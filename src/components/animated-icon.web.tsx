@@ -3,6 +3,7 @@ import { StyleSheet, View } from 'react-native';
 import Animated, { Keyframe, Easing } from 'react-native-reanimated';
 
 import classes from './animated-icon.module.css';
+
 const DURATION = 300;
 
 export function AnimatedSplashOverlay() {
@@ -54,6 +55,7 @@ const glowKeyframe = new Keyframe({
   },
 });
 
+/** Web hero logo — same animation shell as Expo template, Moments branding. */
 export function AnimatedIcon() {
   return (
     <View style={styles.iconContainer}>
@@ -62,27 +64,29 @@ export function AnimatedIcon() {
       </Animated.View>
 
       <Animated.View style={styles.background} entering={keyframe.duration(DURATION)}>
-        <div className={classes.expoLogoBackground} />
+        <div className={classes.momentsLogoBackground} />
       </Animated.View>
 
       <Animated.View style={styles.imageContainer} entering={logoKeyframe.duration(DURATION)}>
-        <Image style={styles.image} source={require('@/assets/images/expo-logo.png')} />
+        <Image
+          style={styles.image}
+          source={require('@/assets/images/icon.png')}
+          contentFit="cover"
+        />
       </Animated.View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    alignItems: 'center',
-    width: '100%',
-    zIndex: 1000,
-    position: 'absolute',
-    top: 128 / 2 + 138,
-  },
   imageContainer: {
     justifyContent: 'center',
     alignItems: 'center',
+    zIndex: 2,
+    overflow: 'hidden',
+    borderRadius: 40,
+    width: 128,
+    height: 128,
   },
   glow: {
     width: 201,
@@ -96,13 +100,15 @@ const styles = StyleSheet.create({
     height: 128,
   },
   image: {
-    position: 'absolute',
-    width: 76,
-    height: 71,
+    width: 128,
+    height: 128,
+    borderRadius: 40,
+    zIndex: 3,
   },
   background: {
     width: 128,
     height: 128,
     position: 'absolute',
+    zIndex: 1,
   },
 });

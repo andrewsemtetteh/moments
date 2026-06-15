@@ -1,98 +1,89 @@
-import * as Device from 'expo-device';
-import { Platform, StyleSheet } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
+import { useEffect, useRef } from 'react';
+import { ActivityIndicator, Animated, Easing, StyleSheet, Text, View } from 'react-native';
 
-import { AnimatedIcon } from '@/components/animated-icon';
-import { HintRow } from '@/components/hint-row';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { WebBadge } from '@/components/web-badge';
-import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
+import { LogoMark } from '@/components/ui/Logo';
+import { ScreenBackground } from '@/components/ui/primitives';
+import { useTheme } from '@/hooks/useTheme';
+import { isAvatarPromptDone } from '@/lib/onboarding-storage';
+import { useAuthStore, useRelationshipStore } from '@/stores';
 
-function getDevMenuHint() {
-  if (Platform.OS === 'web') {
-    return <ThemedText type="small">use browser devtools</ThemedText>;
-  }
-  if (Device.isDevice) {
-    return (
-      <ThemedText type="small">
-        shake device or press <ThemedText type="code">m</ThemedText> in terminal
-      </ThemedText>
-    );
-  }
-  const shortcut = Platform.OS === 'android' ? 'cmd+m (or ctrl+m)' : 'cmd+d';
+export default function IndexScreen() {
+  const router = useRouter();
+  const { colors } = useTheme();
+  const isLoading = useAuthStore((s) => s.isLoading);
+  const session = useAuthStore((s) => s.session);
+  const relationship = useRelationshipStore((s) => s.relationship);
+  const user = useAuthStore((s) => s.user);
+
+  const fade = useRef(new Animated.Value(0)).current;
+  const scale = useRef(new Animated.Value(0.85)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fade, { toValue: 1, duration: 600, useNativeDriver: true }),
+      Animated.timing(scale, { toValue: 1, duration: 700, easing: Easing.out(Easing.back(1.4)), useNativeDriver: true }),
+    ]).start();
+  }, [fade, scale]);
+
+  useEffect(() => {
+    if (isLoading) return;
+
+    let cancelled = false;
+
+    async function route() {
+      await new Promise((r) => setTimeout(r, 500));
+      if (cancelled) return;
+
+      if (!session) {
+        router.replace('/(auth)/login');
+        return;
+      }
+      if (!relationship) {
+        if (user && !user.avatar_url && !(await isAvatarPromptDone(user.id))) {
+          router.replace('/(onboarding)/profile-setup');
+        } else {
+          router.replace('/(onboarding)/create-relationship');
+        }
+        return;
+      }
+      if (relationship.status === 'pending' && !relationship.user_2_id) {
+        router.replace('/(tabs)/home');
+        return;
+      }
+      if (relationship.status === 'pending') {
+        router.replace('/(onboarding)/welcome');
+        return;
+      }
+      router.replace('/(tabs)/home');
+    }
+
+    route();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isLoading, session, relationship, user, router]);
+
   return (
-    <ThemedText type="small">
-      press <ThemedText type="code">{shortcut}</ThemedText>
-    </ThemedText>
-  );
-}
-
-export default function HomeScreen() {
-  return (
-    <ThemedView style={styles.container}>
-      <SafeAreaView style={styles.safeArea}>
-        <ThemedView style={styles.heroSection}>
-          <AnimatedIcon />
-          <ThemedText type="title" style={styles.title}>
-            Welcome to&nbsp;Expo
-          </ThemedText>
-        </ThemedView>
-
-        <ThemedText type="code" style={styles.code}>
-          get started
-        </ThemedText>
-
-        <ThemedView type="backgroundElement" style={styles.stepContainer}>
-          <HintRow
-            title="Try editing"
-            hint={<ThemedText type="code">src/app/index.tsx</ThemedText>}
-          />
-          <HintRow title="Dev tools" hint={getDevMenuHint()} />
-          <HintRow
-            title="Fresh start"
-            hint={<ThemedText type="code">npm run reset-project</ThemedText>}
-          />
-        </ThemedView>
-
-        {Platform.OS === 'web' && <WebBadge />}
-      </SafeAreaView>
-    </ThemedView>
+    <ScreenBackground>
+      <View style={styles.center}>
+        <Animated.View style={{ opacity: fade, transform: [{ scale }], alignItems: 'center' }}>
+          <LogoMark size={84} />
+          <Text style={[styles.wordmark, { color: colors.text }]}>Moments</Text>
+          <Text style={[styles.tagline, { color: colors.textSecondary }]}>Closer, every day</Text>
+        </Animated.View>
+      </View>
+      <View style={styles.loader}>
+        <ActivityIndicator color={colors.accent} />
+      </View>
+    </ScreenBackground>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: 'center',
-    flexDirection: 'row',
-  },
-  safeArea: {
-    flex: 1,
-    paddingHorizontal: Spacing.four,
-    alignItems: 'center',
-    gap: Spacing.three,
-    paddingBottom: BottomTabInset + Spacing.three,
-    maxWidth: MaxContentWidth,
-  },
-  heroSection: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    flex: 1,
-    paddingHorizontal: Spacing.four,
-    gap: Spacing.four,
-  },
-  title: {
-    textAlign: 'center',
-  },
-  code: {
-    textTransform: 'uppercase',
-  },
-  stepContainer: {
-    gap: Spacing.three,
-    alignSelf: 'stretch',
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.four,
-    borderRadius: Spacing.four,
-  },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  wordmark: { fontSize: 34, fontWeight: '800', letterSpacing: -1, marginTop: 16 },
+  tagline: { fontSize: 15, marginTop: 6, letterSpacing: 0.3 },
+  loader: { position: 'absolute', bottom: 80, left: 0, right: 0, alignItems: 'center' },
 });

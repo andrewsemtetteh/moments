@@ -450,8 +450,8 @@ One subscription covers both partners.
 
 Suggested pricing:
 
-* $7.99/month per couple
-* $59.99/year per couple
+* $6.99/month per relationship
+* $62.99/year per relationship (25% off)
 
 Includes:
 

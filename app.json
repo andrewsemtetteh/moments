@@ -1,23 +1,28 @@
 {
   "expo": {
-    "name": "coupleapp",
-    "slug": "coupleapp",
+    "name": "Moments",
+    "slug": "moments",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "coupleapp",
+    "scheme": "moments",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/expo.icon"
+      "icon": "./assets/expo.icon",
+      "bundleIdentifier": "com.moments.app",
+      "supportsTablet": false,
+      "usesAppleSignIn": true
     },
     "android": {
+      "package": "com.moments.app",
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#FAFAF8",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "softwareKeyboardLayoutMode": "resize"
     },
     "web": {
       "output": "static",
@@ -25,20 +30,56 @@
     },
     "plugins": [
       "expo-router",
+      "expo-secure-store",
+      "expo-apple-authentication",
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#208AEF",
+          "backgroundColor": "#FAFAF8",
           "android": {
             "image": "./assets/images/splash-icon.png",
             "imageWidth": 76
           }
         }
-      ]
+      ],
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "Moments needs microphone access to record voice messages and calls."
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Moments needs camera access for video calls and photo sharing.",
+          "microphonePermission": "Moments needs microphone access for calls and voice messages.",
+          "recordAudioAndroid": true
+        }
+      ],
+      "@config-plugins/react-native-webrtc",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Moments needs photo access to share moments with your partner.",
+          "cameraPermission": "Moments needs camera access to capture moments to share with your partner."
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Moments uses location for location moments you choose to share."
+        }
+      ],
+      "expo-notifications"
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {
+        "root": "./src/app"
+      }
     }
   }
 }

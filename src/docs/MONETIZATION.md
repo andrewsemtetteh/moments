@@ -85,8 +85,8 @@ Adds:
 
 ## Suggested Pricing
 
-* $4.99/month per relationship
-* $39.99/year per relationship (discounted)
+* $6.99/month per relationship
+* $62.99/year per relationship (25% off 12× monthly)
 
 Regional adjustments (optional later):
 
