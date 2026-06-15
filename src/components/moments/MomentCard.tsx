@@ -1,23 +1,18 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { Image } from 'expo-image';
+import { LinearGradient } from 'expo-linear-gradient';
 import { formatDistanceToNow } from 'date-fns';
 import * as Haptics from 'expo-haptics';
+import { Dimensions, Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { Icon, type IconName } from '@/components/ui/Icon';
-import { Avatar } from '@/components/ui/primitives';
-import { MOOD_COLORS, MOOD_EMOJI, MOOD_LABELS } from '@/constants/design-system';
+import { MomentBlobFrame } from '@/components/moments/MomentBlobFrame';
+import { MomentVideoPlayer } from '@/components/moments/MomentVideoPlayer';
+import { Icon } from '@/components/ui/Icon';
 import { useTheme } from '@/hooks/useTheme';
 import { useMomentReaction } from '@/hooks/queries';
-import { useAuthStore } from '@/stores';
-import type { Moment, MomentType } from '@/types/database';
+import { momentPreviewLabel } from '@/lib/moment-display';
+import { useAuthStore, useUIStore } from '@/stores';
+import type { Moment } from '@/types/database';
 
-const TYPE_ICON: Record<MomentType, IconName> = {
-  photo: 'camera',
-  text: 'chat',
-  voice: 'mic',
-  mood: 'heart',
-  location: 'location',
-};
+const PREVIEW_W = Math.min(Dimensions.get('window').width - 64, 280);
 
 interface MomentCardProps {
   moment: Moment;
@@ -25,12 +20,20 @@ interface MomentCardProps {
 }
 
 export function MomentCard({ moment, onPress }: MomentCardProps) {
+  const openMomentViewer = useUIStore((s) => s.openMomentViewer);
   const { colors } = useTheme();
   const user = useAuthStore((s) => s.user);
   const reactMutation = useMomentReaction();
-
-  const reactions = Object.entries(moment.reactions ?? {}).filter(([, u]) => u.length > 0);
   const iLiked = (moment.reactions?.['❤️'] ?? []).includes(user?.id ?? '');
+
+  const handlePress = () => {
+    if (onPress) {
+      onPress();
+      return;
+    }
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    openMomentViewer([moment], 0, { playback: 'focus' });
+  };
 
   const like = () => {
     if (moment.id.startsWith('temp-')) return;
@@ -39,65 +42,70 @@ export function MomentCard({ moment, onPress }: MomentCardProps) {
   };
 
   return (
-    <Pressable
-      onPress={onPress}
-      style={({ pressed }) => [styles.card, { backgroundColor: colors.surface, borderColor: colors.border }, pressed && styles.pressed]}>
-      <View style={styles.header}>
-        <Avatar name={moment.author?.name} size={34} />
-        <View style={{ flex: 1 }}>
-          <Text style={[styles.author, { color: colors.text }]}>{moment.author?.name ?? 'Partner'}</Text>
-          <Text style={[styles.time, { color: colors.textTertiary }]}>
-            {formatDistanceToNow(new Date(moment.created_at), { addSuffix: true })}
-          </Text>
+    <Pressable onPress={handlePress} style={({ pressed }) => [styles.card, pressed && styles.pressed]}>
+      <LinearGradient colors={['#111', '#000']} style={styles.inner}>
+        <View style={styles.blobCenter}>
+          <MomentPreview moment={moment} />
         </View>
-        <View style={[styles.typeBadge, { backgroundColor: colors.accentSoft }]}>
-          <Icon name={TYPE_ICON[moment.type] ?? 'heart'} size={14} color={colors.accent} />
+
+        <View style={styles.footer}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.author}>{moment.author?.name ?? 'Partner'}</Text>
+            <Text style={styles.caption}>{momentPreviewLabel(moment)}</Text>
+            <Text style={styles.time}>{formatDistanceToNow(new Date(moment.created_at), { addSuffix: true })}</Text>
+          </View>
+          <Pressable onPress={like} hitSlop={10}>
+            <Icon name="heart" size={22} color={iLiked ? colors.accent : 'rgba(255,255,255,0.7)'} filled={iLiked} />
+          </Pressable>
         </View>
-      </View>
-
-      {moment.type === 'photo' && moment.media_url && (
-        <Image source={{ uri: moment.media_url }} style={styles.image} contentFit="cover" />
-      )}
-
-      {moment.type === 'mood' && moment.mood && (
-        <View style={[styles.moodChip, { backgroundColor: (MOOD_COLORS[moment.mood] ?? colors.accent) + '22' }]}>
-          <Text style={styles.moodEmoji}>{MOOD_EMOJI[moment.mood]}</Text>
-          <Text style={[styles.moodText, { color: colors.text }]}>Feeling {MOOD_LABELS[moment.mood] ?? moment.mood}</Text>
-        </View>
-      )}
-
-      {moment.content && <Text style={[styles.content, { color: colors.text }]}>{moment.content}</Text>}
-
-      <View style={styles.footer}>
-        <View style={styles.reactionsRow}>
-          {reactions.map(([emoji, u]) => (
-            <View key={emoji} style={[styles.reactionPill, { backgroundColor: colors.surfaceElevated }]}>
-              <Text style={{ fontSize: 12 }}>{emoji}{u.length > 1 ? ` ${u.length}` : ''}</Text>
-            </View>
-          ))}
-        </View>
-        <Pressable onPress={like} hitSlop={8} style={styles.likeBtn}>
-          <Icon name="heart" size={20} color={iLiked ? colors.accent : colors.textSecondary} filled={iLiked} />
-        </Pressable>
-      </View>
+      </LinearGradient>
     </Pressable>
   );
 }
 
+function MomentPreview({ moment }: { moment: Moment }) {
+  const { colors } = useTheme();
+
+  if (moment.type === 'video' && moment.media_url) {
+    return (
+      <View style={{ width: PREVIEW_W, height: PREVIEW_W * 1.12, borderRadius: 20, overflow: 'hidden' }}>
+        <MomentVideoPlayer uri={moment.media_url} fill />
+        <View style={styles.playBadge}>
+          <Icon name="videocam" size={16} color="#fff" />
+        </View>
+      </View>
+    );
+  }
+
+  if (moment.type === 'photo' && moment.media_url) {
+    return <MomentBlobFrame width={PREVIEW_W} imageUri={moment.media_url} />;
+  }
+
+  return (
+    <MomentBlobFrame width={PREVIEW_W} fill={colors.accent + 'AA'}>
+      <Icon name="heart" size={36} color="#fff" filled />
+    </MomentBlobFrame>
+  );
+}
+
 const styles = StyleSheet.create({
-  card: { borderRadius: 18, padding: 16, marginBottom: 12, borderWidth: StyleSheet.hairlineWidth },
-  header: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 },
-  author: { fontSize: 14, fontWeight: '700' },
-  time: { fontSize: 12, marginTop: 1 },
-  typeBadge: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
-  image: { width: '100%', height: 220, borderRadius: 14, marginBottom: 10 },
-  moodChip: { flexDirection: 'row', alignItems: 'center', gap: 8, alignSelf: 'flex-start', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12, marginBottom: 8 },
-  moodEmoji: { fontSize: 22 },
-  moodText: { fontSize: 14, fontWeight: '600' },
-  content: { fontSize: 15, lineHeight: 22 },
-  footer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 12 },
-  reactionsRow: { flexDirection: 'row', gap: 6, flex: 1 },
-  reactionPill: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 10 },
-  likeBtn: { padding: 2 },
-  pressed: { opacity: 0.92, transform: [{ scale: 0.995 }] },
+  card: { marginBottom: 14, borderRadius: 24, overflow: 'hidden' },
+  inner: { paddingVertical: 24, paddingHorizontal: 16, borderRadius: 24, borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(255,255,255,0.08)' },
+  blobCenter: { alignItems: 'center', marginBottom: 16 },
+  footer: { flexDirection: 'row', alignItems: 'flex-end', gap: 12, paddingHorizontal: 4 },
+  author: { color: '#fff', fontWeight: '800', fontSize: 14 },
+  caption: { color: 'rgba(255,255,255,0.85)', fontSize: 14, marginTop: 4 },
+  time: { color: 'rgba(255,255,255,0.45)', fontSize: 11, marginTop: 4, fontWeight: '600' },
+  playBadge: {
+    position: 'absolute',
+    bottom: 10,
+    right: 10,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pressed: { opacity: 0.94 },
 });

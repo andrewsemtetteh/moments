@@ -2,17 +2,17 @@ import type { RealtimeChannel } from '@supabase/supabase-js';
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef } from 'react';
 
-import { supabase } from '@/lib/supabase';
 import { isMissingTableError } from '@/lib/network-error';
+import { supabase } from '@/lib/supabase';
 import { scheduleWatchReminder } from '@/lib/watch-reminders';
-import * as api from '@/services/api';
 import { AnalyticsEvents, track } from '@/services/analytics';
+import * as api from '@/services/api';
 import { useAuthStore, useRelationshipStore, useUIStore } from '@/stores';
 import type {
-  StreamingConnection,
-  WatchlistItem,
-  WatchSession,
-  WatchVote,
+    StreamingConnection,
+    WatchlistItem,
+    WatchSession,
+    WatchVote,
 } from '@/types/database';
 
 export function useProfile() {
@@ -73,13 +73,19 @@ export function useSendMessage() {
   const user = useAuthStore((s) => s.user);
 
   return useMutation({
-    mutationFn: (params: { content: string; mediaUrl?: string; mediaType?: string }) =>
+    mutationFn: (params: {
+      content: string;
+      mediaUrl?: string;
+      mediaType?: string;
+      momentId?: string;
+    }) =>
       api.sendMessage(
         relationship!.id,
         user!.id,
         params.content,
         params.mediaUrl,
         params.mediaType,
+        params.momentId,
       ),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['messages', relationship?.id] });
@@ -101,6 +107,15 @@ export function useCalendarEvents(month?: Date) {
   return useQuery({
     queryKey: ['calendar', relationship?.id, month?.toISOString()],
     queryFn: () => api.fetchCalendarEvents(relationship!.id, month),
+    enabled: !!relationship?.id,
+  });
+}
+
+export function useUpcomingCalendarEvents() {
+  const relationship = useRelationshipStore((s) => s.relationship);
+  return useQuery({
+    queryKey: ['calendarUpcoming', relationship?.id],
+    queryFn: () => api.fetchUpcomingCalendarEvents(relationship!.id),
     enabled: !!relationship?.id,
   });
 }
@@ -204,7 +219,8 @@ export function useRealtimeSubscription(
     | 'notifications'
     | 'calendar_events'
     | 'watch_sessions'
-    | 'watch_watchlist',
+    | 'watch_watchlist'
+    | 'watch_messages',
 ) {
   const queryClient = useQueryClient();
   const queryClientRef = useRef(queryClient);
@@ -241,9 +257,15 @@ export function useRealtimeSubscription(
           if (table === 'watch_watchlist') {
             qc.invalidateQueries({ queryKey: ['watchlist', relationship.id] });
           }
+          if (table === 'watch_messages') {
+            qc.invalidateQueries({ queryKey: ['watchMessages'] });
+          }
           if (table === 'moments') qc.invalidateQueries({ queryKey: ['moments', relationship.id] });
           if (table === 'mood_logs') qc.invalidateQueries({ queryKey: ['moods', relationship.id] });
-          if (table === 'calendar_events') qc.invalidateQueries({ queryKey: ['calendar', relationship.id] });
+          if (table === 'calendar_events') {
+            qc.invalidateQueries({ queryKey: ['calendar', relationship.id] });
+            qc.invalidateQueries({ queryKey: ['calendarUpcoming', relationship.id] });
+          }
         },
       )
       .subscribe();
@@ -285,7 +307,7 @@ export function useCreateMoment() {
   const user = useAuthStore((s) => s.user);
 
   return useMutation({
-    mutationFn: (moment: { type: string; content?: string; media_url?: string; mood?: string }) =>
+    mutationFn: (moment: { type: 'photo' | 'video'; media_url: string }) =>
       api.createMoment(relationship!.id, user!.id, moment),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['moments', relationship?.id] });
@@ -369,6 +391,28 @@ export function useActiveWatchSession() {
   });
 }
 
+export function useWatchMessages(sessionId: string | undefined) {
+  const isOffline = useUIStore((s) => s.isOffline);
+  return useQuery({
+    queryKey: ['watchMessages', sessionId],
+    queryFn: () => (sessionId ? api.fetchWatchMessages(sessionId) : []),
+    enabled: !!sessionId && !isOffline,
+    refetchInterval: isOffline ? false : 4_000,
+    retry: (count, error) => !isMissingTableError(error) && count < 1,
+  });
+}
+
+export function useSendWatchMessage(sessionId: string | undefined) {
+  const queryClient = useQueryClient();
+  const relationship = useRelationshipStore((s) => s.relationship);
+  const user = useAuthStore((s) => s.user);
+  return useMutation({
+    mutationFn: (message: string) =>
+      api.sendWatchMessage(sessionId!, relationship!.id, user!.id, message),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['watchMessages', sessionId] }),
+  });
+}
+
 export function useWatchSessionMutations() {
   const queryClient = useQueryClient();
   const relationship = useRelationshipStore((s) => s.relationship);
@@ -380,8 +424,13 @@ export function useWatchSessionMutations() {
   };
 
   const create = useMutation({
-    mutationFn: (payload: { title: string; link?: string; platformId?: string; contentId?: string }) =>
-      api.createWatchSession(relationship!.id, user!.id, payload),
+    mutationFn: (payload: {
+      title: string;
+      link?: string;
+      platformId?: string;
+      contentId?: string;
+      contentSource?: WatchSession['content_source'];
+    }) => api.createWatchSession(relationship!.id, user!.id, { ...payload, status: 'watching' }),
     onSuccess: async (session) => {
       invalidate();
       if (relationship && user) {
@@ -422,7 +471,7 @@ export function useWatchSessionMutations() {
         reminderMinutes: payload.reminderMinutes,
         status: 'scheduled',
       });
-      if (payload.reminderMinutes) {
+      if (payload.reminderMinutes != null) {
         await scheduleWatchReminder({
           title: payload.title,
           scheduledAt: new Date(payload.scheduledAt),

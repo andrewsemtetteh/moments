@@ -10,9 +10,10 @@ import { Alert, Pressable, Share, StyleSheet, Text, View } from 'react-native';
 import { AppHeader } from '@/components/layout/AppHeader';
 import { ScreenContainer } from '@/components/layout/ScreenContainer';
 import { TabScreenScroll } from '@/components/layout/TabScreenScroll';
-import { MomentCard } from '@/components/moments/MomentCard';
+import { MomentsWall } from '@/components/moments/MomentsWall';
 import { ChangePasswordModal } from '@/components/profile/ChangePasswordModal';
 import { EditFieldModal } from '@/components/profile/EditFieldModal';
+import { LocationSharingSettings } from '@/components/profile/LocationSharingSettings';
 import { Icon, type IconName } from '@/components/ui/Icon';
 import { LogoMark } from '@/components/ui/Logo';
 import { Avatar, Card, PrimaryButton, SectionTitle, StatPill } from '@/components/ui/primitives';
@@ -38,6 +39,7 @@ export default function ProfileScreen() {
   const resetAuth = useAuthStore((s) => s.reset);
   const resetRelationship = useRelationshipStore((s) => s.reset);
   const setShowJournal = useUIStore((s) => s.setShowJournal);
+  const setShowMomentHistory = useUIStore((s) => s.setShowMomentHistory);
 
   const { data: momentsData } = useMoments();
   const { data: streak } = useStreak();
@@ -413,14 +415,14 @@ export default function ProfileScreen() {
 
         {tab === 'timeline' && (
           <View style={styles.tabBody}>
-            <SectionTitle>Memory Timeline</SectionTitle>
+            <SectionTitle action="History" onAction={() => setShowMomentHistory(true)}>
+              Memory Wall
+            </SectionTitle>
             {timelineMoments.length === 0 ? (
               <EmptyState icon="camera" text="Your shared moments will live here" />
             ) : (
               <>
-                {visibleTimeline.map((m) => (
-                  <MomentCard key={m.id} moment={m} />
-                ))}
+                <MomentsWall moments={visibleTimeline} />
                 {hiddenTimelineCount > 0 && (
                   <Pressable onPress={() => requirePlus('Full memory timeline')} style={[styles.timelineUpsell, { backgroundColor: colors.accentSoft, borderColor: colors.accent }]}>
                     <Icon name="lock" size={18} color={colors.accent} />
@@ -544,6 +546,9 @@ export default function ProfileScreen() {
             <View style={styles.privacySection}>
               <SectionTitle>Privacy & Data</SectionTitle>
             </View>
+            <Card padded={false} style={{ marginBottom: 12 }}>
+              <LocationSharingSettings />
+            </Card>
             <Card padded={false}>
               <SettingItem icon="lock" label="Privacy Policy" colors={colors} onPress={() => router.push('/legal/privacy')} />
               <SettingItem icon="list" label="Terms of Service" colors={colors} onPress={() => router.push('/legal/terms')} />

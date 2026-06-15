@@ -1,7 +1,7 @@
 import { format } from 'date-fns';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, RefreshControl, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { MoodSnapshot } from '@/components/home/MoodSnapshot';
@@ -9,7 +9,7 @@ import { StreakBadge } from '@/components/home/StreakBadge';
 import { AppHeader } from '@/components/layout/AppHeader';
 import { ScreenContainer } from '@/components/layout/ScreenContainer';
 import { TabScreenScroll } from '@/components/layout/TabScreenScroll';
-import { MomentCard } from '@/components/moments/MomentCard';
+import { PartnerMomentHome } from '@/components/moments/PartnerMomentHome';
 import { Icon, type IconName } from '@/components/ui/Icon';
 import { Avatar, Card, PrimaryButton, SectionTitle } from '@/components/ui/primitives';
 import {
@@ -24,6 +24,7 @@ import {
 import { useSubscription } from '@/hooks/useSubscription';
 import { useTheme } from '@/hooks/useTheme';
 import { getFirstName } from '@/lib/avatar-initial';
+import { filterMediaMoments, filterMomentsForHome, enrichMomentsWithAuthors, getMomentSenderFirstName } from '@/lib/moment-display';
 import { shouldShowEntryPaywall } from '@/lib/paywall-storage';
 import * as api from '@/services/api';
 import { useAuthStore, useRelationshipStore, useUIStore } from '@/stores';
@@ -78,7 +79,17 @@ export default function HomeScreen() {
     };
   }, [isPlus, paywallShownThisSession, relationship, markPaywallShownThisSession, openPaywall]);
 
-  const latestMoment = momentsData?.pages[0]?.[0];
+  const homePartnerMoments = useMemo(() => {
+    const enriched = enrichMomentsWithAuthors(
+      filterMediaMoments(momentsData?.pages[0] ?? []),
+      user,
+      partner,
+    );
+    const partnerOnly = enriched.filter((m) =>
+      partner?.id ? m.user_id === partner.id : m.user_id !== user?.id,
+    );
+    return filterMomentsForHome(partnerOnly);
+  }, [momentsData, partner, user]);
   const upcomingEvents = events?.slice(0, 3) ?? [];
 
   const onRefresh = useCallback(async () => {
@@ -205,12 +216,12 @@ export default function HomeScreen() {
           </Card>
         </View>
 
-        {latestMoment && (
+        {homePartnerMoments.length > 0 && (
           <View style={styles.section}>
-            <SectionTitle action="See all" onAction={() => router.push('/(tabs)/profile')}>
-              Latest Moment
+            <SectionTitle>
+              Moments from {getMomentSenderFirstName(homePartnerMoments[0], user, partner)}
             </SectionTitle>
-            <MomentCard moment={latestMoment} />
+            <PartnerMomentHome partnerMoments={homePartnerMoments} />
           </View>
         )}
 

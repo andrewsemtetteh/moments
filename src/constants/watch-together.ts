@@ -13,9 +13,10 @@ export const WATCH_QUICK_REACTIONS: { emoji: string; label: string }[] = [
 export const FREE_WATCH_PARTIES_PER_WEEK = 3;
 
 export const WATCH_REMINDER_OPTIONS: { minutes: number; label: string }[] = [
-  { minutes: 15, label: '15 min before' },
+  { minutes: 0, label: 'At start time' },
+  { minutes: 15, label: '15 minutes before' },
+  { minutes: 30, label: '30 minutes before' },
   { minutes: 60, label: '1 hour before' },
-  { minutes: 1440, label: '1 day before' },
 ];
 
 export const WATCH_VOTE_OPTIONS: { value: 'must' | 'interested' | 'not'; emoji: string; label: string }[] = [

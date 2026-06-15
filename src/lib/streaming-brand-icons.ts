@@ -1,14 +1,8 @@
 import {
   siAppletv,
   siCrunchyroll,
-  siMax,
   siNetflix,
   siParamountplus,
-  siShowtime,
-  siSpotify,
-  siStarz,
-  siTubi,
-  siTwitch,
   siYoutube,
 } from 'simple-icons';
 
@@ -19,23 +13,26 @@ export type BrandIcon =
 /** Lookup by platform id — must match `streaming-platforms.ts`. */
 const BRAND_BY_PLATFORM_ID: Record<string, BrandIcon> = {
   netflix: { type: 'svg', path: siNetflix.path, hex: siNetflix.hex },
-  disneyplus: { type: 'label', label: 'D+', hex: '113CCF', fontSize: 11 },
-  hulu: { type: 'label', label: 'hulu', hex: '1CE783', fontSize: 9 },
-  max: { type: 'svg', path: siMax.path, hex: siMax.hex },
+  disneyplus: {
+    type: 'svg',
+    hex: '113CCF',
+    path: 'M2.96 7.303c-.44 0-.96-.058-.96-.319c0-1.839 3.238-1.918 4.618-1.918c1.799 0 4.097.558 6.055 1.258c2.979 1.08 9.016 4.678 9.016 8.795c0 3.638-3.918 5.377-7.556 5.377a20 20 0 0 1-2.918-.3c-.06.221-.1.38-.24.84a4 4 0 0 1-.7.079l-.459-.039c-.3-.36-.4-.939-.52-1.559-1.818-1.059-2.999-1.959-3.538-2.579c-.46-.48-.98-1.12-.98-1.739c0-.319.2-.6.66-.918c.94-.7 2.139-1.08 4.098-1.421l.04-.818c.02-.2.22-2.339.68-2.739c.739.6.819 1.219.879 2.139c.02.4.04.819.1 1.259h.28c1.399 0 5.677.359 5.677 2.378c0 .48-.7 1.379-1.38 1.379a1.73 1.73 0 0 1-.879-.259c.299-.341.739-.64.859-.9c-.4-.48-2.558-1.039-4.137-1.039a4 4 0 0 0-.52.02l.02 4.378c.639.4 1.419.439 1.918.439c2.2 0 6.756-.379 6.756-3.938c0-3.518-4.497-6.236-7.855-7.515a19.5 19.5 0 0 0-7.216-1.36a6.6 6.6 0 0 0-1.639.18c-.339.08-.459.16-.459.24c0 .139.679.22.76.26a.2.2 0 0 1 .1.159a.24.24 0 0 1-.08.16c-.081 0-.26.02-.48.02m6.495 7.016c-1.978.161-4.178.361-4.178 1.06c0 .54.92 1.2 1.48 1.619a6.4 6.4 0 0 0 2.518 1.2Zm10.141-8.955a31 31 0 0 0-.038 1.567c0 .272 0 .583.009.933c-.038.176-.291.195-.418.253a1 1 0 0 1-.233-.174V5.482c0-.264.009-.535.009-.944c0-.205 0-.438-.009-.72c0-.175.029-.34.137-.729a.31.31 0 0 1 .272-.204c.223.058.447.155.525.34c-.234.691-.214 1.449-.254 2.139m-.349-.077c.389.019.856.038 1.566.038c.272 0 .584 0 .933-.009c.176.037.196.291.254.417q-.071.129-.175.234h-2.461c-.262 0-.535-.009-.942-.009c-.205 0-.439 0-.72.009c-.176.002-.341-.027-.73-.135a.32.32 0 0 1-.205-.272c.058-.224.156-.448.34-.526c.691.234 1.45.214 2.141.253Z',
+  },
+  youtube: { type: 'svg', path: siYoutube.path, hex: siYoutube.hex },
+  hulu: {
+    type: 'svg',
+    hex: '008656',
+    path: 'M14.707 15.957h1.912V8.043h-1.912zm-3.357-2.256a.517.517 0 0 1-.512.511H9.727a.517.517 0 0 1-.512-.511v-3.19H7.303v3.345c0 1.368.879 2.09 2.168 2.09h1.868c1.189 0 1.912-.856 1.912-2.09V10.51h-1.912c.01 0 .01 3.09.01 3.19zm10.75-3.19v3.19a.517.517 0 0 1-.512.511h-1.112a.517.517 0 0 1-.511-.511v-3.19h-1.912v3.345c0 1.368.878 2.09 2.167 2.09h1.868c1.19 0 1.912-.856 1.912-2.09V10.51zm-18.32 0H2.557c-.434 0-.645.11-.645.11V8.044H0v7.903h1.9v-3.179c0-.278.234-.511.512-.511h1.112c.278 0 .511.233.511.511v3.19h1.912v-3.446c0-1.445-.967-2-2.167-2Z',
+  },
+  max: {
+    type: 'svg',
+    hex: '000000',
+    path: 'M7.042 16.896H4.414v-3.754H2.708v3.754H.01L0 7.22h2.708v3.6h1.706v-3.6h2.628zm12.043.046C21.795 16.94 24 14.689 24 11.978a4.89 4.89 0 0 0-4.915-4.92c-2.707-.002-4.09 1.991-4.432 2.795c.003-1.207-1.187-2.632-2.58-2.634H7.59v9.674l4.181.001c1.686 0 2.886-1.46 2.888-2.713c.385.788 1.72 2.762 4.427 2.76zm-7.665-3.936c.387 0 .692.382.692.817s-.305.817-.692.817h-1.33v-1.634zm.005-3.633c.387 0 .692.382.692.817c0 .436-.305.818-.692.818h-1.33V9.373zm1.77 2.607c.305-.039.813-.387.992-.61c-.063.276-.068 1.074.006 1.35c-.204-.314-.688-.701-.998-.74m3.43 0a2.462 2.462 0 1 1 4.924 0a2.462 2.462 0 0 1-4.925 0zm2.462 1.936a1.936 1.936 0 1 0 0-3.872a1.936 1.936 0 0 0 0 3.872',
+  },
   primevideo: { type: 'label', label: 'prime', hex: '00A8E1', fontSize: 8 },
   appletv: { type: 'svg', path: siAppletv.path, hex: siAppletv.hex },
-  peacock: { type: 'label', label: 'NBC', hex: '000000', fontSize: 9 },
   paramountplus: { type: 'svg', path: siParamountplus.path, hex: siParamountplus.hex },
   crunchyroll: { type: 'svg', path: siCrunchyroll.path, hex: siCrunchyroll.hex },
-  youtube: { type: 'svg', path: siYoutube.path, hex: siYoutube.hex },
-  tubi: { type: 'svg', path: siTubi.path, hex: siTubi.hex },
-  pluto: { type: 'label', label: 'pluto', hex: '1B1451', fontSize: 8 },
-  spotify: { type: 'svg', path: siSpotify.path, hex: siSpotify.hex },
-  twitch: { type: 'svg', path: siTwitch.path, hex: siTwitch.hex },
-  discoveryplus: { type: 'label', label: 'disc+', hex: '2175D9', fontSize: 8 },
-  espn: { type: 'label', label: 'ESPN', hex: 'CC0000', fontSize: 8 },
-  starz: { type: 'svg', path: siStarz.path, hex: siStarz.hex },
-  showtime: { type: 'svg', path: siShowtime.path, hex: siShowtime.hex },
 };
 
 export function getStreamingBrandIcon(platformId: string): BrandIcon | null {

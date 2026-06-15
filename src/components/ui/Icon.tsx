@@ -51,7 +51,10 @@ export type IconName =
   | 'volumeHigh'
   | 'micOff'
   | 'videocamOff'
-  | 'flipCamera';
+  | 'flipCamera'
+  | 'flash'
+  | 'download'
+  | 'expand';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
 
@@ -106,6 +109,9 @@ const ICON_MAP: Record<IconName, { outline: IoniconName; filled: IoniconName }> 
   micOff: { outline: 'mic-off-outline', filled: 'mic-off' },
   videocamOff: { outline: 'videocam-off-outline', filled: 'videocam-off' },
   flipCamera: { outline: 'camera-reverse-outline', filled: 'camera-reverse' },
+  flash: { outline: 'flash-outline', filled: 'flash' },
+  download: { outline: 'download-outline', filled: 'download' },
+  expand: { outline: 'expand-outline', filled: 'expand' },
 };
 
 interface IconProps {

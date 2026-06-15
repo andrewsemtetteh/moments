@@ -1,5 +1,5 @@
 export type RelationshipStatus = 'pending' | 'active' | 'ended';
-export type MomentType = 'photo' | 'text' | 'voice' | 'mood' | 'location';
+export type MomentType = 'photo' | 'video' | 'text' | 'voice' | 'mood' | 'location';
 export type MoodType =
   | 'happy'
   | 'excited'
@@ -39,6 +39,11 @@ export interface UserProfile {
   subscription_expires_at?: string | null;
   revenuecat_customer_id?: string | null;
   revenuecat_subscription_id?: string | null;
+  location_sharing_enabled?: boolean;
+  location_latitude?: number | null;
+  location_longitude?: number | null;
+  location_label?: string | null;
+  location_updated_at?: string | null;
   created_at: string;
 }
 
@@ -64,6 +69,8 @@ export interface Moment {
   content: string | null;
   media_url: string | null;
   mood: MoodType | null;
+  latitude: number | null;
+  longitude: number | null;
   reactions: Record<string, string[]>;
   created_at: string;
   author?: UserProfile;
@@ -76,11 +83,14 @@ export interface Message {
   content: string | null;
   media_url: string | null;
   media_type: 'image' | 'voice' | 'video' | null;
+  moment_id: string | null;
   reactions: Record<string, string[]>;
   is_pinned: boolean;
   read_at: string | null;
   created_at: string;
   sender?: UserProfile;
+  /** Joined when listing messages with moment preview */
+  moment?: Pick<Moment, 'id' | 'type' | 'media_url' | 'user_id' | 'created_at'> | null;
 }
 
 export interface Activity {
@@ -195,6 +205,7 @@ export interface WrappedStats {
 
 export type WatchSessionStatus = 'scheduled' | 'setup' | 'countdown' | 'watching' | 'ended';
 export type WatchPlaybackState = 'playing' | 'paused';
+export type WatchContentSource = 'streaming' | 'youtube' | 'video' | 'podcast' | 'music';
 
 export interface WatchReaction {
   user_id: string;
@@ -209,6 +220,7 @@ export interface WatchSession {
   title: string;
   link: string | null;
   platform_id: string | null;
+  content_source: WatchContentSource;
   content_id: string | null;
   status: WatchSessionStatus;
   ready_user_ids: string[];
@@ -217,7 +229,17 @@ export interface WatchSession {
   reminder_minutes: number | null;
   playback_state: WatchPlaybackState;
   playback_position: number;
+  playback_updated_at: string | null;
   reactions: WatchReaction[];
+  created_at: string;
+}
+
+export interface WatchMessage {
+  id: string;
+  session_id: string;
+  relationship_id: string;
+  sender_id: string;
+  message: string;
   created_at: string;
 }
 

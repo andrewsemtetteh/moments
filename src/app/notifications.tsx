@@ -1,12 +1,11 @@
-import { Platform } from 'react-native';
-import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
-import { Redirect, useRouter } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { formatDistanceToNow } from 'date-fns';
+import { Redirect, useRouter } from 'expo-router';
+import { FlatList, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Icon, type IconName } from '@/components/ui/Icon';
-import { useTheme } from '@/hooks/useTheme';
 import { useNotifications } from '@/hooks/queries';
+import { useTheme } from '@/hooks/useTheme';
 import { useUIStore } from '@/stores';
 
 const TYPE_ICON: Record<string, IconName> = {
@@ -56,7 +55,10 @@ export default function NotificationsScreen() {
       <FlatList
         data={notifications ?? []}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.list}
+        contentContainerStyle={[
+          styles.list,
+          (notifications?.length ?? 0) === 0 && styles.listEmpty,
+        ]}
         showsVerticalScrollIndicator={false}
         ListEmptyComponent={
           <View style={styles.empty}>
@@ -95,12 +97,13 @@ const styles = StyleSheet.create({
   iconBtn: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
   title: { fontSize: 18, fontWeight: '800' },
   list: { padding: 16, gap: 10, flexGrow: 1 },
+  listEmpty: { justifyContent: 'center', alignItems: 'center' },
   item: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, borderRadius: 16, borderWidth: StyleSheet.hairlineWidth, marginBottom: 4 },
   itemIcon: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
   itemContent: { fontSize: 15, lineHeight: 20 },
   itemTime: { fontSize: 12, marginTop: 3 },
   unreadDot: { width: 9, height: 9, borderRadius: 5 },
-  empty: { alignItems: 'center', gap: 14, marginTop: 80, paddingHorizontal: 40 },
+  empty: { alignItems: 'center', gap: 14, paddingHorizontal: 40, maxWidth: 320 },
   emptyIcon: { width: 64, height: 64, borderRadius: 32, alignItems: 'center', justifyContent: 'center' },
   emptyText: { textAlign: 'center', fontSize: 15, lineHeight: 21 },
 });

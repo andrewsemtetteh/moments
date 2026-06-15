@@ -61,7 +61,10 @@ export async function cancelWatchReminder(notificationId: string | null | undefi
 }
 
 function formatLead(minutes: number): string {
+  if (minutes <= 0) return 'now';
+  if (minutes >= 2880) return 'in 2 days';
   if (minutes >= 1440) return 'tomorrow';
+  if (minutes >= 360) return `in ${Math.round(minutes / 60)} hours`;
   if (minutes >= 60) return `in ${Math.round(minutes / 60)} hour${minutes >= 120 ? 's' : ''}`;
   return `in ${minutes} minutes`;
 }

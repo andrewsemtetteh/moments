@@ -6,6 +6,8 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { MoodHistoryModal } from '@/components/home/MoodHistoryModal';
 import { JournalModal } from '@/components/journal/JournalModal';
 import { MomentCreatorModal } from '@/components/moments/MomentCreatorModal';
+import { MomentHistoryModal } from '@/components/moments/MomentHistoryModal';
+import { MomentStoryViewer } from '@/components/moments/MomentStoryViewer';
 import { PaywallModal } from '@/components/subscription/PaywallModal';
 import { WrappedModal } from '@/components/wrapped/WrappedModal';
 import { resolveThemeColors } from '@/constants/design-system';
@@ -37,6 +39,8 @@ function RootStack() {
       {Platform.OS !== 'web' && (
         <>
           <MomentCreatorModal />
+          <MomentHistoryModal />
+          <MomentStoryViewer />
           <JournalModal />
           <WrappedModal />
           <MoodHistoryModal />

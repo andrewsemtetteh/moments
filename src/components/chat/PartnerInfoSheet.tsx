@@ -1,8 +1,8 @@
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
-import { useRelationshipStore } from '@/stores';
-import { Avatar } from '@/components/ui/primitives';
 import { Icon } from '@/components/ui/Icon';
+import { Avatar } from '@/components/ui/primitives';
 import { useTheme } from '@/hooks/useTheme';
+import { useRelationshipStore } from '@/stores';
+import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 
 interface Props {
   visible: boolean;

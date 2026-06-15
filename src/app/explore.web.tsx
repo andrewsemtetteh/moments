@@ -40,8 +40,8 @@ export default function FeaturesScreen() {
         <ThemedView style={styles.sectionsWrapper}>
           <Collapsible title="Moments & memories">
             <ThemedText type="small">
-              Share photos, text, mood, and voice moments that land instantly on a shared timeline.
-              Your relationship history stays private — never a public feed.
+              Share photo and video moments with your partner on a private memory wall.
+              Your relationship history stays between the two of you — never a public feed.
             </ThemedText>
           </Collapsible>
 

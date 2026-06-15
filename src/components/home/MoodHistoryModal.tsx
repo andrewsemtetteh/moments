@@ -39,9 +39,13 @@ export function MoodHistoryModal() {
             </Pressable>
           </View>
         ) : (
-          <ScrollView contentContainerStyle={styles.scroll}>
+          <ScrollView
+            contentContainerStyle={[styles.scroll, moodFreq.length === 0 && styles.scrollEmpty]}
+          >
             {moodFreq.length === 0 ? (
-              <Text style={{ color: colors.textSecondary }}>Log moods on Home to build your history.</Text>
+              <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
+                Log moods on Home to build your history.
+              </Text>
             ) : (
               moodFreq.map((mood, index) => (
                 <View key={mood} style={[styles.row, { backgroundColor: colors.surface, borderColor: colors.border }]}>
@@ -62,9 +66,11 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingBottom: 12 },
   title: { fontSize: 17, fontWeight: '700' },
-  preview: { flex: 1, padding: 24, justifyContent: 'center', gap: 16 },
-  body: { fontSize: 16, lineHeight: 24, textAlign: 'center' },
+  preview: { flex: 1, padding: 24, justifyContent: 'center', alignItems: 'center', gap: 16 },
+  body: { fontSize: 16, lineHeight: 24, textAlign: 'center', width: '100%' },
+  emptyText: { fontSize: 16, lineHeight: 24, textAlign: 'center', width: '100%' },
   scroll: { padding: 16, gap: 10 },
+  scrollEmpty: { flexGrow: 1, justifyContent: 'center' },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, borderRadius: 14, borderWidth: StyleSheet.hairlineWidth },
   rank: { width: 24, fontWeight: '800', color: '#888' },
   emoji: { fontSize: 24 },

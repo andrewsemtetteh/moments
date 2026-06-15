@@ -35,6 +35,7 @@ function WatchTogetherContent({ onClose }: { onClose: () => void }) {
   const { data: session } = useActiveWatchSession();
   useRealtimeSubscription('watch_sessions');
   useRealtimeSubscription('watch_watchlist');
+  useRealtimeSubscription('watch_messages');
 
   // A live (non-scheduled) session takes over the whole modal as the watch room.
   const liveSession = session && session.status !== 'scheduled' ? session : null;

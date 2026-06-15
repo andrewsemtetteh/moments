@@ -18,6 +18,8 @@ import { useTheme } from '@/hooks/useTheme';
 import { resendOtp, verifyEmailOtp, type OtpFlowType } from '@/lib/auth-otp';
 import { hydrateAuthSession } from '@/lib/auth-session';
 
+const RESEND_COOLDOWN_SECONDS = 45;
+
 export default function VerifyOtpScreen() {
   const router = useRouter();
   const { colors } = useTheme();
@@ -27,7 +29,7 @@ export default function VerifyOtpScreen() {
 
   const [code, setCode] = useState('');
   const [loading, setLoading] = useState(false);
-  const [resendCooldown, setResendCooldown] = useState(0);
+  const [resendCooldown, setResendCooldown] = useState(RESEND_COOLDOWN_SECONDS);
 
   useEffect(() => {
     if (!email) router.replace('/(auth)/login');
@@ -66,7 +68,7 @@ export default function VerifyOtpScreen() {
     try {
       const { error } = await resendOtp(email, flow);
       if (error) throw error;
-      setResendCooldown(60);
+      setResendCooldown(RESEND_COOLDOWN_SECONDS);
       Alert.alert('Code sent', 'Check your email for a new 6-digit code.');
     } catch (e: unknown) {
       Alert.alert('Could not resend', e instanceof Error ? e.message : 'Please try again');

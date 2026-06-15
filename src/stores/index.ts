@@ -3,7 +3,20 @@ import { create } from 'zustand';
 import type { AppTheme } from '@/constants/design-system';
 import { callManager } from '@/lib/call-manager';
 import type { CallMode, CallPhase } from '@/lib/call-types';
-import type { Relationship, UserProfile } from '@/types/database';
+import type { Relationship, UserProfile, Moment } from '@/types/database';
+import type { MomentReplyContext } from '@/lib/moment-reply';
+
+export type MomentViewerPlayback = 'story' | 'focus';
+
+export interface MomentViewerState {
+  moments: Moment[];
+  startIndex: number;
+  /** Story = auto-advance queue (home strip). Focus = picked moment, manual swipe only. */
+  playback: MomentViewerPlayback;
+  sectionLabel?: string;
+  /** Re-open moment history when the viewer closes (opened from history grid). */
+  returnToHistory?: boolean;
+}
 
 interface AuthState {
   user: UserProfile | null;
@@ -45,6 +58,9 @@ interface UIState {
   theme: AppTheme;
   isOffline: boolean;
   showMomentCreator: boolean;
+  showMomentHistory: boolean;
+  momentViewer: MomentViewerState | null;
+  momentHistoryScrollY: number;
   showJournal: boolean;
   showWrapped: boolean;
   showMoodHistory: boolean;
@@ -52,17 +68,27 @@ interface UIState {
   showWatchTogether: boolean;
   watchInitialView: 'hub' | 'start' | 'watchlist' | 'schedule';
   chatDraft: string | null;
+  chatMomentReply: MomentReplyContext | null;
   paywallShownThisSession: boolean;
   typingUsers: string[];
   tabBarOverlayHeight: number;
   setTheme: (theme: AppTheme) => void;
   setOffline: (offline: boolean) => void;
   setShowMomentCreator: (show: boolean) => void;
+  setShowMomentHistory: (show: boolean) => void;
+  setMomentHistoryScrollY: (y: number) => void;
+  openMomentViewer: (
+    moments: Moment[],
+    startIndex?: number,
+    options?: { playback?: MomentViewerPlayback; sectionLabel?: string; returnToHistory?: boolean },
+  ) => void;
+  closeMomentViewer: () => void;
   setShowJournal: (show: boolean) => void;
   setShowWrapped: (show: boolean) => void;
   setShowMoodHistory: (show: boolean) => void;
   setShowWatchTogether: (show: boolean) => void;
   setChatDraft: (draft: string | null) => void;
+  setChatMomentReply: (reply: MomentReplyContext | null) => void;
   clearChatDraft: () => void;
   openPaywall: () => void;
   closePaywall: () => void;
@@ -77,6 +103,9 @@ export const useUIStore = create<UIState>((set) => ({
   theme: 'dark',
   isOffline: false,
   showMomentCreator: false,
+  showMomentHistory: false,
+  momentViewer: null,
+  momentHistoryScrollY: 0,
   showJournal: false,
   showWrapped: false,
   showMoodHistory: false,
@@ -84,18 +113,37 @@ export const useUIStore = create<UIState>((set) => ({
   showWatchTogether: false,
   watchInitialView: 'hub',
   chatDraft: null,
+  chatMomentReply: null,
   paywallShownThisSession: false,
   typingUsers: [],
   tabBarOverlayHeight: 0,
   setTheme: (theme) => set({ theme }),
   setOffline: (isOffline) => set({ isOffline }),
   setShowMomentCreator: (showMomentCreator) => set({ showMomentCreator }),
+  setShowMomentHistory: (showMomentHistory) => set({ showMomentHistory }),
+  setMomentHistoryScrollY: (momentHistoryScrollY) => set({ momentHistoryScrollY }),
+  openMomentViewer: (moments, startIndex = 0, options) =>
+    set({
+      momentViewer: {
+        moments,
+        startIndex: Math.max(0, Math.min(startIndex, Math.max(moments.length - 1, 0))),
+        playback: options?.playback ?? 'story',
+        sectionLabel: options?.sectionLabel,
+        returnToHistory: options?.returnToHistory,
+      },
+    }),
+  closeMomentViewer: () =>
+    set((state) => ({
+      momentViewer: null,
+      showMomentHistory: state.momentViewer?.returnToHistory ? true : state.showMomentHistory,
+    })),
   setShowJournal: (showJournal) => set({ showJournal }),
   setShowWrapped: (showWrapped) => set({ showWrapped }),
   setShowMoodHistory: (showMoodHistory) => set({ showMoodHistory }),
   setShowWatchTogether: (showWatchTogether) => set({ showWatchTogether }),
   setChatDraft: (chatDraft) => set({ chatDraft }),
-  clearChatDraft: () => set({ chatDraft: null }),
+  setChatMomentReply: (chatMomentReply) => set({ chatMomentReply }),
+  clearChatDraft: () => set({ chatDraft: null, chatMomentReply: null }),
   openPaywall: () => set({ showPaywall: true }),
   closePaywall: () => set({ showPaywall: false }),
   openWatchTogether: (view = 'hub') => set({ showWatchTogether: true, watchInitialView: view }),
@@ -106,10 +154,8 @@ export const useUIStore = create<UIState>((set) => ({
 }));
 
 interface MomentDraft {
-  type: 'photo' | 'text' | 'voice' | 'mood' | 'location' | null;
-  content: string;
+  type: 'photo' | 'video' | null;
   mediaUri: string | null;
-  mood: string | null;
 }
 
 interface MomentState {
@@ -120,9 +166,7 @@ interface MomentState {
 
 const emptyDraft: MomentDraft = {
   type: null,
-  content: '',
   mediaUri: null,
-  mood: null,
 };
 
 export const useMomentStore = create<MomentState>((set) => ({

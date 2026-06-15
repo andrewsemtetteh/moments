@@ -1,26 +1,27 @@
 import { useQueryClient } from '@tanstack/react-query';
 import {
-  RecordingPresets,
-  requestRecordingPermissionsAsync,
-  setAudioModeAsync,
-  useAudioRecorder,
+    RecordingPresets,
+    requestRecordingPermissionsAsync,
+    setAudioModeAsync,
+    useAudioRecorder,
 } from 'expo-audio';
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
+import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Alert,
-  FlatList,
-  Keyboard,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
+    Alert,
+    FlatList,
+    Keyboard,
+    KeyboardAvoidingView,
+    Modal,
+    Platform,
+    Pressable,
+    StyleSheet,
+    Text,
+    TextInput,
+    View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -36,10 +37,10 @@ import { Icon } from '@/components/ui/Icon';
 import { Avatar } from '@/components/ui/primitives';
 import { REACTION_EMOJI } from '@/constants/design-system';
 import {
-  useMessageActions,
-  useMessages,
-  useRealtimeSubscription,
-  useSendMessage,
+    useMessageActions,
+    useMessages,
+    useRealtimeSubscription,
+    useSendMessage,
 } from '@/hooks/queries';
 import { useStartCall } from '@/hooks/useStartCall';
 import { useTheme } from '@/hooks/useTheme';
@@ -62,7 +63,9 @@ export default function ChatScreen() {
   const user = useAuthStore((s) => s.user);
   const isOffline = useUIStore((s) => s.isOffline);
   const chatDraft = useUIStore((s) => s.chatDraft);
+  const chatMomentReply = useUIStore((s) => s.chatMomentReply);
   const clearChatDraft = useUIStore((s) => s.clearChatDraft);
+  const setChatMomentReply = useUIStore((s) => s.setChatMomentReply);
   const offlineQueue = useOfflineStore((s) => s.queue);
   const addToQueue = useOfflineStore((s) => s.addToQueue);
   const removeFromQueue = useOfflineStore((s) => s.removeFromQueue);
@@ -113,12 +116,12 @@ export default function ChatScreen() {
   }, [scrollToLatest]);
 
   useEffect(() => {
-    if (!chatDraft) return;
-    setText(chatDraft);
+    if (!chatDraft && !chatMomentReply) return;
+    if (chatDraft) setText(chatDraft);
     clearChatDraft();
     const timer = setTimeout(() => inputRef.current?.focus(), 300);
     return () => clearTimeout(timer);
-  }, [chatDraft, clearChatDraft]);
+  }, [chatDraft, chatMomentReply, clearChatDraft]);
 
   // Snapshot unread IDs on first load for the "UNREAD" divider
   useEffect(() => {
@@ -165,7 +168,20 @@ export default function ChatScreen() {
     if (isOffline || offlineQueue.length === 0 || !relationship || !user) return;
     offlineQueue.forEach(async (item) => {
       if (item.type === 'message') {
-        await api.sendMessage(relationship.id, user.id, item.payload.content as string);
+        const payload = item.payload as {
+          content: string;
+          momentId?: string;
+          mediaUrl?: string;
+          mediaType?: string;
+        };
+        await api.sendMessage(
+          relationship.id,
+          user.id,
+          payload.content,
+          payload.mediaUrl,
+          payload.mediaType,
+          payload.momentId,
+        );
         removeFromQueue(item.id);
       }
     });
@@ -201,16 +217,29 @@ export default function ChatScreen() {
   const handleSend = useCallback(async () => {
     if (!text.trim() || !user || !relationship) return;
     const content = text.trim();
+    const momentPayload: {
+      momentId?: string;
+      mediaUrl?: string;
+      mediaType?: 'image' | 'video';
+    } = chatMomentReply
+      ? {
+          momentId: chatMomentReply.momentId,
+          mediaUrl: chatMomentReply.mediaUrl ?? undefined,
+          mediaType: chatMomentReply.momentType === 'video' ? 'video' : 'image',
+        }
+      : {};
     setText('');
     setShowEmoji(false);
+    setChatMomentReply(null);
 
     const optimistic: Message = {
       id: `temp-${Date.now()}`,
       relationship_id: relationship.id,
       sender_id: user.id,
       content,
-      media_url: null,
-      media_type: null,
+      media_url: momentPayload.mediaUrl ?? null,
+      media_type: momentPayload.mediaType ?? null,
+      moment_id: momentPayload.momentId ?? null,
       reactions: {},
       is_pinned: false,
       read_at: null,
@@ -219,17 +248,17 @@ export default function ChatScreen() {
     setOptimisticMessages((prev) => [...prev, optimistic]);
 
     if (isOffline) {
-      addToQueue({ id: optimistic.id, type: 'message', payload: { content } });
+      addToQueue({ id: optimistic.id, type: 'message', payload: { content, ...momentPayload } });
       return;
     }
     try {
-      await sendMessage.mutateAsync({ content });
+      await sendMessage.mutateAsync({ content, ...momentPayload });
       await api.trackEvent(relationship.id, user.id, 'message_sent');
       setOptimisticMessages((prev) => prev.filter((m) => m.id !== optimistic.id));
     } catch {
-      addToQueue({ id: optimistic.id, type: 'message', payload: { content } });
+      addToQueue({ id: optimistic.id, type: 'message', payload: { content, ...momentPayload } });
     }
-  }, [text, user, relationship, isOffline, sendMessage, addToQueue]);
+  }, [text, user, relationship, chatMomentReply, isOffline, sendMessage, addToQueue, setChatMomentReply]);
 
   // ─── Emoji insert ─────────────────────────────────────────────────────────
   const handleEmojiSelect = (emoji: string) => {
@@ -258,6 +287,7 @@ export default function ChatScreen() {
         content: '',
         media_url: publicUrl,
         media_type: mediaType,
+        moment_id: null,
         reactions: {},
         is_pinned: false,
         read_at: null,
@@ -380,6 +410,7 @@ export default function ChatScreen() {
         content: '🎙 Voice message',
         media_url: publicUrl,
         media_type: 'voice',
+        moment_id: null,
         reactions: {},
         is_pinned: false,
         read_at: null,
@@ -558,6 +589,27 @@ export default function ChatScreen() {
         {isSendingMedia && (
           <View style={[styles.offlineBar, { backgroundColor: colors.accentSoft }]}>
             <Text style={[styles.offlineText, { color: colors.accent }]}>Sending…</Text>
+          </View>
+        )}
+
+        {/* ── Moment reply composer chip ── */}
+        {chatMomentReply && (
+          <View style={[styles.momentReplyBar, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
+            {chatMomentReply.mediaUrl ? (
+              <Image source={{ uri: chatMomentReply.mediaUrl }} style={styles.momentReplyThumb} contentFit="cover" />
+            ) : (
+              <View style={[styles.momentReplyThumb, { backgroundColor: colors.surfaceElevated }]} />
+            )}
+            <View style={styles.momentReplyMeta}>
+              <Text style={[styles.momentReplyTitle, { color: colors.text }]}>Replying to moment</Text>
+              <Text style={[styles.momentReplySub, { color: colors.textSecondary }]}>Attached to your message</Text>
+            </View>
+            <Pressable
+              hitSlop={8}
+              onPress={() => setChatMomentReply(null)}
+              accessibilityLabel="Remove moment attachment">
+              <Icon name="close" size={20} color={colors.textSecondary} />
+            </Pressable>
           </View>
         )}
 
@@ -790,6 +842,19 @@ const styles = StyleSheet.create({
   },
   recordingDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#fff' },
   recordingText: { flex: 1, color: '#fff', fontSize: 13, fontWeight: '600' },
+
+  momentReplyBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  momentReplyThumb: { width: 44, height: 44, borderRadius: 10 },
+  momentReplyMeta: { flex: 1, gap: 2 },
+  momentReplyTitle: { fontSize: 13, fontWeight: '700' },
+  momentReplySub: { fontSize: 11, fontWeight: '600' },
 
   // Input bar
   inputBar: {

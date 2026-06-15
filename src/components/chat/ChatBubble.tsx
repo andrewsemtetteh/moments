@@ -2,9 +2,11 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Image } from 'expo-image';
 import { format } from 'date-fns';
 
-import { Icon } from '@/components/ui/Icon';
+import { MomentReplyCard } from '@/components/chat/MomentReplyCard';
 import { VoiceNotePlayer } from '@/components/chat/VoiceNotePlayer';
+import { Icon } from '@/components/ui/Icon';
 import { useTheme } from '@/hooks/useTheme';
+import { isMomentReplyMessage } from '@/lib/moment-reply';
 import { useAuthStore } from '@/stores';
 import type { Message } from '@/types/database';
 
@@ -47,7 +49,9 @@ export function ChatBubble({ message, onLongPress }: ChatBubbleProps) {
           </View>
         )}
 
-        {message.media_url && message.media_type === 'image' && (
+        {isMomentReplyMessage(message) && <MomentReplyCard message={message} isSelf={isSelf} />}
+
+        {message.media_url && message.media_type === 'image' && !message.moment_id && (
           <Image source={{ uri: message.media_url }} style={styles.media} contentFit="cover" />
         )}
 

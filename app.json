@@ -65,6 +65,13 @@
         }
       ],
       [
+        "expo-media-library",
+        {
+          "photosPermission": "Moments needs access to save photos and videos to your gallery.",
+          "savePhotosPermission": "Moments needs access to save photos and videos to your gallery."
+        }
+      ],
+      [
         "expo-location",
         {
           "locationWhenInUsePermission": "Moments uses location for location moments you choose to share."

@@ -3,16 +3,15 @@ import * as Haptics from 'expo-haptics';
 import { useMemo } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { StreamingPlatformIcon } from '@/components/watch/StreamingPlatformIcon';
-import { WatchScreen } from '@/components/watch/WatchScreen';
 import { Icon, type IconName } from '@/components/ui/Icon';
 import { Card } from '@/components/ui/primitives';
-import { getStreamingPlatform } from '@/constants/streaming-platforms';
+import { StreamingPlatformIcon } from '@/components/watch/StreamingPlatformIcon';
+import { WatchScreen } from '@/components/watch/WatchScreen';
 import { FREE_WATCH_PARTIES_PER_WEEK } from '@/constants/watch-together';
 import {
-  useUpcomingSessions,
-  useWatchHistory,
-  useWatchSessionMutations,
+    useUpcomingSessions,
+    useWatchHistory,
+    useWatchSessionMutations,
 } from '@/hooks/queries';
 import { usePlusGate } from '@/hooks/usePlusGate';
 import { useTheme } from '@/hooks/useTheme';
@@ -174,7 +173,7 @@ export function WatchHub({
       {/* Suggested (AI - Plus) */}
       <Card style={styles.suggestCard}>
         <View style={styles.suggestHead}>
-          <Icon name="sparkles" size={18} color={colors.accent} />
+          <Icon name="moon" size={18} color={colors.accent} filled />
           <Text style={[styles.rowTitle, { color: colors.text }]}>AI date-night picks</Text>
           {!isPlus && (
             <View style={[styles.plusTag, { backgroundColor: colors.accentSoft }]}>

@@ -1,5 +1,5 @@
-import { hasActiveUserSubscription } from '@/lib/subscription';
 import { isMissingTableError } from '@/lib/network-error';
+import { hasActiveUserSubscription } from '@/lib/subscription';
 import { supabase } from '@/lib/supabase';
 import type {
     Activity,
@@ -20,6 +20,7 @@ import type {
     UserProfile,
     WatchHistoryEntry,
     WatchlistItem,
+    WatchMessage,
     WatchReaction,
     WatchSession,
     WatchVote,
@@ -58,6 +59,29 @@ export async function updateProfile(userId: string, updates: Partial<UserProfile
   const { data, error } = await supabase.from('users').update(updates).eq('id', userId).select().single();
   if (error) throw error;
   return data;
+}
+
+export async function updateLocationSharing(
+  userId: string,
+  enabled: boolean,
+  place?: { latitude: number; longitude: number; label: string },
+) {
+  const updates: Partial<UserProfile> = enabled && place
+    ? {
+        location_sharing_enabled: true,
+        location_latitude: place.latitude,
+        location_longitude: place.longitude,
+        location_label: place.label,
+        location_updated_at: new Date().toISOString(),
+      }
+    : {
+        location_sharing_enabled: false,
+        location_latitude: null,
+        location_longitude: null,
+        location_label: null,
+        location_updated_at: null,
+      };
+  return updateProfile(userId, updates);
 }
 
 export async function fetchRelationship(userId: string): Promise<{
@@ -254,7 +278,10 @@ export async function fetchMoments(relationshipId: string, limit = 30, cursor?: 
 export async function createMoment(
   relationshipId: string,
   userId: string,
-  moment: { type: string; content?: string; media_url?: string; mood?: string },
+  moment: {
+    type: 'photo' | 'video';
+    media_url: string;
+  },
 ) {
   const { data, error } = await supabase
     .from('moments')
@@ -265,6 +292,12 @@ export async function createMoment(
 
   await supabase.rpc('update_streak', { p_relationship_id: relationshipId });
   return data as Moment;
+}
+
+export async function fetchMomentById(momentId: string) {
+  const { data, error } = await supabase.from('moments').select('*').eq('id', momentId).maybeSingle();
+  if (error) throw error;
+  return data as Moment | null;
 }
 
 export async function fetchMessages(relationshipId: string, limit = 50, cursor?: string) {
@@ -288,6 +321,7 @@ export async function sendMessage(
   content: string,
   mediaUrl?: string,
   mediaType?: string,
+  momentId?: string,
 ) {
   const { data, error } = await supabase
     .from('messages')
@@ -297,6 +331,7 @@ export async function sendMessage(
       content,
       media_url: mediaUrl,
       media_type: mediaType,
+      moment_id: momentId ?? null,
     })
     .select()
     .single();
@@ -341,6 +376,24 @@ export async function fetchActivities(relationshipId: string) {
 export async function fetchCalendarEvents(relationshipId: string, month?: Date) {
   const start = month ? new Date(month.getFullYear(), month.getMonth(), 1) : new Date();
   const end = new Date(start.getFullYear(), start.getMonth() + 1, 0, 23, 59, 59);
+
+  const { data, error } = await supabase
+    .from('calendar_events')
+    .select('*')
+    .eq('relationship_id', relationshipId)
+    .gte('date_time', start.toISOString())
+    .lte('date_time', end.toISOString())
+    .order('date_time', { ascending: true });
+
+  if (error) throw error;
+  return data as CalendarEvent[];
+}
+
+/** Future plans across the next N days — used for live countdown hero. */
+export async function fetchUpcomingCalendarEvents(relationshipId: string, daysAhead = 120) {
+  const start = new Date();
+  const end = new Date();
+  end.setDate(end.getDate() + daysAhead);
 
   const { data, error } = await supabase
     .from('calendar_events')
@@ -674,6 +727,7 @@ export async function createWatchSession(
     link?: string;
     platformId?: string;
     contentId?: string;
+    contentSource?: WatchSession['content_source'];
     scheduledAt?: string;
     reminderMinutes?: number;
     status?: WatchSession['status'];
@@ -689,6 +743,7 @@ export async function createWatchSession(
       link: payload.link?.trim() || null,
       platform_id: payload.platformId ?? null,
       content_id: payload.contentId ?? null,
+      content_source: payload.contentSource ?? 'streaming',
       scheduled_at: payload.scheduledAt ?? null,
       reminder_minutes: payload.reminderMinutes ?? null,
       status,
@@ -732,15 +787,18 @@ export async function setWatchPlayback(
 ) {
   return updateWatchSession(sessionId, {
     playback_state: playbackState,
-    ...(position != null ? { playback_position: position } : {}),
+    playback_updated_at: new Date().toISOString(),
+    ...(position != null ? { playback_position: Math.round(position) } : {}),
   });
 }
 
 export async function startScheduledSession(sessionId: string, hostUserId: string) {
   return updateWatchSession(sessionId, {
-    status: 'setup',
+    status: 'watching',
     ready_user_ids: [hostUserId],
     scheduled_at: null,
+    playback_state: 'paused',
+    playback_position: 0,
   });
 }
 
@@ -751,6 +809,40 @@ export async function addWatchReaction(sessionId: string, reactions: WatchReacti
 
 export async function endWatchSession(sessionId: string) {
   return updateWatchSession(sessionId, { status: 'ended' });
+}
+
+export async function fetchWatchMessages(sessionId: string): Promise<WatchMessage[]> {
+  const { data, error } = await supabase
+    .from('watch_messages')
+    .select('*')
+    .eq('session_id', sessionId)
+    .order('created_at', { ascending: true })
+    .limit(200);
+  if (error) {
+    if (isMissingTableError(error)) return [];
+    throw error;
+  }
+  return (data as WatchMessage[]) ?? [];
+}
+
+export async function sendWatchMessage(
+  sessionId: string,
+  relationshipId: string,
+  senderId: string,
+  message: string,
+): Promise<WatchMessage> {
+  const { data, error } = await supabase
+    .from('watch_messages')
+    .insert({
+      session_id: sessionId,
+      relationship_id: relationshipId,
+      sender_id: senderId,
+      message: message.trim(),
+    })
+    .select()
+    .single();
+  if (error) throw error;
+  return data as WatchMessage;
 }
 
 export async function fetchStreamingConnections(userId: string): Promise<StreamingConnection[]> {

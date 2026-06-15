@@ -1,12 +1,15 @@
 import { formatDistanceToNow } from 'date-fns';
 import * as Haptics from 'expo-haptics';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { StreamingPlatformIcon } from '@/components/watch/StreamingPlatformIcon';
-import { WatchScreen } from '@/components/watch/WatchScreen';
 import { Icon } from '@/components/ui/Icon';
-import { PrimaryButton } from '@/components/ui/primitives';
+import { Avatar, PrimaryButton } from '@/components/ui/primitives';
+import { FloatingReactions } from '@/components/watch/FloatingReactions';
+import { StreamingPlatformIcon } from '@/components/watch/StreamingPlatformIcon';
+import { SyncedYouTubePlayer, type SyncedYouTubePlayerHandle, type YTPlayerState } from '@/components/watch/SyncedYouTubePlayer';
+import { WatchChatTray } from '@/components/watch/WatchChatTray';
+import { WatchScreen } from '@/components/watch/WatchScreen';
 import { getStreamingPlatform } from '@/constants/streaming-platforms';
 import { WATCH_QUICK_REACTIONS } from '@/constants/watch-together';
 import { useWatchPartyNudge, useWatchSessionMutations } from '@/hooks/queries';
@@ -17,6 +20,16 @@ import { getFirstName } from '@/lib/avatar-initial';
 import { openStreamingSignIn } from '@/lib/streaming-platform';
 import { useAuthStore, useRelationshipStore } from '@/stores';
 import type { WatchSession } from '@/types/database';
+
+const DRIFT_THRESHOLD = 0.5; // seconds
+const SYNC_INTERVAL = 4000; // ms
+
+function expectedPosition(session: WatchSession): number {
+  const base = session.playback_position ?? 0;
+  if (session.playback_state !== 'playing' || !session.playback_updated_at) return base;
+  const elapsed = (Date.now() - new Date(session.playback_updated_at).getTime()) / 1000;
+  return base + Math.max(0, elapsed);
+}
 
 export function WatchRoom({
   session,
@@ -38,13 +51,35 @@ export function WatchRoom({
   const { requirePlus } = usePlusGate();
 
   const [countdown, setCountdown] = useState<number | null>(null);
+  const [tray, setTray] = useState<'chat' | null>(null);
+  const [elapsed, setElapsed] = useState(0);
 
   const isHost = session.host_user_id === user?.id;
-  const myReady = session.ready_user_ids.includes(user?.id ?? '');
-  const partnerReady = partner ? session.ready_user_ids.includes(partner.id) : false;
+  const isYouTube = session.content_source === 'youtube' && !!session.content_id;
+  const myJoined = session.ready_user_ids.includes(user?.id ?? '');
+  const partnerJoined = partner ? session.ready_user_ids.includes(partner.id) : true;
+  // Host enters immediately; partner sees a join screen until they tap "Join now"
+  const showJoinScreen = !isHost && !myJoined;
+  // Legacy countdown support for any existing setup/countdown sessions
+  const lobby = !isHost && (session.status === 'setup' || session.status === 'countdown') && !myJoined;
 
-  const recentReactions = useMemo(() => [...(session.reactions ?? [])].reverse().slice(0, 8), [session.reactions]);
+  const playerRef = useRef<SyncedYouTubePlayerHandle>(null);
+  const localTimeRef = useRef(0);
+  const lastSentStateRef = useRef<string>('');
 
+  const recentReactions = useMemo(() => [...(session.reactions ?? [])].reverse().slice(0, 6), [session.reactions]);
+
+  // Session timer
+  useEffect(() => {
+    if (lobby) return;
+    const started = new Date(session.created_at).getTime();
+    const tick = () => setElapsed(Math.max(0, Math.floor((Date.now() - started) / 1000)));
+    tick();
+    const t = setInterval(tick, 1000);
+    return () => clearInterval(t);
+  }, [lobby, session.created_at]);
+
+  // Countdown -> begin watching
   useEffect(() => {
     if (!session.countdown_at || session.status !== 'countdown') {
       setCountdown(null);
@@ -61,15 +96,57 @@ export function WatchRoom({
     return () => clearInterval(timer);
   }, [session.countdown_at, session.status, session.id, isHost, beginWatching]);
 
-  const handleMarkReady = () => {
-    markReady.mutate(session, {
-      onSuccess: (updated) => {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-        const ids = updated.ready_user_ids ?? [];
-        const allReady = partner ? ids.includes(partner.id) && ids.includes(user!.id) : ids.includes(user!.id);
-        if (allReady && session.status === 'setup' && isHost) startCountdown.mutate(session.id);
-      },
-    });
+  // Non-host: apply remote playback whenever the host changes it.
+  useEffect(() => {
+    if (isHost || !isYouTube || session.status !== 'watching') return;
+    const target = expectedPosition(session);
+    if (Math.abs(localTimeRef.current - target) > DRIFT_THRESHOLD) {
+      playerRef.current?.seekTo(target);
+    }
+    if (session.playback_state === 'playing') playerRef.current?.play();
+    else playerRef.current?.pause();
+  }, [isHost, isYouTube, session.status, session.playback_state, session.playback_position, session.playback_updated_at, session]);
+
+  // Drift correction (non-host) + heartbeat (host).
+  useEffect(() => {
+    if (!isYouTube || session.status !== 'watching') return;
+    const id = setInterval(() => {
+      if (session.playback_state !== 'playing') return;
+      if (isHost) {
+        // Keep the extrapolation base fresh.
+        setPlayback.mutate({ sessionId: session.id, state: 'playing', position: localTimeRef.current });
+      } else {
+        const target = expectedPosition(session);
+        if (Math.abs(localTimeRef.current - target) > DRIFT_THRESHOLD) {
+          playerRef.current?.seekTo(target);
+          playerRef.current?.play();
+        }
+      }
+    }, SYNC_INTERVAL);
+    return () => clearInterval(id);
+  }, [isHost, isYouTube, session.status, session.playback_state, session, setPlayback]);
+
+  const handleProgress = useCallback((seconds: number) => {
+    localTimeRef.current = seconds;
+  }, []);
+
+  const handlePlayerState = useCallback(
+    (state: YTPlayerState, time: number) => {
+      localTimeRef.current = time;
+      if (!isHost) return;
+      if (state === 'playing' || state === 'paused') {
+        const key = `${state}-${Math.round(time)}`;
+        if (key === lastSentStateRef.current) return;
+        lastSentStateRef.current = key;
+        setPlayback.mutate({ sessionId: session.id, state, position: time });
+      }
+    },
+    [isHost, session.id, setPlayback],
+  );
+
+  const handleJoin = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    markReady.mutate(session);
   };
 
   const handleNudge = () => {
@@ -87,23 +164,22 @@ export function WatchRoom({
     if (session.link) await Linking.openURL(session.link);
   };
 
-  const togglePlayback = () => {
+  const hostTogglePlay = () => {
     if (!isHost) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    setPlayback.mutate({
-      sessionId: session.id,
-      state: session.playback_state === 'playing' ? 'paused' : 'playing',
-    });
+    const next = session.playback_state === 'playing' ? 'paused' : 'playing';
+    if (next === 'playing') playerRef.current?.play();
+    else playerRef.current?.pause();
+    setPlayback.mutate({ sessionId: session.id, state: next, position: localTimeRef.current });
   };
 
-  const seek = (delta: number) => {
+  const hostSeek = (delta: number) => {
     if (!isHost) return;
     Haptics.selectionAsync();
-    setPlayback.mutate({
-      sessionId: session.id,
-      state: session.playback_state,
-      position: Math.max(0, (session.playback_position ?? 0) + delta),
-    });
+    const target = Math.max(0, localTimeRef.current + delta);
+    localTimeRef.current = target;
+    playerRef.current?.seekTo(target);
+    setPlayback.mutate({ sessionId: session.id, state: session.playback_state, position: target });
   };
 
   const handleEnd = () => {
@@ -112,19 +188,12 @@ export function WatchRoom({
       {
         text: 'End party',
         style: 'destructive',
-        onPress: () =>
-          end.mutate(session.id, {
-            onSuccess: () => onEnded(session.title, session.platform_id),
-          }),
+        onPress: () => end.mutate(session.id, { onSuccess: () => onEnded(session.title, session.platform_id) }),
       },
     ]);
   };
 
-  const handleVideoCall = () => {
-    requirePlus('Video calls during watch parties', () => startCall('video'));
-  };
-
-  const lobby = session.status === 'setup' || session.status === 'countdown';
+  const handleVideoCall = () => requirePlus('Video calls during watch parties', () => startCall('video'));
 
   return (
     <WatchScreen
@@ -135,51 +204,110 @@ export function WatchRoom({
           <Text style={{ color: colors.error, fontWeight: '800', fontSize: 14 }}>End</Text>
         </Pressable>
       }>
-      {/* Room status header */}
+      {/* Presence + timer bar */}
       <View style={[styles.statusBar, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-        <StreamingPlatformIcon platformId={session.platform_id ?? 'other'} size={36} />
+        <View style={styles.presence}>
+          <Avatar name={partner?.name} imageUrl={partner?.avatar_url} size={32} />
+          <View style={[
+            styles.presenceDot,
+            { backgroundColor: partnerJoined ? colors.success : colors.textTertiary, borderColor: colors.surface },
+          ]} />
+        </View>
         <View style={{ flex: 1 }}>
           <Text style={[styles.statusTitle, { color: colors.text }]} numberOfLines={1}>
-            {session.platform_id ? getStreamingPlatform(session.platform_id).name : 'Watch party'}
+            {isYouTube ? 'YouTube' : session.platform_id ? getStreamingPlatform(session.platform_id).name : 'Watch party'}
           </Text>
           <Text style={{ color: colors.textTertiary, fontSize: 12 }}>
-            {lobby ? 'Getting ready' : 'Live'} · started {formatDistanceToNow(new Date(session.created_at), { addSuffix: true })}
+            {partnerJoined ? `${partnerName} watching with you` : `${partnerName} hasn't joined yet`}
           </Text>
         </View>
-        <View style={[styles.liveDot, { backgroundColor: lobby ? colors.warning : colors.success }]} />
+        {!showJoinScreen && (
+          <View style={[styles.timer, { backgroundColor: colors.surfaceElevated }]}>
+            <View style={[styles.liveDot, { backgroundColor: colors.success }]} />
+            <Text style={{ color: colors.textSecondary, fontWeight: '700', fontSize: 12 }}>{formatClock(elapsed)}</Text>
+          </View>
+        )}
       </View>
 
-      {lobby ? (
-        <View style={[styles.lobby, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <View style={styles.readyRow}>
-            <ReadyPill label="You" ready={myReady} colors={colors} />
-            {partner && <ReadyPill label={partnerName} ready={partnerReady} colors={colors} />}
+      {/* Partner join screen — shown until they tap "Join now" */}
+      {showJoinScreen && (
+        <View style={[styles.joinCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <StreamingPlatformIcon platformId={session.platform_id ?? 'other'} size={56} />
+          <View style={{ alignItems: 'center', gap: 4 }}>
+            <Text style={[styles.joinTitle, { color: colors.text }]}>{session.title}</Text>
+            <Text style={{ color: colors.textSecondary, fontSize: 14 }}>
+              {partnerName} started watching
+            </Text>
+            {session.playback_position > 0 && (
+              <Text style={{ color: colors.textTertiary, fontSize: 12 }}>
+                {isYouTube ? 'At' : 'Around'} {formatClock(session.playback_position)} into the video
+              </Text>
+            )}
+          </View>
+          <PrimaryButton label="Join now" onPress={handleJoin} loading={markReady.isPending} />
+          <Pressable onPress={handleNudge} style={[styles.nudgeBtn, { backgroundColor: colors.accentSoft }]}>
+            <Text style={{ color: colors.accent, fontWeight: '700' }}>Send a nudge instead</Text>
+          </Pressable>
+        </View>
+      )}
+
+      {/* Host: "waiting for partner" inline nudge strip */}
+      {isHost && !partnerJoined && !showJoinScreen && (
+        <Pressable
+          onPress={handleNudge}
+          style={[styles.waitingBanner, { backgroundColor: colors.accentSoft, borderColor: colors.accent }]}>
+          <View style={[styles.liveDot, { backgroundColor: colors.accent }]} />
+          <Text style={{ color: colors.accent, fontWeight: '700', flex: 1, fontSize: 13 }}>
+            Waiting for {partnerName} to join
+          </Text>
+          <Text style={{ color: colors.accent, fontSize: 12, fontWeight: '700' }}>Nudge ›</Text>
+        </Pressable>
+      )}
+
+      {!showJoinScreen && isYouTube ? (
+        <>
+          {/* Embedded synced player */}
+          <View>
+            <SyncedYouTubePlayer
+              ref={playerRef}
+              videoId={session.content_id!}
+              controls={false}
+              onProgress={handleProgress}
+              onStateChange={handlePlayerState}
+            />
+            <FloatingReactions reactions={session.reactions ?? []} />
           </View>
 
-          {!myReady && <PrimaryButton label="I'm ready" onPress={handleMarkReady} loading={markReady.isPending} />}
+          {/* Host playback controls */}
+          <View style={[styles.playerControls, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <View style={[styles.syncDot, { backgroundColor: session.playback_state === 'playing' ? colors.success : colors.warning }]} />
+            <Text style={{ color: colors.text, fontWeight: '700', fontSize: 13 }}>
+              {session.playback_state === 'playing' ? 'Playing' : 'Paused'} · in sync
+            </Text>
+            <View style={{ flex: 1 }} />
+            {isHost ? (
+              <View style={styles.hostControls}>
+                <Pressable onPress={() => hostSeek(-10)} hitSlop={6} style={[styles.ctrlBtn, { backgroundColor: colors.surfaceElevated }]}>
+                  <Icon name="chevronLeft" size={18} color={colors.textSecondary} />
+                </Pressable>
+                <Pressable onPress={hostTogglePlay} style={[styles.ctrlPlay, { backgroundColor: colors.accent }]}>
+                  <Icon name={session.playback_state === 'playing' ? 'pause' : 'play'} size={20} color={colors.onAccent} />
+                </Pressable>
+                <Pressable onPress={() => hostSeek(10)} hitSlop={6} style={[styles.ctrlBtn, { backgroundColor: colors.surfaceElevated }]}>
+                  <Icon name="chevronRight" size={18} color={colors.textSecondary} />
+                </Pressable>
+              </View>
+            ) : (
+              <Text style={{ color: colors.textTertiary, fontSize: 12 }}>{partnerName} is hosting</Text>
+            )}
+          </View>
 
-          {myReady && partner && !partnerReady && session.status === 'setup' && (
-            <>
-              <Text style={{ color: colors.textSecondary, textAlign: 'center' }}>
-                Waiting for {partnerName} to get ready…
-              </Text>
-              <Pressable onPress={handleNudge} style={[styles.nudgeBtn, { backgroundColor: colors.accentSoft }]}>
-                <Text style={{ color: colors.accent, fontWeight: '700' }}>Nudge {partnerName}</Text>
-              </Pressable>
-            </>
-          )}
-
-          {session.status === 'countdown' && countdown !== null && (
-            <View style={styles.countdownWrap}>
-              <Text style={[styles.countdownLabel, { color: colors.textSecondary }]}>Press play in</Text>
-              <Text style={[styles.countdownNum, { color: colors.accent }]}>{countdown}</Text>
-              <Text style={{ color: colors.textTertiary, fontSize: 13 }}>Open your app and hit play together</Text>
-            </View>
-          )}
-        </View>
-      ) : (
+          {renderReactionBar()}
+          {renderCommunication()}
+        </>
+      ) : !showJoinScreen ? (
         <>
-          {/* Now playing + open */}
+          {/* Companion (streaming) mode */}
           <View style={[styles.nowPlaying, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <Icon name="film" size={28} color={colors.accent} />
             <View style={{ flex: 1 }}>
@@ -191,141 +319,143 @@ export function WatchRoom({
             </Pressable>
           </View>
 
-          {/* Sync / playback controls */}
-          <View style={[styles.syncBox, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <View style={styles.syncHead}>
-              <View style={[styles.syncDot, { backgroundColor: session.playback_state === 'playing' ? colors.success : colors.warning }]} />
-              <Text style={{ color: colors.text, fontWeight: '700' }}>
-                {session.playback_state === 'playing' ? 'Playing' : 'Paused'} · {formatPos(session.playback_position)}
-              </Text>
-              <Text style={{ color: colors.textTertiary, fontSize: 12, marginLeft: 'auto' }}>
-                {isHost ? 'You host' : `${partnerName} hosts`}
-              </Text>
-            </View>
-
-            <View style={styles.controls}>
-              <ControlBtn icon="chevronLeft" label="-15s" disabled={!isHost} onPress={() => seek(-15)} colors={colors} />
-              <Pressable
-                onPress={togglePlayback}
-                disabled={!isHost}
-                style={[styles.playBtn, { backgroundColor: isHost ? colors.accent : colors.surfaceElevated, opacity: isHost ? 1 : 0.6 }]}>
-                <Icon
-                  name={session.playback_state === 'playing' ? 'pause' : 'play'}
-                  size={26}
-                  color={isHost ? colors.onAccent : colors.textSecondary}
-                />
-              </Pressable>
-              <ControlBtn icon="chevronRight" label="+15s" disabled={!isHost} onPress={() => seek(15)} colors={colors} />
-            </View>
-            {!isHost && (
-              <Text style={{ color: colors.textTertiary, fontSize: 12, textAlign: 'center' }}>
-                {partnerName} controls playback — your screen stays in sync.
-              </Text>
+          <View style={[styles.playerControls, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <View style={[styles.syncDot, { backgroundColor: session.playback_state === 'playing' ? colors.success : colors.warning }]} />
+            <Text style={{ color: colors.text, fontWeight: '700', fontSize: 13 }}>
+              {session.playback_state === 'playing' ? 'Playing' : 'Paused'} · {formatClock(session.playback_position)}
+            </Text>
+            <View style={{ flex: 1 }} />
+            {isHost ? (
+              <View style={styles.hostControls}>
+                <Pressable onPress={() => hostSeekStreaming(-15)} hitSlop={6} style={[styles.ctrlBtn, { backgroundColor: colors.surfaceElevated }]}>
+                  <Text style={{ color: colors.textSecondary, fontSize: 11, fontWeight: '700' }}>-15</Text>
+                </Pressable>
+                <Pressable onPress={hostToggleStreaming} style={[styles.ctrlPlay, { backgroundColor: colors.accent }]}>
+                  <Icon name={session.playback_state === 'playing' ? 'pause' : 'play'} size={20} color={colors.onAccent} />
+                </Pressable>
+                <Pressable onPress={() => hostSeekStreaming(15)} hitSlop={6} style={[styles.ctrlBtn, { backgroundColor: colors.surfaceElevated }]}>
+                  <Text style={{ color: colors.textSecondary, fontSize: 11, fontWeight: '700' }}>+15</Text>
+                </Pressable>
+              </View>
+            ) : (
+              <Text style={{ color: colors.textTertiary, fontSize: 12 }}>{partnerName} is hosting</Text>
             )}
           </View>
 
-          {/* Communication */}
-          <View style={styles.callRow}>
-            <Pressable onPress={() => startCall('audio')} style={[styles.callBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-              <Icon name="call" size={18} color={colors.accent} />
-              <Text style={{ color: colors.text, fontWeight: '700', fontSize: 13 }}>Voice call</Text>
-            </Pressable>
-            <Pressable onPress={handleVideoCall} style={[styles.callBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-              <Icon name="videocam" size={18} color={colors.accent} />
-              <Text style={{ color: colors.text, fontWeight: '700', fontSize: 13 }}>Video call</Text>
-            </Pressable>
-          </View>
-
-          {/* Quick reactions */}
-          <Text style={[styles.reactLabel, { color: colors.text }]}>Quick reactions</Text>
-          <View style={styles.reactRow}>
-            {WATCH_QUICK_REACTIONS.map((r) => (
-              <Pressable
-                key={r.emoji}
-                onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  react.mutate({ session, emoji: r.emoji });
-                }}
-                style={[styles.reactBtn, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
-                <Text style={styles.reactEmoji}>{r.emoji}</Text>
-                <Text style={{ color: colors.textSecondary, fontSize: 10, fontWeight: '600' }} numberOfLines={1}>
-                  {r.label}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
-
-          {recentReactions.length > 0 && (
-            <View style={[styles.reactFeed, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-              {recentReactions.map((r, i) => (
-                <Text key={`${r.at}-${i}`} style={{ color: colors.textSecondary, fontSize: 14 }}>
-                  {r.emoji} {r.user_id === user?.id ? 'You' : partnerName}{' '}
-                  <Text style={{ color: colors.textTertiary, fontSize: 12 }}>
-                    {formatDistanceToNow(new Date(r.at), { addSuffix: true })}
-                  </Text>
-                </Text>
-              ))}
-            </View>
-          )}
+          {renderReactionBar()}
+          {renderCommunication()}
         </>
-      )}
+      ) : null}
     </WatchScreen>
   );
+
+  function hostToggleStreaming() {
+    if (!isHost) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    const next = session.playback_state === 'playing' ? 'paused' : 'playing';
+    setPlayback.mutate({ sessionId: session.id, state: next });
+  }
+
+  function hostSeekStreaming(delta: number) {
+    if (!isHost) return;
+    Haptics.selectionAsync();
+    setPlayback.mutate({
+      sessionId: session.id,
+      state: session.playback_state,
+      position: Math.max(0, (session.playback_position ?? 0) + delta),
+    });
+  }
+
+  function renderReactionBar() {
+    return (
+      <View style={styles.reactBar}>
+        {WATCH_QUICK_REACTIONS.map((r) => (
+          <Pressable
+            key={r.emoji}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              react.mutate({ session, emoji: r.emoji });
+            }}
+            style={[styles.reactBtn, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
+            <Text style={styles.reactEmoji}>{r.emoji}</Text>
+          </Pressable>
+        ))}
+      </View>
+    );
+  }
+
+  function renderCommunication() {
+    return (
+      <>
+        <View style={styles.commRow}>
+          <CommButton
+            icon="chat"
+            label="Chat"
+            active={tray === 'chat'}
+            onPress={() => setTray((t) => (t === 'chat' ? null : 'chat'))}
+            colors={colors}
+          />
+          <CommButton icon="call" label="Voice" onPress={() => startCall('audio')} colors={colors} />
+          <CommButton icon="videocam" label="Video" onPress={handleVideoCall} colors={colors} />
+        </View>
+
+        {tray === 'chat' && <WatchChatTray sessionId={session.id} />}
+
+        {tray !== 'chat' && recentReactions.length > 0 && (
+          <View style={[styles.reactFeed, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            {recentReactions.map((r, i) => (
+              <Text key={`${r.at}-${i}`} style={{ color: colors.textSecondary, fontSize: 14 }}>
+                {r.emoji} {r.user_id === user?.id ? 'You' : partnerName}{' '}
+                <Text style={{ color: colors.textTertiary, fontSize: 12 }}>
+                  {formatDistanceToNow(new Date(r.at), { addSuffix: true })}
+                </Text>
+              </Text>
+            ))}
+          </View>
+        )}
+      </>
+    );
+  }
 }
 
-function ControlBtn({
+function CommButton({
   icon,
   label,
-  disabled,
+  active,
   onPress,
   colors,
 }: {
-  icon: 'chevronLeft' | 'chevronRight';
+  icon: 'chat' | 'call' | 'videocam';
   label: string;
-  disabled?: boolean;
+  active?: boolean;
   onPress: () => void;
   colors: ReturnType<typeof useTheme>['colors'];
 }) {
   return (
     <Pressable
       onPress={onPress}
-      disabled={disabled}
-      style={[styles.controlBtn, { backgroundColor: colors.surfaceElevated, borderColor: colors.border, opacity: disabled ? 0.5 : 1 }]}>
-      <Icon name={icon} size={18} color={colors.textSecondary} />
-      <Text style={{ color: colors.textSecondary, fontSize: 11, fontWeight: '700' }}>{label}</Text>
+      style={[
+        styles.commBtn,
+        {
+          backgroundColor: active ? colors.accent : colors.surface,
+          borderColor: active ? colors.accent : colors.border,
+        },
+      ]}>
+      <Icon name={icon} size={18} color={active ? colors.onAccent : colors.accent} filled={active} />
+      <Text style={{ color: active ? colors.onAccent : colors.text, fontWeight: '700', fontSize: 13 }}>{label}</Text>
     </Pressable>
   );
 }
 
-function ReadyPill({
-  label,
-  ready,
-  colors,
-}: {
-  label: string;
-  ready: boolean;
-  colors: ReturnType<typeof useTheme>['colors'];
-}) {
-  return (
-    <View
-      style={[
-        styles.readyPill,
-        {
-          backgroundColor: ready ? colors.success + '22' : colors.surfaceElevated,
-          borderColor: ready ? colors.success : colors.border,
-        },
-      ]}>
-      <Icon name={ready ? 'check' : 'film'} size={16} color={ready ? colors.success : colors.textSecondary} />
-      <Text style={{ color: ready ? colors.success : colors.textSecondary, fontWeight: '700' }}>{label}</Text>
-    </View>
-  );
-}
 
-function formatPos(seconds: number): string {
+function formatClock(seconds: number): string {
   const s = Math.max(0, Math.floor(seconds));
-  const m = Math.floor(s / 60);
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
   const r = s % 60;
-  return `${m}:${r.toString().padStart(2, '0')}`;
+  const mm = m.toString().padStart(2, '0');
+  const ss = r.toString().padStart(2, '0');
+  return h > 0 ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
 }
 
 const styles = StyleSheet.create({
@@ -333,27 +463,41 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    padding: 14,
+    padding: 12,
     borderRadius: 16,
     borderWidth: StyleSheet.hairlineWidth,
   },
-  statusTitle: { fontSize: 16, fontWeight: '800' },
-  liveDot: { width: 10, height: 10, borderRadius: 5 },
-  lobby: { borderRadius: 20, borderWidth: StyleSheet.hairlineWidth, padding: 20, gap: 14, alignItems: 'center' },
-  readyRow: { flexDirection: 'row', gap: 10 },
-  readyPill: {
+  presence: { width: 36, height: 36 },
+  presenceDot: {
+    position: 'absolute',
+    right: -1,
+    bottom: -1,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    borderWidth: 2,
+  },
+  statusTitle: { fontSize: 15, fontWeight: '800' },
+  timer: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999 },
+  liveDot: { width: 8, height: 8, borderRadius: 4 },
+  joinCard: {
+    borderRadius: 24,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: 28,
+    gap: 18,
+    alignItems: 'center',
+  },
+  joinTitle: { fontSize: 20, fontWeight: '900', textAlign: 'center' },
+  waitingBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 10,
     paddingHorizontal: 14,
     paddingVertical: 10,
-    borderRadius: 999,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 12,
+    borderWidth: 1,
   },
   nudgeBtn: { paddingHorizontal: 20, paddingVertical: 12, borderRadius: 999 },
-  countdownWrap: { alignItems: 'center', gap: 4, marginTop: 4 },
-  countdownLabel: { fontSize: 13, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.8 },
-  countdownNum: { fontSize: 64, fontWeight: '900', lineHeight: 72 },
   nowPlaying: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -363,21 +507,29 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
   },
   openBtn: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
-  syncBox: { borderRadius: 18, borderWidth: StyleSheet.hairlineWidth, padding: 16, gap: 14 },
-  syncHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  syncDot: { width: 8, height: 8, borderRadius: 4 },
-  controls: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 18 },
-  controlBtn: {
+  playerControls: {
+    flexDirection: 'row',
     alignItems: 'center',
-    gap: 2,
-    paddingHorizontal: 16,
+    gap: 8,
+    padding: 12,
+    borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  syncDot: { width: 8, height: 8, borderRadius: 4 },
+  hostControls: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  ctrlBtn: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
+  ctrlPlay: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
+  reactBar: { flexDirection: 'row', justifyContent: 'space-between', gap: 8 },
+  reactBtn: {
+    flex: 1,
+    alignItems: 'center',
     paddingVertical: 10,
     borderRadius: 14,
     borderWidth: StyleSheet.hairlineWidth,
   },
-  playBtn: { width: 64, height: 64, borderRadius: 32, alignItems: 'center', justifyContent: 'center' },
-  callRow: { flexDirection: 'row', gap: 10 },
-  callBtn: {
+  reactEmoji: { fontSize: 24 },
+  commRow: { flexDirection: 'row', gap: 10 },
+  commBtn: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
@@ -387,16 +539,5 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     borderWidth: StyleSheet.hairlineWidth,
   },
-  reactLabel: { fontSize: 16, fontWeight: '800' },
-  reactRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  reactBtn: {
-    width: 64,
-    alignItems: 'center',
-    gap: 3,
-    paddingVertical: 10,
-    borderRadius: 16,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
-  reactEmoji: { fontSize: 24 },
   reactFeed: { borderRadius: 16, borderWidth: StyleSheet.hairlineWidth, padding: 14, gap: 8 },
 });
