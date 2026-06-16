@@ -1,5 +1,5 @@
-import { usePathname, useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
+import { usePathname, useRouter } from 'expo-router';
 import { useMemo } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';

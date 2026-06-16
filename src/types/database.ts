@@ -84,8 +84,11 @@ export interface Message {
   media_url: string | null;
   media_type: 'image' | 'voice' | 'video' | null;
   moment_id: string | null;
+  reply_to_id: string | null;
   reactions: Record<string, string[]>;
   is_pinned: boolean;
+  deleted_for_all: boolean;
+  hidden_for: string[];
   read_at: string | null;
   created_at: string;
   sender?: UserProfile;

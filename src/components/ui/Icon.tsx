@@ -54,7 +54,9 @@ export type IconName =
   | 'flipCamera'
   | 'flash'
   | 'download'
-  | 'expand';
+  | 'expand'
+  | 'reply'
+  | 'moreVertical';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
 
@@ -112,6 +114,8 @@ const ICON_MAP: Record<IconName, { outline: IoniconName; filled: IoniconName }> 
   flash: { outline: 'flash-outline', filled: 'flash' },
   download: { outline: 'download-outline', filled: 'download' },
   expand: { outline: 'expand-outline', filled: 'expand' },
+  reply: { outline: 'arrow-undo-outline', filled: 'arrow-undo' },
+  moreVertical: { outline: 'ellipsis-vertical', filled: 'ellipsis-vertical' },
 };
 
 interface IconProps {

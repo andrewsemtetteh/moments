@@ -1,3 +1,4 @@
+import { PartnerStatusLine } from '@/components/chat/PartnerStatusLine';
 import { Icon } from '@/components/ui/Icon';
 import { Avatar } from '@/components/ui/primitives';
 import { useTheme } from '@/hooks/useTheme';
@@ -7,17 +8,25 @@ import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 interface Props {
   visible: boolean;
   partnerTyping: boolean;
+  partnerOnline: boolean;
+  partnerLastSeenAt: string | null;
   onClose: () => void;
   onSendMessage: () => void;
   onViewAvatar?: () => void;
+  onViewProfile?: () => void;
+  onViewMoments?: () => void;
 }
 
 export function PartnerInfoSheet({
   visible,
   partnerTyping,
+  partnerOnline,
+  partnerLastSeenAt,
   onClose,
   onSendMessage,
   onViewAvatar,
+  onViewProfile,
+  onViewMoments,
 }: Props) {
   const { colors } = useTheme();
   const partner = useRelationshipStore((s) => s.partner);
@@ -51,10 +60,12 @@ export function PartnerInfoSheet({
           <Text style={[styles.name, { color: colors.text }]}>{partner?.name ?? 'Partner'}</Text>
 
           <View style={[styles.statusPill, { backgroundColor: colors.accentSoft }]}>
-            <View style={[styles.statusDot, { backgroundColor: partnerTyping ? colors.accent : colors.success }]} />
-            <Text style={[styles.statusText, { color: colors.accent }]}>
-              {partnerTyping ? 'Typing…' : 'In your space'}
-            </Text>
+            <PartnerStatusLine
+              isTyping={partnerTyping}
+              isOnline={partnerOnline}
+              lastSeenAt={partnerLastSeenAt}
+              textStyle={styles.statusText}
+            />
           </View>
 
           {since && (
@@ -75,14 +86,14 @@ export function PartnerInfoSheet({
 
             <Pressable
               style={[styles.actionBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
-              onPress={onClose}>
+              onPress={() => { onClose(); onViewMoments?.(); }}>
               <Icon name="camera" size={22} color={colors.accent} />
               <Text style={[styles.actionLabel, { color: colors.text }]}>Moments</Text>
             </Pressable>
 
             <Pressable
               style={[styles.actionBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
-              onPress={onClose}>
+              onPress={() => { onClose(); onViewProfile?.(); }}>
               <Icon name="heart" size={22} color={colors.accent} />
               <Text style={[styles.actionLabel, { color: colors.text }]}>Profile</Text>
             </Pressable>
@@ -129,7 +140,6 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     marginBottom: 8,
   },
-  statusDot: { width: 8, height: 8, borderRadius: 4 },
   statusText: { fontSize: 13, fontWeight: '600' },
   since: { fontSize: 13, marginBottom: 20 },
   divider: { width: '100%', height: StyleSheet.hairlineWidth, marginBottom: 20 },

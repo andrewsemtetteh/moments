@@ -1,50 +1,56 @@
 import { useQueryClient } from '@tanstack/react-query';
 import {
-    RecordingPresets,
-    requestRecordingPermissionsAsync,
-    setAudioModeAsync,
-    useAudioRecorder,
+  RecordingPresets,
+  requestRecordingPermissionsAsync,
+  setAudioModeAsync,
+  useAudioRecorder,
 } from 'expo-audio';
 import * as Haptics from 'expo-haptics';
-import * as ImagePicker from 'expo-image-picker';
 import { Image } from 'expo-image';
+import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-    Alert,
-    FlatList,
-    Keyboard,
-    KeyboardAvoidingView,
-    Modal,
-    Platform,
-    Pressable,
-    StyleSheet,
-    Text,
-    TextInput,
-    View,
+  Alert,
+  FlatList,
+  Keyboard,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
 } from 'react-native';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ChatAttachmentSheet } from '@/components/chat/ChatAttachmentSheet';
 import { ChatBubble } from '@/components/chat/ChatBubble';
 import { ChatEmojiPicker } from '@/components/chat/ChatEmojiPicker';
+import { ChatEmptyProfile } from '@/components/chat/ChatEmptyProfile';
 import { ChatDateSeparator, ChatUnreadDivider } from '@/components/chat/ChatListSeparators';
+import { ChatMessageActionSheet } from '@/components/chat/ChatMessageActionSheet';
+import { ChatReplyBar } from '@/components/chat/ChatReplyBar';
 import { ChatWallpaper } from '@/components/chat/ChatWallpaper';
 import { PartnerInfoSheet } from '@/components/chat/PartnerInfoSheet';
+import { PartnerStatusLine } from '@/components/chat/PartnerStatusLine';
 import { LoadingState } from '@/components/home/MoodSnapshot';
 import { FullScreenImageModal } from '@/components/ui/FullScreenImageModal';
 import { Icon } from '@/components/ui/Icon';
 import { Avatar } from '@/components/ui/primitives';
-import { REACTION_EMOJI } from '@/constants/design-system';
 import {
-    useMessageActions,
-    useMessages,
-    useRealtimeSubscription,
-    useSendMessage,
+  useMessageActions,
+  useMessages,
+  useRealtimeSubscription,
+  useSendMessage,
 } from '@/hooks/queries';
+import { usePartnerPresence } from '@/hooks/usePartnerPresence';
 import { useStartCall } from '@/hooks/useStartCall';
 import { useTheme } from '@/hooks/useTheme';
 import { buildChatListItems, type ChatListItem } from '@/lib/chat-list';
+import { goBackOrReplace } from '@/lib/router';
 import { supabase } from '@/lib/supabase';
 import * as api from '@/services/api';
 import { useAuthStore, useOfflineStore, useRelationshipStore, useUIStore } from '@/stores';
@@ -52,6 +58,8 @@ import type { Message } from '@/types/database';
 
 /** Distance from top of screen to top of KAV (safe area + header row height). */
 const HEADER_CONTENT_HEIGHT = 54;
+const CHAT_DISMISS_THRESHOLD = 72;
+const CHAT_DISMISS_VELOCITY = 850;
 
 export default function ChatScreen() {
   const router = useRouter();
@@ -75,6 +83,7 @@ export default function ChatScreen() {
   // UI
   const [optimisticMessages, setOptimisticMessages] = useState<Message[]>([]);
   const [selected, setSelected] = useState<Message | null>(null);
+  const [replyTo, setReplyTo] = useState<Message | null>(null);
   const [partnerTyping, setPartnerTyping] = useState(false);
   const [showPartnerInfo, setShowPartnerInfo] = useState(false);
   const [showPartnerAvatar, setShowPartnerAvatar] = useState(false);
@@ -95,8 +104,13 @@ export default function ChatScreen() {
   const inputRef = useRef<TextInput>(null);
 
   const { data: messages, isLoading, refetch } = useMessages();
+  const { isOnline: partnerOnline, lastSeenAt: partnerLastSeenAt } = usePartnerPresence(
+    relationship?.id,
+    user?.id,
+    partner?.id,
+  );
   const sendMessage = useSendMessage();
-  const { react, pin } = useMessageActions();
+  const { react, pin, deleteForMe, deleteForAll } = useMessageActions();
 
   useRealtimeSubscription('messages');
 
@@ -132,12 +146,19 @@ export default function ChatScreen() {
     setInitialUnreadIds(unread);
   }, [messages, user, initialUnreadIds]);
 
-  // Mark messages read, clear badge
+  // Mark messages read after a short delay so unread styling / divider are visible first.
   useEffect(() => {
-    if (!relationship || !user) return;
-    void api.markMessagesRead(relationship.id, user.id).then(() => {
-      queryClient.invalidateQueries({ queryKey: ['unreadMessages', relationship.id, user.id] });
-    });
+    if (!relationship || !user || !messages) return;
+    const hasPartnerUnread = messages.some((m) => m.sender_id !== user.id && !m.read_at);
+    if (!hasPartnerUnread) return;
+
+    const timer = setTimeout(() => {
+      void api.markMessagesRead(relationship.id, user.id).then(() => {
+        queryClient.invalidateQueries({ queryKey: ['messages', relationship.id] });
+        queryClient.invalidateQueries({ queryKey: ['unreadMessages', relationship.id, user.id] });
+      });
+    }, 1500);
+    return () => clearTimeout(timer);
   }, [relationship, user, messages, queryClient]);
 
   // Typing broadcast
@@ -192,6 +213,10 @@ export default function ChatScreen() {
     () => [...(messages ?? []), ...optimisticMessages],
     [messages, optimisticMessages],
   );
+  const messageById = useMemo(
+    () => new Map(allMessages.map((message) => [message.id, message])),
+    [allMessages],
+  );
   const pinned = useMemo(() => (messages ?? []).filter((m) => m.is_pinned), [messages]);
   const listItems = useMemo(() => {
     if (!user) return [];
@@ -228,9 +253,11 @@ export default function ChatScreen() {
           mediaType: chatMomentReply.momentType === 'video' ? 'video' : 'image',
         }
       : {};
+    const replyToId = replyTo?.id.startsWith('temp-') ? undefined : replyTo?.id;
     setText('');
     setShowEmoji(false);
     setChatMomentReply(null);
+    setReplyTo(null);
 
     const optimistic: Message = {
       id: `temp-${Date.now()}`,
@@ -240,8 +267,11 @@ export default function ChatScreen() {
       media_url: momentPayload.mediaUrl ?? null,
       media_type: momentPayload.mediaType ?? null,
       moment_id: momentPayload.momentId ?? null,
+      reply_to_id: replyToId ?? null,
       reactions: {},
       is_pinned: false,
+      deleted_for_all: false,
+      hidden_for: [],
       read_at: null,
       created_at: new Date().toISOString(),
     };
@@ -252,13 +282,13 @@ export default function ChatScreen() {
       return;
     }
     try {
-      await sendMessage.mutateAsync({ content, ...momentPayload });
+      await sendMessage.mutateAsync({ content, ...momentPayload, replyToId });
       await api.trackEvent(relationship.id, user.id, 'message_sent');
       setOptimisticMessages((prev) => prev.filter((m) => m.id !== optimistic.id));
     } catch {
       addToQueue({ id: optimistic.id, type: 'message', payload: { content, ...momentPayload } });
     }
-  }, [text, user, relationship, chatMomentReply, isOffline, sendMessage, addToQueue, setChatMomentReply]);
+  }, [text, user, relationship, chatMomentReply, replyTo, isOffline, sendMessage, addToQueue, setChatMomentReply]);
 
   // ─── Emoji insert ─────────────────────────────────────────────────────────
   const handleEmojiSelect = (emoji: string) => {
@@ -288,8 +318,11 @@ export default function ChatScreen() {
         media_url: publicUrl,
         media_type: mediaType,
         moment_id: null,
+        reply_to_id: null,
         reactions: {},
         is_pinned: false,
+        deleted_for_all: false,
+        hidden_for: [],
         read_at: null,
         created_at: new Date().toISOString(),
       };
@@ -411,8 +444,11 @@ export default function ChatScreen() {
         media_url: publicUrl,
         media_type: 'voice',
         moment_id: null,
+        reply_to_id: null,
         reactions: {},
         is_pinned: false,
+        deleted_for_all: false,
+        hidden_for: [],
         read_at: null,
         created_at: new Date().toISOString(),
       };
@@ -437,12 +473,31 @@ export default function ChatScreen() {
   };
 
   const startCall = useStartCall();
+  const translateX = useSharedValue(0);
 
-  const renderItem = ({ item }: { item: ChatListItem }) => {
-    if (item.type === 'date') return <ChatDateSeparator label={item.label} />;
-    if (item.type === 'unread') return <ChatUnreadDivider count={item.count} />;
-    return <ChatBubble message={item.message} onLongPress={setSelected} />;
-  };
+  const closeChat = useCallback(() => {
+    goBackOrReplace(router, '/(tabs)/home');
+  }, [router]);
+
+  const dismissPan = Gesture.Pan()
+    .activeOffsetX(-18)
+    .failOffsetY([-12, 12])
+    .onUpdate((e) => {
+      if (e.translationX < 0) {
+        translateX.value = e.translationX;
+      }
+    })
+    .onEnd((e) => {
+      if (e.translationX < -CHAT_DISMISS_THRESHOLD || e.velocityX < -CHAT_DISMISS_VELOCITY) {
+        runOnJS(closeChat)();
+        return;
+      }
+      translateX.value = withSpring(0, { damping: 22, stiffness: 260 });
+    });
+
+  const animatedRootStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: translateX.value }],
+  }));
 
   const hasText = text.trim().length > 0;
   const kbOffset = Platform.OS === 'ios' ? insets.top + HEADER_CONTENT_HEIGHT : 0;
@@ -455,8 +510,74 @@ export default function ChatScreen() {
     setShowPartnerAvatar(true);
   };
 
+  const openPartnerProfile = () => setShowPartnerInfo(true);
+
+  const goToProfile = () => {
+    setShowPartnerInfo(false);
+    router.push('/(tabs)/profile');
+  };
+
+  const goToMoments = () => {
+    setShowPartnerInfo(false);
+    router.push('/(tabs)/home');
+  };
+
+  const startReply = useCallback((message: Message) => {
+    setSelected(null);
+    setReplyTo(message);
+    setTimeout(() => inputRef.current?.focus(), 200);
+  }, []);
+
+  const showProfileIntro = allMessages.length === 0;
+
+  const profileIntro = useMemo(
+    () =>
+      showProfileIntro ? (
+        <ChatEmptyProfile
+          partner={partner}
+          relationship={relationship}
+          isTyping={partnerTyping}
+          isOnline={partnerOnline}
+          lastSeenAt={partnerLastSeenAt}
+          onOpenProfile={openPartnerProfile}
+          onOpenAvatar={openPartnerAvatar}
+        />
+      ) : null,
+    [
+      showProfileIntro,
+      partner,
+      relationship,
+      partnerTyping,
+      partnerOnline,
+      partnerLastSeenAt,
+    ],
+  );
+
+  const renderItem = ({ item }: { item: ChatListItem }) => {
+    if (item.type === 'date') return <ChatDateSeparator label={item.label} />;
+    if (item.type === 'unread') return <ChatUnreadDivider count={item.count} />;
+    const replyToMessage = item.message.reply_to_id
+      ? messageById.get(item.message.reply_to_id) ?? null
+      : null;
+    return (
+      <ChatBubble
+        message={item.message}
+        replyToMessage={replyToMessage}
+        partner={partner}
+        isUnread={
+          !!user &&
+          item.message.sender_id !== user.id &&
+          (initialUnreadIds?.has(item.message.id) ?? !item.message.read_at)
+        }
+        onLongPress={setSelected}
+        onSwipeReply={startReply}
+      />
+    );
+  };
+
   return (
-    <View style={[styles.root, { backgroundColor: colors.background }]}>
+    <GestureDetector gesture={dismissPan}>
+      <Animated.View style={[styles.root, animatedRootStyle, { backgroundColor: colors.background }]}>
       {/* ── Header ── */}
       <View
         style={[
@@ -467,49 +588,43 @@ export default function ChatScreen() {
             borderBottomColor: colors.border,
           },
         ]}>
-        <View style={styles.headerSide}>
-          <Pressable
-            onPress={() => router.back()}
-            hitSlop={10}
-            accessibilityLabel="Go back"
-            style={styles.headerIconSlot}>
-            <Icon name="chevronLeft" size={26} color={colors.accent} />
-          </Pressable>
-        </View>
-
-        <View style={styles.headerCenter}>
+        <Pressable
+          style={styles.headerProfile}
+          onPress={openPartnerProfile}
+          accessibilityLabel="View partner info">
           <Pressable
             onPress={openPartnerAvatar}
             disabled={!partner?.avatar_url?.trim()}
             hitSlop={4}
             accessibilityRole="button"
             accessibilityLabel="View profile photo">
-            <Avatar name={partner?.name} imageUrl={partner?.avatar_url} size={34} />
+            <Avatar name={partner?.name} imageUrl={partner?.avatar_url} size={40} />
           </Pressable>
-          <Pressable
-            style={styles.headerText}
-            onPress={() => setShowPartnerInfo(true)}
-            accessibilityLabel="View partner info">
+          <View style={styles.headerText}>
             <Text style={[styles.headerName, { color: colors.text }]} numberOfLines={1}>
               {partner?.name ?? 'Partner'}
             </Text>
-            <Text
-              style={[
-                styles.headerStatus,
-                { color: partnerTyping ? colors.accent : colors.textSecondary },
-              ]}
-              numberOfLines={1}>
-              {partnerTyping ? 'typing…' : 'online'}
-            </Text>
-          </Pressable>
-        </View>
+            <PartnerStatusLine
+              isTyping={partnerTyping}
+              isOnline={partnerOnline}
+              lastSeenAt={partnerLastSeenAt}
+            />
+          </View>
+        </Pressable>
 
-        <View style={[styles.headerSide, styles.headerSideRight]}>
+        <View style={styles.headerActions}>
           <Pressable onPress={() => startCall('video')} hitSlop={8} style={styles.headerIconSlot}>
             <Icon name="videocam" size={24} color={colors.accent} />
           </Pressable>
           <Pressable onPress={() => startCall('audio')} hitSlop={8} style={styles.headerIconSlot}>
             <Icon name="call" size={22} color={colors.accent} />
+          </Pressable>
+          <Pressable
+            onPress={closeChat}
+            hitSlop={10}
+            accessibilityLabel="Close chat"
+            style={styles.headerIconSlot}>
+            <Icon name="chevronRight" size={26} color={colors.accent} />
           </Pressable>
         </View>
       </View>
@@ -540,22 +655,19 @@ export default function ChatScreen() {
         <ChatWallpaper style={styles.messageArea}>
           {isLoading ? (
             <LoadingState />
-          ) : allMessages.length === 0 ? (
-            <View style={styles.empty}>
-              <Avatar name={partner?.name} imageUrl={partner?.avatar_url} size={72} />
-              <Text style={[styles.emptyTitle, { color: colors.text }]}>Say hello 👋</Text>
-              <Text style={[styles.emptySub, { color: colors.textSecondary }]}>
-                This is the start of your private space.
-              </Text>
-            </View>
           ) : (
             <FlatList
               ref={listRef}
               data={listItems}
               keyExtractor={(item) => item.id}
               renderItem={renderItem}
+              ListHeaderComponent={profileIntro}
               style={styles.flex}
-              contentContainerStyle={[styles.list, { paddingTop: listPad, paddingBottom: listPad }]}
+              contentContainerStyle={[
+                styles.list,
+                { paddingTop: listPad, paddingBottom: listPad },
+                showProfileIntro && styles.listWithProfileIntro,
+              ]}
               onContentSizeChange={() => scrollToLatest(false)}
               onLayout={() => scrollToLatest(false)}
               showsVerticalScrollIndicator={false}
@@ -611,6 +723,15 @@ export default function ChatScreen() {
               <Icon name="close" size={20} color={colors.textSecondary} />
             </Pressable>
           </View>
+        )}
+
+        {replyTo && user && (
+          <ChatReplyBar
+            message={replyTo}
+            partner={partner}
+            userId={user.id}
+            onClose={() => setReplyTo(null)}
+          />
         )}
 
         {/* ── Input bar ── */}
@@ -705,9 +826,13 @@ export default function ChatScreen() {
       <PartnerInfoSheet
         visible={showPartnerInfo}
         partnerTyping={partnerTyping}
+        partnerOnline={partnerOnline}
+        partnerLastSeenAt={partnerLastSeenAt}
         onClose={() => setShowPartnerInfo(false)}
         onSendMessage={() => { setShowPartnerInfo(false); setTimeout(() => inputRef.current?.focus(), 300); }}
         onViewAvatar={openPartnerAvatar}
+        onViewProfile={goToProfile}
+        onViewMoments={goToMoments}
       />
 
       <FullScreenImageModal
@@ -726,50 +851,17 @@ export default function ChatScreen() {
         onPickAudio={startRecording}
       />
 
-      {/* ── Long-press action sheet ── */}
-      <Modal visible={!!selected} transparent animationType="fade" onRequestClose={() => setSelected(null)}>
-        <Pressable style={styles.sheetOverlay} onPress={() => setSelected(null)}>
-          <View style={[styles.sheet, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
-            <View style={styles.reactionPicker}>
-              {REACTION_EMOJI.map((emoji) => (
-                <Pressable
-                  key={emoji}
-                  onPress={() => {
-                    if (selected && !selected.id.startsWith('temp-')) {
-                      react.mutate({ messageId: selected.id, emoji });
-                    }
-                    setSelected(null);
-                  }}
-                  style={[styles.reactionBtn, { backgroundColor: colors.surface }]}>
-                  <Text style={{ fontSize: 24 }}>{emoji}</Text>
-                </Pressable>
-              ))}
-            </View>
-
-            <Pressable
-              style={[styles.sheetAction, { borderTopColor: colors.border }]}
-              onPress={() => {
-                if (selected && !selected.id.startsWith('temp-')) {
-                  pin.mutate({ messageId: selected.id, isPinned: !selected.is_pinned });
-                }
-                setSelected(null);
-              }}>
-              <Icon name="pin" size={20} color={colors.text} filled={selected?.is_pinned} />
-              <Text style={{ color: colors.text, fontSize: 16, fontWeight: '600' }}>
-                {selected?.is_pinned ? 'Unpin' : 'Pin message'}
-              </Text>
-            </Pressable>
-
-            <Pressable
-              style={[styles.sheetAction, { borderTopColor: colors.border }]}
-              onPress={() => setSelected(null)}>
-              <Icon name="close" size={20} color={colors.textSecondary} />
-              <Text style={{ color: colors.textSecondary, fontSize: 16 }}>Cancel</Text>
-            </Pressable>
-          </View>
-        </Pressable>
-      </Modal>
-    </View>
+      <ChatMessageActionSheet
+        message={selected}
+        onClose={() => setSelected(null)}
+        onReply={startReply}
+        onReact={(messageId, emoji) => react.mutate({ messageId, emoji })}
+        onPin={(messageId, isPinned) => pin.mutate({ messageId, isPinned })}
+        onDeleteForMe={(messageId) => deleteForMe.mutate(messageId)}
+        onDeleteForAll={(messageId) => deleteForAll.mutate(messageId)}
+      />
+      </Animated.View>
+    </GestureDetector>
   );
 }
 
@@ -786,19 +878,18 @@ const styles = StyleSheet.create({
     paddingBottom: 8,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  headerSide: { flexDirection: 'row', alignItems: 'center' },
-  headerSideRight: { justifyContent: 'flex-end' },
-  headerCenter: {
+  headerProfile: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    marginHorizontal: 4,
+    minWidth: 0,
+    paddingRight: 8,
   },
+  headerActions: { flexDirection: 'row', alignItems: 'center' },
   headerIconSlot: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-  headerText: { flex: 1 },
+  headerText: { flex: 1, minWidth: 0 },
   headerName: { fontSize: 16, fontWeight: '700' },
-  headerStatus: { fontSize: 12, marginTop: 1 },
 
   pinnedBar: {
     flexDirection: 'row',
@@ -815,10 +906,7 @@ const styles = StyleSheet.create({
 
   // List
   list: { paddingHorizontal: 2, flexGrow: 1 },
-
-  empty: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, padding: 32 },
-  emptyTitle: { fontSize: 20, fontWeight: '800', marginTop: 10 },
-  emptySub: { fontSize: 14, textAlign: 'center', lineHeight: 20 },
+  listWithProfileIntro: { justifyContent: 'center' },
 
   // Typing bubble
   typingBubble: { paddingHorizontal: 12, paddingBottom: 8 },
@@ -892,34 +980,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 2,
-  },
-
-  // Long-press sheet
-  sheetOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    justifyContent: 'flex-end',
-    padding: 16,
-  },
-  sheet: {
-    borderRadius: 20,
-    borderWidth: StyleSheet.hairlineWidth,
-    overflow: 'hidden',
-    marginBottom: 24,
-  },
-  reactionPicker: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    padding: 14,
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  reactionBtn: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
-  sheetAction: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    padding: 18,
-    borderTopWidth: StyleSheet.hairlineWidth,
   },
 });

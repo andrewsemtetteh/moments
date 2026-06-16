@@ -4,7 +4,6 @@ import { Platform, StyleSheet } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { MoodHistoryModal } from '@/components/home/MoodHistoryModal';
-import { JournalModal } from '@/components/journal/JournalModal';
 import { MomentCreatorModal } from '@/components/moments/MomentCreatorModal';
 import { MomentHistoryModal } from '@/components/moments/MomentHistoryModal';
 import { MomentStoryViewer } from '@/components/moments/MomentStoryViewer';
@@ -34,6 +33,7 @@ function RootStack() {
         <Stack.Screen name="legal" />
         <Stack.Screen name="auth/callback" options={{ animation: 'none' }} />
         <Stack.Screen name="notifications" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="journal" />
         <Stack.Screen name="pro" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
       </Stack>
       {Platform.OS !== 'web' && (
@@ -41,7 +41,6 @@ function RootStack() {
           <MomentCreatorModal />
           <MomentHistoryModal />
           <MomentStoryViewer />
-          <JournalModal />
           <WrappedModal />
           <MoodHistoryModal />
           <PaywallModal />

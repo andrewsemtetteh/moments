@@ -3,17 +3,17 @@ import * as Clipboard from 'expo-clipboard';
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useRouter, type Href } from 'expo-router';
+import { useEffect, useMemo, useState } from 'react';
 import { Alert, Pressable, Share, StyleSheet, Text, View } from 'react-native';
 
 import { AppHeader } from '@/components/layout/AppHeader';
 import { ScreenContainer } from '@/components/layout/ScreenContainer';
 import { TabScreenScroll } from '@/components/layout/TabScreenScroll';
-import { MomentsWall } from '@/components/moments/MomentsWall';
 import { ChangePasswordModal } from '@/components/profile/ChangePasswordModal';
 import { EditFieldModal } from '@/components/profile/EditFieldModal';
 import { LocationSharingSettings } from '@/components/profile/LocationSharingSettings';
+import { SharedAlbum } from '@/components/profile/SharedAlbum';
 import { Icon, type IconName } from '@/components/ui/Icon';
 import { LogoMark } from '@/components/ui/Logo';
 import { Avatar, Card, PrimaryButton, SectionTitle, StatPill } from '@/components/ui/primitives';
@@ -22,11 +22,18 @@ import { useBucketList, useJournalEntries, useMoments, useStreak } from '@/hooks
 import { usePlusGate } from '@/hooks/usePlusGate';
 import { useSubscription } from '@/hooks/useSubscription';
 import { useTheme } from '@/hooks/useTheme';
+import { enrichMomentsWithAuthors, filterMediaMoments } from '@/lib/moment-display';
 import { formatSubscriptionExpiry } from '@/lib/subscription';
 import { supabase } from '@/lib/supabase';
 import { queryClient } from '@/providers/AppProviders';
 import * as api from '@/services/api';
 import { useAuthStore, useRelationshipStore, useUIStore } from '@/stores';
+
+const PROFILE_TABS = [
+  { key: 'album', label: 'Album' },
+  { key: 'journal', label: 'Journal' },
+  { key: 'settings', label: 'Settings' },
+] as const;
 
 export default function ProfileScreen() {
   const router = useRouter();
@@ -38,14 +45,14 @@ export default function ProfileScreen() {
   const setUser = useAuthStore((s) => s.setUser);
   const resetAuth = useAuthStore((s) => s.reset);
   const resetRelationship = useRelationshipStore((s) => s.reset);
-  const setShowJournal = useUIStore((s) => s.setShowJournal);
   const setShowMomentHistory = useUIStore((s) => s.setShowMomentHistory);
+  const setShowMomentCreator = useUIStore((s) => s.setShowMomentCreator);
 
   const { data: momentsData } = useMoments();
   const { data: streak } = useStreak();
   const { data: journalEntries } = useJournalEntries();
   const { data: bucketList } = useBucketList();
-  const [tab, setTab] = useState<'timeline' | 'journal' | 'settings'>('timeline');
+  const [tab, setTab] = useState<'album' | 'journal' | 'settings'>('album');
   const [inviteCode, setInviteCode] = useState<string | null>(relationship?.invite_code ?? null);
   const [editField, setEditField] = useState<'name' | 'space' | 'email' | null>(null);
   const [editDraft, setEditDraft] = useState('');
@@ -102,19 +109,25 @@ export default function ProfileScreen() {
   };
 
   const timelineMoments = momentsData?.pages.flat() ?? [];
+  const albumMoments = useMemo(
+    () => enrichMomentsWithAuthors(filterMediaMoments(timelineMoments), user, partner),
+    [timelineMoments, user, partner],
+  );
   const relationshipDuration = relationship
     ? formatDistanceToNow(new Date(relationship.created_at), { addSuffix: false })
     : '';
   const { isPlus, isOwner, limits } = useSubscription();
   const { requirePlus } = usePlusGate();
   const plusExpiryLabel = formatSubscriptionExpiry(user?.subscription_expires_at);
-  const timelineLimit = limits.timelineMoments;
-  const visibleTimeline = Number.isFinite(timelineLimit)
-    ? timelineMoments.slice(0, timelineLimit)
-    : timelineMoments;
-  const hiddenTimelineCount = Number.isFinite(timelineLimit)
-    ? Math.max(0, timelineMoments.length - timelineLimit)
+  const albumLimit = limits.timelineMoments;
+  const hiddenAlbumCount = Number.isFinite(albumLimit)
+    ? Math.max(0, albumMoments.length - albumLimit)
     : 0;
+
+  const openSharedAlbum = () => setShowMomentHistory(true);
+  const unlockSharedAlbum = () => {
+    requirePlus('Full shared album');
+  };
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -401,45 +414,34 @@ export default function ProfileScreen() {
 
         {/* Tabs */}
         <View style={[styles.segment, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
-          {(['timeline', 'journal', 'settings'] as const).map((t) => (
+          {PROFILE_TABS.map((t) => (
             <Pressable
-              key={t}
-              onPress={() => setTab(t)}
-              style={[styles.segmentItem, tab === t && { backgroundColor: colors.surface }]}>
-              <Text style={{ color: tab === t ? colors.text : colors.textSecondary, fontWeight: '700', fontSize: 13, textTransform: 'capitalize' }}>
-                {t}
+              key={t.key}
+              onPress={() => setTab(t.key)}
+              style={[styles.segmentItem, tab === t.key && { backgroundColor: colors.surface }]}>
+              <Text style={{ color: tab === t.key ? colors.text : colors.textSecondary, fontWeight: '700', fontSize: 13 }}>
+                {t.label}
               </Text>
             </Pressable>
           ))}
         </View>
 
-        {tab === 'timeline' && (
+        {tab === 'album' && (
           <View style={styles.tabBody}>
-            <SectionTitle action="History" onAction={() => setShowMomentHistory(true)}>
-              Memory Wall
-            </SectionTitle>
-            {timelineMoments.length === 0 ? (
-              <EmptyState icon="camera" text="Your shared moments will live here" />
-            ) : (
-              <>
-                <MomentsWall moments={visibleTimeline} />
-                {hiddenTimelineCount > 0 && (
-                  <Pressable onPress={() => requirePlus('Full memory timeline')} style={[styles.timelineUpsell, { backgroundColor: colors.accentSoft, borderColor: colors.accent }]}>
-                    <Icon name="lock" size={18} color={colors.accent} />
-                    <Text style={[styles.timelineUpsellText, { color: colors.text }]}>
-                      {hiddenTimelineCount} more moment{hiddenTimelineCount === 1 ? '' : 's'} with Plus
-                    </Text>
-                    <Icon name="chevronRight" size={18} color={colors.accent} />
-                  </Pressable>
-                )}
-              </>
-            )}
+            <SharedAlbum
+              moments={albumMoments}
+              previewLimit={albumLimit}
+              hiddenCount={hiddenAlbumCount}
+              onOpenFull={openSharedAlbum}
+              onUnlockFull={unlockSharedAlbum}
+              onAddMoment={() => setShowMomentCreator(true)}
+            />
           </View>
         )}
 
         {tab === 'journal' && (
           <View style={styles.tabBody}>
-            <SectionTitle action="New entry" onAction={() => setShowJournal(true)}>
+            <SectionTitle action="New entry" onAction={() => router.push('/journal/compose' as Href)}>
               Journal
             </SectionTitle>
             {!journalEntries || journalEntries.length === 0 ? (
@@ -695,16 +697,6 @@ const styles = StyleSheet.create({
   themeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 14, marginBottom: 20 },
   themeItem: { alignItems: 'center', gap: 6, width: 56 },
   swatch: { width: 52, height: 52, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
-  timelineUpsell: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    padding: 14,
-    borderRadius: 16,
-    borderWidth: StyleSheet.hairlineWidth,
-    marginTop: 4,
-  },
-  timelineUpsellText: { flex: 1, fontSize: 14, fontWeight: '700' },
   settingRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16 },
   settingLeft: { flexDirection: 'row', alignItems: 'center', gap: 14, flex: 1 },
   settingTitle: { fontSize: 15, fontWeight: '600' },

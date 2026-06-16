@@ -1,6 +1,6 @@
 import { format } from 'date-fns';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
+import { useRouter, type Href } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, RefreshControl, StyleSheet, Text, TextInput, View } from 'react-native';
 
@@ -24,7 +24,7 @@ import {
 import { useSubscription } from '@/hooks/useSubscription';
 import { useTheme } from '@/hooks/useTheme';
 import { getFirstName } from '@/lib/avatar-initial';
-import { filterMediaMoments, filterMomentsForHome, enrichMomentsWithAuthors, getMomentSenderFirstName } from '@/lib/moment-display';
+import { enrichMomentsWithAuthors, filterMediaMoments, filterMomentsForHome, getMomentSenderFirstName } from '@/lib/moment-display';
 import { shouldShowEntryPaywall } from '@/lib/paywall-storage';
 import * as api from '@/services/api';
 import { useAuthStore, useRelationshipStore, useUIStore } from '@/stores';
@@ -43,7 +43,6 @@ export default function HomeScreen() {
   const partner = useRelationshipStore((s) => s.partner);
   const user = useAuthStore((s) => s.user);
   const setShowMomentCreator = useUIStore((s) => s.setShowMomentCreator);
-  const setShowJournal = useUIStore((s) => s.setShowJournal);
   const setShowWrapped = useUIStore((s) => s.setShowWrapped);
   const setShowMoodHistory = useUIStore((s) => s.setShowMoodHistory);
   const openPaywall = useUIStore((s) => s.openPaywall);
@@ -109,7 +108,7 @@ export default function HomeScreen() {
     if (id === 'bored') router.push('/(tabs)/activities');
     else if (id === 'moment') setShowMomentCreator(true);
     else if (id === 'plan') router.push('/(tabs)/calendar');
-    else if (id === 'journal') setShowJournal(true);
+    else if (id === 'journal') router.push('/journal/compose' as Href);
   };
 
   const smartSuggestion = getSmartSuggestion(moods ?? {}, upcomingEvents.length);

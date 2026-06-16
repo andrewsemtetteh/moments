@@ -193,6 +193,26 @@ export function groupMomentsForHistory(moments: Moment[]): { key: string; label:
   return sections;
 }
 
+/** Calendar-month buckets for shared album previews (newest first). */
+export function groupMomentsByMonth(moments: Moment[]): { key: string; label: string; moments: Moment[] }[] {
+  const groups = new Map<string, Moment[]>();
+
+  for (const moment of moments) {
+    const key = format(new Date(moment.created_at), 'yyyy-MM');
+    const bucket = groups.get(key);
+    if (bucket) bucket.push(moment);
+    else groups.set(key, [moment]);
+  }
+
+  return Array.from(groups.entries())
+    .sort(([a], [b]) => b.localeCompare(a))
+    .map(([key, items]) => ({
+      key,
+      label: format(new Date(key + '-01'), 'MMMM yyyy'),
+      moments: items,
+    }));
+}
+
 export function countMomentReactions(moment: Moment): number {
   return Object.values(moment.reactions ?? {}).reduce((sum, ids) => sum + ids.length, 0);
 }

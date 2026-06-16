@@ -103,24 +103,7 @@ export default function CalendarScreen() {
     <ScreenContainer padded={false}>
       <AppHeader />
       <TabScreenScroll showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
-        {nextUpcoming ? (
-          <PlanCountdownHero event={nextUpcoming} />
-        ) : (
-          <Pressable onPress={openCreate}>
-            <Card style={[styles.emptyHero, { borderColor: colors.border, backgroundColor: colors.surface }]}>
-              <View style={[styles.emptyHeroIcon, { backgroundColor: colors.accentSoft }]}>
-                <Text style={{ fontSize: 28 }}>✨</Text>
-              </View>
-              <View style={{ flex: 1, gap: 4 }}>
-                <Text style={{ color: colors.text, fontWeight: '900', fontSize: 18 }}>Plan your next moment</Text>
-                <Text style={{ color: colors.textSecondary, fontSize: 14, lineHeight: 20 }}>
-                  Dates, anniversaries, and experiences — we&apos;ll count it down together.
-                </Text>
-              </View>
-              <Icon name="chevronRight" size={20} color={colors.textTertiary} />
-            </Card>
-          </Pressable>
-        )}
+        {nextUpcoming ? <PlanCountdownHero event={nextUpcoming} /> : null}
 
         <Card style={[styles.calendarCard, { backgroundColor: colors.surface }]}>
           <View style={styles.monthHeader}>
@@ -253,7 +236,7 @@ export default function CalendarScreen() {
                   </View>
                   <Text style={{ color: colors.text, fontWeight: '800', fontSize: 16 }}>Nothing planned yet</Text>
                   <Text style={{ color: colors.textSecondary, textAlign: 'center', fontSize: 14, lineHeight: 20 }}>
-                    Add a date night, reminder, or shared experience — we&apos;ll count it down together.
+                    Add a date night, reminder, or shared experience and we&apos;ll count it down together.
                   </Text>
                   <PrimaryButton label="Add event" onPress={openCreate} style={{ marginTop: 8, minWidth: 160 }} />
                 </Card>
@@ -284,14 +267,6 @@ export default function CalendarScreen() {
 
 const styles = StyleSheet.create({
   scroll: { padding: 16, gap: 16, paddingBottom: 100 },
-  emptyHero: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-    borderWidth: StyleSheet.hairlineWidth,
-    paddingVertical: 4,
-  },
-  emptyHeroIcon: { width: 52, height: 52, borderRadius: 26, alignItems: 'center', justifyContent: 'center' },
   calendarCard: { paddingVertical: 4 },
   monthHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
   monthCenter: { alignItems: 'center', gap: 6 },

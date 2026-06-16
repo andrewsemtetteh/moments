@@ -1,4 +1,4 @@
-export type AppTheme = 'dark' | 'light' | 'forest' | 'glass' | 'deep_blue';
+export type AppTheme = 'dark' | 'black' | 'light' | 'forest' | 'glass' | 'deep_blue';
 
 export interface ThemeColors {
   /** Identity */
@@ -64,6 +64,35 @@ export const Themes: Record<AppTheme, ThemeColors> = {
     chatBubbleSelf: '#FF6B8A',
     chatBubblePartner: '#1E1E28',
     chatBackground: '#121218',
+    chatBubbleSelfText: '#FFFFFF',
+    chatReadReceipt: '#53BDEB',
+    shadow: '#000000',
+  },
+  black: {
+    isDark: true,
+    glass: false,
+    background: '#000000',
+    backgroundElevated: '#050505',
+    surface: '#0A0A0A',
+    surfaceElevated: '#121212',
+    surfaceGlass: 'rgba(255,255,255,0.06)',
+    text: '#FFFFFF',
+    textSecondary: '#A3A3A3',
+    textTertiary: '#6B6B6B',
+    onAccent: '#FFFFFF',
+    accent: '#FF6B8A',
+    accentSoft: 'rgba(255,107,138,0.14)',
+    accentMuted: '#2A1218',
+    gradient: ['#FF6B8A', '#FF8E72'],
+    gradientHero: ['#000000', '#050505', '#000000'],
+    border: 'rgba(255,255,255,0.10)',
+    borderStrong: 'rgba(255,255,255,0.18)',
+    success: '#46C98B',
+    warning: '#E5B567',
+    error: '#FF5C6C',
+    chatBubbleSelf: '#FF6B8A',
+    chatBubblePartner: '#121212',
+    chatBackground: '#050505',
     chatBubbleSelfText: '#FFFFFF',
     chatReadReceipt: '#53BDEB',
     shadow: '#000000',
@@ -197,7 +226,8 @@ export function resolveThemeColors(theme: AppTheme): ThemeColors {
 }
 
 export const THEME_META: { key: AppTheme; label: string; swatch: string }[] = [
-  { key: 'dark', label: 'Dark', swatch: Themes.dark.background },
+  { key: 'black', label: 'Black', swatch: Themes.black.background },
+  { key: 'dark', label: 'Charcoal', swatch: Themes.dark.background },
   { key: 'light', label: 'White', swatch: Themes.light.background },
   { key: 'forest', label: 'Dark Green', swatch: Themes.forest.background },
   { key: 'glass', label: 'Glassy', swatch: '#EEF2F8' },

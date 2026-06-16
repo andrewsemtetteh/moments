@@ -48,10 +48,14 @@ export function useMoments() {
 
 export function useMessages() {
   const relationship = useRelationshipStore((s) => s.relationship);
+  const user = useAuthStore((s) => s.user);
   return useQuery({
     queryKey: ['messages', relationship?.id],
-    queryFn: () => api.fetchMessages(relationship!.id),
-    enabled: !!relationship?.id,
+    queryFn: async () => {
+      const rows = await api.fetchMessages(relationship!.id);
+      return rows.filter((m) => !(m.hidden_for ?? []).includes(user!.id));
+    },
+    enabled: !!relationship?.id && !!user?.id,
     staleTime: 30_000,
   });
 }
@@ -78,6 +82,7 @@ export function useSendMessage() {
       mediaUrl?: string;
       mediaType?: string;
       momentId?: string;
+      replyToId?: string;
     }) =>
       api.sendMessage(
         relationship!.id,
@@ -86,6 +91,7 @@ export function useSendMessage() {
         params.mediaUrl,
         params.mediaType,
         params.momentId,
+        params.replyToId,
       ),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['messages', relationship?.id] });
@@ -126,6 +132,24 @@ export function useJournalEntries() {
     queryKey: ['journal', relationship?.id],
     queryFn: () => api.fetchJournalEntries(relationship!.id),
     enabled: !!relationship?.id,
+  });
+}
+
+export function useCreateJournalEntry() {
+  const queryClient = useQueryClient();
+  const relationship = useRelationshipStore((s) => s.relationship);
+  const user = useAuthStore((s) => s.user);
+
+  return useMutation({
+    mutationFn: (entry: { content: string; type: string; is_private?: boolean }) =>
+      api.createJournalEntry(relationship!.id, user!.id, entry),
+    onSuccess: async () => {
+      queryClient.invalidateQueries({ queryKey: ['journal', relationship?.id] });
+      queryClient.invalidateQueries({ queryKey: ['streak', relationship?.id] });
+      if (relationship && user) {
+        await api.trackEvent(relationship.id, user.id, 'journal_entry_created');
+      }
+    },
   });
 }
 
@@ -365,7 +389,15 @@ export function useMessageActions() {
     mutationFn: (p: { messageId: string; isPinned: boolean }) => api.setMessagePinned(p.messageId, p.isPinned),
     onSuccess: invalidate,
   });
-  return { react, pin };
+  const deleteForMe = useMutation({
+    mutationFn: (messageId: string) => api.hideMessageForUser(messageId, user!.id),
+    onSuccess: invalidate,
+  });
+  const deleteForAll = useMutation({
+    mutationFn: (messageId: string) => api.deleteMessageForAll(messageId, user!.id),
+    onSuccess: invalidate,
+  });
+  return { react, pin, deleteForMe, deleteForAll };
 }
 
 export function useMomentReaction() {

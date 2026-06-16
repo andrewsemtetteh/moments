@@ -312,7 +312,14 @@ export async function fetchMessages(relationshipId: string, limit = 50, cursor?:
 
   const { data, error } = await query;
   if (error) throw error;
-  return (data as Message[]).reverse();
+  return (data as Message[])
+    .reverse()
+    .map((message) => ({
+      ...message,
+      reply_to_id: message.reply_to_id ?? null,
+      deleted_for_all: message.deleted_for_all ?? false,
+      hidden_for: message.hidden_for ?? [],
+    }));
 }
 
 export async function sendMessage(
@@ -322,6 +329,7 @@ export async function sendMessage(
   mediaUrl?: string,
   mediaType?: string,
   momentId?: string,
+  replyToId?: string,
 ) {
   const { data, error } = await supabase
     .from('messages')
@@ -332,6 +340,7 @@ export async function sendMessage(
       media_url: mediaUrl,
       media_type: mediaType,
       moment_id: momentId ?? null,
+      reply_to_id: replyToId ?? null,
     })
     .select()
     .single();
@@ -688,6 +697,39 @@ export async function toggleMessageReaction(messageId: string, userId: string, e
 
 export async function setMessagePinned(messageId: string, isPinned: boolean) {
   const { error } = await supabase.from('messages').update({ is_pinned: isPinned }).eq('id', messageId);
+  if (error) throw error;
+}
+
+export async function hideMessageForUser(messageId: string, userId: string) {
+  const { data: msg, error: fetchError } = await supabase
+    .from('messages')
+    .select('hidden_for')
+    .eq('id', messageId)
+    .single();
+  if (fetchError) throw fetchError;
+
+  const hidden = (msg?.hidden_for as string[] | null) ?? [];
+  if (hidden.includes(userId)) return;
+
+  const { error } = await supabase
+    .from('messages')
+    .update({ hidden_for: [...hidden, userId] })
+    .eq('id', messageId);
+  if (error) throw error;
+}
+
+export async function deleteMessageForAll(messageId: string, senderId: string) {
+  const { error } = await supabase
+    .from('messages')
+    .update({
+      deleted_for_all: true,
+      content: null,
+      media_url: null,
+      media_type: null,
+      is_pinned: false,
+    })
+    .eq('id', messageId)
+    .eq('sender_id', senderId);
   if (error) throw error;
 }
 
