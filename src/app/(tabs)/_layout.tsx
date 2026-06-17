@@ -2,6 +2,7 @@ import { Platform } from 'react-native';
 import { Redirect, Tabs } from 'expo-router';
 
 import { AppTabBar } from '@/components/layout/AppTabBar';
+import { PartnerProfileModal } from '@/components/profile/PartnerProfileModal';
 import { WatchTogetherModal } from '@/components/watch/WatchTogetherModal';
 
 export default function TabsLayout() {
@@ -22,6 +23,7 @@ export default function TabsLayout() {
         <Tabs.Screen name="chat" options={{ href: null }} />
       </Tabs>
       <WatchTogetherModal />
+      <PartnerProfileModal />
     </>
   );
 }

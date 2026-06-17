@@ -3,6 +3,7 @@ import { Redirect, useRouter } from 'expo-router';
 import { FlatList, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { SwipeDismissView } from '@/components/layout/SwipeDismissView';
 import { Icon, type IconName } from '@/components/ui/Icon';
 import { useNotifications } from '@/hooks/queries';
 import { useTheme } from '@/hooks/useTheme';
@@ -30,6 +31,7 @@ export default function NotificationsScreen() {
   const { colors } = useTheme();
   const { data: notifications } = useNotifications();
   const openWatchTogether = useUIStore((s) => s.openWatchTogether);
+  const goBack = () => router.back();
 
   const openNotification = (type: string) => {
     if (type === 'watch_party' || type === 'watch_party_nudge') {
@@ -44,8 +46,9 @@ export default function NotificationsScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+      <SwipeDismissView edge="start" onDismiss={goBack}>
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()} style={[styles.iconBtn, { backgroundColor: colors.surfaceElevated }]}>
+        <Pressable onPress={goBack} style={[styles.iconBtn, { backgroundColor: colors.surfaceElevated }]}>
           <Icon name="chevronLeft" size={22} color={colors.text} />
         </Pressable>
         <Text style={[styles.title, { color: colors.text }]}>Notifications</Text>
@@ -87,6 +90,7 @@ export default function NotificationsScreen() {
           </Pressable>
         )}
       />
+      </SwipeDismissView>
     </SafeAreaView>
   );
 }

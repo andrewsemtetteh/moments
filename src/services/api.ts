@@ -26,6 +26,11 @@ import type {
     WatchVote,
 } from '@/types/database';
 
+async function readUriAsArrayBuffer(uri: string): Promise<ArrayBuffer> {
+  const response = await fetch(uri);
+  return response.arrayBuffer();
+}
+
 function generateInviteCode(): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   let code = '';
@@ -585,9 +590,7 @@ export async function uploadMedia(
   uri: string,
   contentType: string,
 ) {
-  const response = await fetch(uri);
-  const blob = await response.blob();
-  const arrayBuffer = await new Response(blob).arrayBuffer();
+  const arrayBuffer = await readUriAsArrayBuffer(uri);
 
   const { data, error } = await supabase.storage.from(bucket).upload(path, arrayBuffer, {
     contentType,
@@ -599,12 +602,27 @@ export async function uploadMedia(
   return urlData.publicUrl;
 }
 
+/** Upload chat media to the private `chat` bucket; returns a long-lived signed URL. */
+export async function uploadChatMedia(path: string, uri: string, contentType: string) {
+  const arrayBuffer = await readUriAsArrayBuffer(uri);
+
+  const { data, error } = await supabase.storage.from('chat').upload(path, arrayBuffer, {
+    contentType,
+    upsert: true,
+  });
+  if (error) throw error;
+
+  const { data: signed, error: signError } = await supabase.storage
+    .from('chat')
+    .createSignedUrl(data.path, 60 * 60 * 24 * 365 * 5);
+  if (signError) throw signError;
+  return signed.signedUrl;
+}
+
 /** Upload avatar to private profiles bucket; returns a long-lived signed URL. */
 export async function uploadProfileAvatar(userId: string, uri: string) {
   const path = `${userId}/avatar-${Date.now()}.jpg`;
-  const response = await fetch(uri);
-  const blob = await response.blob();
-  const arrayBuffer = await new Response(blob).arrayBuffer();
+  const arrayBuffer = await readUriAsArrayBuffer(uri);
 
   const { data, error } = await supabase.storage.from('profiles').upload(path, arrayBuffer, {
     contentType: 'image/jpeg',

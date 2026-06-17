@@ -54,6 +54,7 @@ export function MomentStoryViewer() {
   const moments = viewer?.moments ?? [];
   const playback = viewer?.playback ?? 'story';
   const sectionLabel = viewer?.sectionLabel;
+  const returnToPartnerProfile = viewer?.returnToPartnerProfile;
   const isFocusMode = playback === 'focus';
 
   const [index, setIndex] = useState(0);
@@ -211,12 +212,15 @@ export function MomentStoryViewer() {
   if (!viewer || !moment) return null;
 
   const showProgress = !isFocusMode && moments.length > 1;
-  const focusLabel =
+  const headerLabel =
     isFocusMode && sectionLabel && moments.length > 1
       ? `${sectionLabel} · ${activeIndex + 1}/${moments.length}`
       : isFocusMode && sectionLabel
         ? sectionLabel
-        : null;
+        : returnToPartnerProfile && sectionLabel
+          ? sectionLabel
+          : null;
+  const focusLabel = headerLabel;
 
   const tapBottom = DOCK_APPROX + insets.bottom;
 
@@ -248,8 +252,10 @@ export function MomentStoryViewer() {
           <Pressable onPress={dismissViewer} hitSlop={12} style={styles.topIcon}>
             <Icon name="close" size={28} color="#fff" />
           </Pressable>
-          <View style={styles.topRight}>
+          <View style={styles.topCenter}>
             {focusLabel ? <Text style={styles.focusLabel}>{focusLabel}</Text> : null}
+          </View>
+          <View style={styles.topRight}>
             <Pressable
               onPress={toggleNativeView}
               hitSlop={10}
@@ -380,10 +386,11 @@ const styles = StyleSheet.create({
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     paddingHorizontal: 16,
     zIndex: 4,
+    gap: 8,
   },
+  topCenter: { flex: 1, alignItems: 'center', paddingHorizontal: 8 },
   topIcon: {
     padding: 6,
     borderRadius: 20,
@@ -392,8 +399,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   topIconActive: { backgroundColor: '#fff' },
-  topRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  focusLabel: { color: 'rgba(255,255,255,0.55)', fontSize: 13, fontWeight: '700', marginRight: 4 },
+  topRight: { flexDirection: 'row', alignItems: 'center', gap: 8, minWidth: 84, justifyContent: 'flex-end' },
+  focusLabel: { color: 'rgba(255,255,255,0.88)', fontSize: 14, fontWeight: '700', textAlign: 'center' },
   tapLeft: { position: 'absolute', top: 0, left: 0, zIndex: 2 },
   tapRight: { position: 'absolute', top: 0, zIndex: 2 },
   stage: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 16, zIndex: 1 },

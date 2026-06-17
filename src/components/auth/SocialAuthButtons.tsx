@@ -51,13 +51,16 @@ export function SocialAuthButtons({ onSuccess, requireTerms = false, agreedToTer
 
   const showApple = Platform.OS === 'ios' || Platform.OS === 'android';
   const busy = loadingProvider !== null;
+  const appleOnDark = colors.isDark;
+  const appleBackground = appleOnDark ? '#FFFFFF' : '#000000';
+  const appleForeground = appleOnDark ? '#000000' : '#FFFFFF';
 
   return (
     <View style={styles.container}>
       <View style={styles.dividerRow}>
-        <View style={[styles.dividerLine, { backgroundColor: colors.border }]} />
+        <View style={[styles.dividerLine, { backgroundColor: colors.borderStrong }]} />
         <Text style={[styles.dividerText, { color: colors.textSecondary }]}>or continue with</Text>
-        <View style={[styles.dividerLine, { backgroundColor: colors.border }]} />
+        <View style={[styles.dividerLine, { backgroundColor: colors.borderStrong }]} />
       </View>
 
       {showApple && (
@@ -65,16 +68,21 @@ export function SocialAuthButtons({ onSuccess, requireTerms = false, agreedToTer
           style={[
             styles.btn,
             styles.appleBtn,
-            { opacity: busy && loadingProvider !== 'apple' ? 0.6 : 1 },
+            {
+              backgroundColor: appleBackground,
+              borderColor: appleOnDark ? colors.borderStrong : 'transparent',
+              borderWidth: appleOnDark ? StyleSheet.hairlineWidth : 0,
+              opacity: busy && loadingProvider !== 'apple' ? 0.6 : 1,
+            },
           ]}
           onPress={handleApple}
           disabled={busy}>
           {loadingProvider === 'apple' ? (
-            <ActivityIndicator color="#fff" />
+            <ActivityIndicator color={appleForeground} />
           ) : (
             <View style={styles.btnContent}>
-              <AppleIcon size={20} color="#fff" />
-              <Text style={styles.appleBtnText}>Continue with Apple</Text>
+              <AppleIcon size={20} color={appleForeground} />
+              <Text style={[styles.appleBtnText, { color: appleForeground }]}>Continue with Apple</Text>
             </View>
           )}
         </Pressable>
@@ -123,11 +131,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
   },
-  appleBtn: {
-    backgroundColor: '#000',
-  },
+  appleBtn: {},
   appleBtnText: {
-    color: '#fff',
     fontSize: 16,
     fontWeight: '600',
   },
@@ -146,9 +151,12 @@ const styles = StyleSheet.create({
   },
   dividerLine: {
     flex: 1,
-    height: StyleSheet.hairlineWidth,
+    height: 1,
+    minHeight: 1,
+    borderRadius: 1,
   },
   dividerText: {
+    flexShrink: 0,
     fontSize: 12,
     fontWeight: '500',
     letterSpacing: 0.3,

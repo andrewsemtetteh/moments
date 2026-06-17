@@ -21,6 +21,7 @@ import {
     useStreak,
     useUpdateMood,
 } from '@/hooks/queries';
+import { useOpenPartnerProfile } from '@/hooks/useOpenPartnerProfile';
 import { useSubscription } from '@/hooks/useSubscription';
 import { useTheme } from '@/hooks/useTheme';
 import { getFirstName } from '@/lib/avatar-initial';
@@ -46,6 +47,7 @@ export default function HomeScreen() {
   const setShowWrapped = useUIStore((s) => s.setShowWrapped);
   const setShowMoodHistory = useUIStore((s) => s.setShowMoodHistory);
   const openPaywall = useUIStore((s) => s.openPaywall);
+  const openPartnerProfile = useOpenPartnerProfile();
   const paywallShownThisSession = useUIStore((s) => s.paywallShownThisSession);
   const markPaywallShownThisSession = useUIStore((s) => s.markPaywallShownThisSession);
   const [refreshing, setRefreshing] = useState(false);
@@ -135,9 +137,14 @@ export default function HomeScreen() {
           <View style={styles.heroFooter}>
             <View style={styles.avatars}>
               <Avatar name={user?.name} imageUrl={user?.avatar_url} size={38} colorsOverride={['#ffffff', '#ffffff']} />
-              <View style={styles.avatarOverlap}>
+              <Pressable
+                style={styles.avatarOverlap}
+                onPress={() => openPartnerProfile()}
+                disabled={!partner}
+                accessibilityRole="button"
+                accessibilityLabel={partner ? `View ${partner.name ?? 'partner'} profile` : 'Partner profile'}>
                 <Avatar name={partner?.name} imageUrl={partner?.avatar_url} size={38} colorsOverride={['#ffffff', '#ffffff']} />
-              </View>
+              </Pressable>
             </View>
             {streak && (
               <View style={styles.heroStreak}>

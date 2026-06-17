@@ -2,9 +2,9 @@ import * as Haptics from 'expo-haptics';
 import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
-import { WatchScreen } from '@/components/watch/WatchScreen';
 import { Icon } from '@/components/ui/Icon';
 import { PrimaryButton } from '@/components/ui/primitives';
+import { WatchScreen } from '@/components/watch/WatchScreen';
 import { WATCH_POST_PROMPTS } from '@/constants/watch-together';
 import { useAddWatchHistory } from '@/hooks/queries';
 import { useTheme } from '@/hooks/useTheme';

@@ -274,6 +274,18 @@ export function filterMomentsForHome(moments: Moment[]): Moment[] {
   return moments.filter(isMomentWithinHomeWindow);
 }
 
+export function getPartnerActiveMoments(
+  moments: Moment[],
+  userId: string | undefined,
+  partnerId: string | null | undefined,
+): Moment[] {
+  if (!moments.length) return [];
+  const partnerMedia = filterMediaMoments(
+    moments.filter((m) => (partnerId ? m.user_id === partnerId : !!userId && m.user_id !== userId)),
+  );
+  return filterMomentsForHome(partnerMedia);
+}
+
 export function getUserReactionEmoji(
   moment: Moment,
   userId: string,

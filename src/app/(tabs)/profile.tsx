@@ -19,6 +19,7 @@ import { LogoMark } from '@/components/ui/Logo';
 import { Avatar, Card, PrimaryButton, SectionTitle, StatPill } from '@/components/ui/primitives';
 import { THEME_META } from '@/constants/design-system';
 import { useBucketList, useJournalEntries, useMoments, useStreak } from '@/hooks/queries';
+import { useOpenPartnerProfile } from '@/hooks/useOpenPartnerProfile';
 import { usePlusGate } from '@/hooks/usePlusGate';
 import { useSubscription } from '@/hooks/useSubscription';
 import { useTheme } from '@/hooks/useTheme';
@@ -47,6 +48,7 @@ export default function ProfileScreen() {
   const resetRelationship = useRelationshipStore((s) => s.reset);
   const setShowMomentHistory = useUIStore((s) => s.setShowMomentHistory);
   const setShowMomentCreator = useUIStore((s) => s.setShowMomentCreator);
+  const openPartnerProfile = useOpenPartnerProfile();
 
   const { data: momentsData } = useMoments();
   const { data: streak } = useStreak();
@@ -326,7 +328,13 @@ export default function ProfileScreen() {
             <View style={styles.heartBetween}>
               <Icon name="heart" size={20} color="#fff" filled />
             </View>
-            <Avatar name={partner?.name} imageUrl={partner?.avatar_url} size={56} colorsOverride={['#fff', '#fff']} />
+            <Pressable
+              onPress={() => partner && openPartnerProfile()}
+              disabled={!partner}
+              accessibilityRole="button"
+              accessibilityLabel={partner ? `View ${partner.name ?? 'partner'} profile` : 'Partner profile'}>
+              <Avatar name={partner?.name} imageUrl={partner?.avatar_url} size={56} colorsOverride={['#fff', '#fff']} />
+            </Pressable>
           </View>
           <Text style={styles.relName}>{relationship?.relationship_name ?? 'Moments'}</Text>
           {partner ? (

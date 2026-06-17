@@ -1,5 +1,5 @@
-import { Platform } from 'react-native';
 import { Redirect, useRouter } from 'expo-router';
+import { Platform } from 'react-native';
 
 import { PaywallScreen } from '@/components/subscription/PaywallScreen';
 

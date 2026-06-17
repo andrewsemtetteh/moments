@@ -2,6 +2,7 @@ import { ReactNode } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { SwipeDismissView } from '@/components/layout/SwipeDismissView';
 import { Icon } from '@/components/ui/Icon';
 import { useTheme } from '@/hooks/useTheme';
 
@@ -25,9 +26,11 @@ export function WatchScreen({
 }) {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
+  const dismiss = onBack ?? onClose;
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>
+      <SwipeDismissView edge="start" onDismiss={dismiss}>
       <View style={styles.header}>
         {onBack ? (
           <Pressable onPress={onBack} hitSlop={8} style={styles.headerBtn}>
@@ -57,6 +60,7 @@ export function WatchScreen({
       ) : (
         <View style={[styles.content, { flex: 1 }, contentStyle]}>{children}</View>
       )}
+      </SwipeDismissView>
     </View>
   );
 }

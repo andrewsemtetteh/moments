@@ -1,27 +1,28 @@
-import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useState } from 'react';
 import {
-  Alert,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
+    Alert,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text,
+    View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { SwipeDismissView } from '@/components/layout/SwipeDismissView';
 import { Icon } from '@/components/ui/Icon';
 import { PrimaryButton } from '@/components/ui/primitives';
 import { Radius } from '@/constants/design-system';
 import {
-  getTrialCtaLabel,
-  getTrialPriceLine,
-  PLUS_FEATURES,
-  SUBSCRIPTION_PLANS,
-  TRIAL_DAYS,
-  TRIAL_STEPS,
-  type SubscriptionPlanId,
+    getTrialCtaLabel,
+    getTrialPriceLine,
+    PLUS_FEATURES,
+    SUBSCRIPTION_PLANS,
+    TRIAL_DAYS,
+    TRIAL_STEPS,
+    type SubscriptionPlanId,
 } from '@/constants/subscription';
 import { useTheme } from '@/hooks/useTheme';
 
@@ -58,6 +59,7 @@ export function PaywallScreen({ onClose, showClose = true, onSubscribe }: Props)
   };
 
   return (
+    <SwipeDismissView edge="end" onDismiss={onClose ?? (() => undefined)} enabled={!!(showClose && onClose)}>
     <View style={[styles.root, { backgroundColor: colors.background }]}>
       <ScrollView
         showsVerticalScrollIndicator={false}
@@ -168,6 +170,7 @@ export function PaywallScreen({ onClose, showClose = true, onSubscribe }: Props)
         </Pressable>
       </ScrollView>
     </View>
+    </SwipeDismissView>
   );
 }
 

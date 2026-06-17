@@ -77,6 +77,12 @@
           "locationWhenInUsePermission": "Moments uses location for location moments you choose to share."
         }
       ],
+      [
+        "expo-contacts",
+        {
+          "contactsPermission": "Moments needs contacts access to share a contact in chat."
+        }
+      ],
       "expo-notifications"
     ],
     "experiments": {

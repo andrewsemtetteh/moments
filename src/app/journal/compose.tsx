@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { SwipeDismissView } from '@/components/layout/SwipeDismissView';
 import { PrimaryButton } from '@/components/ui/primitives';
 import { useCreateJournalEntry } from '@/hooks/queries';
 import { usePlusGate } from '@/hooks/usePlusGate';
@@ -42,6 +43,7 @@ export default function JournalComposeScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'bottom']}>
+      <SwipeDismissView edge="start" onDismiss={close}>
       <View style={styles.header}>
         <Pressable onPress={close}>
           <Text style={{ color: colors.textSecondary, fontWeight: '600' }}>Cancel</Text>
@@ -79,6 +81,7 @@ export default function JournalComposeScreen() {
         />
         <PrimaryButton label="Save entry" onPress={save} loading={createEntry.isPending} disabled={!content.trim()} />
       </ScrollView>
+      </SwipeDismissView>
     </SafeAreaView>
   );
 }

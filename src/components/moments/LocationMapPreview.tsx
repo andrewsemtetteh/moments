@@ -10,6 +10,7 @@ export interface MapMarker {
   longitude: number;
   label?: string;
   color?: string;
+  avatarUrl?: string | null;
 }
 
 interface LocationMapPreviewProps {
@@ -30,6 +31,7 @@ function buildMapHtml(markers: MapMarker[], interactive: boolean): string {
       lng: m.longitude,
       label: m.label ?? '',
       color: m.color ?? '#e85d75',
+      avatarUrl: m.avatarUrl?.trim() || '',
     })),
   );
 
@@ -43,11 +45,20 @@ function buildMapHtml(markers: MapMarker[], interactive: boolean): string {
       html, body, #map { margin: 0; padding: 0; width: 100%; height: 100%; background: #e8e4df; }
       .leaflet-control-attribution { font-size: 9px !important; }
       .pin-label { font-size: 11px; font-weight: 700; white-space: nowrap; }
+      .avatar-pin-wrap { background: transparent !important; border: none !important; }
     </style>
   </head>
   <body>
     <div id="map"></div>
     <script>
+      function escapeHtml(value) {
+        return String(value || '')
+          .replace(/&/g, '&amp;')
+          .replace(/"/g, '&quot;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;');
+      }
+
       var markers = ${markersJson};
       var map = L.map('map', {
         zoomControl: ${interactive ? 'true' : 'false'},
@@ -64,15 +75,21 @@ function buildMapHtml(markers: MapMarker[], interactive: boolean): string {
 
       var group = [];
       markers.forEach(function(m) {
-        var marker = L.circleMarker([m.lat, m.lng], {
-          radius: 10,
-          fillColor: m.color,
-          color: '#ffffff',
-          weight: 2.5,
-          fillOpacity: 0.95,
-        }).addTo(map);
-        if (m.label) {
-          marker.bindTooltip('<span class="pin-label">' + m.label + '</span>', { direction: 'top', offset: [0, -8] });
+        var ring = m.color || '#e85d75';
+        var label = escapeHtml(m.label || '');
+        var initial = label ? label.charAt(0).toUpperCase() : '?';
+        var face = m.avatarUrl
+          ? '<img src="' + escapeHtml(m.avatarUrl) + '" alt="" style="width:100%;height:100%;object-fit:cover;display:block;" />'
+          : '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:' + ring + ';color:#fff;font-size:12px;font-weight:800;">' + initial + '</div>';
+        var icon = L.divIcon({
+          className: 'avatar-pin-wrap',
+          html: '<div style="width:44px;height:44px;box-sizing:border-box;border-radius:50%;border:3px solid ' + ring + ';background:#fff;padding:2px;box-shadow:0 2px 10px rgba(0,0,0,0.28);overflow:hidden;">' + face + '</div>',
+          iconSize: [44, 44],
+          iconAnchor: [22, 22],
+        });
+        var marker = L.marker([m.lat, m.lng], { icon: icon }).addTo(map);
+        if (label) {
+          marker.bindTooltip('<span class="pin-label">' + label + '</span>', { direction: 'top', offset: [0, -24] });
         }
         group.push(marker);
       });
@@ -80,7 +97,7 @@ function buildMapHtml(markers: MapMarker[], interactive: boolean): string {
       if (group.length === 1) {
         map.setView([markers[0].lat, markers[0].lng], 14);
       } else if (group.length > 1) {
-        map.fitBounds(L.featureGroup(group).getBounds().pad(0.25));
+        map.fitBounds(L.featureGroup(group).getBounds().pad(0.3));
       }
     </script>
   </body>
@@ -99,8 +116,10 @@ export function LocationMapPreview({
 
   if (markers.length === 0) return null;
 
+  const sizeStyle = StyleSheet.flatten(style)?.flex != null ? { flex: 1, minHeight: 120 } : { height };
+
   const map = (
-    <View style={[styles.wrapper, { height, borderColor: colors.border }, style]}>
+    <View style={[styles.wrapper, sizeStyle, { borderColor: colors.border }, style]}>
       <WebView
         source={{ html }}
         style={styles.webview}
@@ -115,7 +134,7 @@ export function LocationMapPreview({
       />
       {onPress && (
         <View style={styles.openHint} pointerEvents="none">
-          <Icon name="location" size={14} color="#fff" />
+          <Icon name="expand" size={14} color="#fff" />
         </View>
       )}
     </View>

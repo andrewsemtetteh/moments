@@ -5,6 +5,8 @@ import {
   setAudioModeAsync,
   useAudioRecorder,
 } from 'expo-audio';
+import * as Contacts from 'expo-contacts/legacy';
+import * as DocumentPicker from 'expo-document-picker';
 import * as Haptics from 'expo-haptics';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
@@ -15,6 +17,7 @@ import {
   FlatList,
   Keyboard,
   KeyboardAvoidingView,
+  PanResponder,
   Platform,
   Pressable,
   StyleSheet,
@@ -22,22 +25,21 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ChatAttachmentSheet } from '@/components/chat/ChatAttachmentSheet';
 import { ChatBubble } from '@/components/chat/ChatBubble';
+import { ChatCameraModal } from '@/components/chat/ChatCameraModal';
+import { ChatVoiceRecorder } from '@/components/chat/ChatVoiceRecorder';
 import { ChatEmojiPicker } from '@/components/chat/ChatEmojiPicker';
 import { ChatEmptyProfile } from '@/components/chat/ChatEmptyProfile';
 import { ChatDateSeparator, ChatUnreadDivider } from '@/components/chat/ChatListSeparators';
 import { ChatMessageActionSheet } from '@/components/chat/ChatMessageActionSheet';
 import { ChatReplyBar } from '@/components/chat/ChatReplyBar';
 import { ChatWallpaper } from '@/components/chat/ChatWallpaper';
-import { PartnerInfoSheet } from '@/components/chat/PartnerInfoSheet';
 import { PartnerStatusLine } from '@/components/chat/PartnerStatusLine';
 import { LoadingState } from '@/components/home/MoodSnapshot';
-import { FullScreenImageModal } from '@/components/ui/FullScreenImageModal';
+import { SwipeDismissView } from '@/components/layout/SwipeDismissView';
 import { Icon } from '@/components/ui/Icon';
 import { Avatar } from '@/components/ui/primitives';
 import {
@@ -47,8 +49,12 @@ import {
   useSendMessage,
 } from '@/hooks/queries';
 import { usePartnerPresence } from '@/hooks/usePartnerPresence';
+import { usePartnerActiveMoments } from '@/hooks/usePartnerActiveMoments';
+import { useOpenPartnerProfile } from '@/hooks/useOpenPartnerProfile';
 import { useStartCall } from '@/hooks/useStartCall';
 import { useTheme } from '@/hooks/useTheme';
+import { encodeAttachment } from '@/lib/chat-attachments';
+import { getCurrentPlace } from '@/lib/location';
 import { buildChatListItems, type ChatListItem } from '@/lib/chat-list';
 import { goBackOrReplace } from '@/lib/router';
 import { supabase } from '@/lib/supabase';
@@ -58,8 +64,6 @@ import type { Message } from '@/types/database';
 
 /** Distance from top of screen to top of KAV (safe area + header row height). */
 const HEADER_CONTENT_HEIGHT = 54;
-const CHAT_DISMISS_THRESHOLD = 72;
-const CHAT_DISMISS_VELOCITY = 850;
 
 export default function ChatScreen() {
   const router = useRouter();
@@ -74,6 +78,7 @@ export default function ChatScreen() {
   const chatMomentReply = useUIStore((s) => s.chatMomentReply);
   const clearChatDraft = useUIStore((s) => s.clearChatDraft);
   const setChatMomentReply = useUIStore((s) => s.setChatMomentReply);
+  const openPartnerProfileView = useOpenPartnerProfile();
   const offlineQueue = useOfflineStore((s) => s.queue);
   const addToQueue = useOfflineStore((s) => s.addToQueue);
   const removeFromQueue = useOfflineStore((s) => s.removeFromQueue);
@@ -85,15 +90,17 @@ export default function ChatScreen() {
   const [selected, setSelected] = useState<Message | null>(null);
   const [replyTo, setReplyTo] = useState<Message | null>(null);
   const [partnerTyping, setPartnerTyping] = useState(false);
-  const [showPartnerInfo, setShowPartnerInfo] = useState(false);
-  const [showPartnerAvatar, setShowPartnerAvatar] = useState(false);
   const [showEmoji, setShowEmoji] = useState(false);
   const [showAttachment, setShowAttachment] = useState(false);
+  const [showCamera, setShowCamera] = useState(false);
   const [initialUnreadIds, setInitialUnreadIds] = useState<Set<string> | null>(null);
   // Recording
   const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const [isRecording, setIsRecording] = useState(false);
+  const [willCancelRecording, setWillCancelRecording] = useState(false);
+  const [recordingElapsed, setRecordingElapsed] = useState(0);
   const isRecordingRef = useRef(false);
+  const willCancelRecordingRef = useRef(false);
   const [isSendingMedia, setIsSendingMedia] = useState(false);
 
   const listRef = useRef<FlatList>(null);
@@ -296,7 +303,10 @@ export default function ChatScreen() {
   };
 
   const toggleEmoji = () => {
-    if (!showEmoji) inputRef.current?.blur();
+    if (!showEmoji) {
+      inputRef.current?.blur();
+      setShowAttachment(false);
+    }
     setShowEmoji((v) => !v);
   };
 
@@ -308,14 +318,14 @@ export default function ChatScreen() {
       const ext = uri.split('.').pop() ?? 'jpg';
       const contentType = mediaType === 'video' ? 'video/mp4' : 'image/jpeg';
       const path = `${relationship.id}/${user.id}-${Date.now()}.${ext}`;
-      const publicUrl = await api.uploadMedia('moments-media', path, uri, contentType);
+      const mediaUrl = await api.uploadChatMedia(path, uri, contentType);
 
       const optimistic: Message = {
         id: `temp-${Date.now()}`,
         relationship_id: relationship.id,
         sender_id: user.id,
         content: '',
-        media_url: publicUrl,
+        media_url: mediaUrl,
         media_type: mediaType,
         moment_id: null,
         reply_to_id: null,
@@ -328,7 +338,7 @@ export default function ChatScreen() {
       };
       setOptimisticMessages((prev) => [...prev, optimistic]);
 
-      await sendMessage.mutateAsync({ content: '', mediaUrl: publicUrl, mediaType });
+      await sendMessage.mutateAsync({ content: '', mediaUrl, mediaType });
       setOptimisticMessages((prev) => prev.filter((m) => m.id !== optimistic.id));
     } catch (e) {
       Alert.alert('Upload failed', e instanceof Error ? e.message : 'Please try again');
@@ -347,6 +357,7 @@ export default function ChatScreen() {
       mediaTypes: ['images', 'videos'],
       quality: 0.8,
       allowsEditing: false,
+      videoMaxDuration: 60,
     });
     if (!result.canceled && result.assets[0]) {
       const asset = result.assets[0];
@@ -355,18 +366,126 @@ export default function ChatScreen() {
     }
   };
 
-  const handlePickCamera = async () => {
-    const perm = await ImagePicker.requestCameraPermissionsAsync();
-    if (!perm.granted) {
-      Alert.alert('Permission required', 'Allow camera access in Settings.');
-      return;
+  const openCamera = () => setShowCamera(true);
+
+  const handleCameraCapture = async (uri: string, mediaType: 'image' | 'video') => {
+    setShowCamera(false);
+    await sendImageMessage(uri, mediaType);
+  };
+
+  const sendAttachmentMessage = async (content: string) => {
+    if (!user || !relationship) return;
+
+    const optimistic: Message = {
+      id: `temp-${Date.now()}`,
+      relationship_id: relationship.id,
+      sender_id: user.id,
+      content,
+      media_url: null,
+      media_type: null,
+      moment_id: null,
+      reply_to_id: replyTo?.id ?? null,
+      reactions: {},
+      is_pinned: false,
+      deleted_for_all: false,
+      hidden_for: [],
+      read_at: null,
+      created_at: new Date().toISOString(),
+    };
+    setOptimisticMessages((prev) => [...prev, optimistic]);
+
+    try {
+      await sendMessage.mutateAsync({ content, replyToId: replyTo?.id });
+      setOptimisticMessages((prev) => prev.filter((m) => m.id !== optimistic.id));
+    } catch {
+      addToQueue({ id: optimistic.id, type: 'message', payload: { content } });
     }
-    const result = await ImagePicker.launchCameraAsync({
-      mediaTypes: ['images'],
-      quality: 0.8,
-    });
-    if (!result.canceled && result.assets[0]) {
-      await sendImageMessage(result.assets[0].uri, 'image');
+  };
+
+  const handlePickFile = async () => {
+    if (!user || !relationship) return;
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: '*/*',
+        copyToCacheDirectory: true,
+      });
+      if (result.canceled || !result.assets[0]) return;
+
+      const asset = result.assets[0];
+      setIsSendingMedia(true);
+      const ext = asset.name?.split('.').pop() ?? 'bin';
+      const path = `${relationship.id}/${user.id}-file-${Date.now()}.${ext}`;
+      const contentType = asset.mimeType ?? 'application/octet-stream';
+      const fileUrl = await api.uploadChatMedia(path, asset.uri, contentType);
+      const content = encodeAttachment({
+        type: 'file',
+        name: asset.name ?? 'File',
+        url: fileUrl,
+        mimeType: asset.mimeType ?? undefined,
+      });
+      await sendAttachmentMessage(content);
+    } catch (e) {
+      Alert.alert('Upload failed', e instanceof Error ? e.message : 'Please try again');
+    } finally {
+      setIsSendingMedia(false);
+    }
+  };
+
+  const handlePickContact = async () => {
+    try {
+      const { status } = await Contacts.requestPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission required', 'Allow access to contacts in Settings.');
+        return;
+      }
+
+      const contact = await Contacts.presentContactPickerAsync();
+      if (!contact) return;
+
+      const displayName =
+        [contact.firstName, contact.lastName].filter(Boolean).join(' ').trim() ||
+        contact.name ||
+        'Contact';
+      const phone = contact.phoneNumbers?.[0]?.number?.trim();
+      const email = contact.emails?.[0]?.email?.trim();
+
+      if (!phone && !email) {
+        Alert.alert('No contact details', 'That contact has no phone number or email to share.');
+        return;
+      }
+
+      const content = encodeAttachment({
+        type: 'contact',
+        name: displayName,
+        phone: phone || undefined,
+        email: email || undefined,
+      });
+      await sendAttachmentMessage(content);
+    } catch (e) {
+      Alert.alert('Contact failed', e instanceof Error ? e.message : 'Please try again');
+    }
+  };
+
+  const handlePickLocation = async () => {
+    setIsSendingMedia(true);
+    try {
+      const result = await getCurrentPlace();
+      if (!result.ok) {
+        Alert.alert('Location unavailable', result.message);
+        return;
+      }
+
+      const content = encodeAttachment({
+        type: 'location',
+        label: result.place.label,
+        latitude: result.place.latitude,
+        longitude: result.place.longitude,
+      });
+      await sendAttachmentMessage(content);
+    } catch (e) {
+      Alert.alert('Location failed', e instanceof Error ? e.message : 'Please try again');
+    } finally {
+      setIsSendingMedia(false);
     }
   };
 
@@ -374,6 +493,10 @@ export default function ChatScreen() {
   useEffect(() => {
     isRecordingRef.current = isRecording;
   }, [isRecording]);
+
+  useEffect(() => {
+    willCancelRecordingRef.current = willCancelRecording;
+  }, [willCancelRecording]);
 
   useEffect(() => {
     return () => {
@@ -386,6 +509,30 @@ export default function ChatScreen() {
       setAudioModeAsync({ allowsRecording: false }).catch(() => null);
     };
   }, [audioRecorder]);
+
+  useEffect(() => {
+    if (!isRecording) {
+      setRecordingElapsed(0);
+      return;
+    }
+
+    const started = Date.now();
+    const timer = setInterval(() => {
+      setRecordingElapsed(Math.floor((Date.now() - started) / 1000));
+    }, 250);
+    return () => clearInterval(timer);
+  }, [isRecording]);
+
+  const recordPanResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onMoveShouldSetPanResponder: () => isRecordingRef.current,
+        onPanResponderMove: (_, gesture) => {
+          setWillCancelRecording(gesture.dx < -60);
+        },
+      }),
+    [],
+  );
 
   const startRecording = async () => {
     try {
@@ -414,6 +561,11 @@ export default function ChatScreen() {
 
       await audioRecorder.prepareToRecordAsync();
       audioRecorder.record();
+      setWillCancelRecording(false);
+      setRecordingElapsed(0);
+      setShowAttachment(false);
+      setShowEmoji(false);
+      inputRef.current?.blur();
       setIsRecording(true);
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     } catch (e) {
@@ -425,6 +577,8 @@ export default function ChatScreen() {
   const stopAndSendRecording = async () => {
     if (!isRecording || !user || !relationship) return;
     setIsRecording(false);
+    setWillCancelRecording(false);
+    setRecordingElapsed(0);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     try {
       await audioRecorder.stop();
@@ -434,14 +588,14 @@ export default function ChatScreen() {
 
       setIsSendingMedia(true);
       const path = `${relationship.id}/${user.id}-voice-${Date.now()}.m4a`;
-      const publicUrl = await api.uploadMedia('moments-media', path, uri, 'audio/m4a');
+      const mediaUrl = await api.uploadChatMedia(path, uri, 'audio/mp4');
 
       const optimistic: Message = {
         id: `temp-${Date.now()}`,
         relationship_id: relationship.id,
         sender_id: user.id,
         content: '🎙 Voice message',
-        media_url: publicUrl,
+        media_url: mediaUrl,
         media_type: 'voice',
         moment_id: null,
         reply_to_id: null,
@@ -453,7 +607,7 @@ export default function ChatScreen() {
         created_at: new Date().toISOString(),
       };
       setOptimisticMessages((prev) => [...prev, optimistic]);
-      await sendMessage.mutateAsync({ content: '🎙 Voice message', mediaUrl: publicUrl, mediaType: 'voice' });
+      await sendMessage.mutateAsync({ content: '🎙 Voice message', mediaUrl, mediaType: 'voice' });
       setOptimisticMessages((prev) => prev.filter((m) => m.id !== optimistic.id));
     } catch (e) {
       Alert.alert('Send failed', e instanceof Error ? e.message : 'Please try again');
@@ -465,6 +619,8 @@ export default function ChatScreen() {
   const cancelRecording = async () => {
     if (!isRecording) return;
     setIsRecording(false);
+    setWillCancelRecording(false);
+    setRecordingElapsed(0);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
     try {
       await audioRecorder.stop();
@@ -472,55 +628,23 @@ export default function ChatScreen() {
     } catch {/* ignore */}
   };
 
+  const handleMicRelease = () => {
+    if (!isRecording) return;
+    if (willCancelRecordingRef.current) void cancelRecording();
+    else void stopAndSendRecording();
+    setWillCancelRecording(false);
+  };
+
   const startCall = useStartCall();
-  const translateX = useSharedValue(0);
 
   const closeChat = useCallback(() => {
     goBackOrReplace(router, '/(tabs)/home');
   }, [router]);
 
-  const dismissPan = Gesture.Pan()
-    .activeOffsetX(-18)
-    .failOffsetY([-12, 12])
-    .onUpdate((e) => {
-      if (e.translationX < 0) {
-        translateX.value = e.translationX;
-      }
-    })
-    .onEnd((e) => {
-      if (e.translationX < -CHAT_DISMISS_THRESHOLD || e.velocityX < -CHAT_DISMISS_VELOCITY) {
-        runOnJS(closeChat)();
-        return;
-      }
-      translateX.value = withSpring(0, { damping: 22, stiffness: 260 });
-    });
-
-  const animatedRootStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: translateX.value }],
-  }));
-
   const hasText = text.trim().length > 0;
   const kbOffset = Platform.OS === 'ios' ? insets.top + HEADER_CONTENT_HEIGHT : 0;
   const listPad = 8;
   const inputBarPad = 6;
-
-  const openPartnerAvatar = () => {
-    if (!partner?.avatar_url?.trim()) return;
-    setShowPartnerInfo(false);
-    setShowPartnerAvatar(true);
-  };
-
-  const openPartnerProfile = () => setShowPartnerInfo(true);
-
-  const goToProfile = () => {
-    setShowPartnerInfo(false);
-    router.push('/(tabs)/profile');
-  };
-
-  const goToMoments = () => {
-    setShowPartnerInfo(false);
-    router.push('/(tabs)/home');
-  };
 
   const startReply = useCallback((message: Message) => {
     setSelected(null);
@@ -539,8 +663,8 @@ export default function ChatScreen() {
           isTyping={partnerTyping}
           isOnline={partnerOnline}
           lastSeenAt={partnerLastSeenAt}
-          onOpenProfile={openPartnerProfile}
-          onOpenAvatar={openPartnerAvatar}
+          onOpenProfile={openPartnerProfileView}
+          onOpenAvatar={openPartnerProfileView}
         />
       ) : null,
     [
@@ -550,6 +674,7 @@ export default function ChatScreen() {
       partnerTyping,
       partnerOnline,
       partnerLastSeenAt,
+      openPartnerProfileView,
     ],
   );
 
@@ -576,9 +701,8 @@ export default function ChatScreen() {
   };
 
   return (
-    <GestureDetector gesture={dismissPan}>
-      <Animated.View style={[styles.root, animatedRootStyle, { backgroundColor: colors.background }]}>
-      {/* ── Header ── */}
+    <View style={[styles.root, { backgroundColor: colors.background }]}>
+      {/* Header sits outside swipe gesture so profile taps register reliably */}
       <View
         style={[
           styles.header,
@@ -590,16 +714,10 @@ export default function ChatScreen() {
         ]}>
         <Pressable
           style={styles.headerProfile}
-          onPress={openPartnerProfile}
+          onPress={openPartnerProfileView}
+          accessibilityRole="button"
           accessibilityLabel="View partner info">
-          <Pressable
-            onPress={openPartnerAvatar}
-            disabled={!partner?.avatar_url?.trim()}
-            hitSlop={4}
-            accessibilityRole="button"
-            accessibilityLabel="View profile photo">
-            <Avatar name={partner?.name} imageUrl={partner?.avatar_url} size={40} />
-          </Pressable>
+          <Avatar name={partner?.name} imageUrl={partner?.avatar_url} size={40} />
           <View style={styles.headerText}>
             <Text style={[styles.headerName, { color: colors.text }]} numberOfLines={1}>
               {partner?.name ?? 'Partner'}
@@ -629,6 +747,7 @@ export default function ChatScreen() {
         </View>
       </View>
 
+      <SwipeDismissView edge="end" onDismiss={closeChat} style={styles.flex}>
       {/* ── Pinned bar ── */}
       {pinned.length > 0 && (
         <View style={[styles.pinnedBar, { backgroundColor: colors.accentSoft, borderBottomColor: colors.border }]}>
@@ -651,51 +770,50 @@ export default function ChatScreen() {
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={kbOffset}>
-        {/* ── Message area ── */}
-        <ChatWallpaper style={styles.messageArea}>
-          {isLoading ? (
-            <LoadingState />
-          ) : (
-            <FlatList
-              ref={listRef}
-              data={listItems}
-              keyExtractor={(item) => item.id}
-              renderItem={renderItem}
-              ListHeaderComponent={profileIntro}
-              style={styles.flex}
-              contentContainerStyle={[
-                styles.list,
-                { paddingTop: listPad, paddingBottom: listPad },
-                showProfileIntro && styles.listWithProfileIntro,
-              ]}
-              onContentSizeChange={() => scrollToLatest(false)}
-              onLayout={() => scrollToLatest(false)}
-              showsVerticalScrollIndicator={false}
-              keyboardDismissMode="interactive"
-              keyboardShouldPersistTaps="handled"
+        {/* ── Message area (recorder replaces list while recording) ── */}
+        <View style={styles.messageArea}>
+          {isRecording ? (
+            <ChatVoiceRecorder
+              elapsedSec={recordingElapsed}
+              willCancel={willCancelRecording}
+              panHandlers={recordPanResponder.panHandlers}
+              onCancel={() => void cancelRecording()}
             />
-          )}
+          ) : (
+            <ChatWallpaper style={styles.flex}>
+              {isLoading ? (
+                <LoadingState />
+              ) : (
+                <FlatList
+                  ref={listRef}
+                  data={listItems}
+                  keyExtractor={(item) => item.id}
+                  renderItem={renderItem}
+                  ListHeaderComponent={profileIntro}
+                  style={styles.flex}
+                  contentContainerStyle={[
+                    styles.list,
+                    { paddingTop: listPad, paddingBottom: listPad },
+                    showProfileIntro && styles.listWithProfileIntro,
+                  ]}
+                  onContentSizeChange={() => scrollToLatest(false)}
+                  onLayout={() => scrollToLatest(false)}
+                  showsVerticalScrollIndicator={false}
+                  keyboardDismissMode="interactive"
+                  keyboardShouldPersistTaps="handled"
+                />
+              )}
 
-          {/* Typing bubble */}
-          {partnerTyping && (
-            <View style={styles.typingBubble}>
-              <View style={[styles.typingPill, { backgroundColor: colors.chatBubblePartner, borderColor: colors.border }]}>
-                <Text style={[styles.typingDots, { color: colors.textSecondary }]}>● ● ●</Text>
-              </View>
-            </View>
+              {partnerTyping && (
+                <View style={styles.typingBubble}>
+                  <View style={[styles.typingPill, { backgroundColor: colors.chatBubblePartner, borderColor: colors.border }]}>
+                    <Text style={[styles.typingDots, { color: colors.textSecondary }]}>● ● ●</Text>
+                  </View>
+                </View>
+              )}
+            </ChatWallpaper>
           )}
-        </ChatWallpaper>
-
-        {/* ── Recording indicator ── */}
-        {isRecording && (
-          <View style={[styles.recordingBar, { backgroundColor: colors.error }]}>
-            <View style={styles.recordingDot} />
-            <Text style={styles.recordingText}>Recording… swipe up to cancel</Text>
-            <Pressable onPress={cancelRecording} hitSlop={8}>
-              <Icon name="close" size={18} color="#fff" />
-            </Pressable>
-          </View>
-        )}
+        </View>
 
         {/* ── Media sending indicator ── */}
         {isSendingMedia && (
@@ -734,24 +852,51 @@ export default function ChatScreen() {
           />
         )}
 
-        {/* ── Input bar ── */}
+        {/* ── Composer (attachment tray + input + emoji) ── */}
         <View
           style={[
-            styles.inputBar,
-            {
-              backgroundColor: colors.background,
-              borderTopColor: colors.border,
-              paddingTop: inputBarPad,
-              paddingBottom: insets.bottom + inputBarPad,
-            },
+            styles.composer,
+            { paddingBottom: insets.bottom, borderTopColor: colors.border, backgroundColor: colors.background },
           ]}>
+          {showAttachment && !isRecording && (
+            <ChatAttachmentSheet
+              onClose={() => setShowAttachment(false)}
+              onPickGallery={handlePickGallery}
+              onPickFile={handlePickFile}
+              onPickContact={handlePickContact}
+              onPickLocation={handlePickLocation}
+            />
+          )}
+
+          <View
+            style={[
+              styles.inputBar,
+              {
+                backgroundColor: colors.background,
+                paddingTop: inputBarPad,
+                paddingBottom: inputBarPad,
+              },
+            ]}>
           {/* + Attachment */}
           <Pressable
             hitSlop={8}
             style={styles.inputSideBtn}
-            accessibilityLabel="Add attachment"
-            onPress={() => { setShowEmoji(false); setShowAttachment(true); }}>
-            <Icon name="plus" size={26} color={colors.textSecondary} />
+            disabled={isRecording}
+            accessibilityLabel={showAttachment ? 'Close attachments' : 'Add attachment'}
+            onPress={() => {
+              if (!showAttachment) inputRef.current?.blur();
+              setShowEmoji(false);
+              setShowAttachment((open) => {
+                const next = !open;
+                if (next) scrollToLatest(true);
+                return next;
+              });
+            }}>
+            <Icon
+              name={showAttachment ? 'close' : 'plus'}
+              size={showAttachment ? 22 : 26}
+              color={showAttachment ? colors.accent : colors.textSecondary}
+            />
           </Pressable>
 
           {/* Pill: text input + emoji toggle */}
@@ -763,10 +908,12 @@ export default function ChatScreen() {
               placeholderTextColor={colors.textTertiary}
               value={text}
               onChangeText={onChangeText}
+              editable={!isRecording}
               multiline
               maxLength={2000}
               onFocus={() => {
                 setShowEmoji(false);
+                setShowAttachment(false);
                 scrollToLatest(true);
               }}
             />
@@ -784,13 +931,12 @@ export default function ChatScreen() {
             </Pressable>
           </View>
 
-          {/* Camera (always visible) */}
-          {!hasText && (
+          {!hasText && !isRecording && (
             <Pressable
               hitSlop={8}
               style={styles.inputSideBtn}
               accessibilityLabel="Open camera"
-              onPress={handlePickCamera}>
+              onPress={openCamera}>
               <Icon name="camera" size={24} color={colors.textSecondary} />
             </Pressable>
           )}
@@ -798,8 +944,8 @@ export default function ChatScreen() {
           {/* Send / Mic (hold for voice, tap to send) */}
           <Pressable
             onPress={hasText ? handleSend : undefined}
-            onLongPress={!hasText ? startRecording : undefined}
-            onPressOut={isRecording ? stopAndSendRecording : undefined}
+            onLongPress={!hasText ? () => void startRecording() : undefined}
+            onPressOut={!hasText ? handleMicRelease : undefined}
             delayLongPress={300}
             hitSlop={8}
             style={[
@@ -816,40 +962,12 @@ export default function ChatScreen() {
               filled={hasText || isRecording}
             />
           </Pressable>
+          </View>
+
+          {showEmoji && <ChatEmojiPicker onSelect={handleEmojiSelect} />}
         </View>
-
-        {/* ── Emoji picker panel ── */}
-        {showEmoji && <ChatEmojiPicker onSelect={handleEmojiSelect} />}
       </KeyboardAvoidingView>
-
-      {/* ── Partner info sheet ── */}
-      <PartnerInfoSheet
-        visible={showPartnerInfo}
-        partnerTyping={partnerTyping}
-        partnerOnline={partnerOnline}
-        partnerLastSeenAt={partnerLastSeenAt}
-        onClose={() => setShowPartnerInfo(false)}
-        onSendMessage={() => { setShowPartnerInfo(false); setTimeout(() => inputRef.current?.focus(), 300); }}
-        onViewAvatar={openPartnerAvatar}
-        onViewProfile={goToProfile}
-        onViewMoments={goToMoments}
-      />
-
-      <FullScreenImageModal
-        visible={showPartnerAvatar}
-        imageUrl={partner?.avatar_url}
-        title={partner?.name}
-        onClose={() => setShowPartnerAvatar(false)}
-      />
-
-      {/* ── Attachment sheet ── */}
-      <ChatAttachmentSheet
-        visible={showAttachment}
-        onClose={() => setShowAttachment(false)}
-        onPickGallery={handlePickGallery}
-        onPickCamera={handlePickCamera}
-        onPickAudio={startRecording}
-      />
+      </SwipeDismissView>
 
       <ChatMessageActionSheet
         message={selected}
@@ -860,8 +978,13 @@ export default function ChatScreen() {
         onDeleteForMe={(messageId) => deleteForMe.mutate(messageId)}
         onDeleteForAll={(messageId) => deleteForAll.mutate(messageId)}
       />
-      </Animated.View>
-    </GestureDetector>
+
+      <ChatCameraModal
+        visible={showCamera}
+        onClose={() => setShowCamera(false)}
+        onCapture={handleCameraCapture}
+      />
+    </View>
   );
 }
 
@@ -920,17 +1043,6 @@ const styles = StyleSheet.create({
   },
   typingDots: { fontSize: 10, letterSpacing: 3 },
 
-  // Recording bar
-  recordingBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-  },
-  recordingDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#fff' },
-  recordingText: { flex: 1, color: '#fff', fontSize: 13, fontWeight: '600' },
-
   momentReplyBar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -944,12 +1056,15 @@ const styles = StyleSheet.create({
   momentReplyTitle: { fontSize: 13, fontWeight: '700' },
   momentReplySub: { fontSize: 11, fontWeight: '600' },
 
+  composer: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+
   // Input bar
   inputBar: {
     flexDirection: 'row',
     alignItems: 'flex-end',
     paddingHorizontal: 6,
-    borderTopWidth: StyleSheet.hairlineWidth,
     gap: 4,
   },
   inputSideBtn: {

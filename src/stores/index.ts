@@ -16,6 +16,8 @@ export interface MomentViewerState {
   sectionLabel?: string;
   /** Re-open moment history when the viewer closes (opened from history grid). */
   returnToHistory?: boolean;
+  /** Re-open partner profile when the viewer closes (opened from profile avatar). */
+  returnToPartnerProfile?: boolean;
 }
 
 interface AuthState {
@@ -65,6 +67,7 @@ interface UIState {
   showWrapped: boolean;
   showMoodHistory: boolean;
   showPaywall: boolean;
+  showPartnerProfile: boolean;
   showWatchTogether: boolean;
   watchInitialView: 'hub' | 'start' | 'watchlist' | 'schedule';
   chatDraft: string | null;
@@ -80,7 +83,12 @@ interface UIState {
   openMomentViewer: (
     moments: Moment[],
     startIndex?: number,
-    options?: { playback?: MomentViewerPlayback; sectionLabel?: string; returnToHistory?: boolean },
+    options?: {
+      playback?: MomentViewerPlayback;
+      sectionLabel?: string;
+      returnToHistory?: boolean;
+      returnToPartnerProfile?: boolean;
+    },
   ) => void;
   closeMomentViewer: () => void;
   setShowJournal: (show: boolean) => void;
@@ -92,6 +100,8 @@ interface UIState {
   clearChatDraft: () => void;
   openPaywall: () => void;
   closePaywall: () => void;
+  openPartnerProfile: () => void;
+  closePartnerProfile: () => void;
   openWatchTogether: (view?: 'hub' | 'start' | 'watchlist' | 'schedule') => void;
   closeWatchTogether: () => void;
   markPaywallShownThisSession: () => void;
@@ -110,6 +120,7 @@ export const useUIStore = create<UIState>((set) => ({
   showWrapped: false,
   showMoodHistory: false,
   showPaywall: false,
+  showPartnerProfile: false,
   showWatchTogether: false,
   watchInitialView: 'hub',
   chatDraft: null,
@@ -130,12 +141,16 @@ export const useUIStore = create<UIState>((set) => ({
         playback: options?.playback ?? 'story',
         sectionLabel: options?.sectionLabel,
         returnToHistory: options?.returnToHistory,
+        returnToPartnerProfile: options?.returnToPartnerProfile,
       },
     }),
   closeMomentViewer: () =>
     set((state) => ({
       momentViewer: null,
       showMomentHistory: state.momentViewer?.returnToHistory ? true : state.showMomentHistory,
+      showPartnerProfile: state.momentViewer?.returnToPartnerProfile
+        ? true
+        : state.showPartnerProfile,
     })),
   setShowJournal: (showJournal) => set({ showJournal }),
   setShowWrapped: (showWrapped) => set({ showWrapped }),
@@ -146,6 +161,8 @@ export const useUIStore = create<UIState>((set) => ({
   clearChatDraft: () => set({ chatDraft: null, chatMomentReply: null }),
   openPaywall: () => set({ showPaywall: true }),
   closePaywall: () => set({ showPaywall: false }),
+  openPartnerProfile: () => set({ showPartnerProfile: true }),
+  closePartnerProfile: () => set({ showPartnerProfile: false }),
   openWatchTogether: (view = 'hub') => set({ showWatchTogether: true, watchInitialView: view }),
   closeWatchTogether: () => set({ showWatchTogether: false }),
   markPaywallShownThisSession: () => set({ paywallShownThisSession: true }),

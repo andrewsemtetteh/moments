@@ -165,12 +165,32 @@ export function hasValidCoords(
 
 export function openInMaps(latitude: number, longitude: number, label?: string | null) {
   const query = encodeURIComponent(label?.trim() || `${latitude},${longitude}`);
-  const url = Platform.select({
-    ios: `maps:0,0?q=${query}&ll=${latitude},${longitude}`,
-    android: `geo:${latitude},${longitude}?q=${latitude},${longitude}(${query})`,
-    default: `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`,
-  });
-  if (url) void Linking.openURL(url);
+  const googleMaps = `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`;
+
+  const open = async (url: string) => {
+    try {
+      await Linking.openURL(url);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  void (async () => {
+    if (Platform.OS === 'ios') {
+      const iosUrl = `maps:0,0?q=${query}&ll=${latitude},${longitude}`;
+      if (!(await open(iosUrl))) await open(googleMaps);
+      return;
+    }
+
+    if (Platform.OS === 'android') {
+      const geoUrl = `geo:0,0?q=${latitude},${longitude}(${query})`;
+      if (!(await open(geoUrl))) await open(googleMaps);
+      return;
+    }
+
+    await open(googleMaps);
+  })();
 }
 
 export function openAppSettings() {

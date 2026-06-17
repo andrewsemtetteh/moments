@@ -1,14 +1,9 @@
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { Platform, StyleSheet } from 'react-native';
+import { StyleSheet } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
-import { MoodHistoryModal } from '@/components/home/MoodHistoryModal';
-import { MomentCreatorModal } from '@/components/moments/MomentCreatorModal';
-import { MomentHistoryModal } from '@/components/moments/MomentHistoryModal';
-import { MomentStoryViewer } from '@/components/moments/MomentStoryViewer';
-import { PaywallModal } from '@/components/subscription/PaywallModal';
-import { WrappedModal } from '@/components/wrapped/WrappedModal';
+import { AppModals } from '@/components/layout/AppModals';
 import { resolveThemeColors } from '@/constants/design-system';
 import { AppProviders } from '@/providers/AppProviders';
 import { useUIStore } from '@/stores';
@@ -36,16 +31,7 @@ function RootStack() {
         <Stack.Screen name="journal" />
         <Stack.Screen name="pro" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
       </Stack>
-      {Platform.OS !== 'web' && (
-        <>
-          <MomentCreatorModal />
-          <MomentHistoryModal />
-          <MomentStoryViewer />
-          <WrappedModal />
-          <MoodHistoryModal />
-          <PaywallModal />
-        </>
-      )}
+      <AppModals />
     </ThemeProvider>
   );
 }

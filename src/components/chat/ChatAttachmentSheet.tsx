@@ -1,124 +1,137 @@
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import * as Haptics from 'expo-haptics';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Icon, type IconName } from '@/components/ui/Icon';
 import { useTheme } from '@/hooks/useTheme';
 
+export type AttachmentOptionId = 'gallery' | 'file' | 'contact' | 'location';
+
 interface AttachmentOption {
-  id: string;
+  id: AttachmentOptionId;
   icon: IconName;
   label: string;
-  color: string;
-  bgColor: string;
+  tint: string;
 }
 
 interface Props {
-  visible: boolean;
   onClose: () => void;
   onPickGallery: () => void;
-  onPickCamera: () => void;
-  onPickAudio: () => void;
+  onPickFile: () => void;
+  onPickContact: () => void;
+  onPickLocation: () => void;
 }
 
+const OPTIONS: Omit<AttachmentOption, 'tint'>[] = [
+  { id: 'gallery', icon: 'image', label: 'Gallery' },
+  { id: 'file', icon: 'document', label: 'File' },
+  { id: 'contact', icon: 'user', label: 'Contact' },
+  { id: 'location', icon: 'location', label: 'Location' },
+];
+
+const TINTS: Record<AttachmentOptionId, string> = {
+  gallery: '#BF59CF',
+  file: '#5F6CEF',
+  contact: '#0FABDB',
+  location: '#34C759',
+};
+
+/** Four attachment options in one row above the composer. */
 export function ChatAttachmentSheet({
-  visible,
   onClose,
   onPickGallery,
-  onPickCamera,
-  onPickAudio,
+  onPickFile,
+  onPickContact,
+  onPickLocation,
 }: Props) {
   const { colors } = useTheme();
 
-  const options: AttachmentOption[] = [
-    { id: 'gallery', icon: 'image', label: 'Photo Library', color: colors.onAccent, bgColor: '#9B59B6' },
-    { id: 'camera', icon: 'camera', label: 'Camera', color: '#fff', bgColor: '#2C3E50' },
-    { id: 'audio', icon: 'mic', label: 'Voice Note', color: '#fff', bgColor: colors.accent },
-  ];
+  const options: AttachmentOption[] = OPTIONS.map((opt) => ({
+    ...opt,
+    tint: TINTS[opt.id],
+  }));
 
-  const handlePress = (id: string) => {
+  const handlers: Record<AttachmentOptionId, () => void> = {
+    gallery: onPickGallery,
+    file: onPickFile,
+    contact: onPickContact,
+    location: onPickLocation,
+  };
+
+  const handlePress = (id: AttachmentOptionId) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     onClose();
-    // Small delay so sheet closes before permission dialogs appear
-    setTimeout(() => {
-      if (id === 'gallery') onPickGallery();
-      else if (id === 'camera') onPickCamera();
-      else if (id === 'audio') onPickAudio();
-    }, 200);
+    setTimeout(() => handlers[id](), 180);
   };
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable style={styles.overlay} onPress={onClose}>
-        <Pressable
-          style={[styles.sheet, { backgroundColor: colors.backgroundElevated }]}
-          onPress={() => undefined}>
-          <View style={[styles.handle, { backgroundColor: colors.border }]} />
-          <Text style={[styles.title, { color: colors.text }]}>Share</Text>
-
-          <View style={styles.grid}>
-            {options.map((opt) => (
-              <Pressable
-                key={opt.id}
-                style={styles.optionWrap}
-                onPress={() => handlePress(opt.id)}>
-                <View style={[styles.optionIcon, { backgroundColor: opt.bgColor }]}>
-                  <Icon name={opt.icon} size={28} color={opt.color} />
-                </View>
-                <Text style={[styles.optionLabel, { color: colors.textSecondary }]}>
-                  {opt.label}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
-
+    <View
+      style={[
+        styles.root,
+        {
+          backgroundColor: colors.surface,
+          borderBottomColor: colors.border,
+        },
+      ]}>
+      <View style={styles.row}>
+        {options.map((opt) => (
           <Pressable
-            onPress={onClose}
-            style={[styles.cancelBtn, { backgroundColor: colors.surface }]}>
-            <Text style={[styles.cancelText, { color: colors.text }]}>Cancel</Text>
+            key={opt.id}
+            style={({ pressed }) => [styles.item, pressed && styles.itemPressed]}
+            accessibilityRole="button"
+            accessibilityLabel={opt.label}
+            onPress={() => handlePress(opt.id)}>
+            <View style={[styles.circle, { backgroundColor: opt.tint }]}>
+              <Icon name={opt.icon} size={24} color="#FFFFFF" filled={opt.id === 'location'} />
+            </View>
+            <Text style={[styles.label, { color: colors.textSecondary }]} numberOfLines={1}>
+              {opt.label}
+            </Text>
           </Pressable>
-        </Pressable>
-      </Pressable>
-    </Modal>
+        ))}
+      </View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    justifyContent: 'flex-end',
-    backgroundColor: 'rgba(0,0,0,0.45)',
+  root: {
+    minHeight: 112,
+    justifyContent: 'center',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    paddingVertical: 16,
+    paddingHorizontal: 12,
   },
-  sheet: {
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingHorizontal: 20,
-    paddingBottom: 36,
-    paddingTop: 12,
-  },
-  handle: {
-    width: 40,
-    height: 4,
-    borderRadius: 2,
-    alignSelf: 'center',
-    marginBottom: 16,
-  },
-  title: { fontSize: 18, fontWeight: '800', marginBottom: 20 },
-  grid: {
+  row: {
     flexDirection: 'row',
-    gap: 16,
-    marginBottom: 24,
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
-  optionWrap: { alignItems: 'center', gap: 8, flex: 1 },
-  optionIcon: {
-    width: 64,
-    height: 64,
-    borderRadius: 20,
+  item: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 10,
+    minWidth: 0,
   },
-  optionLabel: { fontSize: 12, fontWeight: '600', textAlign: 'center' },
-  cancelBtn: {
-    paddingVertical: 16,
-    borderRadius: 16,
+  itemPressed: {
+    opacity: 0.72,
+    transform: [{ scale: 0.94 }],
+  },
+  circle: {
+    width: 54,
+    height: 54,
+    borderRadius: 27,
     alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.14,
+    shadowRadius: 5,
+    elevation: 3,
   },
-  cancelText: { fontSize: 17, fontWeight: '600' },
+  label: {
+    fontSize: 11,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
 });

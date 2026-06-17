@@ -2,6 +2,7 @@ import { useRouter, type Href } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { SwipeDismissView } from '@/components/layout/SwipeDismissView';
 import { Icon } from '@/components/ui/Icon';
 import { PrimaryButton } from '@/components/ui/primitives';
 import { useJournalEntries } from '@/hooks/queries';
@@ -12,12 +13,14 @@ export default function JournalScreen() {
   const router = useRouter();
   const { colors } = useTheme();
   const { data: entries = [] } = useJournalEntries();
+  const close = () => goBackOrReplace(router, '/(tabs)/home');
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+      <SwipeDismissView edge="start" onDismiss={close}>
       <View style={styles.header}>
         <Pressable
-          onPress={() => goBackOrReplace(router, '/(tabs)/home')}
+          onPress={close}
           style={[styles.iconBtn, { backgroundColor: colors.surfaceElevated }]}>
           <Icon name="chevronLeft" size={22} color={colors.text} />
         </Pressable>
@@ -35,6 +38,7 @@ export default function JournalScreen() {
         ))}
         <PrimaryButton label="New entry" onPress={() => router.push('/journal/compose' as Href)} />
       </View>
+      </SwipeDismissView>
     </SafeAreaView>
   );
 }

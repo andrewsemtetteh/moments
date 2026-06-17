@@ -39,10 +39,9 @@ export function ChatEmptyProfile({
   return (
     <View style={styles.container}>
       <Pressable
-        onPress={onOpenAvatar}
-        disabled={!partner?.avatar_url?.trim()}
+        onPress={onOpenAvatar ?? onOpenProfile}
         accessibilityRole="button"
-        accessibilityLabel="View profile photo">
+        accessibilityLabel="View partner profile">
         <View style={styles.avatarWrap}>
           <Avatar name={partner?.name} imageUrl={partner?.avatar_url} size={108} />
           {status.variant === 'online' && (
@@ -70,7 +69,7 @@ export function ChatEmptyProfile({
       <View style={[styles.divider, { backgroundColor: colors.border }]} />
 
       <Text style={[styles.note, { color: colors.textSecondary }]}>
-        This is the start of your private space. Say hello — only you two can see messages here.
+        This is the start of your private space. Say hello. Only you two can see messages here.
       </Text>
 
       <Pressable onPress={onOpenProfile} style={[styles.profileBtn, { borderColor: colors.border }]}>

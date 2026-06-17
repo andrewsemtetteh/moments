@@ -11,10 +11,13 @@ import Animated, {
   withSpring,
 } from 'react-native-reanimated';
 
+import { ChatAttachmentCard } from '@/components/chat/ChatAttachmentCard';
+import { ChatVideoMessage } from '@/components/chat/ChatVideoMessage';
 import { MomentReplyCard } from '@/components/chat/MomentReplyCard';
 import { VoiceNotePlayer } from '@/components/chat/VoiceNotePlayer';
 import { Icon } from '@/components/ui/Icon';
 import { useTheme } from '@/hooks/useTheme';
+import { parseAttachment } from '@/lib/chat-attachments';
 import { getMessagePreviewText } from '@/lib/message-preview';
 import { isMomentReplyMessage } from '@/lib/moment-reply';
 import { useAuthStore } from '@/stores';
@@ -51,6 +54,7 @@ export function ChatBubble({
   const textColor = isSelf ? selfTextColor : partnerTextColor;
   const timeColor = isSelf ? `${selfTextColor}99` : colors.textTertiary;
   const isDeleted = message.deleted_for_all;
+  const attachment = !isDeleted ? parseAttachment(message.content) : null;
   const replyAuthor =
     replyToMessage?.sender_id === user?.id ? 'You' : partner?.name ?? 'Partner';
 
@@ -156,11 +160,17 @@ export function ChatBubble({
                   <Image source={{ uri: message.media_url }} style={styles.media} contentFit="cover" />
                 )}
 
+                {message.media_url && message.media_type === 'video' && !message.moment_id && (
+                  <ChatVideoMessage uri={message.media_url} isSelf={isSelf} />
+                )}
+
                 {message.media_url && message.media_type === 'voice' && (
                   <VoiceNotePlayer uri={message.media_url} isSelf={isSelf} />
                 )}
 
-                {message.content && message.media_type !== 'voice' && (
+                {attachment && <ChatAttachmentCard attachment={attachment} isSelf={isSelf} />}
+
+                {message.content && message.media_type !== 'voice' && message.media_type !== 'video' && message.media_type !== 'image' && !attachment && (
                   <Text
                     style={[
                       styles.text,

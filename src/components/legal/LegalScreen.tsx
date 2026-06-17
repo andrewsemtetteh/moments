@@ -1,7 +1,8 @@
-import { ScrollView, StyleSheet, Text, View, Pressable } from 'react-native';
 import { useRouter } from 'expo-router';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { SwipeDismissView } from '@/components/layout/SwipeDismissView';
 import { Icon } from '@/components/ui/Icon';
 import { useTheme } from '@/hooks/useTheme';
 
@@ -15,13 +16,15 @@ interface LegalScreenProps {
 export function LegalScreen({ title, children }: LegalScreenProps) {
   const router = useRouter();
   const { colors } = useTheme();
+  const goBack = () => router.back();
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+      <SwipeDismissView edge="start" onDismiss={goBack}>
       <View style={styles.header}>
         <View style={styles.headerSide}>
           <Pressable
-            onPress={() => router.back()}
+            onPress={goBack}
             style={styles.backBtn}
             hitSlop={8}
             accessibilityLabel="Go back"
@@ -38,6 +41,7 @@ export function LegalScreen({ title, children }: LegalScreenProps) {
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={[styles.body, { color: colors.text }]}>{children}</Text>
       </ScrollView>
+      </SwipeDismissView>
     </SafeAreaView>
   );
 }

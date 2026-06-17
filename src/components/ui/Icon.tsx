@@ -54,6 +54,7 @@ export type IconName =
   | 'flipCamera'
   | 'flash'
   | 'download'
+  | 'document'
   | 'expand'
   | 'reply'
   | 'moreVertical';
@@ -113,6 +114,7 @@ const ICON_MAP: Record<IconName, { outline: IoniconName; filled: IoniconName }> 
   flipCamera: { outline: 'camera-reverse-outline', filled: 'camera-reverse' },
   flash: { outline: 'flash-outline', filled: 'flash' },
   download: { outline: 'download-outline', filled: 'download' },
+  document: { outline: 'document-outline', filled: 'document' },
   expand: { outline: 'expand-outline', filled: 'expand' },
   reply: { outline: 'arrow-undo-outline', filled: 'arrow-undo' },
   moreVertical: { outline: 'ellipsis-vertical', filled: 'ellipsis-vertical' },

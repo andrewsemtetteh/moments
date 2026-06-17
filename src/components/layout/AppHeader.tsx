@@ -5,10 +5,12 @@ import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Icon, type IconName } from '@/components/ui/Icon';
+import { Avatar } from '@/components/ui/primitives';
+import { useOpenPartnerProfile } from '@/hooks/useOpenPartnerProfile';
 import { useNotifications, useUnreadMessageCount } from '@/hooks/queries';
 import { useTheme } from '@/hooks/useTheme';
 import { formatBadgeCount } from '@/lib/format-badge';
-import { useUIStore } from '@/stores';
+import { useRelationshipStore, useUIStore } from '@/stores';
 
 const APP_NAME = 'Moments';
 
@@ -23,6 +25,8 @@ export function AppHeader({ showChat = true, showWatchTogether = true }: AppHead
   const pathname = usePathname();
   const { colors } = useTheme();
   const openWatchTogether = useUIStore((s) => s.openWatchTogether);
+  const openPartnerProfile = useOpenPartnerProfile();
+  const partner = useRelationshipStore((s) => s.partner);
   const { data: notifications } = useNotifications();
   const { data: unreadMessages = 0 } = useUnreadMessageCount();
 
@@ -47,11 +51,27 @@ export function AppHeader({ showChat = true, showWatchTogether = true }: AppHead
         )}
       </View>
 
-      <View style={styles.center}>
-        <Text style={[styles.title, { color: colors.text }]} numberOfLines={1}>
-          {APP_NAME}
-        </Text>
-      </View>
+      <Pressable
+        style={styles.center}
+        disabled={!partner}
+        onPress={() => {
+          openPartnerProfile();
+        }}
+        accessibilityRole="button"
+        accessibilityLabel={partner ? `View ${partner.name ?? 'partner'} profile` : APP_NAME}>
+        {partner ? (
+          <View style={styles.centerRow}>
+            <Avatar name={partner.name} imageUrl={partner.avatar_url} size={30} />
+            <Text style={[styles.title, { color: colors.text }]} numberOfLines={1}>
+              {APP_NAME}
+            </Text>
+          </View>
+        ) : (
+          <Text style={[styles.title, { color: colors.text }]} numberOfLines={1}>
+            {APP_NAME}
+          </Text>
+        )}
+      </Pressable>
 
       <View style={[styles.side, styles.right]}>
         {showWatchTogether && (
@@ -145,7 +165,8 @@ const styles = StyleSheet.create({
   left: { justifyContent: 'flex-start' },
   right: { justifyContent: 'flex-end' },
   center: { flexShrink: 1, maxWidth: '52%', alignItems: 'center' },
-  title: { fontSize: 18, fontWeight: '800', letterSpacing: -0.4 },
+  centerRow: { flexDirection: 'row', alignItems: 'center', gap: 8, maxWidth: '100%' },
+  title: { fontSize: 18, fontWeight: '800', letterSpacing: -0.4, flexShrink: 1 },
   iconSlot: {
     width: 44,
     height: 44,
