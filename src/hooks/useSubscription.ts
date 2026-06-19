@@ -47,7 +47,7 @@ export function useSubscription() {
       aiRequests: isPlus ? Infinity : FREE_AI_REQUESTS,
       journalEntries: isPlus ? Infinity : FREE_JOURNAL_ENTRIES,
       timelineMoments: isPlus ? Infinity : FREE_TIMELINE_MOMENTS,
-      wrapped: isPlus,
+      wrapped: true,
       moodHistory: isPlus,
     },
   };

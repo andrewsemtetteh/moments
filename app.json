@@ -83,7 +83,10 @@
           "contactsPermission": "Moments needs contacts access to share a contact in chat."
         }
       ],
-      "expo-notifications"
+      "expo-notifications",
+      "ffmpeg-expo",
+      "expo-video",
+      "@react-native-community/datetimepicker"
     ],
     "experiments": {
       "typedRoutes": true,

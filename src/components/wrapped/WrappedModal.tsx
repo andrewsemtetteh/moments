@@ -4,10 +4,8 @@ import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-nati
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Icon } from '@/components/ui/Icon';
-import { PrimaryButton } from '@/components/ui/primitives';
 import { MOOD_EMOJI, MOOD_LABELS } from '@/constants/design-system';
 import { useJournalEntries, useMoments, useMoodFrequency, useStreak } from '@/hooks/queries';
-import { usePlusGate } from '@/hooks/usePlusGate';
 import { useTheme } from '@/hooks/useTheme';
 import { useAuthStore, useRelationshipStore, useUIStore } from '@/stores';
 
@@ -19,7 +17,6 @@ export function WrappedModal() {
   const relationship = useRelationshipStore((s) => s.relationship);
   const partner = useRelationshipStore((s) => s.partner);
   const user = useAuthStore((s) => s.user);
-  const { isPlus, requirePlus } = usePlusGate();
   const { data: momentsData } = useMoments();
   const { data: streak } = useStreak();
   const { data: journalEntries } = useJournalEntries();
@@ -31,33 +28,6 @@ export function WrappedModal() {
   const moments = momentsData?.pages.flat() ?? [];
   const topMood = moodFreq[0];
   const close = () => setVisible(false);
-
-  if (!isPlus) {
-    return (
-      <Modal visible animationType="slide" presentationStyle="pageSheet" onRequestClose={close}>
-        <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>
-          <View style={styles.header}>
-            <Pressable onPress={close}>
-              <Text style={{ color: colors.textSecondary }}>Close</Text>
-            </Pressable>
-            <Text style={[styles.title, { color: colors.text }]}>Wrapped {year}</Text>
-            <View style={{ width: 48 }} />
-          </View>
-          <View style={styles.preview}>
-            <LinearGradient colors={colors.gradient} style={styles.previewCard}>
-              <Text style={styles.previewEyebrow}>Moments Plus</Text>
-              <Text style={styles.previewTitle}>Your year together, beautifully summarized</Text>
-              <Text style={styles.previewBody}>
-                Relive your top moods, streaks, moments, and journal highlights in a private recap for just the two of
-                you.
-              </Text>
-            </LinearGradient>
-            <PrimaryButton label="Unlock Wrapped" onPress={() => requirePlus('Wrapped recap')} />
-          </View>
-        </View>
-      </Modal>
-    );
-  }
 
   return (
     <Modal visible animationType="slide" presentationStyle="pageSheet" onRequestClose={close}>
@@ -123,11 +93,6 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingBottom: 12 },
   title: { fontSize: 17, fontWeight: '700' },
-  preview: { flex: 1, padding: 24, justifyContent: 'center', gap: 20 },
-  previewCard: { borderRadius: 24, padding: 24 },
-  previewEyebrow: { color: 'rgba(255,255,255,0.85)', fontSize: 12, fontWeight: '800', letterSpacing: 1 },
-  previewTitle: { color: '#fff', fontSize: 24, fontWeight: '800', marginTop: 8, lineHeight: 30 },
-  previewBody: { color: 'rgba(255,255,255,0.92)', fontSize: 15, lineHeight: 22, marginTop: 10 },
   scroll: { padding: 16, gap: 12, paddingBottom: 40 },
   hero: { borderRadius: 24, padding: 24, marginBottom: 8 },
   heroEyebrow: { color: 'rgba(255,255,255,0.85)', fontSize: 12, fontWeight: '800', letterSpacing: 0.8 },

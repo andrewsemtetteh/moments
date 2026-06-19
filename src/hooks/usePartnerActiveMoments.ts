@@ -5,7 +5,6 @@ import {
   enrichMomentsWithAuthors,
   getPartnerActiveMoments,
 } from '@/lib/moment-display';
-import { withHomePartnerMoments } from '@/lib/mock-moments';
 import { useAuthStore, useRelationshipStore } from '@/stores';
 
 export function usePartnerActiveMoments() {
@@ -23,24 +22,6 @@ export function usePartnerActiveMoments() {
   return useMemo(() => {
     const flat = momentsData?.pages.flat() ?? [];
     const enriched = enrichMomentsWithAuthors(flat, user, partner);
-    const active = getPartnerActiveMoments(enriched, user?.id, partnerId);
-
-    if (active.length > 0) return active;
-
-    if (relationship?.id && user?.id) {
-      const homeMocked = withHomePartnerMoments(
-        active,
-        {
-          relationshipId: relationship.id,
-          userId: user.id,
-          partnerId,
-          partnerName: partner?.name,
-        },
-        user.id,
-      );
-      if (homeMocked.length > 0) return homeMocked;
-    }
-
-    return active;
-  }, [momentsData, user, partner, partnerId, relationship?.id]);
+    return getPartnerActiveMoments(enriched, user?.id, partnerId);
+  }, [momentsData, user, partner, partnerId]);
 }

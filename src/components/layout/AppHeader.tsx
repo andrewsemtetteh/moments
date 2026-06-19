@@ -6,8 +6,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Icon, type IconName } from '@/components/ui/Icon';
 import { Avatar } from '@/components/ui/primitives';
-import { useOpenPartnerProfile } from '@/hooks/useOpenPartnerProfile';
 import { useNotifications, useUnreadMessageCount } from '@/hooks/queries';
+import { useOpenPartnerProfile } from '@/hooks/useOpenPartnerProfile';
 import { useTheme } from '@/hooks/useTheme';
 import { formatBadgeCount } from '@/lib/format-badge';
 import { useRelationshipStore, useUIStore } from '@/stores';

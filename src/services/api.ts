@@ -1,3 +1,4 @@
+import { extractMomentsStoragePath, hydrateMomentsMedia } from '@/lib/moment-media';
 import { isMissingTableError } from '@/lib/network-error';
 import { hasActiveUserSubscription } from '@/lib/subscription';
 import { supabase } from '@/lib/supabase';
@@ -6,7 +7,6 @@ import type {
     BucketListItem,
     CalendarEvent,
     DailyChallenge,
-    Experience,
     JournalEntry,
     Message,
     Moment,
@@ -24,7 +24,15 @@ import type {
     WatchReaction,
     WatchSession,
     WatchVote,
+    QuizLiveSession,
+    QuizLiveQuestion,
 } from '@/types/database';
+import {
+  computeRoundPoints,
+  mergeScores,
+  parseQuizQuestions,
+  clientFallbackQuestions,
+} from '@/lib/quiz-live';
 
 async function readUriAsArrayBuffer(uri: string): Promise<ArrayBuffer> {
   const response = await fetch(uri);
@@ -167,7 +175,7 @@ export async function setUserSubscription(
   return { profile, relationship };
 }
 
-export async function createRelationship(userId: string, name: string) {
+export async function createRelationship(userId: string, name: string, anniversaryDate?: string | null) {
   const inviteCode = generateInviteCode();
   const { data, error } = await supabase
     .from('relationships')
@@ -176,6 +184,7 @@ export async function createRelationship(userId: string, name: string) {
       relationship_name: name,
       invite_code: inviteCode,
       status: 'pending',
+      ...(anniversaryDate ? { anniversary_date: anniversaryDate } : {}),
     })
     .select()
     .single();
@@ -277,7 +286,7 @@ export async function fetchMoments(relationshipId: string, limit = 30, cursor?: 
 
   const { data, error } = await query;
   if (error) throw error;
-  return data as Moment[];
+  return hydrateMomentsMedia(data as Moment[]);
 }
 
 export async function createMoment(
@@ -287,6 +296,7 @@ export async function createMoment(
     type: 'photo' | 'video';
     media_url: string;
   },
+  options?: { senderName?: string | null; partnerUserId?: string | null },
 ) {
   const { data, error } = await supabase
     .from('moments')
@@ -296,13 +306,95 @@ export async function createMoment(
   if (error) throw error;
 
   await supabase.rpc('update_streak', { p_relationship_id: relationshipId });
+
+  const partnerId = options?.partnerUserId;
+  if (partnerId && partnerId !== userId) {
+    const label = options?.senderName?.split(' ')[0] ?? 'Your partner';
+    await sendPartnerNotification(relationshipId, partnerId, 'moment', `${label} sent you a moment`);
+  }
+
   return data as Moment;
 }
 
 export async function fetchMomentById(momentId: string) {
   const { data, error } = await supabase.from('moments').select('*').eq('id', momentId).maybeSingle();
   if (error) throw error;
-  return data as Moment | null;
+  if (!data) return null;
+  const [hydrated] = await hydrateMomentsMedia([data as Moment]);
+  return hydrated;
+}
+
+export async function markMomentViewed(momentId: string, userId: string) {
+  const { data: m, error: fetchError } = await supabase
+    .from('moments')
+    .select('viewed_by')
+    .eq('id', momentId)
+    .maybeSingle();
+  if (fetchError) throw fetchError;
+  if (!m) return;
+
+  const viewed = (m.viewed_by as string[] | null) ?? [];
+  if (viewed.includes(userId)) return;
+
+  const { error } = await supabase
+    .from('moments')
+    .update({ viewed_by: [...viewed, userId] })
+    .eq('id', momentId);
+  if (error) throw error;
+}
+
+export async function deleteMoment(momentId: string, userId: string) {
+  const { data: moment, error: fetchError } = await supabase
+    .from('moments')
+    .select('id, user_id, media_url')
+    .eq('id', momentId)
+    .maybeSingle();
+  if (fetchError) throw fetchError;
+  if (!moment) return;
+  if (moment.user_id !== userId) {
+    throw new Error('You can only delete moments you sent.');
+  }
+
+  const path = extractMomentsStoragePath(moment.media_url);
+  if (path) {
+    await supabase.storage.from('moments').remove([path]);
+  }
+
+  const { error } = await supabase.from('moments').delete().eq('id', momentId);
+  if (error) throw error;
+}
+
+export async function deleteMoments(momentIds: string[], userId: string) {
+  if (momentIds.length === 0) return { deleted: 0, skipped: 0 };
+
+  const { data: rows, error: fetchError } = await supabase
+    .from('moments')
+    .select('id, user_id, media_url')
+    .in('id', momentIds);
+  if (fetchError) throw fetchError;
+
+  const owned = (rows ?? []).filter((m) => m.user_id === userId);
+  const skipped = momentIds.length - owned.length;
+
+  if (owned.length === 0) {
+    throw new Error('You can only delete moments you sent.');
+  }
+
+  const paths = owned
+    .map((m) => extractMomentsStoragePath(m.media_url))
+    .filter((p): p is string => !!p);
+
+  if (paths.length > 0) {
+    await supabase.storage.from('moments').remove(paths);
+  }
+
+  const { error } = await supabase.from('moments').delete().in(
+    'id',
+    owned.map((m) => m.id),
+  );
+  if (error) throw error;
+
+  return { deleted: owned.length, skipped };
 }
 
 export async function fetchMessages(relationshipId: string, limit = 50, cursor?: string) {
@@ -567,11 +659,39 @@ export async function fetchSharedGoals(relationshipId: string) {
   return data as SharedGoal[];
 }
 
+// Experiences marketplace paused — re-enable when backend is ready.
+/*
 export async function fetchExperiences() {
-  const { data, error } = await supabase.from('experiences').select('*').limit(20);
+  const { data, error } = await supabase.from('experiences').select('*').limit(50);
   if (error) throw error;
   return data as Experience[];
 }
+
+export async function fetchSavedExperienceIds(relationshipId: string) {
+  const { data, error } = await supabase
+    .from('saved_experiences')
+    .select('experience_id')
+    .eq('relationship_id', relationshipId);
+  if (error) throw error;
+  return (data ?? []).map((row) => row.experience_id as string);
+}
+
+export async function saveExperience(relationshipId: string, experienceId: string) {
+  const { error } = await supabase
+    .from('saved_experiences')
+    .insert({ relationship_id: relationshipId, experience_id: experienceId });
+  if (error) throw error;
+}
+
+export async function unsaveExperience(relationshipId: string, experienceId: string) {
+  const { error } = await supabase
+    .from('saved_experiences')
+    .delete()
+    .eq('relationship_id', relationshipId)
+    .eq('experience_id', experienceId);
+  if (error) throw error;
+}
+*/
 
 export async function fetchNotifications(userId: string) {
   const { data, error } = await supabase
@@ -598,8 +718,21 @@ export async function uploadMedia(
   });
   if (error) throw error;
 
+  if (bucket === 'moments') {
+    const { data: signed, error: signError } = await supabase.storage
+      .from('moments')
+      .createSignedUrl(data.path, 60 * 60 * 24 * 365 * 5);
+    if (signError) throw signError;
+    return signed.signedUrl;
+  }
+
   const { data: urlData } = supabase.storage.from(bucket).getPublicUrl(data.path);
   return urlData.publicUrl;
+}
+
+/** Upload moment media to the private `moments` bucket; returns a long-lived signed URL. */
+export async function uploadMomentMedia(path: string, uri: string, contentType: string) {
+  return uploadMedia('moments', path, uri, contentType);
 }
 
 /** Upload chat media to the private `chat` bucket; returns a long-lived signed URL. */
@@ -752,12 +885,11 @@ export async function deleteMessageForAll(messageId: string, senderId: string) {
 }
 
 export async function toggleMomentReaction(momentId: string, userId: string, emoji: string) {
-  const { data: m } = await supabase.from('moments').select('reactions').eq('id', momentId).single();
-  const reactions: Record<string, string[]> = (m?.reactions as Record<string, string[]>) ?? {};
-  const current = reactions[emoji] ?? [];
-  reactions[emoji] = current.includes(userId) ? current.filter((u) => u !== userId) : [...current, userId];
-  if (reactions[emoji].length === 0) delete reactions[emoji];
-  const { error } = await supabase.from('moments').update({ reactions }).eq('id', momentId);
+  const { error } = await supabase.rpc('toggle_moment_reaction', {
+    p_moment_id: momentId,
+    p_user_id: userId,
+    p_emoji: emoji,
+  });
   if (error) throw error;
 }
 
@@ -1129,4 +1261,156 @@ export async function addWatchHistoryEntry(
     .single();
   if (error) throw error;
   return data as WatchHistoryEntry;
+}
+
+// --- Quiz Live ---
+
+export async function fetchActiveQuizLiveSession(relationshipId: string): Promise<QuizLiveSession | null> {
+  const { data, error } = await supabase
+    .from('quiz_live_sessions')
+    .select('*')
+    .eq('relationship_id', relationshipId)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) {
+    if (isMissingTableError(error)) return null;
+    throw error;
+  }
+  if (!data) return null;
+  return normalizeQuizLiveSession(data);
+}
+
+function normalizeQuizLiveSession(row: Record<string, unknown>): QuizLiveSession {
+  const base = row as unknown as QuizLiveSession;
+  return {
+    ...base,
+    questions: parseQuizQuestions(row.questions),
+    responses: (row.responses as Record<string, Record<string, number>>) ?? {},
+    scores: (row.scores as Record<string, number>) ?? {},
+  };
+}
+
+export async function endActiveQuizLiveSessions(relationshipId: string): Promise<void> {
+  const { error } = await supabase
+    .from('quiz_live_sessions')
+    .update({ status: 'finished', updated_at: new Date().toISOString() })
+    .eq('relationship_id', relationshipId)
+    .in('status', ['lobby', 'generating', 'active']);
+  if (error && !isMissingTableError(error)) throw error;
+}
+
+export async function createQuizLiveSession(
+  relationshipId: string,
+  hostUserId: string,
+  topic: string,
+): Promise<QuizLiveSession> {
+  const { data, error } = await supabase
+    .from('quiz_live_sessions')
+    .insert({
+      relationship_id: relationshipId,
+      host_user_id: hostUserId,
+      topic: topic.trim(),
+      status: 'lobby',
+    })
+    .select()
+    .single();
+  if (error) throw error;
+  return normalizeQuizLiveSession(data as Record<string, unknown>);
+}
+
+export async function updateQuizLiveSession(
+  sessionId: string,
+  updates: Partial<QuizLiveSession>,
+): Promise<QuizLiveSession> {
+  const { data, error } = await supabase
+    .from('quiz_live_sessions')
+    .update({ ...updates, updated_at: new Date().toISOString() })
+    .eq('id', sessionId)
+    .select()
+    .single();
+  if (error) throw error;
+  return normalizeQuizLiveSession(data as Record<string, unknown>);
+}
+
+export async function startQuizLiveSession(
+  relationshipId: string,
+  hostUserId: string,
+  topic: string,
+): Promise<QuizLiveSession> {
+  await endActiveQuizLiveSessions(relationshipId);
+  const created = await createQuizLiveSession(relationshipId, hostUserId, topic);
+  await updateQuizLiveSession(created.id, { status: 'generating' });
+
+  let questions: QuizLiveQuestion[] = [];
+  try {
+    const result = await invokeEdgeFunction<{ questions: QuizLiveQuestion[] }>('generate-quiz-live', {
+      relationship_id: relationshipId,
+      topic: topic.trim(),
+      count: 6,
+    });
+    questions = parseQuizQuestions(result.questions);
+  } catch {
+    questions = [];
+  }
+  if (!questions.length) {
+    questions = clientFallbackQuestions(topic.trim());
+  }
+
+  return updateQuizLiveSession(created.id, {
+    status: 'active',
+    round_phase: 'answer',
+    current_index: 0,
+    questions,
+    responses: {},
+    scores: {},
+  });
+}
+
+export async function submitQuizLiveAnswer(
+  session: QuizLiveSession,
+  userId: string,
+  answerIndex: number,
+  memberIds: string[],
+): Promise<QuizLiveSession> {
+  const key = String(session.current_index);
+  const responses = { ...session.responses };
+  const round = { ...(responses[key] ?? {}) };
+  round[userId] = answerIndex;
+  responses[key] = round;
+
+  const updates: Partial<QuizLiveSession> = { responses };
+  const allAnswered = memberIds.length > 0 && memberIds.every((id) => typeof round[id] === 'number');
+
+  if (allAnswered) {
+    updates.round_phase = 'reveal';
+    const question = session.questions[session.current_index];
+    let scores = { ...session.scores };
+    if (question) {
+      for (const id of memberIds) {
+        const partnerId = memberIds.find((m) => m !== id);
+        const partnerAnswer = partnerId !== undefined ? round[partnerId] : undefined;
+        const pts = computeRoundPoints(question, round[id], partnerAnswer);
+        scores = mergeScores(scores, id, pts);
+      }
+    }
+    updates.scores = scores;
+  }
+
+  return updateQuizLiveSession(session.id, updates);
+}
+
+export async function advanceQuizLiveRound(session: QuizLiveSession): Promise<QuizLiveSession> {
+  const nextIndex = session.current_index + 1;
+  if (nextIndex >= session.questions.length) {
+    return updateQuizLiveSession(session.id, { status: 'finished', round_phase: 'reveal' });
+  }
+  return updateQuizLiveSession(session.id, {
+    current_index: nextIndex,
+    round_phase: 'answer',
+  });
+}
+
+export async function endQuizLiveSession(sessionId: string): Promise<QuizLiveSession> {
+  return updateQuizLiveSession(sessionId, { status: 'finished', round_phase: 'reveal' });
 }

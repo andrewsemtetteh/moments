@@ -7,6 +7,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Icon } from '@/components/ui/Icon';
 import { colorWithAlpha, PrimaryButton } from '@/components/ui/primitives';
 import { PromptLink } from '@/components/ui/PromptLink';
+import { AnniversaryOnboardingField } from '@/components/onboarding/AnniversaryOnboardingField';
+import { formatAnniversaryForDb } from '@/lib/anniversary';
 import { useTheme } from '@/hooks/useTheme';
 import * as api from '@/services/api';
 import { useAuthStore, useRelationshipStore } from '@/stores';
@@ -19,6 +21,7 @@ export default function CreateRelationshipScreen() {
   const relationship = useRelationshipStore((s) => s.relationship);
   const setRelationship = useRelationshipStore((s) => s.setRelationship);
   const [name, setName] = useState('Our Moments');
+  const [anniversaryDate, setAnniversaryDate] = useState(formatAnniversaryForDb(new Date()));
   const [inviteCode, setInviteCode] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -66,7 +69,7 @@ export default function CreateRelationshipScreen() {
     }
     setLoading(true);
     try {
-      const rel = await api.createRelationship(user.id, name);
+      const rel = await api.createRelationship(user.id, name, anniversaryDate);
       setRelationship(rel);
       setInviteCode(rel.invite_code);
     } catch (e: unknown) {
@@ -114,6 +117,7 @@ export default function CreateRelationshipScreen() {
               placeholder="e.g. Our Moments"
               placeholderTextColor={colors.textTertiary}
             />
+            <AnniversaryOnboardingField value={anniversaryDate} onChange={setAnniversaryDate} />
             <PrimaryButton label={loading ? 'Creating…' : 'Create Relationship'} onPress={create} loading={loading} style={styles.btn} />
             <PromptLink
               prompt="Have an invite code?"
@@ -182,7 +186,7 @@ const styles = StyleSheet.create({
   subtitle: { fontSize: 16, textAlign: 'center', lineHeight: 22, marginTop: 10, maxWidth: 320 },
   hint: { fontSize: 14, textAlign: 'center', lineHeight: 20, marginTop: 12, maxWidth: 320 },
   input: { borderWidth: 1, borderRadius: 14, padding: 16, fontSize: 18, width: '100%', marginTop: 28, textAlign: 'center' },
-  btn: { width: '100%', marginTop: 20 },
+  btn: { width: '100%', marginTop: 16 },
   laterWrap: { width: '100%', marginTop: 28, alignItems: 'center' },
   dividerRow: {
     flexDirection: 'row',

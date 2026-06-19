@@ -1,16 +1,16 @@
 import { format, formatDistanceToNow } from 'date-fns';
-import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
+import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  Dimensions,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
+    Dimensions,
+    KeyboardAvoidingView,
+    Platform,
+    Pressable,
+    StyleSheet,
+    Text,
+    TextInput,
+    View,
 } from 'react-native';
 
 import { LocketReactionCluster } from '@/components/moments/LocketReactionCluster';
@@ -19,7 +19,7 @@ import { Icon } from '@/components/ui/Icon';
 import { Avatar } from '@/components/ui/primitives';
 import { useMomentReaction, useSendMessage } from '@/hooks/queries';
 import { useTheme } from '@/hooks/useTheme';
-import { toggleMomentReactionForUser, getUserReactionEmoji } from '@/lib/moment-display';
+import { getUserReactionEmoji, toggleMomentReactionForUser } from '@/lib/moment-display';
 import { momentToReplyContext } from '@/lib/moment-reply';
 import { useAuthStore, useRelationshipStore, useUIStore } from '@/stores';
 import type { Moment } from '@/types/database';
@@ -71,13 +71,12 @@ export function PartnerMomentHome({ partnerMoments }: PartnerMomentHomeProps) {
   const react = useCallback(
     (emoji: string) => {
       if (!user || !baseMoment) return;
-      const isMock = baseMoment.id.startsWith('mock-') || baseMoment.id.startsWith('temp-');
       setLocalReactions((prev) => {
         const current = prev[baseMoment.id] ?? baseMoment.reactions ?? {};
         const next = toggleMomentReactionForUser(current, user.id, emoji);
         return { ...prev, [baseMoment.id]: next };
       });
-      if (!isMock) reactMutation.mutate({ momentId: baseMoment.id, emoji });
+      reactMutation.mutate({ momentId: baseMoment.id, emoji });
     },
     [baseMoment, user, reactMutation],
   );

@@ -209,12 +209,41 @@ export function useSharedGoals() {
   });
 }
 
+// Experiences marketplace paused — re-enable when backend is ready.
+/*
 export function useExperiences() {
   return useQuery({
     queryKey: ['experiences'],
     queryFn: () => api.fetchExperiences(),
   });
 }
+
+export function useSavedExperienceIds() {
+  const relationship = useRelationshipStore((s) => s.relationship);
+  return useQuery({
+    queryKey: ['saved-experiences', relationship?.id],
+    queryFn: () => api.fetchSavedExperienceIds(relationship!.id),
+    enabled: !!relationship?.id,
+  });
+}
+
+export function useExperienceMutations() {
+  const queryClient = useQueryClient();
+  const relationship = useRelationshipStore((s) => s.relationship);
+  const invalidate = () =>
+    queryClient.invalidateQueries({ queryKey: ['saved-experiences', relationship?.id] });
+
+  const save = useMutation({
+    mutationFn: (experienceId: string) => api.saveExperience(relationship!.id, experienceId),
+    onSuccess: invalidate,
+  });
+  const unsave = useMutation({
+    mutationFn: (experienceId: string) => api.unsaveExperience(relationship!.id, experienceId),
+    onSuccess: invalidate,
+  });
+  return { save, unsave };
+}
+*/
 
 export function useNotifications() {
   const user = useAuthStore((s) => s.user);
@@ -244,7 +273,8 @@ export function useRealtimeSubscription(
     | 'calendar_events'
     | 'watch_sessions'
     | 'watch_watchlist'
-    | 'watch_messages',
+    | 'watch_messages'
+    | 'quiz_live_sessions',
 ) {
   const queryClient = useQueryClient();
   const queryClientRef = useRef(queryClient);
@@ -283,6 +313,9 @@ export function useRealtimeSubscription(
           }
           if (table === 'watch_messages') {
             qc.invalidateQueries({ queryKey: ['watchMessages'] });
+          }
+          if (table === 'quiz_live_sessions') {
+            qc.invalidateQueries({ queryKey: ['quizLiveSession', relationship.id] });
           }
           if (table === 'moments') qc.invalidateQueries({ queryKey: ['moments', relationship.id] });
           if (table === 'mood_logs') qc.invalidateQueries({ queryKey: ['moods', relationship.id] });
@@ -331,11 +364,30 @@ export function useCreateMoment() {
   const user = useAuthStore((s) => s.user);
 
   return useMutation({
-    mutationFn: (moment: { type: 'photo' | 'video'; media_url: string }) =>
-      api.createMoment(relationship!.id, user!.id, moment),
+    mutationFn: (moment: { type: 'photo' | 'video'; media_url: string }) => {
+      const partnerUserId =
+        relationship!.user_1_id === user!.id ? relationship!.user_2_id : relationship!.user_1_id;
+      return api.createMoment(relationship!.id, user!.id, moment, {
+        senderName: user!.name,
+        partnerUserId,
+      });
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['moments', relationship?.id] });
       queryClient.invalidateQueries({ queryKey: ['streak', relationship?.id] });
+    },
+  });
+}
+
+export function useDeleteMoments() {
+  const queryClient = useQueryClient();
+  const relationship = useRelationshipStore((s) => s.relationship);
+  const user = useAuthStore((s) => s.user);
+
+  return useMutation({
+    mutationFn: (momentIds: string[]) => api.deleteMoments(momentIds, user!.id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['moments', relationship?.id] });
     },
   });
 }
@@ -745,4 +797,56 @@ export function useWatchPartyNudge() {
       await api.nudgePartnerToWatchParty(relationship.id, partner.id, user.name ?? 'Your partner');
     },
   });
+}
+
+export function useActiveQuizLiveSession() {
+  const relationship = useRelationshipStore((s) => s.relationship);
+  const isOffline = useUIStore((s) => s.isOffline);
+  return useQuery({
+    queryKey: ['quizLiveSession', relationship?.id],
+    queryFn: () => (relationship ? api.fetchActiveQuizLiveSession(relationship.id) : null),
+    enabled: !!relationship?.id && !isOffline,
+    refetchInterval: isOffline ? false : 4_000,
+    retry: (count, error) => !isMissingTableError(error) && count < 1,
+  });
+}
+
+export function useQuizLiveMutations() {
+  const queryClient = useQueryClient();
+  const relationship = useRelationshipStore((s) => s.relationship);
+  const user = useAuthStore((s) => s.user);
+
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: ['quizLiveSession', relationship?.id] });
+  };
+
+  const start = useMutation({
+    mutationFn: (topic: string) => api.startQuizLiveSession(relationship!.id, user!.id, topic),
+    onSuccess: invalidate,
+  });
+
+  const submitAnswer = useMutation({
+    mutationFn: ({
+      session,
+      answerIndex,
+      memberIds,
+    }: {
+      session: import('@/types/database').QuizLiveSession;
+      answerIndex: number;
+      memberIds: string[];
+    }) => api.submitQuizLiveAnswer(session, user!.id, answerIndex, memberIds),
+    onSuccess: invalidate,
+  });
+
+  const advance = useMutation({
+    mutationFn: (session: import('@/types/database').QuizLiveSession) => api.advanceQuizLiveRound(session),
+    onSuccess: invalidate,
+  });
+
+  const end = useMutation({
+    mutationFn: (sessionId: string) => api.endQuizLiveSession(sessionId),
+    onSuccess: invalidate,
+  });
+
+  return { start, submitAnswer, advance, end };
 }

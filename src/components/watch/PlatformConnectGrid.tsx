@@ -1,10 +1,9 @@
-import * as Haptics from 'expo-haptics';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { StreamingPlatformIcon } from '@/components/watch/StreamingPlatformIcon';
 import { Icon } from '@/components/ui/Icon';
+import { StreamingServiceGrid } from '@/components/watch/StreamingServiceGrid';
+import { StreamingPlatformIcon } from '@/components/watch/StreamingPlatformIcon';
 import {
-  STREAMING_PLATFORMS,
   getStreamingPlatform,
   type StreamingPlatformId,
 } from '@/constants/streaming-platforms';
@@ -17,42 +16,47 @@ type Props = {
   selectedPlatformId: StreamingPlatformId | null;
   onSelectPlatform: (id: StreamingPlatformId) => void;
   compact?: boolean;
+  hideHeader?: boolean;
+  /** pick = start/schedule flow (no sign-in). manage = profile-style service linking. */
+  mode?: 'pick' | 'manage';
 };
 
-export function PlatformConnectGrid({ selectedPlatformId, onSelectPlatform, compact = false }: Props) {
+export function PlatformConnectGrid({
+  selectedPlatformId,
+  onSelectPlatform,
+  compact = false,
+  hideHeader = false,
+  mode = 'pick',
+}: Props) {
   const { colors } = useTheme();
-  const { width } = useWindowDimensions();
   const user = useAuthStore((s) => s.user);
   const partner = useRelationshipStore((s) => s.partner);
   const { data: connections } = useWatchPartyConnections();
   const { connect } = useStreamingConnectionMutations();
 
-  const cols = compact ? 4 : width > 380 ? 4 : 3;
-  const tileSize = (width - 48 - (cols - 1) * 10) / cols;
-
   const mineIds = new Set((connections?.mine ?? []).map((c) => c.platform_id));
   const partnerIds = new Set((connections?.partner ?? []).map((c) => c.platform_id));
 
-  const handlePlatformPress = (platformId: StreamingPlatformId) => {
-    onSelectPlatform(platformId);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-  };
+  const selectedPlatform = selectedPlatformId ? getStreamingPlatform(selectedPlatformId) : null;
+  const selectedConnected = selectedPlatformId ? mineIds.has(selectedPlatformId) : false;
 
-  const handleConnect = async (platformId: StreamingPlatformId) => {
+  const handleAddService = (platformId: StreamingPlatformId) => {
     const platform = getStreamingPlatform(platformId);
+    if (mineIds.has(platformId)) return;
+
     Alert.alert(
-      `Connect ${platform.name}`,
-      'Sign in on their website, then come back and confirm you are connected.',
+      `Add ${platform.name}?`,
+      'This tells your partner which services you use. Sign in happens in the app on your phone — not here.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Open sign in',
+          text: 'Open app to sign in',
           onPress: async () => {
             await openStreamingSignIn(platformId);
           },
         },
         {
-          text: "I'm signed in",
+          text: 'Already signed in',
           onPress: () => {
             connect.mutate({
               platformId,
@@ -66,34 +70,27 @@ export function PlatformConnectGrid({ selectedPlatformId, onSelectPlatform, comp
 
   return (
     <View style={styles.wrap}>
-      <Text style={[styles.heading, { color: colors.text }]}>Pick your streaming service</Text>
-      <Text style={[styles.sub, { color: colors.textSecondary }]}>
-        Open your app externally. Moments syncs the countdown and reactions, not the video.
-      </Text>
+      {!hideHeader && (
+        <>
+          <Text style={[styles.heading, { color: colors.text }]}>Pick your streaming service</Text>
+          <Text style={[styles.sub, { color: colors.textSecondary }]}>
+            {mode === 'pick'
+              ? 'Video plays in the app on your phone. Moments handles chat and reactions.'
+              : 'Link services you use so your partner knows what you have.'}
+          </Text>
+        </>
+      )}
 
-      <View style={[styles.grid, { gap: 10 }]}>
-        {STREAMING_PLATFORMS.map((platform) => {
-          const selected = selectedPlatformId === platform.id;
+      <StreamingServiceGrid
+        selectedId={selectedPlatformId}
+        onSelect={onSelectPlatform}
+        onLongPress={mode === 'manage' ? handleAddService : undefined}
+        iconSize={compact ? 26 : 30}
+        renderBadge={(platform) => {
           const connected = mineIds.has(platform.id);
           const partnerHas = partnerIds.has(platform.id);
-
           return (
-            <Pressable
-              key={platform.id}
-              onPress={() => handlePlatformPress(platform.id)}
-              onLongPress={() => handleConnect(platform.id)}
-              style={[
-                styles.tile,
-                {
-                  width: tileSize,
-                  backgroundColor: selected ? colors.accentSoft : 'transparent',
-                  borderColor: selected ? colors.accent : colors.border,
-                },
-              ]}>
-              <StreamingPlatformIcon platformId={platform.id} size={compact ? 36 : 40} />
-              <Text style={[styles.tileLabel, { color: colors.text }]} numberOfLines={1}>
-                {platform.name}
-              </Text>
+            <>
               {connected && (
                 <View style={[styles.badge, { backgroundColor: colors.success }]}>
                   <Icon name="check" size={10} color="#fff" />
@@ -102,20 +99,29 @@ export function PlatformConnectGrid({ selectedPlatformId, onSelectPlatform, comp
               {partnerHas && !connected && (
                 <View style={[styles.partnerDot, { backgroundColor: colors.accent }]} />
               )}
-            </Pressable>
+            </>
           );
-        })}
-      </View>
+        }}
+      />
 
-      {selectedPlatformId && (
+      {mode === 'manage' && selectedPlatformId && !selectedConnected && (
         <Pressable
-          onPress={() => handleConnect(selectedPlatformId)}
+          onPress={() => handleAddService(selectedPlatformId)}
           style={[styles.connectBtn, { backgroundColor: colors.accentSoft }]}>
-          <Icon name="globe" size={18} color={colors.accent} />
+          <Icon name="plus" size={18} color={colors.accent} />
           <Text style={[styles.connectText, { color: colors.accent }]}>
-            Connect {getStreamingPlatform(selectedPlatformId).name}
+            Add {getStreamingPlatform(selectedPlatformId).name} to my services
           </Text>
         </Pressable>
+      )}
+
+      {mode === 'manage' && selectedPlatformId && selectedConnected && (
+        <View style={[styles.hintCard, { backgroundColor: colors.accentSoft, borderColor: colors.accent }]}>
+          <Icon name="check" size={16} color={colors.accent} />
+          <Text style={[styles.hintText, { color: colors.text }]}>
+            {selectedPlatform?.name} is on your profile. No need to connect again.
+          </Text>
+        </View>
       )}
 
       {partner && (
@@ -124,7 +130,7 @@ export function PlatformConnectGrid({ selectedPlatformId, onSelectPlatform, comp
             {partner.name?.split(' ')[0] ?? 'Partner'} uses:{' '}
           </Text>
           {(connections?.partner ?? []).length === 0 ? (
-            <Text style={{ color: colors.textSecondary, fontSize: 13 }}>Not connected yet</Text>
+            <Text style={{ color: colors.textSecondary, fontSize: 13 }}>Not added yet</Text>
           ) : (
             (connections?.partner ?? []).map((c) => (
               <View key={c.id} style={[styles.partnerChip, { backgroundColor: colors.surfaceElevated }]}>
@@ -142,35 +148,34 @@ export function PlatformConnectGrid({ selectedPlatformId, onSelectPlatform, comp
 }
 
 const styles = StyleSheet.create({
-  wrap: { gap: 10 },
+  wrap: { gap: 10, width: '100%' },
   heading: { fontSize: 17, fontWeight: '800' },
   sub: { fontSize: 13, lineHeight: 18 },
-  grid: { flexDirection: 'row', flexWrap: 'wrap' },
-  tile: {
+  hintCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    padding: 12,
     borderRadius: 14,
     borderWidth: StyleSheet.hairlineWidth,
-    paddingVertical: 12,
-    paddingHorizontal: 6,
-    alignItems: 'center',
-    gap: 8,
   },
-  tileLabel: { fontSize: 11, fontWeight: '700', textAlign: 'center' },
+  hintText: { flex: 1, fontSize: 13, lineHeight: 18 },
   badge: {
     position: 'absolute',
-    top: 6,
-    right: 6,
-    width: 16,
-    height: 16,
-    borderRadius: 8,
+    top: 5,
+    right: 5,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
     alignItems: 'center',
     justifyContent: 'center',
   },
   partnerDot: {
     position: 'absolute',
-    top: 6,
-    left: 6,
-    width: 8,
-    height: 8,
+    top: 5,
+    left: 5,
+    width: 7,
+    height: 7,
     borderRadius: 4,
   },
   connectBtn: {

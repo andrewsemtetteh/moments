@@ -3,6 +3,7 @@ import { Platform } from 'react-native';
 import { MoodHistoryModal } from '@/components/home/MoodHistoryModal';
 import { MomentCreatorModal } from '@/components/moments/MomentCreatorModal';
 import { MomentHistoryModal } from '@/components/moments/MomentHistoryModal';
+import { MomentRecapVideoModal } from '@/components/moments/MomentRecapVideoModal';
 import { MomentStoryViewer } from '@/components/moments/MomentStoryViewer';
 import { PaywallModal } from '@/components/subscription/PaywallModal';
 import { WrappedModal } from '@/components/wrapped/WrappedModal';
@@ -15,6 +16,7 @@ export function AppModals() {
     <>
       <MomentCreatorModal />
       <MomentHistoryModal />
+      <MomentRecapVideoModal />
       <MomentStoryViewer />
       <WrappedModal />
       <MoodHistoryModal />

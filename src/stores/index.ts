@@ -65,6 +65,8 @@ interface UIState {
   momentHistoryScrollY: number;
   showJournal: boolean;
   showWrapped: boolean;
+  showMomentRecapVideo: boolean;
+  recapVideoMoments: Moment[] | null;
   showMoodHistory: boolean;
   showPaywall: boolean;
   showPartnerProfile: boolean;
@@ -93,6 +95,8 @@ interface UIState {
   closeMomentViewer: () => void;
   setShowJournal: (show: boolean) => void;
   setShowWrapped: (show: boolean) => void;
+  openMomentRecapVideo: (moments: Moment[]) => void;
+  closeMomentRecapVideo: () => void;
   setShowMoodHistory: (show: boolean) => void;
   setShowWatchTogether: (show: boolean) => void;
   setChatDraft: (draft: string | null) => void;
@@ -118,6 +122,8 @@ export const useUIStore = create<UIState>((set) => ({
   momentHistoryScrollY: 0,
   showJournal: false,
   showWrapped: false,
+  showMomentRecapVideo: false,
+  recapVideoMoments: null,
   showMoodHistory: false,
   showPaywall: false,
   showPartnerProfile: false,
@@ -154,6 +160,8 @@ export const useUIStore = create<UIState>((set) => ({
     })),
   setShowJournal: (showJournal) => set({ showJournal }),
   setShowWrapped: (showWrapped) => set({ showWrapped }),
+  openMomentRecapVideo: (moments) => set({ recapVideoMoments: moments, showMomentRecapVideo: true }),
+  closeMomentRecapVideo: () => set({ recapVideoMoments: null, showMomentRecapVideo: false }),
   setShowMoodHistory: (showMoodHistory) => set({ showMoodHistory }),
   setShowWatchTogether: (showWatchTogether) => set({ showWatchTogether }),
   setChatDraft: (chatDraft) => set({ chatDraft }),

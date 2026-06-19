@@ -9,6 +9,7 @@ import { StreakBadge } from '@/components/home/StreakBadge';
 import { AppHeader } from '@/components/layout/AppHeader';
 import { ScreenContainer } from '@/components/layout/ScreenContainer';
 import { TabScreenScroll } from '@/components/layout/TabScreenScroll';
+import { MomentsStrip } from '@/components/moments/MomentsStrip';
 import { PartnerMomentHome } from '@/components/moments/PartnerMomentHome';
 import { Icon, type IconName } from '@/components/ui/Icon';
 import { Avatar, Card, PrimaryButton, SectionTitle } from '@/components/ui/primitives';
@@ -91,6 +92,18 @@ export default function HomeScreen() {
     );
     return filterMomentsForHome(partnerOnly);
   }, [momentsData, partner, user]);
+
+  const stripMoments = useMemo(() => {
+    const enriched = enrichMomentsWithAuthors(
+      filterMediaMoments(momentsData?.pages.flat() ?? []),
+      user,
+      partner,
+    );
+    const partnerOnly = enriched.filter((m) =>
+      partner?.id ? m.user_id === partner.id : m.user_id !== user?.id,
+    );
+    return filterMomentsForHome(partnerOnly);
+  }, [momentsData, user, partner]);
   const upcomingEvents = events?.slice(0, 3) ?? [];
 
   const onRefresh = useCallback(async () => {
@@ -167,6 +180,22 @@ export default function HomeScreen() {
           ))}
         </View>
 
+        {homePartnerMoments.length > 0 && (
+          <>
+            <View style={styles.section}>
+              <SectionTitle>Moments</SectionTitle>
+              <MomentsStrip moments={stripMoments} partnerOnly />
+            </View>
+
+            <View style={styles.section}>
+              <SectionTitle>
+                Moments from {getMomentSenderFirstName(homePartnerMoments[0], user, partner)}
+              </SectionTitle>
+              <PartnerMomentHome partnerMoments={homePartnerMoments} />
+            </View>
+          </>
+        )}
+
         <View style={styles.section}>
           <MoodSnapshot
             moods={moods ?? {}}
@@ -214,22 +243,11 @@ export default function HomeScreen() {
             <Icon name="star" size={24} color={colors.accent} filled />
             <View style={{ flex: 1 }}>
               <Text style={[styles.recapTitle, { color: colors.text }]}>Wrapped {new Date().getFullYear()}</Text>
-              <Text style={[styles.recapSub, { color: colors.textSecondary }]}>
-                {isPlus ? 'See your year together' : 'Preview your private recap'}
-              </Text>
+              <Text style={[styles.recapSub, { color: colors.textSecondary }]}>See your year together</Text>
             </View>
             <Icon name="chevronRight" size={20} color={colors.textSecondary} />
           </Card>
         </View>
-
-        {homePartnerMoments.length > 0 && (
-          <View style={styles.section}>
-            <SectionTitle>
-              Moments from {getMomentSenderFirstName(homePartnerMoments[0], user, partner)}
-            </SectionTitle>
-            <PartnerMomentHome partnerMoments={homePartnerMoments} />
-          </View>
-        )}
 
         {upcomingEvents.length > 0 && (
           <View style={styles.section}>
@@ -252,7 +270,7 @@ export default function HomeScreen() {
         )}
 
         <View style={styles.section}>
-          <Pressable onPress={() => router.push('/(tabs)/activities')}>
+          <Pressable onPress={() => router.push(smartSuggestion.href)}>
             <LinearGradient
               colors={[colors.accentSoft, colors.surface]}
               start={{ x: 0, y: 0 }}
@@ -279,19 +297,23 @@ function greeting(name?: string | null) {
 function getSmartSuggestion(
   moods: Record<string, { mood: string }>,
   eventCount: number,
-): { text: string; icon: IconName } {
+): { text: string; icon: IconName; href: Href } {
   const moodValues = Object.values(moods).map((m) => m.mood);
   if (moodValues.includes('stressed') || moodValues.includes('lonely')) {
-    return { text: 'Your partner might love a check-in message today', icon: 'chat' };
+    return {
+      text: 'Your partner might love a check-in message today',
+      icon: 'messages',
+      href: '/(tabs)/chat',
+    };
   }
   const day = new Date().getDay();
   if (day === 0 || day === 6) {
-    return { text: "It's the weekend. Find a date idea together", icon: 'compass' };
+    return { text: "It's the weekend. Find a date idea together", icon: 'compass', href: '/(tabs)/activities' };
   }
   if (eventCount === 0) {
-    return { text: 'No plans yet. Schedule something special', icon: 'calendar' };
+    return { text: 'No plans yet. Schedule something special', icon: 'calendar', href: '/(tabs)/calendar' };
   }
-  return { text: 'Play a quick game together to keep your streak', icon: 'gamepad' };
+  return { text: 'Play a quick game together to keep your streak', icon: 'gamepad', href: '/(tabs)/activities' };
 }
 
 const styles = StyleSheet.create({

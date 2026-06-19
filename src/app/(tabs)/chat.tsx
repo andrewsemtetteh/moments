@@ -1,9 +1,9 @@
 import { useQueryClient } from '@tanstack/react-query';
 import {
-  RecordingPresets,
-  requestRecordingPermissionsAsync,
-  setAudioModeAsync,
-  useAudioRecorder,
+    RecordingPresets,
+    requestRecordingPermissionsAsync,
+    setAudioModeAsync,
+    useAudioRecorder,
 } from 'expo-audio';
 import * as Contacts from 'expo-contacts/legacy';
 import * as DocumentPicker from 'expo-document-picker';
@@ -13,29 +13,29 @@ import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Alert,
-  FlatList,
-  Keyboard,
-  KeyboardAvoidingView,
-  PanResponder,
-  Platform,
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
+    Alert,
+    FlatList,
+    Keyboard,
+    KeyboardAvoidingView,
+    PanResponder,
+    Platform,
+    Pressable,
+    StyleSheet,
+    Text,
+    TextInput,
+    View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ChatAttachmentSheet } from '@/components/chat/ChatAttachmentSheet';
 import { ChatBubble } from '@/components/chat/ChatBubble';
 import { ChatCameraModal } from '@/components/chat/ChatCameraModal';
-import { ChatVoiceRecorder } from '@/components/chat/ChatVoiceRecorder';
 import { ChatEmojiPicker } from '@/components/chat/ChatEmojiPicker';
 import { ChatEmptyProfile } from '@/components/chat/ChatEmptyProfile';
 import { ChatDateSeparator, ChatUnreadDivider } from '@/components/chat/ChatListSeparators';
 import { ChatMessageActionSheet } from '@/components/chat/ChatMessageActionSheet';
 import { ChatReplyBar } from '@/components/chat/ChatReplyBar';
+import { ChatVoiceRecorder } from '@/components/chat/ChatVoiceRecorder';
 import { ChatWallpaper } from '@/components/chat/ChatWallpaper';
 import { PartnerStatusLine } from '@/components/chat/PartnerStatusLine';
 import { LoadingState } from '@/components/home/MoodSnapshot';
@@ -43,19 +43,18 @@ import { SwipeDismissView } from '@/components/layout/SwipeDismissView';
 import { Icon } from '@/components/ui/Icon';
 import { Avatar } from '@/components/ui/primitives';
 import {
-  useMessageActions,
-  useMessages,
-  useRealtimeSubscription,
-  useSendMessage,
+    useMessageActions,
+    useMessages,
+    useRealtimeSubscription,
+    useSendMessage,
 } from '@/hooks/queries';
-import { usePartnerPresence } from '@/hooks/usePartnerPresence';
-import { usePartnerActiveMoments } from '@/hooks/usePartnerActiveMoments';
 import { useOpenPartnerProfile } from '@/hooks/useOpenPartnerProfile';
+import { usePartnerPresence } from '@/hooks/usePartnerPresence';
 import { useStartCall } from '@/hooks/useStartCall';
 import { useTheme } from '@/hooks/useTheme';
 import { encodeAttachment } from '@/lib/chat-attachments';
-import { getCurrentPlace } from '@/lib/location';
 import { buildChatListItems, type ChatListItem } from '@/lib/chat-list';
+import { getCurrentPlace } from '@/lib/location';
 import { goBackOrReplace } from '@/lib/router';
 import { supabase } from '@/lib/supabase';
 import * as api from '@/services/api';

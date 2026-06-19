@@ -182,3 +182,133 @@ export const LOVE_LANGUAGE_QUIZ = {
   } as Record<string, { title: string; description: string }>,
 };
 
+export const DAILY_QUESTIONS = [
+  'What made you smile about us today?',
+  'What is one small thing I did that you noticed?',
+  'If we had a free hour right now, what would you want to do?',
+  'What are you looking forward to with me this week?',
+  'What song or moment today reminded you of us?',
+  'What is something new you would like to try together?',
+  'When did you last feel proud of us?',
+  'What is your favorite way we reconnect after a busy day?',
+  'What would make tonight feel special?',
+  'What is one thing you are grateful for about our relationship?',
+  'If you could relive one day with me, which would it be?',
+  'What is a habit of mine you secretly love?',
+  'What adventure should we plan next?',
+  'What do you need more of from me right now?',
+  'What made you feel loved recently?',
+];
+
+export const COUPLES_TRIVIA = [
+  {
+    question: 'What matters most in a strong relationship?',
+    options: ['Perfect agreement on everything', 'Trust and communication', 'Matching hobbies only', 'Never arguing'],
+    answer: 1,
+  },
+  {
+    question: 'The best way to show appreciation is often…',
+    options: ['Grand expensive gestures only', 'Noticing the small things', 'Keeping score', 'Waiting for them to ask'],
+    answer: 1,
+  },
+  {
+    question: 'Quality time means…',
+    options: ['Being in the same room on phones', 'Undivided attention together', 'Only going on dates', 'Talking about work only'],
+    answer: 1,
+  },
+  {
+    question: 'When you disagree, the healthiest move is usually…',
+    options: ['Win the argument', 'Pause and listen first', 'Bring up old issues', 'Go silent for days'],
+    answer: 1,
+  },
+  {
+    question: 'A great date night can be…',
+    options: ['Only fancy restaurants', 'Anything intentional together', 'Always outdoors', 'Always a surprise'],
+    answer: 1,
+  },
+  {
+    question: 'Couples who last often prioritize…',
+    options: ['Being right', 'Repairing after conflict', 'Avoiding hard topics', 'Changing each other'],
+    answer: 1,
+  },
+];
+
+export function getDailyQuestion(date = new Date()): string {
+  const start = new Date(date.getFullYear(), 0, 0);
+  const day = Math.floor((date.getTime() - start.getTime()) / 86_400_000);
+  return DAILY_QUESTIONS[day % DAILY_QUESTIONS.length];
+}
+
+export function pickRandomDateIdea() {
+  return DATE_IDEAS[Math.floor(Math.random() * DATE_IDEAS.length)];
+}
+
+export const TRUTH_OR_DARE = {
+  truths: [
+    'What is something you have never told me but want to?',
+    'When did you first know you liked me?',
+    'What is your favorite memory of us?',
+    'What do you think our superpower as a couple is?',
+    'What is one thing I do that always makes you smile?',
+  ],
+  dares: [
+    'Send them a voice note saying three things you love about them',
+    'Plan a surprise snack or drink for them in the next hour',
+    'Do your best impression of them — lovingly',
+    'Pick a song that describes them and play the chorus',
+    'Give them a 30-second shoulder massage',
+  ],
+};
+
+export const MEMORY_QUIZ = [
+  {
+    question: 'Where was your first date together?',
+    hint: 'Compare answers — the story matters more than being exact',
+  },
+  {
+    question: 'What food do you always order together?',
+    hint: 'Bonus points if you both say the same thing',
+  },
+  {
+    question: 'What is a trip or day out you still talk about?',
+    hint: 'Share why it stuck with you',
+  },
+  {
+    question: 'What song feels most like “us”?',
+    hint: 'Hum a line if you dare',
+  },
+  {
+    question: 'What is the best gift you have given each other?',
+    hint: 'Big or small counts',
+  },
+];
+
+export const PLAYLIST_PROMPTS = [
+  'A song that reminds you of them today',
+  'Your go-to road-trip anthem together',
+  'A track that was playing during a favorite memory',
+  'Something mellow for a cozy night in',
+  'A song that hypes you up for a date night',
+  'The song you would dedicate to them right now',
+];
+
+export function pickTruthOrDare(mode: 'truth' | 'dare') {
+  const pool = mode === 'truth' ? TRUTH_OR_DARE.truths : TRUTH_OR_DARE.dares;
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+
+export function pickPlaylistPrompt() {
+  return PLAYLIST_PROMPTS[Math.floor(Math.random() * PLAYLIST_PROMPTS.length)];
+}
+
+export function getNextFridayEvening(from = new Date()) {
+  const d = new Date(from);
+  const day = d.getDay();
+  const daysUntilFriday = (5 - day + 7) % 7 || 7;
+  d.setDate(d.getDate() + daysUntilFriday);
+  d.setHours(19, 0, 0, 0);
+  return d;
+}
+
+export { getAnniversaryCountdown } from '@/lib/anniversary';
+

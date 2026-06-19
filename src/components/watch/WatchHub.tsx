@@ -1,5 +1,6 @@
 import { format, formatDistanceToNow, isToday, isTomorrow } from 'date-fns';
 import * as Haptics from 'expo-haptics';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useMemo } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
@@ -9,12 +10,13 @@ import { StreamingPlatformIcon } from '@/components/watch/StreamingPlatformIcon'
 import { WatchScreen } from '@/components/watch/WatchScreen';
 import { FREE_WATCH_PARTIES_PER_WEEK } from '@/constants/watch-together';
 import {
-    useUpcomingSessions,
-    useWatchHistory,
-    useWatchSessionMutations,
+  useUpcomingSessions,
+  useWatchHistory,
+  useWatchSessionMutations,
 } from '@/hooks/queries';
 import { usePlusGate } from '@/hooks/usePlusGate';
 import { useTheme } from '@/hooks/useTheme';
+import { getFirstName } from '@/lib/avatar-initial';
 import { computeWatchStats, earnedBadges, nextBadge } from '@/lib/watch-gamification';
 import { useRelationshipStore } from '@/stores';
 
@@ -29,6 +31,7 @@ export function WatchHub({
 }) {
   const { colors } = useTheme();
   const partner = useRelationshipStore((s) => s.partner);
+  const partnerName = getFirstName(partner?.name) ?? 'your partner';
   const { isPlus, requirePlus } = usePlusGate();
 
   const { data: history = [] } = useWatchHistory();
@@ -39,11 +42,14 @@ export function WatchHub({
   const badges = useMemo(() => earnedBadges(stats), [stats]);
   const upNext = useMemo(() => nextBadge(stats), [stats]);
 
+  const partiesLeft = FREE_WATCH_PARTIES_PER_WEEK - stats.partiesThisWeek;
+
   const handleStartParty = () => {
     if (!isPlus && stats.partiesThisWeek >= FREE_WATCH_PARTIES_PER_WEEK) {
       requirePlus('Unlimited watch parties');
       return;
     }
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     onNavigate('start');
   };
 
@@ -56,58 +62,104 @@ export function WatchHub({
 
   return (
     <WatchScreen title="Watch Together" onClose={onClose}>
-      <View style={styles.hero}>
-        <Text style={styles.heroEmoji}>🍿</Text>
-        <Text style={[styles.heroTitle, { color: colors.text }]}>Your cinema, together</Text>
-        <Text style={[styles.heroSub, { color: colors.textSecondary }]}>
-          Sync the start, react in real time, and build memories around what you watch.
-        </Text>
-      </View>
+      <LinearGradient
+        colors={colors.gradient}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.hero}>
+        <View style={styles.heroGlow} pointerEvents="none" />
+        <View style={styles.heroRow}>
+          <View style={styles.heroIcon}>
+            <Icon name="film" size={26} color="#fff" filled />
+          </View>
+          <View style={styles.heroCopy}>
+            <Text style={styles.heroEyebrow}>WATCH TOGETHER</Text>
+            <Text style={styles.heroTitle}>Movie night, synced</Text>
+            <Text style={styles.heroSub}>
+              Pick a service, start together, and react in real time while you watch.
+            </Text>
+          </View>
+        </View>
+      </LinearGradient>
 
-      {/* Streak / stats strip */}
-      <View style={styles.statRow}>
-        <StatTile icon="fire" value={stats.streakWeeks} label="week streak" colors={colors} />
-        <StatTile icon="film" value={stats.watched} label="watched" colors={colors} />
-        <StatTile icon="star" value={badges.length} label="badges" colors={colors} />
-      </View>
-
-      {/* Primary actions */}
-      <View style={styles.actionGrid}>
-        <ActionCard
-          icon="play"
-          title="Start watch party"
-          subtitle="Sync & react now"
-          highlight
+      <View
+        style={[
+          styles.quickPanel,
+          { backgroundColor: colors.surfaceElevated, borderColor: colors.border },
+        ]}>
+        <Pressable
           onPress={handleStartParty}
-          colors={colors}
-        />
-        <ActionCard
-          icon="calendar"
-          title="Schedule date night"
-          subtitle="Pick a time"
-          onPress={() => onNavigate('schedule')}
-          colors={colors}
-        />
-        <ActionCard
-          icon="list"
-          title="Watchlist"
-          subtitle="Plan together"
-          onPress={() => onNavigate('watchlist')}
-          colors={colors}
-        />
-        <ActionCard
-          icon="globe"
-          title="Connect services"
-          subtitle="Your streaming apps"
-          onPress={() => onNavigate('start')}
-          colors={colors}
-        />
+          style={({ pressed }) => [
+            styles.primaryAction,
+            { backgroundColor: colors.accent, opacity: pressed ? 0.92 : 1 },
+          ]}>
+          <View style={styles.primaryIcon}>
+            <Icon name="play" size={22} color={colors.onAccent} filled />
+          </View>
+          <View style={styles.primaryCopy}>
+            <Text style={[styles.primaryTitle, { color: colors.onAccent }]}>Start watch party</Text>
+            <Text style={[styles.primarySub, { color: colors.onAccent }]}>
+              Netflix, YouTube, Disney+ and more
+            </Text>
+          </View>
+          <Icon name="chevronRight" size={20} color={colors.onAccent} />
+        </Pressable>
+
+        {!isPlus && partiesLeft > 0 && partiesLeft < FREE_WATCH_PARTIES_PER_WEEK && (
+          <Text style={[styles.limitHint, { color: colors.textTertiary }]}>
+            {partiesLeft} free {partiesLeft === 1 ? 'party' : 'parties'} left this week
+          </Text>
+        )}
+
+        <View style={styles.secondaryRow}>
+          <SecondaryTile
+            icon="calendar"
+            label="Schedule"
+            subtitle="Pick a time"
+            onPress={() => onNavigate('schedule')}
+            colors={colors}
+          />
+          <SecondaryTile
+            icon="list"
+            label="Watchlist"
+            subtitle="Plan together"
+            onPress={() => onNavigate('watchlist')}
+            colors={colors}
+          />
+        </View>
       </View>
 
-      {/* Upcoming */}
+      {(stats.streakWeeks > 0 || stats.watched > 0) && (
+        <View style={styles.statRow}>
+          <StatTile icon="fire" value={stats.streakWeeks} label="week streak" colors={colors} />
+          <StatTile icon="film" value={stats.watched} label="watched" colors={colors} />
+          <StatTile icon="star" value={badges.length} label="badges" colors={colors} />
+        </View>
+      )}
+
+      <View style={styles.howSection}>
+        <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>HOW IT WORKS</Text>
+        <View style={[styles.howCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <HowRow
+            icon="film"
+            title="Pick a service"
+            body="Choose Netflix, YouTube, Disney+, or any platform you both use."
+            colors={colors}
+            accent
+          />
+          <View style={[styles.howDivider, { backgroundColor: colors.border }]} />
+          <HowRow
+            icon="play"
+            title="Watch in your app"
+            body="Open what you want to watch on your phone. Moments keeps chat, reactions, and nudges in sync."
+            colors={colors}
+          />
+        </View>
+      </View>
+
       {upcoming.length > 0 && (
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>UPCOMING</Text>
+          <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>UPCOMING</Text>
           {upcoming.map((s) => (
             <Card key={s.id} style={styles.rowCard}>
               <StreamingPlatformIcon platformId={s.platform_id ?? 'other'} size={34} />
@@ -129,10 +181,9 @@ export function WatchHub({
         </View>
       )}
 
-      {/* Recently watched */}
       {history.length > 0 && (
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>RECENTLY WATCHED</Text>
+          <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>RECENTLY WATCHED</Text>
           {history.slice(0, 4).map((h) => (
             <Card key={h.id} style={styles.rowCard}>
               <StreamingPlatformIcon platformId={h.platform_id ?? 'other'} size={34} />
@@ -150,10 +201,9 @@ export function WatchHub({
         </View>
       )}
 
-      {/* Badges */}
       {badges.length > 0 && (
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>ACHIEVEMENTS</Text>
+          <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>ACHIEVEMENTS</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10 }}>
             {badges.map((b) => (
               <View key={b.id} style={[styles.badge, { backgroundColor: colors.surface, borderColor: colors.border }]}>
@@ -170,42 +220,71 @@ export function WatchHub({
         </View>
       )}
 
-      {/* Suggested (AI - Plus) */}
-      <Card style={styles.suggestCard}>
-        <View style={styles.suggestHead}>
-          <Icon name="moon" size={18} color={colors.accent} filled />
-          <Text style={[styles.rowTitle, { color: colors.text }]}>AI date-night picks</Text>
-          {!isPlus && (
-            <View style={[styles.plusTag, { backgroundColor: colors.accentSoft }]}>
-              <Icon name="lock" size={11} color={colors.accent} />
-              <Text style={{ color: colors.accent, fontSize: 11, fontWeight: '800' }}>Plus</Text>
-            </View>
-          )}
-        </View>
-        <Text style={{ color: colors.textSecondary, fontSize: 13, lineHeight: 19 }}>
-          {isPlus
-            ? 'Personalized recommendations based on what you both love watching.'
-            : 'Unlock AI recommendations tuned to your shared taste with Moments Plus.'}
-        </Text>
-        <Pressable
-          onPress={() =>
-            isPlus
-              ? onNavigate('watchlist')
-              : requirePlus('AI date-night recommendations')
-          }
-          style={[styles.suggestBtn, { borderColor: colors.border }]}>
-          <Text style={{ color: colors.accent, fontWeight: '700' }}>
-            {isPlus ? 'Add a pick to the watchlist' : 'See Plus'}
-          </Text>
-        </Pressable>
-      </Card>
-
       {!partner && (
-        <Text style={{ color: colors.textTertiary, fontSize: 13, textAlign: 'center' }}>
-          Link your partner to watch together in sync.
+        <Text style={[styles.partnerHint, { color: colors.textTertiary }]}>
+          Link {partnerName} to watch together in sync.
         </Text>
       )}
     </WatchScreen>
+  );
+}
+
+function SecondaryTile({
+  icon,
+  label,
+  subtitle,
+  onPress,
+  colors,
+}: {
+  icon: IconName;
+  label: string;
+  subtitle: string;
+  onPress: () => void;
+  colors: ReturnType<typeof useTheme>['colors'];
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.secondaryTile,
+        {
+          backgroundColor: colors.surface,
+          borderColor: colors.border,
+          opacity: pressed ? 0.9 : 1,
+        },
+      ]}>
+      <View style={[styles.secondaryIcon, { backgroundColor: colors.accentSoft }]}>
+        <Icon name={icon} size={18} color={colors.accent} filled />
+      </View>
+      <Text style={[styles.secondaryLabel, { color: colors.text }]}>{label}</Text>
+      <Text style={[styles.secondarySub, { color: colors.textSecondary }]}>{subtitle}</Text>
+    </Pressable>
+  );
+}
+
+function HowRow({
+  icon,
+  title,
+  body,
+  colors,
+  accent,
+}: {
+  icon: IconName;
+  title: string;
+  body: string;
+  colors: ReturnType<typeof useTheme>['colors'];
+  accent?: boolean;
+}) {
+  return (
+    <View style={styles.howRow}>
+      <View style={[styles.howIcon, { backgroundColor: accent ? colors.accentSoft : colors.surfaceElevated }]}>
+        <Icon name={icon} size={18} color={accent ? colors.accent : colors.textSecondary} filled={accent} />
+      </View>
+      <View style={styles.howCopy}>
+        <Text style={[styles.howTitle, { color: colors.text }]}>{title}</Text>
+        <Text style={[styles.howBody, { color: colors.textSecondary }]}>{body}</Text>
+      </View>
+    </View>
   );
 }
 
@@ -222,50 +301,10 @@ function StatTile({
 }) {
   return (
     <View style={[styles.statTile, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-      <Icon name={icon} size={18} color={colors.accent} />
+      <Icon name={icon} size={16} color={colors.accent} />
       <Text style={[styles.statValue, { color: colors.text }]}>{value}</Text>
       <Text style={[styles.statLabel, { color: colors.textTertiary }]}>{label}</Text>
     </View>
-  );
-}
-
-function ActionCard({
-  icon,
-  title,
-  subtitle,
-  onPress,
-  highlight,
-  colors,
-}: {
-  icon: IconName;
-  title: string;
-  subtitle: string;
-  onPress: () => void;
-  highlight?: boolean;
-  colors: ReturnType<typeof useTheme>['colors'];
-}) {
-  return (
-    <Pressable
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.actionCard,
-        {
-          backgroundColor: highlight ? colors.accent : colors.surface,
-          borderColor: highlight ? colors.accent : colors.border,
-          opacity: pressed ? 0.9 : 1,
-        },
-      ]}>
-      <Icon name={icon} size={22} color={highlight ? colors.onAccent : colors.accent} />
-      <Text style={[styles.actionTitle, { color: highlight ? colors.onAccent : colors.text }]}>{title}</Text>
-      <Text
-        style={{
-          color: highlight ? colors.onAccent : colors.textSecondary,
-          fontSize: 12,
-          opacity: highlight ? 0.85 : 1,
-        }}>
-        {subtitle}
-      </Text>
-    </Pressable>
   );
 }
 
@@ -287,33 +326,132 @@ function formatWhen(iso: string): string {
 }
 
 const styles = StyleSheet.create({
-  hero: { alignItems: 'center', gap: 6 },
-  heroEmoji: { fontSize: 40 },
-  heroTitle: { fontSize: 24, fontWeight: '900', letterSpacing: -0.5 },
-  heroSub: { fontSize: 14, lineHeight: 20, textAlign: 'center', maxWidth: 320 },
+  hero: {
+    borderRadius: 24,
+    padding: 20,
+    paddingBottom: 28,
+    overflow: 'hidden',
+    marginBottom: -18,
+  },
+  heroGlow: {
+    position: 'absolute',
+    width: 180,
+    height: 180,
+    borderRadius: 90,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    top: -60,
+    right: -40,
+  },
+  heroRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 14 },
+  heroIcon: {
+    width: 52,
+    height: 52,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  heroCopy: { flex: 1, gap: 4 },
+  heroEyebrow: {
+    color: 'rgba(255,255,255,0.82)',
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 1.1,
+  },
+  heroTitle: {
+    color: '#fff',
+    fontSize: 24,
+    fontWeight: '800',
+    letterSpacing: -0.4,
+  },
+  heroSub: {
+    color: 'rgba(255,255,255,0.88)',
+    fontSize: 14,
+    lineHeight: 20,
+    fontWeight: '500',
+    marginTop: 2,
+  },
+  quickPanel: {
+    borderRadius: 22,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: 16,
+    gap: 12,
+  },
+  primaryAction: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 16,
+    borderRadius: 18,
+  },
+  primaryIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  primaryCopy: { flex: 1, gap: 2 },
+  primaryTitle: { fontSize: 16, fontWeight: '800' },
+  primarySub: { fontSize: 12, opacity: 0.85, lineHeight: 16 },
+  limitHint: { fontSize: 12, textAlign: 'center' },
+  secondaryRow: { flexDirection: 'row', gap: 10 },
+  secondaryTile: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 14,
+    paddingHorizontal: 8,
+    borderRadius: 16,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  secondaryIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  secondaryLabel: { fontSize: 13, fontWeight: '800' },
+  secondarySub: { fontSize: 11, textAlign: 'center' },
   statRow: { flexDirection: 'row', gap: 10 },
   statTile: {
     flex: 1,
     alignItems: 'center',
     gap: 2,
-    paddingVertical: 12,
-    borderRadius: 16,
+    paddingVertical: 10,
+    borderRadius: 14,
     borderWidth: StyleSheet.hairlineWidth,
   },
-  statValue: { fontSize: 20, fontWeight: '900' },
-  statLabel: { fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.4 },
-  actionGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  actionCard: {
-    width: '47.8%',
-    flexGrow: 1,
-    gap: 4,
-    padding: 16,
+  statValue: { fontSize: 18, fontWeight: '900' },
+  statLabel: { fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.4 },
+  howSection: { gap: 10 },
+  howCard: {
     borderRadius: 18,
     borderWidth: StyleSheet.hairlineWidth,
+    padding: 14,
+    gap: 12,
   },
-  actionTitle: { fontSize: 15, fontWeight: '800', marginTop: 4 },
+  howRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
+  howIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  howCopy: { flex: 1, gap: 2 },
+  howTitle: { fontSize: 14, fontWeight: '800' },
+  howBody: { fontSize: 13, lineHeight: 18 },
+  howDivider: { height: StyleSheet.hairlineWidth },
   section: { gap: 10 },
-  sectionTitle: { fontSize: 12, fontWeight: '800', letterSpacing: 0.8 },
+  sectionLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+  },
   rowCard: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   rowTitle: { fontSize: 15, fontWeight: '700' },
   startNow: { paddingHorizontal: 16, paddingVertical: 9, borderRadius: 999 },
@@ -326,13 +464,5 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
   },
   badgeTitle: { fontSize: 12, fontWeight: '700', textAlign: 'center' },
-  suggestCard: { gap: 10 },
-  suggestHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  plusTag: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999 },
-  suggestBtn: {
-    alignItems: 'center',
-    paddingVertical: 12,
-    borderRadius: 12,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
+  partnerHint: { fontSize: 13, textAlign: 'center', lineHeight: 18 },
 });

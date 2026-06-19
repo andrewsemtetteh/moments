@@ -12,7 +12,6 @@ import {
   subWeeks,
 } from 'date-fns';
 
-import { isPreviewMoment } from '@/lib/mock-moments';
 import { getFirstName } from '@/lib/avatar-initial';
 
 import type { Moment, UserProfile } from '@/types/database';
@@ -241,10 +240,8 @@ export function getHistoryReactionBadge(
   userId: string,
   partnerId?: string | null,
 ): { emoji: string; count: number } | null {
-  const effectivePartnerId =
-    partnerId ?? (isPreviewMoment(moment) ? 'preview-partner' : null);
-  if (!effectivePartnerId || !userId) return null;
-  const reactorId = moment.user_id === userId ? effectivePartnerId : userId;
+  if (!partnerId || !userId) return null;
+  const reactorId = moment.user_id === userId ? partnerId : userId;
   return getReactionBadgeFromUser(moment, reactorId);
 }
 
@@ -272,6 +269,25 @@ export function isMomentWithinHomeWindow(moment: Moment, now = Date.now()): bool
 
 export function filterMomentsForHome(moments: Moment[]): Moment[] {
   return moments.filter(isMomentWithinHomeWindow);
+}
+
+export function isMomentUnseenByUser(moment: Moment, userId: string): boolean {
+  return !(moment.viewed_by ?? []).includes(userId);
+}
+
+export function partnerHasUnseenMoments(
+  moments: Moment[],
+  userId: string,
+  partnerId?: string | null,
+): boolean {
+  if (!partnerId || !userId) return false;
+  return moments.some(
+    (m) =>
+      m.user_id === partnerId &&
+      momentHasVisual(m) &&
+      isMomentWithinHomeWindow(m) &&
+      isMomentUnseenByUser(m, userId),
+  );
 }
 
 export function getPartnerActiveMoments(
@@ -309,14 +325,13 @@ export function getMomentReactionHistory(
   partnerId?: string | null,
   partnerName?: string | null,
 ): { emoji: string; label: string; isYou: boolean }[] {
-  const effectivePartnerId = partnerId ?? (isPreviewMoment(moment) ? 'preview-partner' : null);
   const partnerLabel = partnerName?.split(' ')[0] ?? 'Partner';
   const items: { emoji: string; label: string; isYou: boolean }[] = [];
 
   for (const [emoji, ids] of Object.entries(moment.reactions ?? {})) {
     for (const id of ids) {
       if (id === userId) items.push({ emoji, label: 'You', isYou: true });
-      else if (effectivePartnerId && id === effectivePartnerId)
+      else if (partnerId && id === partnerId)
         items.push({ emoji, label: partnerLabel, isYou: false });
     }
   }

@@ -1,6 +1,5 @@
 import * as api from '@/services/api';
 import { enrichMomentWithAuthor } from '@/lib/moment-display';
-import { getPreviewMomentById, type PreviewContext } from '@/lib/mock-moments';
 import type { Moment, MomentType, UserProfile } from '@/types/database';
 
 export interface MomentReplyContext {
@@ -23,11 +22,10 @@ export function isMomentReplyMessage(message: { moment_id?: string | null }): bo
 
 export async function resolveMomentForReply(
   momentId: string,
-  previewCtx: PreviewContext | null,
   user?: Pick<UserProfile, 'id' | 'name' | 'email' | 'avatar_url'> | null,
   partner?: Pick<UserProfile, 'id' | 'name' | 'email' | 'avatar_url'> | null,
 ): Promise<Moment | null> {
   const remote = await api.fetchMomentById(momentId).catch(() => null);
-  if (remote) return enrichMomentWithAuthor(remote, user, partner);
-  return getPreviewMomentById(momentId, previewCtx);
+  if (!remote) return null;
+  return enrichMomentWithAuthor(remote, user, partner);
 }

@@ -6,18 +6,18 @@ import { Alert, Linking, Pressable, StyleSheet, Text, View } from 'react-native'
 import { Icon } from '@/components/ui/Icon';
 import { Avatar, PrimaryButton } from '@/components/ui/primitives';
 import { FloatingReactions } from '@/components/watch/FloatingReactions';
-import { StreamingPlatformIcon } from '@/components/watch/StreamingPlatformIcon';
+import { StreamingPhonePreview } from '@/components/watch/StreamingPhonePreview';
 import { SyncedYouTubePlayer, type SyncedYouTubePlayerHandle, type YTPlayerState } from '@/components/watch/SyncedYouTubePlayer';
 import { WatchChatTray } from '@/components/watch/WatchChatTray';
 import { WatchScreen } from '@/components/watch/WatchScreen';
-import { getStreamingPlatform } from '@/constants/streaming-platforms';
+import { getStreamingPlatform, type StreamingPlatformId } from '@/constants/streaming-platforms';
 import { WATCH_QUICK_REACTIONS } from '@/constants/watch-together';
 import { useWatchPartyNudge, useWatchSessionMutations } from '@/hooks/queries';
 import { usePlusGate } from '@/hooks/usePlusGate';
 import { useStartCall } from '@/hooks/useStartCall';
 import { useTheme } from '@/hooks/useTheme';
 import { getFirstName } from '@/lib/avatar-initial';
-import { openStreamingSignIn } from '@/lib/streaming-platform';
+import { openStreamingApp } from '@/lib/streaming-platform';
 import { useAuthStore, useRelationshipStore } from '@/stores';
 import type { WatchSession } from '@/types/database';
 
@@ -160,7 +160,10 @@ export function WatchRoom({
   };
 
   const handleOpenStream = async () => {
-    if (session.platform_id) return openStreamingSignIn(session.platform_id);
+    if (session.platform_id) {
+      await openStreamingApp(session.platform_id, session.link);
+      return;
+    }
     if (session.link) await Linking.openURL(session.link);
   };
 
@@ -232,17 +235,19 @@ export function WatchRoom({
       {/* Partner join screen — shown until they tap "Join now" */}
       {showJoinScreen && (
         <View style={[styles.joinCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <StreamingPlatformIcon platformId={session.platform_id ?? 'other'} size={56} />
+          <StreamingPhonePreview
+            platformId={(session.platform_id ?? 'other') as StreamingPlatformId}
+            mode="watching"
+            title={session.title}
+            isPlaying={session.playback_state === 'playing'}
+            playbackTime={formatClock(session.playback_position ?? 0)}
+            size="lg"
+          />
           <View style={{ alignItems: 'center', gap: 4 }}>
             <Text style={[styles.joinTitle, { color: colors.text }]}>{session.title}</Text>
             <Text style={{ color: colors.textSecondary, fontSize: 14 }}>
               {partnerName} started watching
             </Text>
-            {session.playback_position > 0 && (
-              <Text style={{ color: colors.textTertiary, fontSize: 12 }}>
-                {isYouTube ? 'At' : 'Around'} {formatClock(session.playback_position)} into the video
-              </Text>
-            )}
           </View>
           <PrimaryButton label="Join now" onPress={handleJoin} loading={markReady.isPending} />
           <Pressable onPress={handleNudge} style={[styles.nudgeBtn, { backgroundColor: colors.accentSoft }]}>
@@ -307,17 +312,15 @@ export function WatchRoom({
         </>
       ) : !showJoinScreen ? (
         <>
-          {/* Companion (streaming) mode */}
-          <View style={[styles.nowPlaying, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <Icon name="film" size={28} color={colors.accent} />
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.statusTitle, { color: colors.text }]}>{session.title}</Text>
-              <Text style={{ color: colors.textTertiary, fontSize: 12 }}>Plays in your streaming app</Text>
-            </View>
-            <Pressable onPress={handleOpenStream} style={[styles.openBtn, { backgroundColor: colors.accent }]}>
-              <Icon name="play" size={18} color={colors.onAccent} />
-            </Pressable>
-          </View>
+          <StreamingPhonePreview
+            platformId={(session.platform_id ?? 'other') as StreamingPlatformId}
+            mode="watching"
+            title={session.title}
+            isPlaying={session.playback_state === 'playing'}
+            playbackTime={formatClock(session.playback_position ?? 0)}
+            onOpenApp={handleOpenStream}
+            size="lg"
+          />
 
           <View style={[styles.playerControls, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <View style={[styles.syncDot, { backgroundColor: session.playback_state === 'playing' ? colors.success : colors.warning }]} />

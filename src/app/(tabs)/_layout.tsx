@@ -1,5 +1,5 @@
-import { Platform } from 'react-native';
 import { Redirect, Tabs } from 'expo-router';
+import { Platform } from 'react-native';
 
 import { AppTabBar } from '@/components/layout/AppTabBar';
 import { PartnerProfileModal } from '@/components/profile/PartnerProfileModal';

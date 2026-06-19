@@ -14,12 +14,13 @@ import * as Haptics from 'expo-haptics';
 import { useMemo, useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
-import { PlatformConnectGrid } from '@/components/watch/PlatformConnectGrid';
-import { WatchScreen } from '@/components/watch/WatchScreen';
 import { Icon, type IconName } from '@/components/ui/Icon';
 import { MonthCalendarPicker, type CalendarDayMarker } from '@/components/ui/MonthCalendarPicker';
 import { PrimaryButton } from '@/components/ui/primitives';
 import { TimePickerDropdown } from '@/components/ui/TimePickerDropdown';
+import { PlatformConnectGrid } from '@/components/watch/PlatformConnectGrid';
+import { WatchPageHero, watchPanelStyles } from '@/components/watch/WatchPageHero';
+import { WatchScreen } from '@/components/watch/WatchScreen';
 import type { StreamingPlatformId } from '@/constants/streaming-platforms';
 import { getStreamingPlatform } from '@/constants/streaming-platforms';
 import { WATCH_REMINDER_OPTIONS } from '@/constants/watch-together';
@@ -68,7 +69,6 @@ function buildCalendarMarkers(
   };
 }
 
-/* ─── Dropdown trigger ─────────────────────────────────────────────────────── */
 function DropdownTrigger({
   icon,
   label,
@@ -94,7 +94,9 @@ function DropdownTrigger({
           borderColor: open ? colors.accent : colors.border,
         },
       ]}>
-      <Icon name={icon} size={18} color={open ? colors.accent : colors.textSecondary} />
+      <View style={[styles.triggerIcon, { backgroundColor: open ? colors.accent : colors.surfaceElevated }]}>
+        <Icon name={icon} size={16} color={open ? colors.onAccent : colors.textSecondary} filled={open} />
+      </View>
       <View style={{ flex: 1 }}>
         <Text style={[styles.triggerLabel, { color: colors.textTertiary }]}>{label}</Text>
         <Text style={[styles.triggerValue, { color: colors.text }]} numberOfLines={1}>
@@ -108,7 +110,6 @@ function DropdownTrigger({
   );
 }
 
-/* ─── Schedule view ─────────────────────────────────────────────────────────── */
 export function WatchScheduleView({ onClose, onBack }: { onClose: () => void; onBack: () => void }) {
   const { colors } = useTheme();
   const { schedule } = useWatchSessionMutations();
@@ -122,7 +123,11 @@ export function WatchScheduleView({ onClose, onBack }: { onClose: () => void; on
   const [timeOpen, setTimeOpen] = useState(false);
   const [reminderOpen, setReminderOpen] = useState(false);
 
-  const closeAll = () => { setDateOpen(false); setTimeOpen(false); setReminderOpen(false); };
+  const closeAll = () => {
+    setDateOpen(false);
+    setTimeOpen(false);
+    setReminderOpen(false);
+  };
 
   const openDate = () => {
     Haptics.selectionAsync();
@@ -174,7 +179,12 @@ export function WatchScheduleView({ onClose, onBack }: { onClose: () => void; on
     }
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     schedule.mutate(
-      { title: resolvedTitle, platformId: platformId ?? undefined, scheduledAt: scheduledAt.toISOString(), reminderMinutes: reminder },
+      {
+        title: resolvedTitle,
+        platformId: platformId ?? undefined,
+        scheduledAt: scheduledAt.toISOString(),
+        reminderMinutes: reminder,
+      },
       {
         onSuccess: () => {
           Alert.alert('Date night set 🍿', `${resolvedTitle} on ${format(scheduledAt, 'EEE MMM d, h:mm a')}.`);
@@ -186,191 +196,229 @@ export function WatchScheduleView({ onClose, onBack }: { onClose: () => void; on
   };
 
   return (
-    <WatchScreen title="Schedule date night" onClose={onClose} onBack={onBack} contentStyle={{ gap: 0 }}>
-      {/* Outer pressable closes any open dropdown when tapping outside */}
-      <Pressable onPress={closeAll} style={styles.contentWrapper}>
-
-      {/* ── WHAT ── */}
-      <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>WHAT TO WATCH</Text>
-      <TextInput
-        value={title}
-        onChangeText={setTitle}
-        placeholder="e.g. Interstellar"
-        placeholderTextColor={colors.textTertiary}
-        style={[styles.input, { color: colors.text, backgroundColor: colors.surface, borderColor: colors.border }]}
-      />
-
-      {/* ── WHERE ── */}
-      <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>WHERE</Text>
-      <PlatformConnectGrid selectedPlatformId={platformId} onSelectPlatform={setPlatformId} compact />
-
-      {/* ── DATE ── */}
-      <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>DATE</Text>
-      <DropdownTrigger
+    <WatchScreen title="Schedule date night" onClose={onClose} onBack={onBack}>
+      <WatchPageHero
+        eyebrow="PLAN AHEAD"
+        title="Schedule date night"
+        subtitle="Pick what, where, and when — we'll remind you both before it starts."
         icon="calendar"
-        label="Selected date"
-        value={format(scheduledAt, 'EEEE, MMMM d, yyyy')}
-        open={dateOpen}
-        onPress={openDate}
-        colors={colors}
       />
-      {dateOpen && (
-        <View
-          style={[styles.dropdownPanel, { backgroundColor: colors.surface, borderColor: colors.accent }]}
-          onStartShouldSetResponder={() => true}>
 
-          <MonthCalendarPicker
-            value={selectedDay}
-            selectedDateTime={scheduledAt}
-            minDate={minDate}
-            maxDate={maxDate}
-            markers={markers}
-            onChange={(day) => {
-              setScheduledAt((prev) => applyDay(prev, day));
-            }}
+      <Pressable onPress={closeAll} style={styles.form}>
+        {/* What + where */}
+        <View
+          style={[
+            watchPanelStyles.panel,
+            { backgroundColor: colors.surfaceElevated, borderColor: colors.border, marginTop: -18 },
+          ]}>
+          <View style={watchPanelStyles.fieldGroup}>
+            <Text style={[watchPanelStyles.sectionLabel, { color: colors.textSecondary }]}>
+              What to watch
+            </Text>
+            <TextInput
+              value={title}
+              onChangeText={setTitle}
+              placeholder="Movie, show, or episode"
+              placeholderTextColor={colors.textTertiary}
+              style={[
+                watchPanelStyles.fieldInput,
+                { color: colors.text, backgroundColor: colors.surface, borderColor: colors.border },
+              ]}
+            />
+          </View>
+
+          <View style={watchPanelStyles.fieldGroup}>
+            <Text style={[watchPanelStyles.sectionLabel, { color: colors.textSecondary }]}>
+              Streaming service
+            </Text>
+            <PlatformConnectGrid
+              selectedPlatformId={platformId}
+              onSelectPlatform={setPlatformId}
+              compact
+              hideHeader
+              mode="pick"
+            />
+          </View>
+        </View>
+
+        {/* When */}
+        <View
+          style={[
+            styles.panelBlock,
+            { backgroundColor: colors.surfaceElevated, borderColor: colors.border, borderWidth: StyleSheet.hairlineWidth, borderRadius: 22, padding: 16, gap: 10 },
+          ]}>
+          <Text style={[watchPanelStyles.sectionLabel, { color: colors.textSecondary }]}>When</Text>
+
+          <DropdownTrigger
+            icon="calendar"
+            label="Date"
+            value={format(scheduledAt, 'EEEE, MMM d')}
+            open={dateOpen}
+            onPress={openDate}
+            colors={colors}
           />
-          {dayAllocations.length > 0 && (
-            <View style={[styles.allocationBox, { borderTopColor: colors.border }]}>
-              <Text style={[styles.allocationTitle, { color: colors.textSecondary }]}>Already booked this day</Text>
-              {dayAllocations.map((a, i) => (
-                <View key={`${a.title}-${i}`} style={styles.allocationRow}>
-                  <Icon name="film" size={13} color={colors.accent} />
-                  <Text style={{ color: colors.text, flex: 1, fontWeight: '600', fontSize: 13 }} numberOfLines={1}>{a.title}</Text>
-                  <Text style={{ color: colors.accent, fontWeight: '700', fontSize: 13 }}>{a.time}</Text>
+          {dateOpen && (
+            <View
+              style={[styles.dropdownPanel, { backgroundColor: colors.surface, borderColor: colors.accent }]}
+              onStartShouldSetResponder={() => true}>
+              <MonthCalendarPicker
+                value={selectedDay}
+                selectedDateTime={scheduledAt}
+                minDate={minDate}
+                maxDate={maxDate}
+                markers={markers}
+                onChange={(day) => setScheduledAt((prev) => applyDay(prev, day))}
+              />
+              {dayAllocations.length > 0 && (
+                <View style={[styles.allocationBox, { borderTopColor: colors.border }]}>
+                  <Text style={[styles.allocationTitle, { color: colors.textSecondary }]}>
+                    Already booked this day
+                  </Text>
+                  {dayAllocations.map((a, i) => (
+                    <View key={`${a.title}-${i}`} style={styles.allocationRow}>
+                      <Icon name="film" size={13} color={colors.accent} />
+                      <Text
+                        style={{ color: colors.text, flex: 1, fontWeight: '600', fontSize: 13 }}
+                        numberOfLines={1}>
+                        {a.title}
+                      </Text>
+                      <Text style={{ color: colors.accent, fontWeight: '700', fontSize: 13 }}>{a.time}</Text>
+                    </View>
+                  ))}
                 </View>
-              ))}
+              )}
+            </View>
+          )}
+
+          <DropdownTrigger
+            icon="moon"
+            label="Time"
+            value={format(scheduledAt, 'h:mm a')}
+            open={timeOpen}
+            onPress={openTime}
+            colors={colors}
+          />
+          {timeOpen && (
+            <View
+              style={[styles.dropdownPanel, { backgroundColor: colors.surface, borderColor: colors.accent }]}
+              onStartShouldSetResponder={() => true}>
+              <TimePickerDropdown
+                hour12={hour12}
+                minute={minute}
+                period={ampm}
+                disabledBefore={disableTimesBefore}
+                onChange={(h, m, p) => setScheduledAt((prev) => applyTimeParts(prev, h, m, p))}
+              />
+            </View>
+          )}
+
+          <DropdownTrigger
+            icon="bell"
+            label="Reminder"
+            value={reminderLabel}
+            open={reminderOpen}
+            onPress={openReminder}
+            colors={colors}
+          />
+          {reminderOpen && (
+            <View
+              style={[styles.dropdownPanel, { backgroundColor: colors.surface, borderColor: colors.accent }]}
+              onStartShouldSetResponder={() => true}>
+              {WATCH_REMINDER_OPTIONS.map((r) => {
+                const active = reminder === r.minutes;
+                return (
+                  <Pressable
+                    key={r.minutes}
+                    onPress={() => {
+                      Haptics.selectionAsync();
+                      setReminder(r.minutes);
+                      setReminderOpen(false);
+                    }}
+                    style={[
+                      styles.reminderOption,
+                      { backgroundColor: active ? colors.accentSoft : 'transparent', borderRadius: 10 },
+                    ]}>
+                    <Text style={[styles.reminderOptionText, { color: active ? colors.accent : colors.text }]}>
+                      {r.label}
+                    </Text>
+                    {active && <Icon name="check" size={16} color={colors.accent} />}
+                  </Pressable>
+                );
+              })}
             </View>
           )}
         </View>
-      )}
 
-      {/* ── TIME ── */}
-      <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>TIME</Text>
-      <DropdownTrigger
-        icon="moon"
-        label="Selected time"
-        value={format(scheduledAt, 'h:mm a')}
-        open={timeOpen}
-        onPress={openTime}
-        colors={colors}
-      />
-      {timeOpen && (
+        {/* Summary */}
         <View
-          style={[styles.dropdownPanel, { backgroundColor: colors.surface, borderColor: colors.accent }]}
-          onStartShouldSetResponder={() => true}>
-          <TimePickerDropdown
-            hour12={hour12}
-            minute={minute}
-            period={ampm}
-            disabledBefore={disableTimesBefore}
-            onChange={(h, m, p) => setScheduledAt((prev) => applyTimeParts(prev, h, m, p))}
+          style={[
+            styles.summary,
+            {
+              backgroundColor: colors.surface,
+              borderColor: isPast ? colors.error : colors.border,
+            },
+          ]}>
+          <View
+            style={[
+              styles.summaryStripe,
+              { backgroundColor: isPast ? colors.error : colors.accent },
+            ]}
           />
+          <View style={styles.summaryCopy}>
+            <Text style={[styles.summaryTitle, { color: colors.text }]} numberOfLines={1}>
+              {resolvedTitle || 'Pick a title or service'}
+            </Text>
+            <Text style={[styles.summaryDate, { color: isPast ? colors.error : colors.textSecondary }]}>
+              {format(scheduledAt, "EEE, MMM d 'at' h:mm a")}
+            </Text>
+            <Text style={{ color: colors.textTertiary, fontSize: 12 }}>
+              Reminder · {reminderLabel}
+              {platformId ? ` · ${getStreamingPlatform(platformId).name}` : ''}
+            </Text>
+          </View>
+          {isPast && (
+            <View style={[styles.pastBadge, { backgroundColor: colors.error }]}>
+              <Text style={{ color: '#fff', fontSize: 11, fontWeight: '800' }}>Past</Text>
+            </View>
+          )}
         </View>
-      )}
 
-      {/* ── REMINDER ── */}
-      <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>REMINDER</Text>
-      <DropdownTrigger
-        icon="bell"
-        label="Remind us"
-        value={reminderLabel}
-        open={reminderOpen}
-        onPress={openReminder}
-        colors={colors}
-      />
-      {reminderOpen && (
-        <View
-          style={[styles.dropdownPanel, { backgroundColor: colors.surface, borderColor: colors.accent }]}
-          onStartShouldSetResponder={() => true}>
-          {WATCH_REMINDER_OPTIONS.map((r) => {
-            const active = reminder === r.minutes;
-            return (
-              <Pressable
-                key={r.minutes}
-                onPress={() => { Haptics.selectionAsync(); setReminder(r.minutes); setReminderOpen(false); }}
-                style={[
-                  styles.reminderOption,
-                  {
-                    backgroundColor: active ? colors.accentSoft : 'transparent',
-                    borderRadius: 10,
-                  },
-                ]}>
-                <Text style={[styles.reminderOptionText, { color: active ? colors.accent : colors.text }]}>
-                  {r.label}
-                </Text>
-                {active && <Icon name="check" size={16} color={colors.accent} />}
-              </Pressable>
-            );
-          })}
-        </View>
-      )}
-
-      {/* ── SUMMARY ── */}
-      <View style={[styles.summary, { backgroundColor: colors.surfaceElevated, borderColor: isPast ? colors.error : colors.border }]}>
-        <View style={[styles.summaryAccent, { backgroundColor: isPast ? colors.error : colors.accent }]} />
-        <View style={{ flex: 1, gap: 3 }}>
-          <Text style={[styles.summaryDate, { color: colors.text }]}>
-            {format(scheduledAt, "EEE, MMMM d 'at' h:mm a")}
-          </Text>
-          <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
-            Reminder · {reminderLabel}
-          </Text>
-        </View>
-        {isPast && <Text style={{ color: colors.error, fontSize: 12, fontWeight: '800' }}>Past</Text>}
-      </View>
-
-      <PrimaryButton label="Schedule date night" onPress={handleSchedule} loading={schedule.isPending} />
+        <PrimaryButton label="Schedule date night" onPress={handleSchedule} loading={schedule.isPending} />
       </Pressable>
     </WatchScreen>
   );
 }
 
-const PANEL_RADIUS = 16;
-
 const styles = StyleSheet.create({
-  contentWrapper: { gap: 18 },
-  sectionLabel: {
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 0.8,
-    marginTop: 2,
-  },
-  input: {
-    borderRadius: 14,
-    borderWidth: StyleSheet.hairlineWidth,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 16,
-  },
-
-  /* ── Dropdown trigger ── */
+  form: { gap: 14 },
   trigger: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 11,
     borderRadius: 14,
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
   },
-  triggerLabel: { fontSize: 10, fontWeight: '700', letterSpacing: 0.5, marginBottom: 1 },
-  triggerValue: { fontSize: 15, fontWeight: '700' },
-
-  /* ── Dropdown panel ── */
+  triggerIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  triggerLabel: { fontSize: 10, fontWeight: '700', letterSpacing: 0.4, textTransform: 'uppercase' },
+  triggerValue: { fontSize: 15, fontWeight: '700', marginTop: 1 },
   dropdownPanel: {
-    borderRadius: PANEL_RADIUS,
+    borderRadius: 16,
     borderWidth: 1,
     padding: 14,
     gap: 10,
-    marginTop: -6,
+    marginTop: -4,
   },
-
-  /* ── Allocations ── */
   allocationBox: { borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 10, gap: 8 },
-  allocationTitle: { fontSize: 10, fontWeight: '800', letterSpacing: 0.5 },
+  allocationTitle: { fontSize: 11, fontWeight: '700', letterSpacing: 0.4, textTransform: 'uppercase' },
   allocationRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-
-  /* ── Reminder options ── */
   reminderOption: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -379,16 +427,18 @@ const styles = StyleSheet.create({
     paddingVertical: 13,
   },
   reminderOptionText: { fontSize: 15, fontWeight: '600' },
-
-  /* ── Summary ── */
   summary: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 14,
-    borderWidth: 1,
+    borderRadius: 18,
+    borderWidth: StyleSheet.hairlineWidth,
     overflow: 'hidden',
     gap: 14,
+    paddingRight: 14,
   },
-  summaryAccent: { width: 4, alignSelf: 'stretch' },
-  summaryDate: { fontSize: 15, fontWeight: '800' },
+  summaryStripe: { width: 4, alignSelf: 'stretch' },
+  summaryCopy: { flex: 1, gap: 3, paddingVertical: 14 },
+  summaryTitle: { fontSize: 16, fontWeight: '800' },
+  summaryDate: { fontSize: 14, fontWeight: '600' },
+  pastBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
 });

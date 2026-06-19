@@ -13,6 +13,7 @@ import { TabScreenScroll } from '@/components/layout/TabScreenScroll';
 import { ChangePasswordModal } from '@/components/profile/ChangePasswordModal';
 import { EditFieldModal } from '@/components/profile/EditFieldModal';
 import { LocationSharingSettings } from '@/components/profile/LocationSharingSettings';
+import { ProfileAnniversarySection } from '@/components/profile/ProfileAnniversarySection';
 import { SharedAlbum } from '@/components/profile/SharedAlbum';
 import { Icon, type IconName } from '@/components/ui/Icon';
 import { LogoMark } from '@/components/ui/Logo';
@@ -24,6 +25,7 @@ import { usePlusGate } from '@/hooks/usePlusGate';
 import { useSubscription } from '@/hooks/useSubscription';
 import { useTheme } from '@/hooks/useTheme';
 import { enrichMomentsWithAuthors, filterMediaMoments } from '@/lib/moment-display';
+import { getRelationshipAnniversaryDate } from '@/lib/anniversary';
 import { formatSubscriptionExpiry } from '@/lib/subscription';
 import { supabase } from '@/lib/supabase';
 import { queryClient } from '@/providers/AppProviders';
@@ -116,7 +118,7 @@ export default function ProfileScreen() {
     [timelineMoments, user, partner],
   );
   const relationshipDuration = relationship
-    ? formatDistanceToNow(new Date(relationship.created_at), { addSuffix: false })
+    ? formatDistanceToNow(getRelationshipAnniversaryDate(relationship), { addSuffix: false })
     : '';
   const { isPlus, isOwner, limits } = useSubscription();
   const { requirePlus } = usePlusGate();
@@ -343,6 +345,8 @@ export default function ProfileScreen() {
             <Text style={styles.partner}>Waiting for your partner to join</Text>
           )}
         </LinearGradient>
+
+        <ProfileAnniversarySection />
 
         <View style={styles.statsRow}>
           <StatPill value={timelineMoments.length} label="Moments" />

@@ -15,7 +15,6 @@ interface MomentReplyCardProps {
 export function MomentReplyCard({ message, isSelf }: MomentReplyCardProps) {
   const { colors } = useTheme();
   const user = useAuthStore((s) => s.user);
-  const relationship = useRelationshipStore((s) => s.relationship);
   const partner = useRelationshipStore((s) => s.partner);
   const openMomentViewer = useUIStore((s) => s.openMomentViewer);
 
@@ -26,17 +25,7 @@ export function MomentReplyCard({ message, isSelf }: MomentReplyCardProps) {
   if (!momentId) return null;
 
   const openPreview = async () => {
-    const ctx =
-      relationship && user
-        ? {
-            relationshipId: relationship.id,
-            userId: user.id,
-            partnerId: partner?.id ?? null,
-            partnerName: partner?.name ?? 'Partner',
-          }
-        : null;
-
-    const moment = await resolveMomentForReply(momentId, ctx, user, partner);
+    const moment = await resolveMomentForReply(momentId, user, partner);
     if (!moment) return;
     openMomentViewer([moment], 0, { playback: 'focus', sectionLabel: 'From chat' });
   };

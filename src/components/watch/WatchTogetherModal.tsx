@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { Modal } from 'react-native';
 
-import { PostWatchModal } from '@/components/watch/PostWatchModal';
 import { WatchHub } from '@/components/watch/WatchHub';
 import { WatchRoom } from '@/components/watch/WatchRoom';
 import { WatchScheduleView } from '@/components/watch/WatchScheduleView';
@@ -30,7 +29,6 @@ type HubView = 'hub' | 'start' | 'watchlist' | 'schedule';
 function WatchTogetherContent({ onClose }: { onClose: () => void }) {
   const initialView = useUIStore((s) => s.watchInitialView);
   const [view, setView] = useState<HubView>(initialView);
-  const [postWatch, setPostWatch] = useState<{ title: string; platformId: string | null } | null>(null);
 
   const { data: session } = useActiveWatchSession();
   useRealtimeSubscription('watch_sessions');
@@ -40,33 +38,19 @@ function WatchTogetherContent({ onClose }: { onClose: () => void }) {
   // A live (non-scheduled) session takes over the whole modal as the watch room.
   const liveSession = session && session.status !== 'scheduled' ? session : null;
 
-  if (postWatch) {
-    return (
-      <PostWatchModal
-        target={postWatch}
-        onDone={() => {
-          setPostWatch(null);
-          onClose();
-        }}
-      />
-    );
-  }
-
   if (liveSession) {
     return (
       <WatchRoom
         session={liveSession}
         onClose={onClose}
-        onEnded={(title, platformId) => setPostWatch({ title, platformId })}
+        onEnded={onClose}
       />
     );
   }
 
   switch (view) {
     case 'start':
-      return (
-        <WatchStartView onClose={onClose} onBack={() => setView('hub')} onSchedule={() => setView('schedule')} />
-      );
+      return <WatchStartView onClose={onClose} onBack={() => setView('hub')} />;
     case 'watchlist':
       return <WatchlistView onClose={onClose} onBack={() => setView('hub')} />;
     case 'schedule':

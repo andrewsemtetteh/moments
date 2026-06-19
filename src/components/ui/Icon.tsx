@@ -57,7 +57,8 @@ export type IconName =
   | 'document'
   | 'expand'
   | 'reply'
-  | 'moreVertical';
+  | 'moreVertical'
+  | 'edit';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
 
@@ -118,6 +119,7 @@ const ICON_MAP: Record<IconName, { outline: IoniconName; filled: IoniconName }> 
   expand: { outline: 'expand-outline', filled: 'expand' },
   reply: { outline: 'arrow-undo-outline', filled: 'arrow-undo' },
   moreVertical: { outline: 'ellipsis-vertical', filled: 'ellipsis-vertical' },
+  edit: { outline: 'create-outline', filled: 'create' },
 };
 
 interface IconProps {
