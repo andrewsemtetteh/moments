@@ -3,8 +3,9 @@ import { create } from 'zustand';
 import type { AppTheme } from '@/constants/design-system';
 import { callManager } from '@/lib/call-manager';
 import type { CallMode, CallPhase } from '@/lib/call-types';
-import type { Relationship, UserProfile, Moment } from '@/types/database';
+import type { Relationship, UserProfile, Moment, SharedAlbumItem } from '@/types/database';
 import type { MomentReplyContext } from '@/lib/moment-reply';
+import type { ChatOfflineItem } from '@/lib/chat-offline-queue';
 
 export type MomentViewerPlayback = 'story' | 'focus';
 
@@ -16,6 +17,8 @@ export interface MomentViewerState {
   sectionLabel?: string;
   /** Re-open moment history when the viewer closes (opened from history grid). */
   returnToHistory?: boolean;
+  /** Re-open shared album when the viewer closes (opened from album grid). */
+  returnToAlbum?: boolean;
   /** Re-open partner profile when the viewer closes (opened from profile avatar). */
   returnToPartnerProfile?: boolean;
 }
@@ -56,13 +59,23 @@ export const useRelationshipStore = create<RelationshipState>((set) => ({
   reset: () => set({ relationship: null, partner: null }),
 }));
 
+export interface AlbumViewerState {
+  items: SharedAlbumItem[];
+  startIndex: number;
+  sectionLabel?: string;
+  returnToAlbum?: boolean;
+}
+
 interface UIState {
   theme: AppTheme;
   isOffline: boolean;
   showMomentCreator: boolean;
   showMomentHistory: boolean;
+  showSharedAlbum: boolean;
+  albumViewer: AlbumViewerState | null;
   momentViewer: MomentViewerState | null;
   momentHistoryScrollY: number;
+  sharedAlbumScrollY: number;
   showJournal: boolean;
   showWrapped: boolean;
   showMomentRecapVideo: boolean;
@@ -81,7 +94,15 @@ interface UIState {
   setOffline: (offline: boolean) => void;
   setShowMomentCreator: (show: boolean) => void;
   setShowMomentHistory: (show: boolean) => void;
+  setShowSharedAlbum: (show: boolean) => void;
+  openAlbumViewer: (
+    items: SharedAlbumItem[],
+    startIndex?: number,
+    options?: { sectionLabel?: string; returnToAlbum?: boolean },
+  ) => void;
+  closeAlbumViewer: () => void;
   setMomentHistoryScrollY: (y: number) => void;
+  setSharedAlbumScrollY: (y: number) => void;
   openMomentViewer: (
     moments: Moment[],
     startIndex?: number,
@@ -89,6 +110,7 @@ interface UIState {
       playback?: MomentViewerPlayback;
       sectionLabel?: string;
       returnToHistory?: boolean;
+      returnToAlbum?: boolean;
       returnToPartnerProfile?: boolean;
     },
   ) => void;
@@ -118,8 +140,11 @@ export const useUIStore = create<UIState>((set) => ({
   isOffline: false,
   showMomentCreator: false,
   showMomentHistory: false,
+  showSharedAlbum: false,
+  albumViewer: null,
   momentViewer: null,
   momentHistoryScrollY: 0,
+  sharedAlbumScrollY: 0,
   showJournal: false,
   showWrapped: false,
   showMomentRecapVideo: false,
@@ -138,7 +163,23 @@ export const useUIStore = create<UIState>((set) => ({
   setOffline: (isOffline) => set({ isOffline }),
   setShowMomentCreator: (showMomentCreator) => set({ showMomentCreator }),
   setShowMomentHistory: (showMomentHistory) => set({ showMomentHistory }),
+  setShowSharedAlbum: (showSharedAlbum) => set({ showSharedAlbum }),
+  openAlbumViewer: (items, startIndex = 0, options) =>
+    set({
+      albumViewer: {
+        items,
+        startIndex: Math.max(0, Math.min(startIndex, Math.max(items.length - 1, 0))),
+        sectionLabel: options?.sectionLabel,
+        returnToAlbum: options?.returnToAlbum,
+      },
+    }),
+  closeAlbumViewer: () =>
+    set((state) => ({
+      albumViewer: null,
+      showSharedAlbum: state.albumViewer?.returnToAlbum ? true : state.showSharedAlbum,
+    })),
   setMomentHistoryScrollY: (momentHistoryScrollY) => set({ momentHistoryScrollY }),
+  setSharedAlbumScrollY: (sharedAlbumScrollY) => set({ sharedAlbumScrollY }),
   openMomentViewer: (moments, startIndex = 0, options) =>
     set({
       momentViewer: {
@@ -147,6 +188,7 @@ export const useUIStore = create<UIState>((set) => ({
         playback: options?.playback ?? 'story',
         sectionLabel: options?.sectionLabel,
         returnToHistory: options?.returnToHistory,
+        returnToAlbum: options?.returnToAlbum,
         returnToPartnerProfile: options?.returnToPartnerProfile,
       },
     }),
@@ -154,6 +196,7 @@ export const useUIStore = create<UIState>((set) => ({
     set((state) => ({
       momentViewer: null,
       showMomentHistory: state.momentViewer?.returnToHistory ? true : state.showMomentHistory,
+      showSharedAlbum: state.momentViewer?.returnToAlbum ? true : state.showSharedAlbum,
       showPartnerProfile: state.momentViewer?.returnToPartnerProfile
         ? true
         : state.showPartnerProfile,
@@ -209,13 +252,6 @@ export const useChatStore = create<ChatState>((set) => ({
   replyingTo: null,
   setReplyingTo: (replyingTo) => set({ replyingTo }),
 }));
-
-interface OfflineQueueItem {
-  id: string;
-  type: 'message' | 'moment';
-  payload: Record<string, unknown>;
-  createdAt: string;
-}
 
 interface CallState {
   phase: CallPhase;
@@ -273,18 +309,58 @@ export const useCallStore = create<CallState>((set, get) => ({
 }));
 
 interface OfflineState {
-  queue: OfflineQueueItem[];
-  addToQueue: (item: Omit<OfflineQueueItem, 'createdAt'>) => void;
+  relationshipId: string | null;
+  queue: ChatOfflineItem[];
+  hydrated: boolean;
+  hydrateQueue: (relationshipId: string) => Promise<void>;
+  addToQueue: (item: Omit<ChatOfflineItem, 'createdAt'>, relationshipId?: string) => void;
   removeFromQueue: (id: string) => void;
   clearQueue: () => void;
+  resetQueue: () => void;
 }
 
-export const useOfflineStore = create<OfflineState>((set) => ({
+async function persistQueue(relationshipId: string | null, queue: ChatOfflineItem[]) {
+  if (!relationshipId) return;
+  const { saveChatOfflineQueue } = await import('@/lib/chat-offline-queue');
+  await saveChatOfflineQueue(relationshipId, queue);
+}
+
+export const useOfflineStore = create<OfflineState>((set, get) => ({
+  relationshipId: null,
   queue: [],
-  addToQueue: (item) =>
-    set((s) => ({
-      queue: [...s.queue, { ...item, createdAt: new Date().toISOString() }],
-    })),
-  removeFromQueue: (id) => set((s) => ({ queue: s.queue.filter((q) => q.id !== id) })),
-  clearQueue: () => set({ queue: [] }),
+  hydrated: false,
+  hydrateQueue: async (relationshipId) => {
+    const { loadChatOfflineQueue } = await import('@/lib/chat-offline-queue');
+    const items = await loadChatOfflineQueue(relationshipId);
+    set({
+      relationshipId,
+      queue: items,
+      hydrated: true,
+    });
+  },
+  addToQueue: (item, relationshipId) => {
+    set((s) => {
+      const relId = relationshipId ?? s.relationshipId;
+      const queue = [...s.queue, { ...item, createdAt: new Date().toISOString() }];
+      void persistQueue(relId, queue);
+      return { queue, ...(relId ? { relationshipId: relId } : {}) };
+    });
+  },
+  removeFromQueue: (id) => {
+    set((s) => {
+      const queue = s.queue.filter((q) => q.id !== id);
+      void persistQueue(s.relationshipId, queue);
+      return { queue };
+    });
+  },
+  clearQueue: () => {
+    const { relationshipId } = get();
+    set({ queue: [] });
+    if (relationshipId) {
+      void import('@/lib/chat-offline-queue').then(({ clearChatOfflineQueue }) =>
+        clearChatOfflineQueue(relationshipId),
+      );
+    }
+  },
+  resetQueue: () => set({ relationshipId: null, queue: [], hydrated: false }),
 }));

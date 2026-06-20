@@ -4,7 +4,7 @@ import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter, type Href } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Alert, Pressable, Share, StyleSheet, Text, View } from 'react-native';
 
 import { AppHeader } from '@/components/layout/AppHeader';
@@ -19,13 +19,14 @@ import { Icon, type IconName } from '@/components/ui/Icon';
 import { LogoMark } from '@/components/ui/Logo';
 import { Avatar, Card, PrimaryButton, SectionTitle, StatPill } from '@/components/ui/primitives';
 import { THEME_META } from '@/constants/design-system';
-import { useBucketList, useJournalEntries, useMoments, useStreak } from '@/hooks/queries';
+import { useBucketList, useJournalEntries, useMoments, useSharedAlbum, useStreak, useUploadSharedAlbumItem } from '@/hooks/queries';
 import { useOpenPartnerProfile } from '@/hooks/useOpenPartnerProfile';
 import { usePlusGate } from '@/hooks/usePlusGate';
 import { useSubscription } from '@/hooks/useSubscription';
 import { useTheme } from '@/hooks/useTheme';
-import { enrichMomentsWithAuthors, filterMediaMoments } from '@/lib/moment-display';
 import { getRelationshipAnniversaryDate } from '@/lib/anniversary';
+import { pickAndUploadSharedAlbumMedia } from '@/lib/pick-shared-album-media';
+import { SharedAlbumStorageLimitError } from '@/lib/shared-album';
 import { formatSubscriptionExpiry } from '@/lib/subscription';
 import { supabase } from '@/lib/supabase';
 import { queryClient } from '@/providers/AppProviders';
@@ -48,7 +49,7 @@ export default function ProfileScreen() {
   const setUser = useAuthStore((s) => s.setUser);
   const resetAuth = useAuthStore((s) => s.reset);
   const resetRelationship = useRelationshipStore((s) => s.reset);
-  const setShowMomentHistory = useUIStore((s) => s.setShowMomentHistory);
+  const setShowSharedAlbum = useUIStore((s) => s.setShowSharedAlbum);
   const setShowMomentCreator = useUIStore((s) => s.setShowMomentCreator);
   const openPartnerProfile = useOpenPartnerProfile();
 
@@ -112,25 +113,47 @@ export default function ProfileScreen() {
     });
   };
 
+  const { data: sharedAlbumItems = [] } = useSharedAlbum();
+  const uploadAlbumItem = useUploadSharedAlbumItem();
+  const [albumUploading, setAlbumUploading] = useState(false);
+
   const timelineMoments = momentsData?.pages.flat() ?? [];
-  const albumMoments = useMemo(
-    () => enrichMomentsWithAuthors(filterMediaMoments(timelineMoments), user, partner),
-    [timelineMoments, user, partner],
-  );
   const relationshipDuration = relationship
     ? formatDistanceToNow(getRelationshipAnniversaryDate(relationship), { addSuffix: false })
     : '';
-  const { isPlus, isOwner, limits } = useSubscription();
+  const { isPlus, isOwner, limits, albumStorageUsedBytes } = useSubscription();
   const { requirePlus } = usePlusGate();
   const plusExpiryLabel = formatSubscriptionExpiry(user?.subscription_expires_at);
-  const albumLimit = limits.timelineMoments;
-  const hiddenAlbumCount = Number.isFinite(albumLimit)
-    ? Math.max(0, albumMoments.length - albumLimit)
-    : 0;
 
-  const openSharedAlbum = () => setShowMomentHistory(true);
+  const openSharedAlbum = () => setShowSharedAlbum(true);
   const unlockSharedAlbum = () => {
-    requirePlus('Full shared album');
+    requirePlus('Unlimited shared album storage');
+  };
+
+  const addAlbumMedia = async () => {
+    if (albumUploading || !user || !relationship) return;
+    if (!isPlus && albumStorageUsedBytes >= limits.albumStorageBytes) {
+      unlockSharedAlbum();
+      return;
+    }
+    setAlbumUploading(true);
+    try {
+      await pickAndUploadSharedAlbumMedia((payload) => uploadAlbumItem.mutateAsync(payload), {
+        isPlus,
+        usedBytes: albumStorageUsedBytes,
+        storageLimitBytes: Number.isFinite(limits.albumStorageBytes)
+          ? limits.albumStorageBytes
+          : undefined,
+      });
+    } catch (error) {
+      if (error instanceof SharedAlbumStorageLimitError) {
+        unlockSharedAlbum();
+      } else {
+        Alert.alert('Upload failed', error instanceof Error ? error.message : 'Please try again.');
+      }
+    } finally {
+      setAlbumUploading(false);
+    }
   };
 
   const handleLogout = async () => {
@@ -441,12 +464,13 @@ export default function ProfileScreen() {
         {tab === 'album' && (
           <View style={styles.tabBody}>
             <SharedAlbum
-              moments={albumMoments}
-              previewLimit={albumLimit}
-              hiddenCount={hiddenAlbumCount}
+              items={sharedAlbumItems}
+              usedBytes={albumStorageUsedBytes}
+              storageLimitBytes={limits.albumStorageBytes}
+              isPlus={isPlus}
               onOpenFull={openSharedAlbum}
-              onUnlockFull={unlockSharedAlbum}
-              onAddMoment={() => setShowMomentCreator(true)}
+              onUnlockStorage={unlockSharedAlbum}
+              onAddMedia={() => void addAlbumMedia()}
             />
           </View>
         )}

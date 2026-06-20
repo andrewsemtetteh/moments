@@ -192,6 +192,48 @@ export function groupMomentsForHistory(moments: Moment[]): { key: string; label:
   return sections;
 }
 
+export interface AlbumMonthSection {
+  key: string;
+  label: string;
+  moments: Moment[];
+}
+
+export interface AlbumYearSection {
+  key: string;
+  label: string;
+  months: AlbumMonthSection[];
+}
+
+/** Photo-album layout: years → months (newest first at each level). */
+export function groupMomentsForAlbum(moments: Moment[]): AlbumYearSection[] {
+  const byYear = new Map<string, Map<string, Moment[]>>();
+
+  for (const moment of moments) {
+    const d = new Date(moment.created_at);
+    const yearKey = format(d, 'yyyy');
+    const monthKey = format(d, 'yyyy-MM');
+    if (!byYear.has(yearKey)) byYear.set(yearKey, new Map());
+    const yearMap = byYear.get(yearKey)!;
+    const bucket = yearMap.get(monthKey);
+    if (bucket) bucket.push(moment);
+    else yearMap.set(monthKey, [moment]);
+  }
+
+  return Array.from(byYear.entries())
+    .sort(([a], [b]) => b.localeCompare(a))
+    .map(([yearKey, monthMap]) => ({
+      key: yearKey,
+      label: yearKey,
+      months: Array.from(monthMap.entries())
+        .sort(([a], [b]) => b.localeCompare(a))
+        .map(([monthKey, items]) => ({
+          key: monthKey,
+          label: format(new Date(`${monthKey}-01`), 'MMMM'),
+          moments: items,
+        })),
+    }));
+}
+
 /** Calendar-month buckets for shared album previews (newest first). */
 export function groupMomentsByMonth(moments: Moment[]): { key: string; label: string; moments: Moment[] }[] {
   const groups = new Map<string, Moment[]>();

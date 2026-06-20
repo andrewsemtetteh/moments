@@ -78,6 +78,22 @@ export interface Moment {
   author?: UserProfile;
 }
 
+export type SharedAlbumMediaType = 'photo' | 'video';
+
+export interface SharedAlbumItem {
+  id: string;
+  relationship_id: string;
+  user_id: string;
+  media_type: SharedAlbumMediaType;
+  storage_path: string;
+  file_size_bytes: number;
+  caption: string | null;
+  created_at: string;
+  /** Hydrated signed URL for display */
+  media_url?: string | null;
+  author?: UserProfile;
+}
+
 export interface Message {
   id: string;
   relationship_id: string;

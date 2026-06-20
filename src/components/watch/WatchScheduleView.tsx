@@ -244,7 +244,7 @@ export function WatchScheduleView({ onClose, onBack }: { onClose: () => void; on
         {/* When */}
         <View
           style={[
-            styles.panelBlock,
+            watchPanelStyles.panel,
             { backgroundColor: colors.surfaceElevated, borderColor: colors.border, borderWidth: StyleSheet.hairlineWidth, borderRadius: 22, padding: 16, gap: 10 },
           ]}>
           <Text style={[watchPanelStyles.sectionLabel, { color: colors.textSecondary }]}>When</Text>

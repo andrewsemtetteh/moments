@@ -1,4 +1,10 @@
+import { FREE_ALBUM_STORAGE_BYTES } from '@/constants/design-system';
+import * as Crypto from 'expo-crypto';
+import { getFirstName } from '@/lib/avatar-initial';
+import { extractChatStoragePath } from '@/lib/chat-media';
 import { extractMomentsStoragePath, hydrateMomentsMedia } from '@/lib/moment-media';
+import { SharedAlbumStorageLimitError } from '@/lib/shared-album';
+import { hydrateSharedAlbumItems } from '@/lib/shared-album-media';
 import { isMissingTableError } from '@/lib/network-error';
 import { hasActiveUserSubscription } from '@/lib/subscription';
 import { supabase } from '@/lib/supabase';
@@ -10,6 +16,7 @@ import type {
     JournalEntry,
     Message,
     Moment,
+    SharedAlbumItem,
     MoodLog,
     Notification,
     Relationship,
@@ -397,6 +404,116 @@ export async function deleteMoments(momentIds: string[], userId: string) {
   return { deleted: owned.length, skipped };
 }
 
+export async function fetchSharedAlbumItems(relationshipId: string) {
+  const { data, error } = await supabase
+    .from('shared_album_items')
+    .select('*')
+    .eq('relationship_id', relationshipId)
+    .order('created_at', { ascending: false });
+  if (error) {
+    if (isMissingTableError(error)) return [];
+    throw error;
+  }
+  return hydrateSharedAlbumItems((data ?? []) as SharedAlbumItem[]);
+}
+
+export async function fetchSharedAlbumStorageUsed(relationshipId: string): Promise<number> {
+  const { data, error } = await supabase
+    .from('shared_album_items')
+    .select('file_size_bytes')
+    .eq('relationship_id', relationshipId);
+  if (error) {
+    if (isMissingTableError(error)) return 0;
+    throw error;
+  }
+  return (data ?? []).reduce((sum, row) => sum + Number(row.file_size_bytes ?? 0), 0);
+}
+
+export async function uploadSharedAlbumMedia(path: string, uri: string, contentType: string) {
+  const arrayBuffer = await readUriAsArrayBuffer(uri);
+
+  const { data, error } = await supabase.storage.from('shared-album').upload(path, arrayBuffer, {
+    contentType,
+    upsert: false,
+  });
+  if (error) throw error;
+
+  const { data: signed, error: signError } = await supabase.storage
+    .from('shared-album')
+    .createSignedUrl(data.path, 60 * 60 * 24 * 365 * 5);
+  if (signError) throw signError;
+  return { path: data.path, signedUrl: signed.signedUrl, byteLength: arrayBuffer.byteLength };
+}
+
+export async function createSharedAlbumItem(
+  relationshipId: string,
+  userId: string,
+  payload: {
+    uri: string;
+    mediaType: 'photo' | 'video';
+    fileSizeBytes?: number;
+    caption?: string | null;
+  },
+  options?: { isPlus?: boolean },
+) {
+  const isPlus = options?.isPlus ?? false;
+  const limitBytes = isPlus ? Number.POSITIVE_INFINITY : FREE_ALBUM_STORAGE_BYTES;
+
+  const arrayBuffer = await readUriAsArrayBuffer(payload.uri);
+  const byteLength =
+    payload.fileSizeBytes && payload.fileSizeBytes > 0 ? payload.fileSizeBytes : arrayBuffer.byteLength;
+
+  const usedBytes = await fetchSharedAlbumStorageUsed(relationshipId);
+  if (!isPlus && usedBytes + byteLength > limitBytes) {
+    throw new SharedAlbumStorageLimitError(usedBytes, limitBytes, byteLength);
+  }
+
+  const ext = payload.mediaType === 'video' ? 'mp4' : 'jpg';
+  const fileName = `${Crypto.randomUUID()}.${ext}`;
+  const storagePath = `${relationshipId}/${userId}/${fileName}`;
+  const contentType = payload.mediaType === 'video' ? 'video/mp4' : 'image/jpeg';
+
+  const { path } = await uploadSharedAlbumMedia(storagePath, payload.uri, contentType);
+
+  const { data, error } = await supabase
+    .from('shared_album_items')
+    .insert({
+      relationship_id: relationshipId,
+      user_id: userId,
+      media_type: payload.mediaType,
+      storage_path: path,
+      file_size_bytes: byteLength,
+      caption: payload.caption?.trim() || null,
+    })
+    .select()
+    .single();
+  if (error) {
+    await supabase.storage.from('shared-album').remove([path]);
+    throw error;
+  }
+
+  const [hydrated] = await hydrateSharedAlbumItems([data as SharedAlbumItem]);
+  return hydrated;
+}
+
+export async function deleteSharedAlbumItem(itemId: string, userId: string) {
+  const { data: item, error: fetchError } = await supabase
+    .from('shared_album_items')
+    .select('id, user_id, storage_path')
+    .eq('id', itemId)
+    .maybeSingle();
+  if (fetchError) throw fetchError;
+  if (!item) return;
+  if (item.user_id !== userId) {
+    throw new Error('You can only remove media you added.');
+  }
+
+  await supabase.storage.from('shared-album').remove([item.storage_path]);
+
+  const { error } = await supabase.from('shared_album_items').delete().eq('id', itemId);
+  if (error) throw error;
+}
+
 export async function fetchMessages(relationshipId: string, limit = 50, cursor?: string) {
   let query = supabase
     .from('messages')
@@ -427,6 +544,7 @@ export async function sendMessage(
   mediaType?: string,
   momentId?: string,
   replyToId?: string,
+  options?: { partnerUserId?: string | null; senderName?: string | null },
 ) {
   const { data, error } = await supabase
     .from('messages')
@@ -444,16 +562,45 @@ export async function sendMessage(
   if (error) throw error;
 
   await supabase.rpc('update_streak', { p_relationship_id: relationshipId });
+
+  const partnerId = options?.partnerUserId;
+  if (partnerId && partnerId !== senderId) {
+    await notifyPartnerNewMessage(relationshipId, partnerId, options?.senderName, data as Message);
+  }
+
   return data as Message;
 }
 
+export async function notifyPartnerNewMessage(
+  relationshipId: string,
+  partnerUserId: string,
+  senderName: string | null | undefined,
+  message: Pick<Message, 'content' | 'media_type'>,
+) {
+  const label = getFirstName(senderName) ?? 'Your partner';
+  const text = message.content?.trim();
+  let preview: string;
+  if (text) {
+    preview = text.length > 80 ? `${text.slice(0, 77)}…` : text;
+    preview = `${label}: ${preview}`;
+  } else if (message.media_type === 'image') {
+    preview = `${label} sent you a photo`;
+  } else if (message.media_type === 'video') {
+    preview = `${label} sent you a video`;
+  } else if (message.media_type === 'voice') {
+    preview = `${label} sent you a voice message`;
+  } else {
+    preview = `${label} sent you a message`;
+  }
+  await sendPartnerNotification(relationshipId, partnerUserId, 'message', preview);
+}
+
 export async function markMessagesRead(relationshipId: string, userId: string) {
-  await supabase
-    .from('messages')
-    .update({ read_at: new Date().toISOString() })
-    .eq('relationship_id', relationshipId)
-    .neq('sender_id', userId)
-    .is('read_at', null);
+  const { error } = await supabase.rpc('mark_messages_read', {
+    p_relationship_id: relationshipId,
+    p_user_id: userId,
+  });
+  if (error) throw error;
 }
 
 export async function fetchUnreadMessageCount(relationshipId: string, userId: string) {
@@ -837,39 +984,48 @@ export async function updateSharedGoal(id: string, updates: Partial<SharedGoal>)
 }
 
 export async function toggleMessageReaction(messageId: string, userId: string, emoji: string) {
-  const { data: msg } = await supabase.from('messages').select('reactions').eq('id', messageId).single();
-  const reactions: Record<string, string[]> = (msg?.reactions as Record<string, string[]>) ?? {};
-  const current = reactions[emoji] ?? [];
-  reactions[emoji] = current.includes(userId) ? current.filter((u) => u !== userId) : [...current, userId];
-  if (reactions[emoji].length === 0) delete reactions[emoji];
-  const { error } = await supabase.from('messages').update({ reactions }).eq('id', messageId);
+  const { error } = await supabase.rpc('toggle_message_reaction', {
+    p_message_id: messageId,
+    p_user_id: userId,
+    p_emoji: emoji,
+  });
   if (error) throw error;
 }
 
-export async function setMessagePinned(messageId: string, isPinned: boolean) {
-  const { error } = await supabase.from('messages').update({ is_pinned: isPinned }).eq('id', messageId);
+export async function setMessagePinned(messageId: string, userId: string, isPinned: boolean) {
+  const { error } = await supabase.rpc('set_message_pinned', {
+    p_message_id: messageId,
+    p_user_id: userId,
+    p_is_pinned: isPinned,
+  });
   if (error) throw error;
 }
 
 export async function hideMessageForUser(messageId: string, userId: string) {
-  const { data: msg, error: fetchError } = await supabase
-    .from('messages')
-    .select('hidden_for')
-    .eq('id', messageId)
-    .single();
-  if (fetchError) throw fetchError;
-
-  const hidden = (msg?.hidden_for as string[] | null) ?? [];
-  if (hidden.includes(userId)) return;
-
-  const { error } = await supabase
-    .from('messages')
-    .update({ hidden_for: [...hidden, userId] })
-    .eq('id', messageId);
+  const { error } = await supabase.rpc('hide_message_for_user', {
+    p_message_id: messageId,
+    p_user_id: userId,
+  });
   if (error) throw error;
 }
 
 export async function deleteMessageForAll(messageId: string, senderId: string) {
+  const { data: message, error: fetchError } = await supabase
+    .from('messages')
+    .select('id, sender_id, media_url')
+    .eq('id', messageId)
+    .maybeSingle();
+  if (fetchError) throw fetchError;
+  if (!message) return;
+  if (message.sender_id !== senderId) {
+    throw new Error('You can only delete messages you sent.');
+  }
+
+  const storagePath = extractChatStoragePath(message.media_url);
+  if (storagePath) {
+    await supabase.storage.from('chat').remove([storagePath]);
+  }
+
   const { error } = await supabase
     .from('messages')
     .update({

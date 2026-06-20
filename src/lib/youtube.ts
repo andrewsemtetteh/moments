@@ -1,26 +1,36 @@
-/** Extract a YouTube video id from common URL shapes (or a bare id). */
-export function parseYouTubeId(input: string): string | null {
-  const value = input.trim();
-  if (!value) return null;
+/** Extract a YouTube video ID from a URL or bare 11-char ID. */
+export function parseYouTubeVideoId(input: string): string | null {
+  const trimmed = input.trim();
+  if (!trimmed) return null;
 
-  // Bare 11-char id
-  if (/^[a-zA-Z0-9_-]{11}$/.test(value)) return value;
+  if (/^[\w-]{11}$/.test(trimmed)) return trimmed;
 
-  const patterns = [
-    /(?:youtube\.com\/watch\?v=)([a-zA-Z0-9_-]{11})/,
-    /(?:youtu\.be\/)([a-zA-Z0-9_-]{11})/,
-    /(?:youtube\.com\/embed\/)([a-zA-Z0-9_-]{11})/,
-    /(?:youtube\.com\/shorts\/)([a-zA-Z0-9_-]{11})/,
-    /(?:youtube\.com\/live\/)([a-zA-Z0-9_-]{11})/,
-    /[?&]v=([a-zA-Z0-9_-]{11})/,
-  ];
-  for (const re of patterns) {
-    const m = value.match(re);
-    if (m?.[1]) return m[1];
+  try {
+    const url = new URL(trimmed.startsWith('http') ? trimmed : `https://${trimmed}`);
+    const host = url.hostname.replace(/^www\./, '');
+
+    if (host === 'youtu.be') {
+      const id = url.pathname.slice(1).split('/')[0];
+      return id.length === 11 ? id : null;
+    }
+
+    if (host === 'youtube.com' || host === 'm.youtube.com' || host === 'music.youtube.com') {
+      const v = url.searchParams.get('v');
+      if (v && v.length === 11) return v;
+
+      const embedMatch = url.pathname.match(/\/embed\/([\w-]{11})/);
+      if (embedMatch) return embedMatch[1];
+
+      const shortsMatch = url.pathname.match(/\/shorts\/([\w-]{11})/);
+      if (shortsMatch) return shortsMatch[1];
+    }
+  } catch {
+    return null;
   }
+
   return null;
 }
 
-export function youTubeThumbnail(videoId: string): string {
-  return `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
+export function youTubeWatchUrl(videoId: string): string {
+  return `https://www.youtube.com/watch?v=${videoId}`;
 }

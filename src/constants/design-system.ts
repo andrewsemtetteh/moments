@@ -809,3 +809,5 @@ export const FREE_DAILY_MOMENTS = 5;
 export const FREE_AI_REQUESTS = 3;
 export const FREE_JOURNAL_ENTRIES = 50;
 export const FREE_TIMELINE_MOMENTS = 12;
+/** Free tier shared album storage (100 MB). Plus is unlimited. */
+export const FREE_ALBUM_STORAGE_BYTES = 100 * 1024 * 1024;

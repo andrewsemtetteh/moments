@@ -33,9 +33,11 @@ export function WatchStartView({
 
   const [platformId, setPlatformId] = useState<StreamingPlatformId | null>(null);
 
+  const platform = platformId ? getStreamingPlatform(platformId) : null;
+
   const handleStart = () => {
-    if (!platformId) return;
-    const platform = getStreamingPlatform(platformId);
+    if (!platformId || !platform) return;
+
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     create.mutate(
       {
@@ -71,7 +73,7 @@ export function WatchStartView({
       <WatchPageHero
         eyebrow="START NOW"
         title="Start watch party"
-        subtitle="Pick where you watch — video opens on your phone, Moments keeps you together."
+        subtitle="Watch in Moments — browse and sign in right in the player below."
         icon="play"
       />
 
@@ -96,7 +98,7 @@ export function WatchStartView({
         <StreamingPhonePreview
           platformId={platformId}
           mode={platformId ? 'preview' : 'idle'}
-          title={platformId ? getStreamingPlatform(platformId).name : undefined}
+          title={platform?.name}
           size="md"
         />
 
@@ -108,7 +110,7 @@ export function WatchStartView({
         </View>
 
         <PrimaryButton
-          label={platformId ? `Watch ${getStreamingPlatform(platformId).name}` : 'Pick a service to start'}
+          label={platformId ? `Watch ${platform?.name ?? 'party'}` : 'Pick a service to start'}
           onPress={handleStart}
           disabled={!platformId}
           loading={create.isPending}

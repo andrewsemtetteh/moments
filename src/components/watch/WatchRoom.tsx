@@ -7,17 +7,19 @@ import { Icon } from '@/components/ui/Icon';
 import { Avatar, PrimaryButton } from '@/components/ui/primitives';
 import { FloatingReactions } from '@/components/watch/FloatingReactions';
 import { StreamingPhonePreview } from '@/components/watch/StreamingPhonePreview';
-import { SyncedYouTubePlayer, type SyncedYouTubePlayerHandle, type YTPlayerState } from '@/components/watch/SyncedYouTubePlayer';
+import { HybridWatchPlayer, type HybridWatchPlayerHandle } from '@/components/watch/HybridWatchPlayer';
+import type { StreamingPlayerState } from '@/components/watch/SyncedStreamingWebView';
+import type { YTPlayerState } from '@/components/watch/SyncedYouTubePlayer';
 import { WatchChatTray } from '@/components/watch/WatchChatTray';
 import { WatchScreen } from '@/components/watch/WatchScreen';
-import { getStreamingPlatform, type StreamingPlatformId } from '@/constants/streaming-platforms';
+import { getStreamingPlatform, usesHybridInApp, usesNativeCompanionOnly, type StreamingPlatformId } from '@/constants/streaming-platforms';
 import { WATCH_QUICK_REACTIONS } from '@/constants/watch-together';
 import { useWatchPartyNudge, useWatchSessionMutations } from '@/hooks/queries';
 import { usePlusGate } from '@/hooks/usePlusGate';
 import { useStartCall } from '@/hooks/useStartCall';
 import { useTheme } from '@/hooks/useTheme';
+import { correctedSeekTime, useWatchSyncChannel } from '@/hooks/useWatchSyncChannel';
 import { getFirstName } from '@/lib/avatar-initial';
-import { openStreamingApp } from '@/lib/streaming-platform';
 import { useAuthStore, useRelationshipStore } from '@/stores';
 import type { WatchSession } from '@/types/database';
 
@@ -55,7 +57,11 @@ export function WatchRoom({
   const [elapsed, setElapsed] = useState(0);
 
   const isHost = session.host_user_id === user?.id;
-  const isYouTube = session.content_source === 'youtube' && !!session.content_id;
+  const isHybrid = usesHybridInApp(session.platform_id) && session.content_source === 'streaming';
+  const isCompanion = usesNativeCompanionOnly(session.platform_id) && session.content_source === 'streaming';
+  const platform = session.platform_id ? getStreamingPlatform(session.platform_id) : null;
+  const youtubeVideoId =
+    session.platform_id === 'youtube' || session.content_source === 'youtube' ? session.content_id : null;
   const myJoined = session.ready_user_ids.includes(user?.id ?? '');
   const partnerJoined = partner ? session.ready_user_ids.includes(partner.id) : true;
   // Host enters immediately; partner sees a join screen until they tap "Join now"
@@ -63,9 +69,39 @@ export function WatchRoom({
   // Legacy countdown support for any existing setup/countdown sessions
   const lobby = !isHost && (session.status === 'setup' || session.status === 'countdown') && !myJoined;
 
-  const playerRef = useRef<SyncedYouTubePlayerHandle>(null);
+  const webRef = useRef<HybridWatchPlayerHandle>(null);
   const localTimeRef = useRef(0);
   const lastSentStateRef = useRef<string>('');
+
+  const applySyncAction = useCallback((action: 'PLAY' | 'PAUSE' | 'SEEK', timestamp: number) => {
+    if (action === 'PLAY') webRef.current?.play();
+    else if (action === 'PAUSE') webRef.current?.pause();
+    else webRef.current?.seekTo(timestamp);
+  }, []);
+
+  const { broadcast, withIncomingLock } = useWatchSyncChannel(session.id, user?.id, (payload) => {
+    const time = payload.action === 'SEEK' ? correctedSeekTime(payload) : payload.timestamp;
+    applySyncAction(payload.action, time);
+  });
+
+  const persistPlayback = useCallback(
+    (state: 'playing' | 'paused', position?: number) => {
+      setPlayback.mutate({ sessionId: session.id, state, position });
+    },
+    [session.id, setPlayback],
+  );
+
+  const emitHostAction = useCallback(
+    (action: 'PLAY' | 'PAUSE' | 'SEEK', timestamp: number, state?: 'playing' | 'paused') => {
+      withIncomingLock(() => {
+        broadcast(action, timestamp);
+        if (state) persistPlayback(state, timestamp);
+        else if (action !== 'SEEK') persistPlayback(session.playback_state, timestamp);
+        else persistPlayback(session.playback_state, timestamp);
+      });
+    },
+    [broadcast, withIncomingLock, persistPlayback, session.playback_state],
+  );
 
   const recentReactions = useMemo(() => [...(session.reactions ?? [])].reverse().slice(0, 6), [session.reactions]);
 
@@ -96,53 +132,52 @@ export function WatchRoom({
     return () => clearInterval(timer);
   }, [session.countdown_at, session.status, session.id, isHost, beginWatching]);
 
-  // Non-host: apply remote playback whenever the host changes it.
+  // Non-host: apply remote playback whenever the host changes it (DB fallback).
   useEffect(() => {
-    if (isHost || !isYouTube || session.status !== 'watching') return;
+    if (isHost || !isHybrid || session.status !== 'watching') return;
     const target = expectedPosition(session);
     if (Math.abs(localTimeRef.current - target) > DRIFT_THRESHOLD) {
-      playerRef.current?.seekTo(target);
+      applySyncAction('SEEK', target);
     }
-    if (session.playback_state === 'playing') playerRef.current?.play();
-    else playerRef.current?.pause();
-  }, [isHost, isYouTube, session.status, session.playback_state, session.playback_position, session.playback_updated_at, session]);
+    if (session.playback_state === 'playing') applySyncAction('PLAY', target);
+    else applySyncAction('PAUSE', target);
+  }, [isHost, isHybrid, session.status, session.playback_state, session.playback_position, session.playback_updated_at, session, applySyncAction]);
 
   // Drift correction (non-host) + heartbeat (host).
   useEffect(() => {
-    if (!isYouTube || session.status !== 'watching') return;
+    if (!isHybrid || session.status !== 'watching') return;
     const id = setInterval(() => {
       if (session.playback_state !== 'playing') return;
       if (isHost) {
-        // Keep the extrapolation base fresh.
-        setPlayback.mutate({ sessionId: session.id, state: 'playing', position: localTimeRef.current });
+        emitHostAction('PLAY', localTimeRef.current, 'playing');
       } else {
         const target = expectedPosition(session);
         if (Math.abs(localTimeRef.current - target) > DRIFT_THRESHOLD) {
-          playerRef.current?.seekTo(target);
-          playerRef.current?.play();
+          applySyncAction('SEEK', target);
+          applySyncAction('PLAY', target);
         }
       }
     }, SYNC_INTERVAL);
     return () => clearInterval(id);
-  }, [isHost, isYouTube, session.status, session.playback_state, session, setPlayback]);
+  }, [isHost, isHybrid, session.status, session.playback_state, session, emitHostAction, applySyncAction]);
 
-  const handleProgress = useCallback((seconds: number) => {
-    localTimeRef.current = seconds;
-  }, []);
-
-  const handlePlayerState = useCallback(
-    (state: YTPlayerState, time: number) => {
+  const handlePlayerStateChange = useCallback(
+    (state: StreamingPlayerState | YTPlayerState, time: number) => {
       localTimeRef.current = time;
       if (!isHost) return;
       if (state === 'playing' || state === 'paused') {
         const key = `${state}-${Math.round(time)}`;
         if (key === lastSentStateRef.current) return;
         lastSentStateRef.current = key;
-        setPlayback.mutate({ sessionId: session.id, state, position: time });
+        emitHostAction(state === 'playing' ? 'PLAY' : 'PAUSE', time, state);
       }
     },
-    [isHost, session.id, setPlayback],
+    [isHost, emitHostAction],
   );
+
+  const handleWebProgress = useCallback((seconds: number) => {
+    localTimeRef.current = seconds;
+  }, []);
 
   const handleJoin = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -160,20 +195,22 @@ export function WatchRoom({
   };
 
   const handleOpenStream = async () => {
-    if (session.platform_id) {
-      await openStreamingApp(session.platform_id, session.link);
-      return;
+    if (session.link) {
+      try {
+        await Linking.openURL(session.link);
+      } catch {
+        Alert.alert('Could not open link', 'Please try again.');
+      }
     }
-    if (session.link) await Linking.openURL(session.link);
   };
 
   const hostTogglePlay = () => {
     if (!isHost) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     const next = session.playback_state === 'playing' ? 'paused' : 'playing';
-    if (next === 'playing') playerRef.current?.play();
-    else playerRef.current?.pause();
-    setPlayback.mutate({ sessionId: session.id, state: next, position: localTimeRef.current });
+    if (next === 'playing') webRef.current?.play();
+    else webRef.current?.pause();
+    emitHostAction(next === 'playing' ? 'PLAY' : 'PAUSE', localTimeRef.current, next);
   };
 
   const hostSeek = (delta: number) => {
@@ -181,8 +218,8 @@ export function WatchRoom({
     Haptics.selectionAsync();
     const target = Math.max(0, localTimeRef.current + delta);
     localTimeRef.current = target;
-    playerRef.current?.seekTo(target);
-    setPlayback.mutate({ sessionId: session.id, state: session.playback_state, position: target });
+    webRef.current?.seekTo(target);
+    emitHostAction('SEEK', target);
   };
 
   const handleEnd = () => {
@@ -218,7 +255,7 @@ export function WatchRoom({
         </View>
         <View style={{ flex: 1 }}>
           <Text style={[styles.statusTitle, { color: colors.text }]} numberOfLines={1}>
-            {isYouTube ? 'YouTube' : session.platform_id ? getStreamingPlatform(session.platform_id).name : 'Watch party'}
+            {platform?.name ?? 'Watch party'}
           </Text>
           <Text style={{ color: colors.textTertiary, fontSize: 12 }}>
             {partnerJoined ? `${partnerName} watching with you` : `${partnerName} hasn't joined yet`}
@@ -269,48 +306,24 @@ export function WatchRoom({
         </Pressable>
       )}
 
-      {!showJoinScreen && isYouTube ? (
+      {!showJoinScreen && isHybrid && session.platform_id ? (
         <>
-          {/* Embedded synced player */}
           <View>
-            <SyncedYouTubePlayer
-              ref={playerRef}
-              videoId={session.content_id!}
-              controls={false}
-              onProgress={handleProgress}
-              onStateChange={handlePlayerState}
+            <HybridWatchPlayer
+              ref={webRef}
+              platformId={session.platform_id}
+              youtubeVideoId={youtubeVideoId}
+              onProgress={handleWebProgress}
+              onStateChange={handlePlayerStateChange}
             />
             <FloatingReactions reactions={session.reactions ?? []} />
           </View>
 
-          {/* Host playback controls */}
-          <View style={[styles.playerControls, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <View style={[styles.syncDot, { backgroundColor: session.playback_state === 'playing' ? colors.success : colors.warning }]} />
-            <Text style={{ color: colors.text, fontWeight: '700', fontSize: 13 }}>
-              {session.playback_state === 'playing' ? 'Playing' : 'Paused'} · in sync
-            </Text>
-            <View style={{ flex: 1 }} />
-            {isHost ? (
-              <View style={styles.hostControls}>
-                <Pressable onPress={() => hostSeek(-10)} hitSlop={6} style={[styles.ctrlBtn, { backgroundColor: colors.surfaceElevated }]}>
-                  <Icon name="chevronLeft" size={18} color={colors.textSecondary} />
-                </Pressable>
-                <Pressable onPress={hostTogglePlay} style={[styles.ctrlPlay, { backgroundColor: colors.accent }]}>
-                  <Icon name={session.playback_state === 'playing' ? 'pause' : 'play'} size={20} color={colors.onAccent} />
-                </Pressable>
-                <Pressable onPress={() => hostSeek(10)} hitSlop={6} style={[styles.ctrlBtn, { backgroundColor: colors.surfaceElevated }]}>
-                  <Icon name="chevronRight" size={18} color={colors.textSecondary} />
-                </Pressable>
-              </View>
-            ) : (
-              <Text style={{ color: colors.textTertiary, fontSize: 12 }}>{partnerName} is hosting</Text>
-            )}
-          </View>
-
+          {renderPlayerControls(true)}
           {renderReactionBar()}
           {renderCommunication()}
         </>
-      ) : !showJoinScreen ? (
+      ) : !showJoinScreen && isCompanion ? (
         <>
           <StreamingPhonePreview
             platformId={(session.platform_id ?? 'other') as StreamingPlatformId}
@@ -322,29 +335,7 @@ export function WatchRoom({
             size="lg"
           />
 
-          <View style={[styles.playerControls, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <View style={[styles.syncDot, { backgroundColor: session.playback_state === 'playing' ? colors.success : colors.warning }]} />
-            <Text style={{ color: colors.text, fontWeight: '700', fontSize: 13 }}>
-              {session.playback_state === 'playing' ? 'Playing' : 'Paused'} · {formatClock(session.playback_position)}
-            </Text>
-            <View style={{ flex: 1 }} />
-            {isHost ? (
-              <View style={styles.hostControls}>
-                <Pressable onPress={() => hostSeekStreaming(-15)} hitSlop={6} style={[styles.ctrlBtn, { backgroundColor: colors.surfaceElevated }]}>
-                  <Text style={{ color: colors.textSecondary, fontSize: 11, fontWeight: '700' }}>-15</Text>
-                </Pressable>
-                <Pressable onPress={hostToggleStreaming} style={[styles.ctrlPlay, { backgroundColor: colors.accent }]}>
-                  <Icon name={session.playback_state === 'playing' ? 'pause' : 'play'} size={20} color={colors.onAccent} />
-                </Pressable>
-                <Pressable onPress={() => hostSeekStreaming(15)} hitSlop={6} style={[styles.ctrlBtn, { backgroundColor: colors.surfaceElevated }]}>
-                  <Text style={{ color: colors.textSecondary, fontSize: 11, fontWeight: '700' }}>+15</Text>
-                </Pressable>
-              </View>
-            ) : (
-              <Text style={{ color: colors.textTertiary, fontSize: 12 }}>{partnerName} is hosting</Text>
-            )}
-          </View>
-
+          {renderPlayerControls(false)}
           {renderReactionBar()}
           {renderCommunication()}
         </>
@@ -352,21 +343,64 @@ export function WatchRoom({
     </WatchScreen>
   );
 
+  function renderPlayerControls(withSeek: boolean) {
+    const togglePlay = withSeek ? hostTogglePlay : hostToggleStreaming;
+
+    return (
+      <View style={[styles.playerControls, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <View style={[styles.syncDot, { backgroundColor: session.playback_state === 'playing' ? colors.success : colors.warning }]} />
+        <Text style={{ color: colors.text, fontWeight: '700', fontSize: 13 }}>
+          {session.playback_state === 'playing' ? 'Playing' : 'Paused'}
+          {withSeek ? ' · in sync' : ` · ${formatClock(session.playback_position)}`}
+        </Text>
+        <View style={{ flex: 1 }} />
+        {isHost ? (
+          <View style={styles.hostControls}>
+            {withSeek ? (
+              <>
+                <Pressable onPress={() => hostSeek(-10)} hitSlop={6} style={[styles.ctrlBtn, { backgroundColor: colors.surfaceElevated }]}>
+                  <Icon name="chevronLeft" size={18} color={colors.textSecondary} />
+                </Pressable>
+                <Pressable onPress={togglePlay} style={[styles.ctrlPlay, { backgroundColor: colors.accent }]}>
+                  <Icon name={session.playback_state === 'playing' ? 'pause' : 'play'} size={20} color={colors.onAccent} />
+                </Pressable>
+                <Pressable onPress={() => hostSeek(10)} hitSlop={6} style={[styles.ctrlBtn, { backgroundColor: colors.surfaceElevated }]}>
+                  <Icon name="chevronRight" size={18} color={colors.textSecondary} />
+                </Pressable>
+              </>
+            ) : (
+              <>
+                <Pressable onPress={() => hostSeekStreaming(-15)} hitSlop={6} style={[styles.ctrlBtn, { backgroundColor: colors.surfaceElevated }]}>
+                  <Text style={{ color: colors.textSecondary, fontSize: 11, fontWeight: '700' }}>-15</Text>
+                </Pressable>
+                <Pressable onPress={togglePlay} style={[styles.ctrlPlay, { backgroundColor: colors.accent }]}>
+                  <Icon name={session.playback_state === 'playing' ? 'pause' : 'play'} size={20} color={colors.onAccent} />
+                </Pressable>
+                <Pressable onPress={() => hostSeekStreaming(15)} hitSlop={6} style={[styles.ctrlBtn, { backgroundColor: colors.surfaceElevated }]}>
+                  <Text style={{ color: colors.textSecondary, fontSize: 11, fontWeight: '700' }}>+15</Text>
+                </Pressable>
+              </>
+            )}
+          </View>
+        ) : (
+          <Text style={{ color: colors.textTertiary, fontSize: 12 }}>{partnerName} is hosting</Text>
+        )}
+      </View>
+    );
+  }
+
   function hostToggleStreaming() {
     if (!isHost) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     const next = session.playback_state === 'playing' ? 'paused' : 'playing';
-    setPlayback.mutate({ sessionId: session.id, state: next });
+    emitHostAction(next === 'playing' ? 'PLAY' : 'PAUSE', session.playback_position ?? 0, next);
   }
 
   function hostSeekStreaming(delta: number) {
     if (!isHost) return;
     Haptics.selectionAsync();
-    setPlayback.mutate({
-      sessionId: session.id,
-      state: session.playback_state,
-      position: Math.max(0, (session.playback_position ?? 0) + delta),
-    });
+    const target = Math.max(0, (session.playback_position ?? 0) + delta);
+    emitHostAction('SEEK', target);
   }
 
   function renderReactionBar() {

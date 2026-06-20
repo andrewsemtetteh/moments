@@ -24,6 +24,8 @@ import {
     Text,
     TextInput,
     View,
+    type NativeScrollEvent,
+    type NativeSyntheticEvent,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -43,8 +45,8 @@ import { SwipeDismissView } from '@/components/layout/SwipeDismissView';
 import { Icon } from '@/components/ui/Icon';
 import { Avatar } from '@/components/ui/primitives';
 import {
+    useInfiniteMessages,
     useMessageActions,
-    useMessages,
     useRealtimeSubscription,
     useSendMessage,
 } from '@/hooks/queries';
@@ -53,6 +55,8 @@ import { usePartnerPresence } from '@/hooks/usePartnerPresence';
 import { useStartCall } from '@/hooks/useStartCall';
 import { useTheme } from '@/hooks/useTheme';
 import { encodeAttachment } from '@/lib/chat-attachments';
+import { messagePreviewLabel } from '@/lib/chat-media';
+import { flushChatOfflineQueue } from '@/lib/chat-offline-flush';
 import { buildChatListItems, type ChatListItem } from '@/lib/chat-list';
 import { getCurrentPlace } from '@/lib/location';
 import { goBackOrReplace } from '@/lib/router';
@@ -81,6 +85,7 @@ export default function ChatScreen() {
   const offlineQueue = useOfflineStore((s) => s.queue);
   const addToQueue = useOfflineStore((s) => s.addToQueue);
   const removeFromQueue = useOfflineStore((s) => s.removeFromQueue);
+  const hydrateOfflineQueue = useOfflineStore((s) => s.hydrateQueue);
 
   // Text
   const [text, setText] = useState('');
@@ -101,6 +106,8 @@ export default function ChatScreen() {
   const isRecordingRef = useRef(false);
   const willCancelRecordingRef = useRef(false);
   const [isSendingMedia, setIsSendingMedia] = useState(false);
+  const [flushingOffline, setFlushingOffline] = useState(false);
+  const [pendingScrollMessageId, setPendingScrollMessageId] = useState<string | null>(null);
 
   const listRef = useRef<FlatList>(null);
   const typingChannel = useRef<ReturnType<typeof supabase.channel> | null>(null);
@@ -109,7 +116,22 @@ export default function ChatScreen() {
   const typingTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inputRef = useRef<TextInput>(null);
 
-  const { data: messages, isLoading, refetch } = useMessages();
+  const loadingOlderRef = useRef(false);
+  const nearBottomRef = useRef(true);
+  const initialScrollDoneRef = useRef(false);
+
+  const {
+    data: messagesData,
+    isLoading,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    refetch,
+  } = useInfiniteMessages();
+  const messages = useMemo(
+    () => messagesData?.pages.reduceRight<Message[]>((acc, page) => [...page, ...acc], []) ?? [],
+    [messagesData?.pages],
+  );
   const { isOnline: partnerOnline, lastSeenAt: partnerLastSeenAt } = usePartnerPresence(
     relationship?.id,
     user?.id,
@@ -125,6 +147,16 @@ export default function ChatScreen() {
       listRef.current?.scrollToEnd({ animated });
     });
   }, []);
+
+  const scrollToLatestIfNearBottom = useCallback(
+    (animated = true) => {
+      if (!initialScrollDoneRef.current || nearBottomRef.current) {
+        scrollToLatest(animated);
+        initialScrollDoneRef.current = true;
+      }
+    },
+    [scrollToLatest],
+  );
 
   // Keep messages visible when the keyboard opens
   useEffect(() => {
@@ -143,6 +175,11 @@ export default function ChatScreen() {
     return () => clearTimeout(timer);
   }, [chatDraft, chatMomentReply, clearChatDraft]);
 
+  useEffect(() => {
+    if (!relationship?.id) return;
+    void hydrateOfflineQueue(relationship.id);
+  }, [relationship?.id, hydrateOfflineQueue]);
+
   // Snapshot unread IDs on first load for the "UNREAD" divider
   useEffect(() => {
     if (!messages || !user || initialUnreadIds !== null) return;
@@ -154,7 +191,7 @@ export default function ChatScreen() {
 
   // Mark messages read after a short delay so unread styling / divider are visible first.
   useEffect(() => {
-    if (!relationship || !user || !messages) return;
+    if (!relationship || !user || messages.length === 0) return;
     const hasPartnerUnread = messages.some((m) => m.sender_id !== user.id && !m.read_at);
     if (!hasPartnerUnread) return;
 
@@ -190,40 +227,48 @@ export default function ChatScreen() {
     };
   }, [relationship?.id, user?.id]);
 
-  // Flush offline queue
+  // Flush durable offline queue sequentially when back online
   useEffect(() => {
-    if (isOffline || offlineQueue.length === 0 || !relationship || !user) return;
-    offlineQueue.forEach(async (item) => {
-      if (item.type === 'message') {
-        const payload = item.payload as {
-          content: string;
-          momentId?: string;
-          mediaUrl?: string;
-          mediaType?: string;
-        };
-        await api.sendMessage(
-          relationship.id,
-          user.id,
-          payload.content,
-          payload.mediaUrl,
-          payload.mediaType,
-          payload.momentId,
-        );
-        removeFromQueue(item.id);
-      }
-    });
-    refetch();
-  }, [isOffline, offlineQueue, relationship, user, removeFromQueue, refetch]);
+    if (isOffline || offlineQueue.length === 0 || !relationship || !user || flushingOffline) return;
+
+    const pending = offlineQueue.filter((item) => item.type === 'message');
+    if (pending.length === 0) return;
+
+    setFlushingOffline(true);
+    void flushChatOfflineQueue({
+      relationshipId: relationship.id,
+      userId: user.id,
+      items: pending,
+      partnerUserId: partner?.id,
+      senderName: user.name,
+      onSent: removeFromQueue,
+    })
+      .then(() => refetch())
+      .finally(() => setFlushingOffline(false));
+  }, [
+    isOffline,
+    offlineQueue,
+    relationship,
+    user,
+    partner?.id,
+    flushingOffline,
+    removeFromQueue,
+    refetch,
+  ]);
 
   const allMessages = useMemo(
-    () => [...(messages ?? []), ...optimisticMessages],
+    () => [...messages, ...optimisticMessages],
     [messages, optimisticMessages],
   );
   const messageById = useMemo(
     () => new Map(allMessages.map((message) => [message.id, message])),
     [allMessages],
   );
-  const pinned = useMemo(() => (messages ?? []).filter((m) => m.is_pinned), [messages]);
+  const pinned = useMemo(
+    () => messages.filter((m) => m.is_pinned && !m.deleted_for_all),
+    [messages],
+  );
+  const latestPinned = pinned[pinned.length - 1] ?? null;
   const listItems = useMemo(() => {
     if (!user) return [];
     return buildChatListItems(allMessages, user.id, initialUnreadIds ?? undefined);
@@ -282,9 +327,17 @@ export default function ChatScreen() {
       created_at: new Date().toISOString(),
     };
     setOptimisticMessages((prev) => [...prev, optimistic]);
+    nearBottomRef.current = true;
 
     if (isOffline) {
-      addToQueue({ id: optimistic.id, type: 'message', payload: { content, ...momentPayload } });
+      addToQueue(
+        {
+          id: optimistic.id,
+          type: 'message',
+          payload: { content, ...momentPayload, replyToId },
+        },
+        relationship.id,
+      );
       return;
     }
     try {
@@ -292,7 +345,14 @@ export default function ChatScreen() {
       await api.trackEvent(relationship.id, user.id, 'message_sent');
       setOptimisticMessages((prev) => prev.filter((m) => m.id !== optimistic.id));
     } catch {
-      addToQueue({ id: optimistic.id, type: 'message', payload: { content, ...momentPayload } });
+      addToQueue(
+        {
+          id: optimistic.id,
+          type: 'message',
+          payload: { content, ...momentPayload, replyToId },
+        },
+        relationship.id,
+      );
     }
   }, [text, user, relationship, chatMomentReply, replyTo, isOffline, sendMessage, addToQueue, setChatMomentReply]);
 
@@ -314,6 +374,18 @@ export default function ChatScreen() {
     if (!user || !relationship) return;
     setIsSendingMedia(true);
     try {
+      if (isOffline) {
+        addToQueue(
+          {
+            id: `temp-${Date.now()}`,
+            type: 'message',
+            payload: { content: '', mediaLocalUri: uri, mediaType },
+          },
+          relationship.id,
+        );
+        return;
+      }
+
       const ext = uri.split('.').pop() ?? 'jpg';
       const contentType = mediaType === 'video' ? 'video/mp4' : 'image/jpeg';
       const path = `${relationship.id}/${user.id}-${Date.now()}.${ext}`;
@@ -340,7 +412,15 @@ export default function ChatScreen() {
       await sendMessage.mutateAsync({ content: '', mediaUrl, mediaType });
       setOptimisticMessages((prev) => prev.filter((m) => m.id !== optimistic.id));
     } catch (e) {
-      Alert.alert('Upload failed', e instanceof Error ? e.message : 'Please try again');
+      addToQueue(
+        {
+          id: `temp-${Date.now()}`,
+          type: 'message',
+          payload: { content: '', mediaLocalUri: uri, mediaType },
+        },
+        relationship.id,
+      );
+      Alert.alert('Upload failed', e instanceof Error ? e.message : 'Queued to send when online.');
     } finally {
       setIsSendingMedia(false);
     }
@@ -374,6 +454,7 @@ export default function ChatScreen() {
 
   const sendAttachmentMessage = async (content: string) => {
     if (!user || !relationship) return;
+    const replyToId = replyTo?.id.startsWith('temp-') ? undefined : replyTo?.id;
 
     const optimistic: Message = {
       id: `temp-${Date.now()}`,
@@ -383,7 +464,7 @@ export default function ChatScreen() {
       media_url: null,
       media_type: null,
       moment_id: null,
-      reply_to_id: replyTo?.id ?? null,
+      reply_to_id: replyToId ?? null,
       reactions: {},
       is_pinned: false,
       deleted_for_all: false,
@@ -393,11 +474,16 @@ export default function ChatScreen() {
     };
     setOptimisticMessages((prev) => [...prev, optimistic]);
 
+    if (isOffline) {
+      addToQueue({ id: optimistic.id, type: 'message', payload: { content, replyToId } }, relationship.id);
+      return;
+    }
+
     try {
-      await sendMessage.mutateAsync({ content, replyToId: replyTo?.id });
+      await sendMessage.mutateAsync({ content, replyToId });
       setOptimisticMessages((prev) => prev.filter((m) => m.id !== optimistic.id));
     } catch {
-      addToQueue({ id: optimistic.id, type: 'message', payload: { content } });
+      addToQueue({ id: optimistic.id, type: 'message', payload: { content, replyToId } }, relationship.id);
     }
   };
 
@@ -579,11 +665,24 @@ export default function ChatScreen() {
     setWillCancelRecording(false);
     setRecordingElapsed(0);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    let uri: string | null = null;
     try {
       await audioRecorder.stop();
       await setAudioModeAsync({ allowsRecording: false });
-      const uri = audioRecorder.uri;
+      uri = audioRecorder.uri;
       if (!uri) return;
+
+      if (isOffline) {
+        addToQueue(
+          {
+            id: `temp-${Date.now()}`,
+            type: 'message',
+            payload: { content: '🎙 Voice message', mediaLocalUri: uri, mediaType: 'voice' },
+          },
+          relationship.id,
+        );
+        return;
+      }
 
       setIsSendingMedia(true);
       const path = `${relationship.id}/${user.id}-voice-${Date.now()}.m4a`;
@@ -606,10 +705,23 @@ export default function ChatScreen() {
         created_at: new Date().toISOString(),
       };
       setOptimisticMessages((prev) => [...prev, optimistic]);
+      nearBottomRef.current = true;
       await sendMessage.mutateAsync({ content: '🎙 Voice message', mediaUrl, mediaType: 'voice' });
       setOptimisticMessages((prev) => prev.filter((m) => m.id !== optimistic.id));
     } catch (e) {
-      Alert.alert('Send failed', e instanceof Error ? e.message : 'Please try again');
+      if (uri) {
+        addToQueue(
+          {
+            id: `temp-${Date.now()}`,
+            type: 'message',
+            payload: { content: '🎙 Voice message', mediaLocalUri: uri, mediaType: 'voice' },
+          },
+          relationship.id,
+        );
+        Alert.alert('Send failed', 'Queued to send when online.');
+      } else {
+        Alert.alert('Send failed', e instanceof Error ? e.message : 'Please try again');
+      }
     } finally {
       setIsSendingMedia(false);
     }
@@ -635,6 +747,53 @@ export default function ChatScreen() {
   };
 
   const startCall = useStartCall();
+
+  useEffect(() => {
+    if (!pendingScrollMessageId) return;
+    const index = listItems.findIndex(
+      (item) => item.type === 'message' && item.id === pendingScrollMessageId,
+    );
+    if (index < 0) {
+      if (hasNextPage && !isFetchingNextPage && !loadingOlderRef.current) {
+        loadingOlderRef.current = true;
+        void fetchNextPage().finally(() => {
+          loadingOlderRef.current = false;
+        });
+      } else if (!hasNextPage && !isFetchingNextPage) {
+        setPendingScrollMessageId(null);
+      }
+      return;
+    }
+    setPendingScrollMessageId(null);
+    requestAnimationFrame(() => {
+      listRef.current?.scrollToIndex({ index, animated: true, viewPosition: 0.5 });
+    });
+  }, [pendingScrollMessageId, listItems, hasNextPage, isFetchingNextPage, fetchNextPage]);
+
+  const scrollToMessage = useCallback((messageId: string) => {
+    setPendingScrollMessageId(messageId);
+  }, []);
+
+  const onListScroll = useCallback(
+    (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+      const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
+      nearBottomRef.current =
+        contentOffset.y + layoutMeasurement.height >= contentSize.height - 120;
+
+      if (
+        contentOffset.y < 80 &&
+        hasNextPage &&
+        !isFetchingNextPage &&
+        !loadingOlderRef.current
+      ) {
+        loadingOlderRef.current = true;
+        void fetchNextPage().finally(() => {
+          loadingOlderRef.current = false;
+        });
+      }
+    },
+    [hasNextPage, isFetchingNextPage, fetchNextPage],
+  );
 
   const closeChat = useCallback(() => {
     goBackOrReplace(router, '/(tabs)/home');
@@ -748,19 +907,31 @@ export default function ChatScreen() {
 
       <SwipeDismissView edge="end" onDismiss={closeChat} style={styles.flex}>
       {/* ── Pinned bar ── */}
-      {pinned.length > 0 && (
-        <View style={[styles.pinnedBar, { backgroundColor: colors.accentSoft, borderBottomColor: colors.border }]}>
+      {latestPinned && (
+        <Pressable
+          onPress={() => scrollToMessage(latestPinned.id)}
+          style={[styles.pinnedBar, { backgroundColor: colors.accentSoft, borderBottomColor: colors.border }]}>
           <Icon name="pin" size={14} color={colors.accent} filled />
           <Text style={[styles.pinnedText, { color: colors.text }]} numberOfLines={1}>
-            {pinned[pinned.length - 1].content}
+            {messagePreviewLabel(latestPinned)}
           </Text>
-        </View>
+          {pinned.length > 1 ? (
+            <Text style={[styles.pinnedCount, { color: colors.textSecondary }]}>{pinned.length}</Text>
+          ) : null}
+        </Pressable>
       )}
 
       {/* ── Offline banner ── */}
       {isOffline && (
         <View style={[styles.offlineBar, { backgroundColor: colors.warning }]}>
-          <Text style={styles.offlineText}>Offline — messages will send when reconnected</Text>
+          <Text style={styles.offlineText}>
+            Offline — {offlineQueue.length} message{offlineQueue.length === 1 ? '' : 's'} will send when reconnected
+          </Text>
+        </View>
+      )}
+      {flushingOffline && (
+        <View style={[styles.offlineBar, { backgroundColor: colors.accentSoft }]}>
+          <Text style={[styles.offlineText, { color: colors.accent }]}>Sending queued messages…</Text>
         </View>
       )}
 
@@ -788,15 +959,31 @@ export default function ChatScreen() {
                   data={listItems}
                   keyExtractor={(item) => item.id}
                   renderItem={renderItem}
-                  ListHeaderComponent={profileIntro}
+                  ListHeaderComponent={
+                    isFetchingNextPage ? (
+                      <View style={styles.loadOlder}>
+                        <Text style={[styles.loadOlderText, { color: colors.textSecondary }]}>
+                          Loading earlier messages…
+                        </Text>
+                      </View>
+                    ) : (
+                      profileIntro
+                    )
+                  }
                   style={styles.flex}
                   contentContainerStyle={[
                     styles.list,
                     { paddingTop: listPad, paddingBottom: listPad },
-                    showProfileIntro && styles.listWithProfileIntro,
+                    showProfileIntro && !isFetchingNextPage && styles.listWithProfileIntro,
                   ]}
-                  onContentSizeChange={() => scrollToLatest(false)}
-                  onLayout={() => scrollToLatest(false)}
+                  maintainVisibleContentPosition={{ minIndexForVisible: 1, autoscrollToTopThreshold: 24 }}
+                  onScroll={onListScroll}
+                  scrollEventThrottle={16}
+                  onScrollToIndexFailed={(info) => {
+                    listRef.current?.scrollToOffset({ offset: info.averageItemLength * info.index, animated: true });
+                  }}
+                  onContentSizeChange={() => scrollToLatestIfNearBottom(false)}
+                  onLayout={() => scrollToLatestIfNearBottom(false)}
                   showsVerticalScrollIndicator={false}
                   keyboardDismissMode="interactive"
                   keyboardShouldPersistTaps="handled"
@@ -1022,6 +1209,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   pinnedText: { fontSize: 13, flex: 1 },
+  pinnedCount: { fontSize: 12, fontWeight: '700' },
 
   offlineBar: { padding: 8, alignItems: 'center' },
   offlineText: { color: '#fff', fontSize: 12, fontWeight: '600' },
@@ -1029,6 +1217,8 @@ const styles = StyleSheet.create({
   // List
   list: { paddingHorizontal: 2, flexGrow: 1 },
   listWithProfileIntro: { justifyContent: 'center' },
+  loadOlder: { paddingVertical: 12, alignItems: 'center' },
+  loadOlderText: { fontSize: 12, fontWeight: '600' },
 
   // Typing bubble
   typingBubble: { paddingHorizontal: 12, paddingBottom: 8 },

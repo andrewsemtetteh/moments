@@ -85,7 +85,6 @@ export default function JournalComposeScreen() {
     </SafeAreaView>
   );
 }
-
 const styles = StyleSheet.create({
   container: { flex: 1 },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16 },
@@ -103,3 +102,4 @@ const styles = StyleSheet.create({
     textAlignVertical: 'top',
   },
 });
+

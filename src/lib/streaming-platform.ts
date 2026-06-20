@@ -1,28 +1,103 @@
-import * as WebBrowser from 'expo-web-browser';
-import { Linking } from 'react-native';
+import { Alert, Linking, Platform } from 'react-native';
 
 import { getStreamingPlatform } from '@/constants/streaming-platforms';
 
-/** Opens the sign-in page — only when user explicitly adds a service to their profile. */
-export async function openStreamingSignIn(platformId: string) {
-  const platform = getStreamingPlatform(platformId);
-  await WebBrowser.openBrowserAsync(platform.signInUrl);
+/** Android package + Play Store id for native app / intent fallbacks. */
+const ANDROID_APPS: Record<string, { package: string; playStoreId: string }> = {
+  netflix: { package: 'com.netflix.mediaclient', playStoreId: 'com.netflix.mediaclient' },
+  disneyplus: { package: 'com.disney.disneyplus', playStoreId: 'com.disney.disneyplus' },
+  youtube: { package: 'com.google.android.youtube', playStoreId: 'com.google.android.youtube' },
+  hulu: { package: 'com.hulu.plus', playStoreId: 'com.hulu.plus' },
+  max: { package: 'com.wbd.stream', playStoreId: 'com.wbd.stream' },
+  primevideo: { package: 'com.amazon.avod.thirdpartyclient', playStoreId: 'com.amazon.avod.thirdpartyclient' },
+  paramountplus: { package: 'com.cbs.ott', playStoreId: 'com.cbs.app' },
+  crunchyroll: { package: 'com.crunchyroll.crunchyroid', playStoreId: 'com.crunchyroll.crunchyroid' },
+};
+
+export type OpenStreamingResult = 'native' | 'web' | 'store' | 'failed';
+
+async function tryOpenURL(url: string, options?: { force?: boolean }): Promise<boolean> {
+  try {
+    if (!options?.force) {
+      const canOpen = await Linking.canOpenURL(url);
+      if (!canOpen) return false;
+    }
+    await Linking.openURL(url);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
-/** Opens the streaming app on the user's phone (they stay logged in there). */
-export async function openStreamingApp(platformId: string, link?: string | null) {
-  const platform = getStreamingPlatform(platformId);
-  const target = link?.trim() || platform.appOpenUrl;
+/** Android intent:// URL — opens app if installed without crashing on bare schemes. */
+function androidIntentUrl(platformId: string, httpsPath: string): string | null {
+  const pkg = ANDROID_APPS[platformId]?.package;
+  if (!pkg) return null;
+  const path = httpsPath.replace(/^https?:\/\//, '');
+  return `intent://${path}#Intent;package=${pkg};scheme=https;end`;
+}
 
-  try {
-    const supported = await Linking.canOpenURL(target);
-    if (supported) {
-      await Linking.openURL(target);
-      return;
-    }
-  } catch {
-    // Fall through to browser.
+export async function openStreamingSignIn(platformId: string): Promise<void> {
+  const platform = getStreamingPlatform(platformId);
+  await tryOpenURL(platform.signInUrl);
+}
+
+/**
+ * Opens the native streaming app when installed.
+ * Never throws — falls back to Play Store, then mobile web.
+ */
+export async function openStreamingApp(
+  platformId: string,
+  link?: string | null,
+  options?: { showAlerts?: boolean },
+): Promise<OpenStreamingResult> {
+  const platform = getStreamingPlatform(platformId);
+  const showAlerts = options?.showAlerts ?? true;
+  const customLink = link?.trim();
+  const androidApp = ANDROID_APPS[platformId];
+
+  if (customLink) {
+    if (await tryOpenURL(customLink)) return 'native';
   }
 
-  await WebBrowser.openBrowserAsync(target);
+  if (Platform.OS === 'android' && androidApp) {
+    const intent = androidIntentUrl(platformId, platform.watchUrl);
+    if (intent && (await tryOpenURL(intent, { force: true }))) return 'native';
+
+    const scheme = platform.appOpenUrl;
+    if (scheme && !/^https?:\/\//i.test(scheme) && (await tryOpenURL(scheme, { force: true }))) {
+      return 'native';
+    }
+
+    const storeUrl = `market://details?id=${androidApp.playStoreId}`;
+    if (await tryOpenURL(storeUrl, { force: true })) {
+      if (showAlerts) {
+        Alert.alert(
+          `Install ${platform.name}`,
+          `${platform.name} is not installed. Opening the Play Store — install it, then try again.`,
+        );
+      }
+      return 'store';
+    }
+  }
+
+  if (Platform.OS === 'ios') {
+    const scheme = platform.appOpenUrl;
+    if (scheme && !/^https?:\/\//i.test(scheme) && (await tryOpenURL(scheme))) return 'native';
+  }
+
+  if (await tryOpenURL(platform.watchUrl)) {
+    if (showAlerts && Platform.OS === 'android' && androidApp) {
+      Alert.alert(
+        `${platform.name} app not found`,
+        `Opening ${platform.name} in your browser. Install the app from the Play Store for the best experience.`,
+      );
+    }
+    return 'web';
+  }
+
+  if (showAlerts) {
+    Alert.alert('Could not open', `Unable to open ${platform.name}. Try installing the app from your app store.`);
+  }
+  return 'failed';
 }

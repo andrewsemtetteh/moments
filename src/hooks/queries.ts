@@ -1,14 +1,16 @@
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 
 import { isMissingTableError } from '@/lib/network-error';
+import { getEffectiveTier } from '@/lib/subscription';
 import { supabase } from '@/lib/supabase';
 import { scheduleWatchReminder } from '@/lib/watch-reminders';
 import { AnalyticsEvents, track } from '@/services/analytics';
 import * as api from '@/services/api';
 import { useAuthStore, useRelationshipStore, useUIStore } from '@/stores';
 import type {
+    Message,
     StreamingConnection,
     WatchlistItem,
     WatchSession,
@@ -46,18 +48,88 @@ export function useMoments() {
   });
 }
 
-export function useMessages() {
+export function useSharedAlbum() {
+  const relationship = useRelationshipStore((s) => s.relationship);
+  return useQuery({
+    queryKey: ['shared-album', relationship?.id],
+    queryFn: () => api.fetchSharedAlbumItems(relationship!.id),
+    enabled: !!relationship?.id,
+  });
+}
+
+export function useSharedAlbumStorage() {
+  const relationship = useRelationshipStore((s) => s.relationship);
+  const { data: items } = useSharedAlbum();
+  const usedBytes = useMemo(
+    () => (items ?? []).reduce((sum, item) => sum + Number(item.file_size_bytes ?? 0), 0),
+    [items],
+  );
+  return { usedBytes, itemCount: items?.length ?? 0 };
+}
+
+export function useUploadSharedAlbumItem() {
+  const queryClient = useQueryClient();
   const relationship = useRelationshipStore((s) => s.relationship);
   const user = useAuthStore((s) => s.user);
-  return useQuery({
-    queryKey: ['messages', relationship?.id],
-    queryFn: async () => {
-      const rows = await api.fetchMessages(relationship!.id);
-      return rows.filter((m) => !(m.hidden_for ?? []).includes(user!.id));
+  const isPlus = getEffectiveTier(user, relationship) === 'plus';
+
+  return useMutation({
+    mutationFn: (payload: {
+      uri: string;
+      mediaType: 'photo' | 'video';
+      fileSizeBytes?: number;
+      caption?: string | null;
+    }) =>
+      api.createSharedAlbumItem(relationship!.id, user!.id, payload, { isPlus }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['shared-album', relationship?.id] });
     },
+  });
+}
+
+export function useDeleteSharedAlbumItem() {
+  const queryClient = useQueryClient();
+  const relationship = useRelationshipStore((s) => s.relationship);
+  const user = useAuthStore((s) => s.user);
+
+  return useMutation({
+    mutationFn: (itemId: string) => api.deleteSharedAlbumItem(itemId, user!.id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['shared-album', relationship?.id] });
+    },
+  });
+}
+
+const MESSAGES_PAGE_SIZE = 50;
+
+export function useInfiniteMessages() {
+  const relationship = useRelationshipStore((s) => s.relationship);
+  const user = useAuthStore((s) => s.user);
+
+  return useInfiniteQuery({
+    queryKey: ['messages', relationship?.id],
+    queryFn: ({ pageParam }) =>
+      api.fetchMessages(relationship!.id, MESSAGES_PAGE_SIZE, pageParam as string | undefined),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (lastPage) =>
+      lastPage.length < MESSAGES_PAGE_SIZE ? undefined : lastPage[0]?.created_at,
     enabled: !!relationship?.id && !!user?.id,
     staleTime: 30_000,
+    select: (data) => ({
+      ...data,
+      pages: data.pages.map((page) => page.filter((m) => !(m.hidden_for ?? []).includes(user!.id))),
+    }),
   });
+}
+
+/** @deprecated use useInfiniteMessages — kept for callers that need a flat list */
+export function useMessages() {
+  const query = useInfiniteMessages();
+  const messages = useMemo(
+    () => query.data?.pages.reduceRight<Message[]>((acc, page) => [...page, ...acc], []) ?? [],
+    [query.data?.pages],
+  );
+  return { ...query, data: messages };
 }
 
 export function useUnreadMessageCount() {
@@ -75,6 +147,7 @@ export function useSendMessage() {
   const queryClient = useQueryClient();
   const relationship = useRelationshipStore((s) => s.relationship);
   const user = useAuthStore((s) => s.user);
+  const partner = useRelationshipStore((s) => s.partner);
 
   return useMutation({
     mutationFn: (params: {
@@ -92,9 +165,11 @@ export function useSendMessage() {
         params.mediaType,
         params.momentId,
         params.replyToId,
+        { partnerUserId: partner?.id, senderName: user?.name },
       ),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['messages', relationship?.id] });
+      queryClient.invalidateQueries({ queryKey: ['unreadMessages', relationship?.id, user?.id] });
     },
   });
 }
@@ -302,7 +377,8 @@ export function useRealtimeSubscription(
           qc.invalidateQueries({ queryKey: [table === 'mood_logs' ? 'moods' : table.replace('_logs', ''), relationship.id] });
           if (table === 'messages') {
             qc.invalidateQueries({ queryKey: ['messages', relationship.id] });
-            qc.invalidateQueries({ queryKey: ['unreadMessages', relationship.id] });
+            const userId = useAuthStore.getState().user?.id;
+            qc.invalidateQueries({ queryKey: ['unreadMessages', relationship.id, userId] });
           }
           if (table === 'watch_sessions') {
             qc.invalidateQueries({ queryKey: ['watchSession', relationship.id] });
@@ -430,24 +506,37 @@ export function useMessageActions() {
   const queryClient = useQueryClient();
   const relationship = useRelationshipStore((s) => s.relationship);
   const user = useAuthStore((s) => s.user);
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: ['messages', relationship?.id] });
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: ['messages', relationship?.id] });
+    queryClient.invalidateQueries({ queryKey: ['unreadMessages', relationship?.id, user?.id] });
+  };
+  const onError = (error: Error) => {
+    void import('react-native').then(({ Alert }) =>
+      Alert.alert('Could not update message', error.message || 'Please try again.'),
+    );
+  };
 
   const react = useMutation({
     mutationFn: (p: { messageId: string; emoji: string }) =>
       api.toggleMessageReaction(p.messageId, user!.id, p.emoji),
     onSuccess: invalidate,
+    onError,
   });
   const pin = useMutation({
-    mutationFn: (p: { messageId: string; isPinned: boolean }) => api.setMessagePinned(p.messageId, p.isPinned),
+    mutationFn: (p: { messageId: string; isPinned: boolean }) =>
+      api.setMessagePinned(p.messageId, user!.id, p.isPinned),
     onSuccess: invalidate,
+    onError,
   });
   const deleteForMe = useMutation({
     mutationFn: (messageId: string) => api.hideMessageForUser(messageId, user!.id),
     onSuccess: invalidate,
+    onError,
   });
   const deleteForAll = useMutation({
     mutationFn: (messageId: string) => api.deleteMessageForAll(messageId, user!.id),
     onSuccess: invalidate,
+    onError,
   });
   return { react, pin, deleteForMe, deleteForAll };
 }

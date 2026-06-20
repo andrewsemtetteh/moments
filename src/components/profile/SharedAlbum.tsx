@@ -4,104 +4,111 @@ import { Image } from 'expo-image';
 import { useMemo } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import { AlbumStorageBar } from '@/components/profile/AlbumStorageBar';
 import { Icon } from '@/components/ui/Icon';
 import { Card, PrimaryButton } from '@/components/ui/primitives';
 import { useTheme } from '@/hooks/useTheme';
-import { groupMomentsByMonth } from '@/lib/moment-display';
-import { useUIStore } from '@/stores';
-import type { Moment } from '@/types/database';
+import { formatStorageBytes, groupSharedAlbumByMonth } from '@/lib/shared-album';
+import type { SharedAlbumItem } from '@/types/database';
 
 const PREVIEW_MONTHS = 3;
 const PREVIEW_PER_MONTH = 6;
 
 interface SharedAlbumProps {
-  moments: Moment[];
-  previewLimit: number;
-  hiddenCount: number;
+  items: SharedAlbumItem[];
+  usedBytes: number;
+  storageLimitBytes: number;
+  isPlus: boolean;
   onOpenFull: () => void;
-  onUnlockFull: () => void;
-  onAddMoment: () => void;
+  onUnlockStorage: () => void;
+  onAddMedia: () => void;
 }
 
 export function SharedAlbum({
-  moments,
-  previewLimit,
-  hiddenCount,
+  items,
+  usedBytes,
+  storageLimitBytes,
+  isPlus,
   onOpenFull,
-  onUnlockFull,
-  onAddMoment,
+  onUnlockStorage,
+  onAddMedia,
 }: SharedAlbumProps) {
   const { colors } = useTheme();
-  const openMomentViewer = useUIStore((s) => s.openMomentViewer);
 
-  const previewMoments = useMemo(
-    () => (Number.isFinite(previewLimit) ? moments.slice(0, previewLimit) : moments),
-    [moments, previewLimit],
-  );
+  const monthSections = useMemo(() => groupSharedAlbumByMonth(items).slice(0, PREVIEW_MONTHS), [items]);
 
-  const monthSections = useMemo(() => groupMomentsByMonth(previewMoments).slice(0, PREVIEW_MONTHS), [previewMoments]);
-
-  const photoCount = moments.filter((m) => m.type === 'photo').length;
-  const videoCount = moments.filter((m) => m.type === 'video').length;
-  const coverMoments = previewMoments.slice(0, 3);
-
-  const openPreview = (moment: Moment, index: number) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    openMomentViewer(previewMoments, index, { playback: 'focus' });
-  };
+  const photoCount = items.filter((i) => i.media_type === 'photo').length;
+  const videoCount = items.filter((i) => i.media_type === 'video').length;
+  const coverItems = items.slice(0, 3);
+  const storageFull = !isPlus && usedBytes >= storageLimitBytes;
 
   const handleOpenFull = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     onOpenFull();
   };
 
-  if (moments.length === 0) {
+  if (items.length === 0) {
     return (
-      <Card style={[styles.emptyCard, { backgroundColor: colors.surface }]}>
-        <View style={[styles.emptyIcon, { backgroundColor: colors.accentSoft }]}>
-          <Icon name="image" size={28} color={colors.accent} />
-        </View>
-        <Text style={[styles.emptyTitle, { color: colors.text }]}>Your shared album is empty</Text>
-        <Text style={[styles.emptySub, { color: colors.textSecondary }]}>
-          Photos and videos you send each other will collect here, just for the two of you.
-        </Text>
-        <PrimaryButton label="Add to album" onPress={onAddMoment} style={{ marginTop: 8, minWidth: 180 }} />
-      </Card>
+      <View style={styles.root}>
+        <AlbumStorageBar
+          usedBytes={usedBytes}
+          limitBytes={storageLimitBytes}
+          isPlus={isPlus}
+          onUpgrade={onUnlockStorage}
+        />
+        <Card style={[styles.emptyCard, { backgroundColor: colors.surface }]}>
+          <View style={[styles.emptyIcon, { backgroundColor: colors.accentSoft }]}>
+            <Icon name="image" size={28} color={colors.accent} />
+          </View>
+          <Text style={[styles.emptyTitle, { color: colors.text }]}>Shared Album</Text>
+          <Text style={[styles.emptySub, { color: colors.textSecondary }]}>
+            Upload photos and videos for just the two of you, with {formatStorageBytes(storageLimitBytes)} free storage.
+          </Text>
+          <PrimaryButton label="Add photos & videos" onPress={onAddMedia} style={{ marginTop: 8, minWidth: 200 }} />
+        </Card>
+      </View>
     );
   }
 
   return (
     <View style={styles.root}>
+      <AlbumStorageBar
+        usedBytes={usedBytes}
+        limitBytes={storageLimitBytes}
+        isPlus={isPlus}
+        onUpgrade={onUnlockStorage}
+      />
+
       <Pressable onPress={handleOpenFull}>
         <Card style={[styles.coverCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <View style={styles.coverMosaic}>
-            {coverMoments.length >= 3 ? (
+            {coverItems.length >= 3 ? (
               <>
-                <CoverTile moment={coverMoments[0]} style={styles.coverLarge} />
+                <CoverTile item={coverItems[0]} style={styles.coverLarge} />
                 <View style={styles.coverStack}>
-                  <CoverTile moment={coverMoments[1]} style={styles.coverSmall} />
-                  <CoverTile moment={coverMoments[2]} style={styles.coverSmall} />
+                  <CoverTile item={coverItems[1]} style={styles.coverSmall} />
+                  <CoverTile item={coverItems[2]} style={styles.coverSmall} />
                 </View>
               </>
-            ) : coverMoments.length === 2 ? (
+            ) : coverItems.length === 2 ? (
               <>
-                <CoverTile moment={coverMoments[0]} style={styles.coverHalf} />
-                <CoverTile moment={coverMoments[1]} style={styles.coverHalf} />
+                <CoverTile item={coverItems[0]} style={styles.coverHalf} />
+                <CoverTile item={coverItems[1]} style={styles.coverHalf} />
               </>
             ) : (
-              <CoverTile moment={coverMoments[0]} style={styles.coverFull} />
+              <CoverTile item={coverItems[0]} style={styles.coverFull} />
             )}
           </View>
 
           <View style={styles.coverMeta}>
             <View style={{ flex: 1, gap: 4 }}>
-              <Text style={[styles.coverTitle, { color: colors.text }]}>Shared album</Text>
+              <Text style={[styles.coverTitle, { color: colors.text }]}>Shared Album</Text>
               <Text style={[styles.coverSub, { color: colors.textSecondary }]}>
                 {photoCount} photo{photoCount === 1 ? '' : 's'}
                 {videoCount > 0 ? ` · ${videoCount} video${videoCount === 1 ? '' : 's'}` : ''}
                 {' · '}
-                {format(new Date(moments[0].created_at), 'MMM yyyy')}
-                {moments.length > 1 ? ` – ${format(new Date(moments[moments.length - 1].created_at), 'MMM yyyy')}` : ''}
+                {format(new Date(items[0].created_at), 'MMM yyyy')}
+                {items.length > 1 ? ` – ${format(new Date(items[items.length - 1].created_at), 'MMM yyyy')}` : ''}
               </Text>
             </View>
             <Icon name="chevronRight" size={20} color={colors.textTertiary} />
@@ -113,65 +120,62 @@ export function SharedAlbum({
         <View key={section.key} style={styles.monthBlock}>
           <Text style={[styles.monthLabel, { color: colors.textSecondary }]}>{section.label}</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.monthScroll}>
-            {section.moments.slice(0, PREVIEW_PER_MONTH).map((moment) => {
-              const index = previewMoments.findIndex((m) => m.id === moment.id);
-              return (
-                <Pressable
-                  key={moment.id}
-                  onPress={() => openPreview(moment, index >= 0 ? index : 0)}
-                  style={[styles.thumb, { backgroundColor: colors.surfaceElevated }]}>
-                  {moment.media_url ? (
-                    <>
-                      <Image source={{ uri: moment.media_url }} style={StyleSheet.absoluteFill} contentFit="cover" />
-                      {moment.type === 'video' && (
-                        <View style={styles.videoBadge}>
-                          <Icon name="videocam" size={12} color="#fff" />
-                        </View>
-                      )}
-                    </>
-                  ) : (
-                    <View style={[StyleSheet.absoluteFill, styles.thumbFallback, { backgroundColor: colors.accentSoft }]}>
-                      <Icon name="heart" size={20} color={colors.accent} filled />
-                    </View>
-                  )}
-                </Pressable>
-              );
-            })}
-            {section.moments.length > PREVIEW_PER_MONTH && (
+            {section.items.slice(0, PREVIEW_PER_MONTH).map((item) => (
+              <Pressable
+                key={item.id}
+                onPress={handleOpenFull}
+                style={[styles.thumb, { backgroundColor: colors.surfaceElevated }]}>
+                {item.media_url ? (
+                  <>
+                    <Image source={{ uri: item.media_url }} style={StyleSheet.absoluteFill} contentFit="cover" />
+                    {item.media_type === 'video' && (
+                      <View style={styles.videoBadge}>
+                        <Icon name="videocam" size={12} color="#fff" />
+                      </View>
+                    )}
+                  </>
+                ) : null}
+              </Pressable>
+            ))}
+            {section.items.length > PREVIEW_PER_MONTH && (
               <Pressable
                 onPress={handleOpenFull}
                 style={[styles.moreThumb, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
-                <Text style={[styles.moreThumbText, { color: colors.text }]}>+{section.moments.length - PREVIEW_PER_MONTH}</Text>
+                <Text style={[styles.moreThumbText, { color: colors.text }]}>+{section.items.length - PREVIEW_PER_MONTH}</Text>
               </Pressable>
             )}
           </ScrollView>
         </View>
       ))}
 
-      {hiddenCount > 0 && (
+      {storageFull && (
         <Pressable
-          onPress={onUnlockFull}
+          onPress={onUnlockStorage}
           style={[styles.upsell, { backgroundColor: colors.accentSoft, borderColor: colors.accent }]}>
           <Icon name="lock" size={18} color={colors.accent} />
           <Text style={[styles.upsellText, { color: colors.text }]}>
-            {hiddenCount} more in your album with Plus
+            Album full — get unlimited storage with Plus
           </Text>
           <Icon name="chevronRight" size={18} color={colors.accent} />
         </Pressable>
       )}
 
-      <PrimaryButton label="Open shared album" onPress={handleOpenFull} />
+      <PrimaryButton label="Open Shared Album" onPress={handleOpenFull} />
+      <Pressable onPress={onAddMedia} style={styles.addLink}>
+        <Icon name="plus" size={16} color={colors.accent} />
+        <Text style={[styles.addLinkText, { color: colors.accent }]}>Add photos & videos</Text>
+      </Pressable>
     </View>
   );
 }
 
-function CoverTile({ moment, style }: { moment: Moment; style: object }) {
+function CoverTile({ item, style }: { item: SharedAlbumItem; style: object }) {
   return (
     <View style={[styles.coverTile, style]}>
-      {moment.media_url ? (
+      {item.media_url ? (
         <>
-          <Image source={{ uri: moment.media_url }} style={StyleSheet.absoluteFill} contentFit="cover" />
-          {moment.type === 'video' && (
+          <Image source={{ uri: item.media_url }} style={StyleSheet.absoluteFill} contentFit="cover" />
+          {item.media_type === 'video' && (
             <View style={styles.coverVideoBadge}>
               <Icon name="videocam" size={14} color="#fff" />
             </View>
@@ -214,7 +218,6 @@ const styles = StyleSheet.create({
   monthLabel: { fontSize: 13, fontWeight: '700', letterSpacing: 0.2 },
   monthScroll: { gap: 8, paddingRight: 4 },
   thumb: { width: 88, height: 88, borderRadius: 14, overflow: 'hidden' },
-  thumbFallback: { alignItems: 'center', justifyContent: 'center' },
   videoBadge: {
     position: 'absolute',
     top: 6,
@@ -244,4 +247,6 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
   },
   upsellText: { flex: 1, fontSize: 14, fontWeight: '700' },
+  addLink: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 4 },
+  addLinkText: { fontSize: 14, fontWeight: '800' },
 });
