@@ -95,7 +95,7 @@ export default function ProfileSetupScreen() {
       }
 
       await markAvatarPromptDone(activeUser.id);
-      router.push('/(onboarding)/create-relationship');
+      router.push('/(onboarding)/anniversary-setup');
     } catch (e: unknown) {
       Alert.alert('Error', e instanceof Error ? e.message : 'Could not save profile photo');
     } finally {
@@ -144,7 +144,7 @@ export default function ProfileSetupScreen() {
           onPress={async () => {
             const activeUser = useAuthStore.getState().user;
             if (activeUser) await markAvatarPromptDone(activeUser.id);
-            router.push('/(onboarding)/create-relationship');
+            router.push('/(onboarding)/anniversary-setup');
           }}
           disabled={bootstrapping || loading}>
           <Text style={[styles.skip, { color: colors.textSecondary }]}>Skip for now</Text>
@@ -167,19 +167,28 @@ const styles = StyleSheet.create({
     marginTop: 32,
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'visible',
+  },
+  avatarImage: { width: '100%', height: '100%', borderRadius: 70 },
+  avatarPlaceholder: {
+    width: '100%',
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 70,
     overflow: 'hidden',
   },
-  avatarImage: { width: '100%', height: '100%' },
-  avatarPlaceholder: { width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center' },
   editBadge: {
     position: 'absolute',
-    bottom: 6,
-    right: 6,
+    right: 4,
+    bottom: 4,
     width: 32,
     height: 32,
     borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
+    zIndex: 10,
+    elevation: 10,
   },
   hint: { fontSize: 13, marginTop: 12, textAlign: 'center' },
   btn: { width: '100%', marginTop: 32 },

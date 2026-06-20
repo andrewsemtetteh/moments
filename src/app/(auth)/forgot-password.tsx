@@ -15,7 +15,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { AuthFooter } from '@/components/auth/AuthFooter';
 import { PrimaryButton } from '@/components/ui/primitives';
 import { useTheme } from '@/hooks/useTheme';
-import { sendRecoveryOtp } from '@/lib/auth-otp';
+import { sendPasswordResetLink, formatAuthError } from '@/lib/auth-otp';
 
 export default function ForgotPasswordScreen() {
   const router = useRouter();
@@ -30,14 +30,14 @@ export default function ForgotPasswordScreen() {
 
     setLoading(true);
     try {
-      const { error } = await sendRecoveryOtp(trimmed);
+      const { error } = await sendPasswordResetLink(trimmed);
       if (error) throw error;
       router.push({
-        pathname: '/(auth)/verify-otp',
+        pathname: '/(auth)/check-email',
         params: { email: trimmed, type: 'recovery' },
       });
     } catch (e: unknown) {
-      Alert.alert('Could not send code', e instanceof Error ? e.message : 'Please try again');
+      Alert.alert('Could not send email', formatAuthError(e));
     } finally {
       setLoading(false);
     }

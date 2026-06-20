@@ -39,11 +39,13 @@ function AuthSync({ children }: { children: ReactNode }) {
       try {
         const rememberMe = await getRememberMe();
         if (!rememberMe) {
+          queryClient.clear();
           await supabase.auth.signOut({ scope: 'local' });
           await clearAuthSession();
           return;
         }
 
+        queryClient.clear();
         if (session?.user) {
           await hydrateAuthSession(session);
         } else {
@@ -56,8 +58,10 @@ function AuthSync({ children }: { children: ReactNode }) {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'TOKEN_REFRESHED') return;
       try {
+        queryClient.clear();
         if (session?.user) {
           await hydrateAuthSession(session);
         } else {

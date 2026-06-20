@@ -20,7 +20,7 @@ export function formatUsd(amount: number): string {
 }
 
 export const PLUS_FEATURES =
-  'Unlimited moments & journal, full AI activity generator, mood history, expanded timeline, and Wrapped recap';
+  'Unlimited moments & journal, full AI activity generator, expanded timeline, and Wrapped recap';
 
 export const TRIAL_STEPS: { day: string; title: string; body: string; icon: IconName }[] = [
   {

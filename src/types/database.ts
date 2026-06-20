@@ -189,6 +189,7 @@ export interface Notification {
   type: string;
   content: string;
   read: boolean;
+  push_dispatched?: boolean;
   created_at: string;
 }
 
@@ -198,7 +199,25 @@ export interface Streak {
   current_streak: number;
   longest_streak: number;
   last_active_date: string | null;
+  user_1_last_active_date?: string | null;
+  user_2_last_active_date?: string | null;
   updated_at: string;
+}
+
+/** Live streak snapshot from get_streak_status RPC (includes at-risk + partner activity). */
+export interface StreakStatus {
+  relationship_id: string;
+  current_streak: number;
+  longest_streak: number;
+  last_active_date: string | null;
+  at_risk: boolean;
+  both_active_today: boolean;
+  user_active_today: boolean;
+  partner_active_today: boolean;
+  /** True only while streak is 0 and a prior streak was saved — before any new activity. */
+  can_restore_streak: boolean;
+  restorable_streak: number | null;
+  restorable_lost_at: string | null;
 }
 
 export interface DailyChallenge {

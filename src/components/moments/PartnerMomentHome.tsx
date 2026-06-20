@@ -16,6 +16,7 @@ import {
 import { LocketReactionCluster } from '@/components/moments/LocketReactionCluster';
 import { SwipeableMomentMediaStack } from '@/components/moments/SwipeableMomentMediaStack';
 import { Icon } from '@/components/ui/Icon';
+import { GlassSurface } from '@/components/ui/GlassSurface';
 import { Avatar } from '@/components/ui/primitives';
 import { useMomentReaction, useSendMessage } from '@/hooks/queries';
 import { useTheme } from '@/hooks/useTheme';
@@ -36,7 +37,7 @@ export function PartnerMomentHome({ partnerMoments }: PartnerMomentHomeProps) {
   const user = useAuthStore((s) => s.user);
   const partner = useRelationshipStore((s) => s.partner);
   const openMomentViewer = useUIStore((s) => s.openMomentViewer);
-  const setShowMomentCreator = useUIStore((s) => s.setShowMomentCreator);
+  const setShowMomentHistory = useUIStore((s) => s.setShowMomentHistory);
   const setChatDraft = useUIStore((s) => s.setChatDraft);
   const setChatMomentReply = useUIStore((s) => s.setChatMomentReply);
 
@@ -130,7 +131,7 @@ export function PartnerMomentHome({ partnerMoments }: PartnerMomentHomeProps) {
 
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <View style={[styles.card, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
+      <GlassSurface style={styles.card} borderRadius={28}>
         <View style={styles.topBar}>
           <View style={styles.authorBlock}>
             <Avatar name={authorName} imageUrl={authorAvatar} size={32} />
@@ -142,11 +143,11 @@ export function PartnerMomentHome({ partnerMoments }: PartnerMomentHomeProps) {
             </View>
           </View>
           <Pressable
-            onPress={() => setShowMomentCreator(true)}
+            onPress={() => setShowMomentHistory(true)}
             hitSlop={8}
             style={styles.historyBtn}
-            accessibilityLabel="Create moment">
-            <Icon name="plus" size={24} color={colors.text} />
+            accessibilityLabel="Moment history">
+            <Icon name="image" size={24} color={colors.text} />
           </Pressable>
         </View>
 
@@ -183,7 +184,7 @@ export function PartnerMomentHome({ partnerMoments }: PartnerMomentHomeProps) {
             style={[
               styles.replyInput,
               {
-                backgroundColor: colors.surface,
+                backgroundColor: colors.surfaceElevated,
                 color: colors.text,
                 borderColor: colors.border,
               },
@@ -209,16 +210,14 @@ export function PartnerMomentHome({ partnerMoments }: PartnerMomentHomeProps) {
             />
           </Pressable>
         </View>
-      </View>
+      </GlassSurface>
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
   card: {
-    borderRadius: 28,
     paddingBottom: 16,
-    borderWidth: StyleSheet.hairlineWidth,
   },
   topBar: {
     flexDirection: 'row',
@@ -247,6 +246,8 @@ const styles = StyleSheet.create({
   },
   reactionsRow: {
     alignItems: 'center',
+    alignSelf: 'center',
+    width: BLOB_W,
     marginTop: 8,
     marginBottom: 14,
   },

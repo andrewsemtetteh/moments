@@ -5,7 +5,7 @@ import { ActivityIndicator, Animated, Easing, StyleSheet, Text, View } from 'rea
 import { LogoMark } from '@/components/ui/Logo';
 import { ScreenBackground } from '@/components/ui/primitives';
 import { useTheme } from '@/hooks/useTheme';
-import { isAvatarPromptDone } from '@/lib/onboarding-storage';
+import { isAvatarPromptDone, isRelationshipOnboardingDone } from '@/lib/onboarding-storage';
 import { useAuthStore, useRelationshipStore } from '@/stores';
 
 export default function IndexScreen() {
@@ -42,8 +42,13 @@ export default function IndexScreen() {
       if (!relationship) {
         if (user && !user.avatar_url && !(await isAvatarPromptDone(user.id))) {
           router.replace('/(onboarding)/profile-setup');
+        } else if (user && (await isRelationshipOnboardingDone(user.id))) {
+          router.replace({
+            pathname: '/(onboarding)/create-relationship',
+            params: { anniversarySkipped: '1' },
+          });
         } else {
-          router.replace('/(onboarding)/create-relationship');
+          router.replace('/(onboarding)/anniversary-setup');
         }
         return;
       }

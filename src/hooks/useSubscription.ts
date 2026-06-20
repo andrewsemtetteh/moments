@@ -57,7 +57,7 @@ export function useSubscription() {
       timelineMoments: isPlus ? Infinity : FREE_TIMELINE_MOMENTS,
       albumStorageBytes: isPlus ? Infinity : FREE_ALBUM_STORAGE_BYTES,
       wrapped: true,
-      moodHistory: isPlus,
+      moodHistory: true,
     },
   };
 }

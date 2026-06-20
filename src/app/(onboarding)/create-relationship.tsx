@@ -1,5 +1,5 @@
 import * as Clipboard from 'expo-clipboard';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Alert, Pressable, Share, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -7,23 +7,29 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Icon } from '@/components/ui/Icon';
 import { colorWithAlpha, PrimaryButton } from '@/components/ui/primitives';
 import { PromptLink } from '@/components/ui/PromptLink';
-import { AnniversaryOnboardingField } from '@/components/onboarding/AnniversaryOnboardingField';
-import { formatAnniversaryForDb } from '@/lib/anniversary';
 import { useTheme } from '@/hooks/useTheme';
+import { markRelationshipOnboardingDone } from '@/lib/onboarding-storage';
 import * as api from '@/services/api';
 import { useAuthStore, useRelationshipStore } from '@/stores';
 import * as Haptics from 'expo-haptics';
 
 export default function CreateRelationshipScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ anniversaryDate?: string; anniversarySkipped?: string }>();
   const { colors } = useTheme();
   const user = useAuthStore((s) => s.user);
   const relationship = useRelationshipStore((s) => s.relationship);
   const setRelationship = useRelationshipStore((s) => s.setRelationship);
-  const [name, setName] = useState('Our Moments');
-  const [anniversaryDate, setAnniversaryDate] = useState(formatAnniversaryForDb(new Date()));
+  const [name, setName] = useState('');
   const [inviteCode, setInviteCode] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  const anniversaryDate =
+    typeof params.anniversaryDate === 'string' && params.anniversaryDate.length > 0
+      ? params.anniversaryDate
+      : null;
+  const cameFromAnniversaryStep =
+    anniversaryDate !== null || params.anniversarySkipped === '1';
 
   const hasSoloSpace =
     !!relationship && relationship.status !== 'ended' && !relationship.user_2_id;
@@ -58,6 +64,11 @@ export default function CreateRelationshipScreen() {
     }
   }, [relationship, inviteCode, hasSoloSpace, router, setRelationship]);
 
+  useEffect(() => {
+    if (inviteCode || hasSoloSpace || cameFromAnniversaryStep) return;
+    router.replace('/(onboarding)/anniversary-setup');
+  }, [inviteCode, hasSoloSpace, cameFromAnniversaryStep, router]);
+
   const create = async () => {
     if (!user) return;
     if (hasSoloSpace) {
@@ -67,9 +78,17 @@ export default function CreateRelationshipScreen() {
       );
       return;
     }
+
+    const trimmed = name.trim();
+    if (!trimmed) {
+      Alert.alert('Name your space', 'Give your shared space a name before continuing.');
+      return;
+    }
+
     setLoading(true);
     try {
-      const rel = await api.createRelationship(user.id, name, anniversaryDate);
+      const rel = await api.createRelationship(user.id, trimmed, anniversaryDate);
+      await markRelationshipOnboardingDone(user.id);
       setRelationship(rel);
       setInviteCode(rel.invite_code);
     } catch (e: unknown) {
@@ -105,19 +124,19 @@ export default function CreateRelationshipScreen() {
           <>
             <Text style={[styles.title, { color: colors.text }]}>Create your relationship</Text>
             <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-              Name your shared space, then share the invite code with your partner
+              Pick a name for your shared space and invite your partner.
             </Text>
-            <Text style={[styles.hint, { color: colors.textTertiary }]}>
-              Both of you already created a space? Tap Join instead and enter their code — not yours.
-            </Text>
+
+            <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Space name</Text>
             <TextInput
               style={[styles.input, { color: colors.text, backgroundColor: colors.surface, borderColor: colors.border }]}
               value={name}
               onChangeText={setName}
               placeholder="e.g. Our Moments"
               placeholderTextColor={colors.textTertiary}
+              autoCorrect={false}
             />
-            <AnniversaryOnboardingField value={anniversaryDate} onChange={setAnniversaryDate} />
+
             <PrimaryButton label={loading ? 'Creating…' : 'Create Relationship'} onPress={create} loading={loading} style={styles.btn} />
             <PromptLink
               prompt="Have an invite code?"
@@ -183,9 +202,9 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   content: { flex: 1, padding: 24, justifyContent: 'center', alignItems: 'center', width: '100%' },
   title: { fontSize: 28, fontWeight: '800', textAlign: 'center', letterSpacing: -0.5, width: '100%' },
-  subtitle: { fontSize: 16, textAlign: 'center', lineHeight: 22, marginTop: 10, maxWidth: 320 },
-  hint: { fontSize: 14, textAlign: 'center', lineHeight: 20, marginTop: 12, maxWidth: 320 },
-  input: { borderWidth: 1, borderRadius: 14, padding: 16, fontSize: 18, width: '100%', marginTop: 28, textAlign: 'center' },
+  subtitle: { fontSize: 16, textAlign: 'center', lineHeight: 22, marginTop: 10, marginBottom: 8, maxWidth: 320 },
+  inputLabel: { fontSize: 13, fontWeight: '700', width: '100%', marginTop: 28, marginBottom: 8, letterSpacing: 0.2 },
+  input: { borderWidth: 1, borderRadius: 14, padding: 16, fontSize: 18, width: '100%', textAlign: 'center' },
   btn: { width: '100%', marginTop: 16 },
   laterWrap: { width: '100%', marginTop: 28, alignItems: 'center' },
   dividerRow: {

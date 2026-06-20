@@ -306,7 +306,10 @@ export const LOCKET_EXTRA_EMOJIS = ['✨', '😍', '👏', '😮', '🙌', '😢
 export const HOME_MOMENT_TTL_MS = 24 * 60 * 60 * 1000;
 
 export function isMomentWithinHomeWindow(moment: Moment, now = Date.now()): boolean {
-  return now - new Date(moment.created_at).getTime() <= HOME_MOMENT_TTL_MS;
+  const created = new Date(moment.created_at).getTime();
+  if (!Number.isFinite(created)) return false;
+  const age = now - created;
+  return age >= 0 && age <= HOME_MOMENT_TTL_MS;
 }
 
 export function filterMomentsForHome(moments: Moment[]): Moment[] {
@@ -341,7 +344,9 @@ export function getPartnerActiveMoments(
   const partnerMedia = filterMediaMoments(
     moments.filter((m) => (partnerId ? m.user_id === partnerId : !!userId && m.user_id !== userId)),
   );
-  return filterMomentsForHome(partnerMedia);
+  return filterMomentsForHome(partnerMedia).sort(
+    (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+  );
 }
 
 export function getUserReactionEmoji(

@@ -2,7 +2,7 @@ import { useEffect, useMemo } from 'react';
 
 import type { MapMarker } from '@/components/moments/LocationMapPreview';
 import { hasValidCoords } from '@/lib/location';
-import { supabase } from '@/lib/supabase';
+import { fetchPartnerProfileRow, subscribePartnerLocation } from '@/lib/partner-location';
 import { useAuthStore, useRelationshipStore } from '@/stores';
 import type { UserProfile } from '@/types/database';
 
@@ -82,27 +82,20 @@ export function usePartnerLocationRealtime() {
 
     let cancelled = false;
 
-    const refresh = async () => {
-      const { data } = await supabase.from('users').select('*').eq('id', partnerId).maybeSingle();
-      if (!cancelled && data) {
-        setPartner(data as UserProfile);
-      }
+    const applyPartner = async () => {
+      const profile = await fetchPartnerProfileRow(partnerId);
+      if (!cancelled && profile) setPartner(profile);
     };
 
-    const channel = supabase
-      .channel(`partner-location:${partnerId}`)
-      .on(
-        'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'users', filter: `id=eq.${partnerId}` },
-        () => {
-          void refresh();
-        },
-      )
-      .subscribe();
+    void applyPartner();
+
+    const unsubscribe = subscribePartnerLocation(partnerId, () => {
+      void applyPartner();
+    });
 
     return () => {
       cancelled = true;
-      void supabase.removeChannel(channel);
+      unsubscribe();
     };
   }, [partnerId, setPartner]);
 }

@@ -57,6 +57,7 @@ export const AnalyticsEvents = {
   JOURNAL_ENTRY_CREATED: 'journal_entry_created',
   STREAK_UPDATED: 'streak_updated',
   MOOD_SELECTED: 'mood_selected',
+  MOOD_VIEWED: 'mood_viewed',
   TAB_VIEWED: 'tab_viewed',
   WATCH_PARTY_CREATED: 'watch_party_created',
   WATCH_INVITATION_SENT: 'invitation_sent',

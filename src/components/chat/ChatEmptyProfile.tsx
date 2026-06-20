@@ -1,6 +1,8 @@
+import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { PartnerStatusLine } from '@/components/chat/PartnerStatusLine';
+import { FullScreenImageModal } from '@/components/ui/FullScreenImageModal';
 import { Avatar } from '@/components/ui/primitives';
 import { useTheme } from '@/hooks/useTheme';
 import { formatPartnerStatus } from '@/lib/partner-status';
@@ -26,6 +28,7 @@ export function ChatEmptyProfile({
   onOpenAvatar,
 }: Props) {
   const { colors } = useTheme();
+  const [showPhoto, setShowPhoto] = useState(false);
   const status = formatPartnerStatus(isTyping, isOnline, lastSeenAt);
 
   const since = relationship?.created_at
@@ -40,6 +43,8 @@ export function ChatEmptyProfile({
     <View style={styles.container}>
       <Pressable
         onPress={onOpenAvatar ?? onOpenProfile}
+        onLongPress={() => setShowPhoto(true)}
+        delayLongPress={400}
         accessibilityRole="button"
         accessibilityLabel="View partner profile">
         <View style={styles.avatarWrap}>
@@ -75,6 +80,14 @@ export function ChatEmptyProfile({
       <Pressable onPress={onOpenProfile} style={[styles.profileBtn, { borderColor: colors.border }]}>
         <Text style={[styles.profileBtnText, { color: colors.accent }]}>View profile</Text>
       </Pressable>
+
+      <FullScreenImageModal
+        visible={showPhoto}
+        imageUrl={partner?.avatar_url}
+        fallbackName={partner?.name}
+        title={partner?.name ?? 'Partner'}
+        onClose={() => setShowPhoto(false)}
+      />
     </View>
   );
 }

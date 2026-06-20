@@ -8,6 +8,7 @@ import { Avatar } from '@/components/ui/primitives';
 import { Icon } from '@/components/ui/Icon';
 import { useTheme } from '@/hooks/useTheme';
 import {
+  filterMomentsForHome,
   groupMomentsByUser,
   momentHasVisual,
   partnerHasUnseenMoments,
@@ -33,23 +34,28 @@ export function MomentsStrip({ moments, partnerOnly = false }: MomentsStripProps
   const openMomentViewer = useUIStore((s) => s.openMomentViewer);
 
   const { mine, theirs } = groupMomentsByUser(moments, user?.id ?? '', partner?.id);
-  const myLatest = mine[0];
-  const partnerLatest = theirs[0];
+  const myRecent = filterMomentsForHome(mine);
+  const theirRecent = filterMomentsForHome(theirs);
+  const myLatest = myRecent[0];
+  const partnerLatest = theirRecent[0];
   const partnerUnseen = partnerHasUnseenMoments(moments, user?.id ?? '', partner?.id);
 
   const openMine = () => {
-    if (mine.length > 0) {
+    if (myRecent.length > 0) {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      openMomentViewer(mine, 0, { playback: 'story' });
+      openMomentViewer(myRecent, 0, { playback: 'story' });
     } else {
       setShowMomentCreator(true);
     }
   };
 
+  const openSend = openMine;
+
   const openTheirs = () => {
-    if (theirs.length === 0) return;
+    const theirRecent = filterMomentsForHome(theirs);
+    if (theirRecent.length === 0) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    openMomentViewer(theirs, 0, { playback: 'story' });
+    openMomentViewer(theirRecent, 0, { playback: 'story' });
   };
 
   return (
@@ -58,14 +64,14 @@ export function MomentsStrip({ moments, partnerOnly = false }: MomentsStripProps
         <StoryRing
           label="You"
           gradient={colors.gradient}
-          hasStory={mine.length > 0}
+          hasStory={myRecent.length > 0}
           onPress={openMine}
-          isAdd={mine.length === 0}>
+          isAdd={myRecent.length === 0}>
           {myLatest && momentHasVisual(myLatest) ? (
             <Image source={{ uri: myLatest.media_url! }} style={styles.ringImage} contentFit="cover" />
           ) : (
             <View style={[styles.ringPlaceholder, { backgroundColor: colors.surfaceElevated }]}>
-              {mine.length === 0 ? (
+              {myRecent.length === 0 ? (
                 <Icon name="plus" size={26} color={colors.accent} />
               ) : (
                 <Avatar name={user?.name} imageUrl={user?.avatar_url} size={INNER - 4} />
@@ -77,20 +83,24 @@ export function MomentsStrip({ moments, partnerOnly = false }: MomentsStripProps
 
       {partnerOnly && (
         <Pressable
-          onPress={() => setShowMomentCreator(true)}
+          onPress={openSend}
           style={({ pressed }) => [styles.ringItem, pressed && { opacity: 0.88 }]}>
           <LinearGradient
-            colors={colors.gradient}
+            colors={myRecent.length > 0 ? colors.gradient : [colors.border, colors.border]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.ringOuter}>
             <View style={[styles.ringInner, { backgroundColor: colors.background }]}>
-              <View style={[styles.ringPlaceholder, { backgroundColor: colors.surfaceElevated }]}>
-                <Icon name="camera" size={26} color={colors.accent} />
-              </View>
-              <View style={[styles.addBadge, { backgroundColor: colors.accent, borderColor: colors.background }]}>
-                <Icon name="plus" size={12} color={colors.onAccent} />
-              </View>
+              {myLatest && momentHasVisual(myLatest) ? (
+                <Image source={{ uri: myLatest.media_url! }} style={styles.ringImage} contentFit="cover" />
+              ) : (
+                <View style={[styles.ringPlaceholder, { backgroundColor: colors.surfaceElevated }]}>
+                  <Icon name="camera" size={26} color={colors.accent} />
+                </View>
+              )}
+            </View>
+            <View style={[styles.sendAddBadge, { backgroundColor: colors.accent, borderColor: colors.background }]}>
+              <Icon name="plus" size={12} color={colors.onAccent} />
             </View>
           </LinearGradient>
           <Text style={[styles.ringLabel, { color: colors.textSecondary }]}>Send</Text>
@@ -101,10 +111,10 @@ export function MomentsStrip({ moments, partnerOnly = false }: MomentsStripProps
         <StoryRing
           label={partner.name?.split(' ')[0] ?? 'Partner'}
           gradient={['#5b8def', '#9b6bff', '#e85d75']}
-          hasStory={theirs.length > 0}
+          hasStory={theirRecent.length > 0}
           unseen={partnerUnseen}
           onPress={openTheirs}
-          dimmed={theirs.length === 0}>
+          dimmed={theirRecent.length === 0}>
           {partnerLatest && momentHasVisual(partnerLatest) ? (
             <Image source={{ uri: partnerLatest.media_url! }} style={styles.ringImage} contentFit="cover" />
           ) : (
@@ -115,27 +125,31 @@ export function MomentsStrip({ moments, partnerOnly = false }: MomentsStripProps
         </StoryRing>
       )}
 
-      <Pressable
-        onPress={() => setShowMomentHistory(true)}
-        style={({ pressed }) => [
-          styles.composeChip,
-          { backgroundColor: colors.surface, borderColor: colors.border },
-          pressed && { opacity: 0.85 },
-        ]}>
-        <Icon name="image" size={18} color={colors.accent} />
-        <Text style={[styles.composeText, { color: colors.text }]}>History</Text>
-      </Pressable>
+      {!partnerOnly && (
+        <>
+          <Pressable
+            onPress={() => setShowMomentHistory(true)}
+            style={({ pressed }) => [
+              styles.composeChip,
+              { backgroundColor: colors.surface, borderColor: colors.border },
+              pressed && { opacity: 0.85 },
+            ]}>
+            <Icon name="image" size={18} color={colors.accent} />
+            <Text style={[styles.composeText, { color: colors.text }]}>History</Text>
+          </Pressable>
 
-      <Pressable
-        onPress={() => setShowMomentCreator(true)}
-        style={({ pressed }) => [
-          styles.composeChip,
-          { backgroundColor: colors.surface, borderColor: colors.border },
-          pressed && { opacity: 0.85 },
-        ]}>
-        <Icon name="camera" size={18} color={colors.accent} />
-        <Text style={[styles.composeText, { color: colors.text }]}>New moment</Text>
-      </Pressable>
+          <Pressable
+            onPress={() => setShowMomentCreator(true)}
+            style={({ pressed }) => [
+              styles.composeChip,
+              { backgroundColor: colors.surface, borderColor: colors.border },
+              pressed && { opacity: 0.85 },
+            ]}>
+            <Icon name="camera" size={18} color={colors.accent} />
+            <Text style={[styles.composeText, { color: colors.text }]}>New moment</Text>
+          </Pressable>
+        </>
+      )}
     </ScrollView>
   );
 }
@@ -192,7 +206,14 @@ function StoryRing({
 const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'flex-start', gap: 14, paddingVertical: 4 },
   ringItem: { alignItems: 'center', width: RING + 8 },
-  ringOuter: { width: RING, height: RING, borderRadius: RING / 2, alignItems: 'center', justifyContent: 'center' },
+  ringOuter: {
+    width: RING,
+    height: RING,
+    borderRadius: RING / 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'visible',
+  },
   ringUnseen: { transform: [{ scale: 1.03 }] },
   ringInner: { width: INNER, height: INNER, borderRadius: INNER / 2, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' },
   ringImage: { width: INNER, height: INNER },
@@ -208,6 +229,19 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  sendAddBadge: {
+    position: 'absolute',
+    bottom: (RING - INNER) / 2 - 2,
+    right: (RING - INNER) / 2 - 2,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 10,
+    elevation: 10,
   },
   composeChip: {
     flexDirection: 'row',

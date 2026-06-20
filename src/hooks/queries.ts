@@ -1,8 +1,11 @@
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useRef } from 'react';
+import { Alert } from 'react-native';
 
-import { isMissingTableError } from '@/lib/network-error';
+import { isMissingTableError, toUserFacingNetworkError, getErrorMessage } from '@/lib/network-error';
+import type { MoodHistoryFilter } from '@/lib/mood-history';
+import { resolveMoodFilterUserId as resolveMoodHistoryUserId } from '@/lib/mood-history';
 import { getEffectiveTier } from '@/lib/subscription';
 import { supabase } from '@/lib/supabase';
 import { scheduleWatchReminder } from '@/lib/watch-reminders';
@@ -11,6 +14,7 @@ import * as api from '@/services/api';
 import { useAuthStore, useRelationshipStore, useUIStore } from '@/stores';
 import type {
     Message,
+    MoodLog,
     StreamingConnection,
     WatchlistItem,
     WatchSession,
@@ -170,6 +174,7 @@ export function useSendMessage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['messages', relationship?.id] });
       queryClient.invalidateQueries({ queryKey: ['unreadMessages', relationship?.id, user?.id] });
+      queryClient.invalidateQueries({ queryKey: ['streak', relationship?.id] });
     },
   });
 }
@@ -230,10 +235,20 @@ export function useCreateJournalEntry() {
 
 export function useMoods() {
   const relationship = useRelationshipStore((s) => s.relationship);
+  const user = useAuthStore((s) => s.user);
   return useQuery({
     queryKey: ['moods', relationship?.id],
-    queryFn: () => api.fetchLatestMoods(relationship!.id),
-    enabled: !!relationship?.id,
+    queryFn: () => {
+      const rel = useRelationshipStore.getState().relationship;
+      const currentUser = useAuthStore.getState().user;
+      const memberIds = rel
+        ? ([rel.user_1_id, rel.user_2_id, currentUser?.id].filter(Boolean) as string[])
+        : currentUser?.id
+          ? [currentUser.id]
+          : undefined;
+      return api.fetchLatestMoods(relationship!.id, memberIds);
+    },
+    enabled: !!relationship?.id && !!user?.id,
     refetchInterval: 60_000,
   });
 }
@@ -248,12 +263,85 @@ export function useMoodFrequency() {
   });
 }
 
+export function useMoodHistory(filter: MoodHistoryFilter) {
+  const relationship = useRelationshipStore((s) => s.relationship);
+  const user = useAuthStore((s) => s.user);
+  const partner = useRelationshipStore((s) => s.partner);
+  const filterUserId = resolveMoodHistoryUserId(filter, user?.id ?? '', partner?.id);
+
+  return useInfiniteQuery({
+    queryKey: ['moodHistory', relationship?.id, filterUserId],
+    queryFn: ({ pageParam }) =>
+      api.fetchMoodHistoryPage(relationship!.id, {
+        before: pageParam as string | undefined,
+        filterUserId,
+        limit: 50,
+      }),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (lastPage) =>
+      lastPage.length === 50 ? lastPage[lastPage.length - 1]?.created_at : undefined,
+    enabled: !!relationship?.id && (filter !== 'partner' || !!partner?.id),
+  });
+}
+
+export function useMoodHistoryOverview(filter: MoodHistoryFilter) {
+  const relationship = useRelationshipStore((s) => s.relationship);
+  const user = useAuthStore((s) => s.user);
+  const partner = useRelationshipStore((s) => s.partner);
+
+  return useQuery({
+    queryKey: ['moodHistoryOverview', relationship?.id, filter, user?.id, partner?.id],
+    queryFn: () =>
+      api.fetchMoodHistoryOverview(relationship!.id, {
+        filter,
+        userId: user!.id,
+        partnerId: partner?.id,
+      }),
+    enabled: !!relationship?.id && !!user?.id && (filter !== 'partner' || !!partner?.id),
+    staleTime: 30_000,
+  });
+}
+
+export function useRestoreStreak() {
+  const queryClient = useQueryClient();
+  const relationship = useRelationshipStore((s) => s.relationship);
+
+  return useMutation({
+    mutationFn: () => api.restoreStreak(relationship!.id),
+    onSuccess: (status) => {
+      queryClient.setQueryData(['streak', relationship?.id], status);
+      queryClient.invalidateQueries({ queryKey: ['streak', relationship?.id] });
+    },
+  });
+}
+
 export function useStreak() {
   const relationship = useRelationshipStore((s) => s.relationship);
+
   return useQuery({
     queryKey: ['streak', relationship?.id],
-    queryFn: () => api.fetchStreak(relationship!.id),
+    queryFn: async () => {
+      const status = await api.fetchStreakStatus(relationship!.id);
+      void import('@/lib/push-notifications').then(({ dispatchPendingPushNotifications }) =>
+        dispatchPendingPushNotifications(),
+      );
+      return status;
+    },
     enabled: !!relationship?.id,
+    staleTime: 30_000,
+    refetchInterval: 5 * 60_000,
+  });
+}
+
+export function useMarkNotificationsRead() {
+  const queryClient = useQueryClient();
+  const user = useAuthStore((s) => s.user);
+
+  return useMutation({
+    mutationFn: (notificationIds?: string[]) => api.markNotificationsRead(notificationIds),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['notifications', user?.id] });
+    },
   });
 }
 
@@ -349,7 +437,8 @@ export function useRealtimeSubscription(
     | 'watch_sessions'
     | 'watch_watchlist'
     | 'watch_messages'
-    | 'quiz_live_sessions',
+    | 'quiz_live_sessions'
+    | 'streaks',
 ) {
   const queryClient = useQueryClient();
   const queryClientRef = useRef(queryClient);
@@ -394,10 +483,26 @@ export function useRealtimeSubscription(
             qc.invalidateQueries({ queryKey: ['quizLiveSession', relationship.id] });
           }
           if (table === 'moments') qc.invalidateQueries({ queryKey: ['moments', relationship.id] });
-          if (table === 'mood_logs') qc.invalidateQueries({ queryKey: ['moods', relationship.id] });
+          if (table === 'mood_logs') {
+            qc.invalidateQueries({ queryKey: ['moods', relationship.id] });
+            qc.invalidateQueries({ queryKey: ['moodHistory', relationship.id] });
+            qc.invalidateQueries({ queryKey: ['moodHistoryOverview', relationship.id] });
+            const userId = useAuthStore.getState().user?.id;
+            qc.invalidateQueries({ queryKey: ['moodFrequency', relationship.id, userId] });
+          }
           if (table === 'calendar_events') {
             qc.invalidateQueries({ queryKey: ['calendar', relationship.id] });
             qc.invalidateQueries({ queryKey: ['calendarUpcoming', relationship.id] });
+          }
+          if (table === 'streaks') {
+            qc.invalidateQueries({ queryKey: ['streak', relationship.id] });
+          }
+          if (table === 'notifications') {
+            const userId = useAuthStore.getState().user?.id;
+            qc.invalidateQueries({ queryKey: ['notifications', userId] });
+            void import('@/lib/push-notifications').then(({ dispatchPendingPushNotifications }) =>
+              dispatchPendingPushNotifications(),
+            );
           }
         },
       )
@@ -426,10 +531,59 @@ export function useUpdateMood() {
   const user = useAuthStore((s) => s.user);
 
   return useMutation({
-    mutationFn: (mood: string) => api.updateMood(relationship!.id, user!.id, mood),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['moods', relationship?.id] });
+    mutationFn: async (mood: string) => {
+      const authUser = useAuthStore.getState().user;
+      if (!authUser?.id) throw new Error('Not signed in');
+
+      const { relationship: fresh, partner } = await api.fetchRelationship(authUser.id);
+      const relId = fresh?.id ?? relationship?.id;
+      if (!relId) throw new Error('Connect with your partner before logging a mood.');
+
+      if (fresh) useRelationshipStore.getState().setRelationship(fresh);
+      if (partner) useRelationshipStore.getState().setPartner(partner);
+
+      return api.updateMood(relId, mood);
+    },
+    onMutate: async (mood) => {
+      if (!relationship?.id || !user?.id) return;
+      const queryKey = ['moods', relationship.id] as const;
+      await queryClient.cancelQueries({ queryKey });
+      const previous = queryClient.getQueryData<Record<string, MoodLog>>(queryKey);
+      queryClient.setQueryData<Record<string, MoodLog>>(queryKey, {
+        ...previous,
+        [user.id]: {
+          ...(previous?.[user.id] ?? {}),
+          id: previous?.[user.id]?.id ?? `optimistic-${user.id}`,
+          relationship_id: relationship.id,
+          user_id: user.id,
+          mood: mood as MoodLog['mood'],
+          created_at: new Date().toISOString(),
+        },
+      });
+      return { previous };
+    },
+    onError: (error, _mood, context) => {
+      if (relationship?.id && context?.previous !== undefined) {
+        queryClient.setQueryData(['moods', relationship.id], context.previous);
+      }
+      const message = getErrorMessage(error) ?? toUserFacingNetworkError(error, 'Could not save your mood. Please try again.').message;
+      Alert.alert('Mood not saved', message);
+    },
+    onSuccess: (data) => {
+      if (relationship?.id) {
+        queryClient.setQueryData<Record<string, MoodLog>>(['moods', relationship.id], (old) => ({
+          ...old,
+          [data.user_id]: data,
+        }));
+      }
       queryClient.invalidateQueries({ queryKey: ['moodFrequency', relationship?.id, user?.id] });
+      queryClient.invalidateQueries({ queryKey: ['moodHistory', relationship?.id] });
+      queryClient.invalidateQueries({ queryKey: ['moodHistoryOverview', relationship?.id] });
+      queryClient.invalidateQueries({ queryKey: ['streak', relationship?.id] });
+      queryClient.invalidateQueries({ queryKey: ['notifications'] });
+      void import('@/lib/push-notifications').then(({ dispatchPendingPushNotifications }) =>
+        dispatchPendingPushNotifications(),
+      );
     },
   });
 }

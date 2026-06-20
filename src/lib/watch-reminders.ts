@@ -2,15 +2,10 @@
 // remote-notification support there), so it is loaded lazily and defensively.
 // Local scheduled reminders still work in a development/production build.
 
-type NotificationsModule = typeof import('expo-notifications');
+import { loadExpoNotifications } from '@/lib/expo-notifications-safe';
 
-function loadNotifications(): NotificationsModule | null {
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    return require('expo-notifications') as NotificationsModule;
-  } catch {
-    return null;
-  }
+function loadNotifications() {
+  return loadExpoNotifications();
 }
 
 /**

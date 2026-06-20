@@ -9,13 +9,12 @@ import {
     ActivityIndicator,
     Modal,
     Platform,
-    Pressable,
     ScrollView,
     StyleSheet,
     Text,
     View,
 } from 'react-native';
-import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { GestureHandlerRootView, Pressable } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { PartnerStatusLine } from '@/components/chat/PartnerStatusLine';
@@ -34,7 +33,7 @@ import { useStartCall } from '@/hooks/useStartCall';
 import { useTheme } from '@/hooks/useTheme';
 import { getFirstName } from '@/lib/avatar-initial';
 import { hasValidCoords } from '@/lib/location';
-import { momentHasVisual } from '@/lib/moment-display';
+import { filterMomentsForHome, momentHasVisual } from '@/lib/moment-display';
 import { formatPartnerStatus } from '@/lib/partner-status';
 import * as api from '@/services/api';
 import { useAuthStore, useRelationshipStore, useUIStore } from '@/stores';
@@ -80,7 +79,11 @@ export function PartnerProfileModal() {
   const { data: moods } = useMoods();
   const { data: streak } = useStreak();
   const partnerActiveMoments = usePartnerActiveMoments();
-  const hasPartnerMoment = partnerActiveMoments.length > 0;
+  const recentPartnerMoments = useMemo(
+    () => filterMomentsForHome(partnerActiveMoments),
+    [partnerActiveMoments],
+  );
+  const hasPartnerMoment = recentPartnerMoments.length > 0;
   const startCall = useStartCall();
   const { isOnline, lastSeenAt } = usePartnerPresence(
     relationship?.id,
@@ -147,8 +150,12 @@ export function PartnerProfileModal() {
   };
 
   const viewPartnerMoment = () => {
+    if (recentPartnerMoments.length === 0) {
+      viewProfilePhoto();
+      return;
+    }
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    openMomentViewer(partnerActiveMoments, 0, {
+    openMomentViewer(recentPartnerMoments, 0, {
       playback: 'story',
       sectionLabel: `${getFirstName(partnerName) ?? 'Partner'}'s moment`,
       returnToPartnerProfile: true,
@@ -156,7 +163,6 @@ export function PartnerProfileModal() {
   };
 
   const viewProfilePhoto = () => {
-    if (!profile?.avatar_url?.trim()) return;
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setShowAvatar(true);
   };
@@ -212,7 +218,7 @@ export function PartnerProfileModal() {
     return formatDistanceToNow(updated, { addSuffix: true });
   }, [profile?.location_updated_at]);
 
-  const latestPartnerMoment = partnerActiveMoments[0];
+  const latestPartnerMoment = recentPartnerMoments[0];
   const storyPreviewUrl =
     latestPartnerMoment && momentHasVisual(latestPartnerMoment)
       ? latestPartnerMoment.media_url
@@ -274,7 +280,7 @@ export function PartnerProfileModal() {
                 onPress={onAvatarPress}
                 onLongPress={onAvatarLongPress}
                 delayLongPress={400}
-                disabled={!hasPartnerMoment && !profile.avatar_url?.trim()}
+                disabled={!hasPartnerMoment && !profile.avatar_url?.trim() && !profile.name?.trim()}
                 style={styles.avatarPress}
                 accessibilityRole="button"
                 accessibilityHint={
@@ -463,6 +469,7 @@ export function PartnerProfileModal() {
       <FullScreenImageModal
         visible={showAvatar}
         imageUrl={profile?.avatar_url}
+        fallbackName={profile?.name}
         title={partnerName}
         onClose={() => setShowAvatar(false)}
       />

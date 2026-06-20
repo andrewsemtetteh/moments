@@ -9,6 +9,7 @@ export default function OnboardingLayout() {
   return (
     <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right' }}>
       <Stack.Screen name="profile-setup" />
+      <Stack.Screen name="anniversary-setup" />
       <Stack.Screen name="create-relationship" />
       <Stack.Screen name="join-relationship" />
       <Stack.Screen name="welcome" />

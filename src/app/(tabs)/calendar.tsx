@@ -9,7 +9,8 @@ import {
     startOfMonth,
 } from 'date-fns';
 import * as Haptics from 'expo-haptics';
-import { useMemo, useState } from 'react';
+import { useLocalSearchParams } from 'expo-router';
+import { useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { AddEventSheet } from '@/components/calendar/AddEventSheet';
@@ -31,12 +32,19 @@ import type { EventType } from '@/types/database';
 const WEEK_DAYS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'] as const;
 
 export default function CalendarScreen() {
+  const { create } = useLocalSearchParams<{ create?: string }>();
   const { colors } = useTheme();
   const relationship = useRelationshipStore((s) => s.relationship);
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date | null>(new Date());
   const [showCreate, setShowCreate] = useState(false);
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (create === '1' || create === 'true') {
+      setShowCreate(true);
+    }
+  }, [create]);
 
   const { data: events, refetch } = useCalendarEvents(currentMonth);
   const { data: upcoming } = useUpcomingCalendarEvents();

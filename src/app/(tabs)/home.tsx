@@ -1,11 +1,12 @@
 import { format } from 'date-fns';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter, type Href } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, RefreshControl, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { MoodSnapshot } from '@/components/home/MoodSnapshot';
 import { StreakBadge } from '@/components/home/StreakBadge';
+import { StreakRestoreBanner } from '@/components/home/StreakRestoreBanner';
 import { AppHeader } from '@/components/layout/AppHeader';
 import { ScreenContainer } from '@/components/layout/ScreenContainer';
 import { TabScreenScroll } from '@/components/layout/TabScreenScroll';
@@ -26,15 +27,16 @@ import { useOpenPartnerProfile } from '@/hooks/useOpenPartnerProfile';
 import { useSubscription } from '@/hooks/useSubscription';
 import { useTheme } from '@/hooks/useTheme';
 import { getFirstName } from '@/lib/avatar-initial';
-import { enrichMomentsWithAuthors, filterMediaMoments, filterMomentsForHome, getMomentSenderFirstName } from '@/lib/moment-display';
+import { enrichMomentsWithAuthors, filterMediaMoments, filterMomentsForHome } from '@/lib/moment-display';
 import { shouldShowEntryPaywall } from '@/lib/paywall-storage';
+import { openActivities, openCalendar, openChat } from '@/lib/router';
 import * as api from '@/services/api';
 import { useAuthStore, useRelationshipStore, useUIStore } from '@/stores';
 
 const QUICK_ACTIONS: { id: string; label: string; icon: IconName }[] = [
   { id: 'bored', label: "We're bored", icon: 'dice' },
   { id: 'moment', label: 'Send moment', icon: 'camera' },
-  { id: 'plan', label: 'Plan a date', icon: 'calendar' },
+  { id: 'plan', label: 'Make plans', icon: 'calendar' },
   { id: 'journal', label: 'Journal', icon: 'journal' },
 ];
 
@@ -45,7 +47,6 @@ export default function HomeScreen() {
   const partner = useRelationshipStore((s) => s.partner);
   const user = useAuthStore((s) => s.user);
   const setShowMomentCreator = useUIStore((s) => s.setShowMomentCreator);
-  const setShowWrapped = useUIStore((s) => s.setShowWrapped);
   const setShowMoodHistory = useUIStore((s) => s.setShowMoodHistory);
   const openPaywall = useUIStore((s) => s.openPaywall);
   const openPartnerProfile = useOpenPartnerProfile();
@@ -99,10 +100,7 @@ export default function HomeScreen() {
       user,
       partner,
     );
-    const partnerOnly = enriched.filter((m) =>
-      partner?.id ? m.user_id === partner.id : m.user_id !== user?.id,
-    );
-    return filterMomentsForHome(partnerOnly);
+    return filterMomentsForHome(enriched);
   }, [momentsData, user, partner]);
   const upcomingEvents = events?.slice(0, 3) ?? [];
 
@@ -116,17 +114,17 @@ export default function HomeScreen() {
     if (!challenge || !relationship || !user || !dailyResponse.trim()) return;
     await api.respondToDailyChallenge(challenge.id, user.id, relationship, dailyResponse.trim());
     setDailyResponse('');
-    refetchChallenge();
+    await Promise.all([refetchChallenge(), refetchStreak()]);
   };
 
   const onQuickAction = (id: string) => {
-    if (id === 'bored') router.push('/(tabs)/activities');
+    if (id === 'bored') openActivities('games');
     else if (id === 'moment') setShowMomentCreator(true);
-    else if (id === 'plan') router.push('/(tabs)/calendar');
-    else if (id === 'journal') router.push('/journal/compose' as Href);
+    else if (id === 'plan') openCalendar({ create: true });
+    else if (id === 'journal') router.push('/journal');
   };
 
-  const smartSuggestion = getSmartSuggestion(moods ?? {}, upcomingEvents.length);
+  const smartSuggestion = getSmartSuggestion(moods ?? {}, upcomingEvents.length, partner?.name);
   const myResponded =
     challenge && user && relationship
       ? (relationship.user_1_id === user.id ? challenge.user_1_response : challenge.user_2_response)
@@ -160,9 +158,17 @@ export default function HomeScreen() {
               </Pressable>
             </View>
             {streak && (
-              <View style={styles.heroStreak}>
+              <View
+                style={[
+                  styles.heroStreak,
+                  streak.at_risk && styles.heroStreakAtRisk,
+                ]}>
                 <Icon name="fire" size={18} color="#fff" filled strokeWidth={1.6} />
-                <Text style={styles.heroStreakText}>{streak.current_streak} days</Text>
+                <Text style={styles.heroStreakText}>
+                  {streak.current_streak > 0
+                    ? `${streak.current_streak} day${streak.current_streak === 1 ? '' : 's'}`
+                    : 'Start streak'}
+                </Text>
               </View>
             )}
           </View>
@@ -181,19 +187,13 @@ export default function HomeScreen() {
         </View>
 
         {homePartnerMoments.length > 0 && (
-          <>
-            <View style={styles.section}>
-              <SectionTitle>Moments</SectionTitle>
-              <MomentsStrip moments={stripMoments} partnerOnly />
-            </View>
-
-            <View style={styles.section}>
-              <SectionTitle>
-                Moments from {getMomentSenderFirstName(homePartnerMoments[0], user, partner)}
-              </SectionTitle>
+          <View style={styles.section}>
+            <SectionTitle>Moments</SectionTitle>
+            <MomentsStrip moments={stripMoments} partnerOnly />
+            <View style={styles.partnerMomentBlock}>
               <PartnerMomentHome partnerMoments={homePartnerMoments} />
             </View>
-          </>
+          </View>
         )}
 
         <View style={styles.section}>
@@ -205,8 +205,9 @@ export default function HomeScreen() {
         </View>
 
         {streak && (
-          <View style={styles.section}>
-            <StreakBadge count={streak.current_streak} longest={streak.longest_streak} />
+          <View style={[styles.section, styles.streakSection]}>
+            <StreakBadge status={streak} />
+            <StreakRestoreBanner status={streak} />
           </View>
         )}
 
@@ -237,40 +238,30 @@ export default function HomeScreen() {
           </View>
         )}
 
-        <View style={styles.section}>
-          <SectionTitle>Your recap</SectionTitle>
-          <Card onPress={() => setShowWrapped(true)} style={styles.recapCard}>
-            <Icon name="star" size={24} color={colors.accent} filled />
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.recapTitle, { color: colors.text }]}>Wrapped {new Date().getFullYear()}</Text>
-              <Text style={[styles.recapSub, { color: colors.textSecondary }]}>See your year together</Text>
-            </View>
-            <Icon name="chevronRight" size={20} color={colors.textSecondary} />
-          </Card>
-        </View>
-
         {upcomingEvents.length > 0 && (
           <View style={styles.section}>
-            <SectionTitle action="Calendar" onAction={() => router.push('/(tabs)/calendar')}>
+            <SectionTitle action="Calendar" onAction={() => openCalendar()}>
               Coming Up
             </SectionTitle>
             {upcomingEvents.map((e) => (
-              <Card key={e.id} style={styles.eventRow}>
-                <View style={[styles.eventDateBox, { backgroundColor: colors.accentSoft }]}>
-                  <Text style={[styles.eventDay, { color: colors.accent }]}>{format(new Date(e.date_time), 'd')}</Text>
-                  <Text style={[styles.eventMonth, { color: colors.accent }]}>{format(new Date(e.date_time), 'MMM')}</Text>
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.eventTitle, { color: colors.text }]}>{e.title}</Text>
-                  <Text style={[styles.eventTime, { color: colors.textSecondary }]}>{format(new Date(e.date_time), 'EEEE · h:mm a')}</Text>
-                </View>
-              </Card>
+              <Pressable key={e.id} onPress={() => openCalendar({ dateISO: e.date_time })}>
+                <Card style={styles.eventRow}>
+                  <View style={[styles.eventDateBox, { backgroundColor: colors.accentSoft }]}>
+                    <Text style={[styles.eventDay, { color: colors.accent }]}>{format(new Date(e.date_time), 'd')}</Text>
+                    <Text style={[styles.eventMonth, { color: colors.accent }]}>{format(new Date(e.date_time), 'MMM')}</Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.eventTitle, { color: colors.text }]}>{e.title}</Text>
+                    <Text style={[styles.eventTime, { color: colors.textSecondary }]}>{format(new Date(e.date_time), 'EEEE · h:mm a')}</Text>
+                  </View>
+                </Card>
+              </Pressable>
             ))}
           </View>
         )}
 
         <View style={styles.section}>
-          <Pressable onPress={() => router.push(smartSuggestion.href)}>
+          <Pressable onPress={smartSuggestion.onPress}>
             <LinearGradient
               colors={[colors.accentSoft, colors.surface]}
               start={{ x: 0, y: 0 }}
@@ -297,23 +288,41 @@ function greeting(name?: string | null) {
 function getSmartSuggestion(
   moods: Record<string, { mood: string }>,
   eventCount: number,
-): { text: string; icon: IconName; href: Href } {
+  partnerName?: string | null,
+): { text: string; icon: IconName; onPress: () => void } {
+  const partnerFirst = getFirstName(partnerName) ?? 'your partner';
   const moodValues = Object.values(moods).map((m) => m.mood);
+
   if (moodValues.includes('stressed') || moodValues.includes('lonely')) {
     return {
-      text: 'Your partner might love a check-in message today',
+      text: `${partnerFirst} might love a check-in message today`,
       icon: 'messages',
-      href: '/(tabs)/chat',
+      onPress: () => openChat('Hey, thinking of you 💛'),
     };
   }
+
   const day = new Date().getDay();
   if (day === 0 || day === 6) {
-    return { text: "It's the weekend. Find a date idea together", icon: 'compass', href: '/(tabs)/activities' };
+    return {
+      text: `It's the weekend. Pick a bucket list idea with ${partnerFirst}`,
+      icon: 'list',
+      onPress: () => openActivities('bucket'),
+    };
   }
+
   if (eventCount === 0) {
-    return { text: 'No plans yet. Schedule something special', icon: 'calendar', href: '/(tabs)/calendar' };
+    return {
+      text: 'No plans yet. Schedule something special',
+      icon: 'calendar',
+      onPress: () => openCalendar({ create: true }),
+    };
   }
-  return { text: 'Play a quick game together to keep your streak', icon: 'gamepad', href: '/(tabs)/activities' };
+
+  return {
+    text: 'Play a quick game together to keep your streak',
+    icon: 'gamepad',
+    onPress: () => openActivities('games'),
+  };
 }
 
 const styles = StyleSheet.create({
@@ -325,12 +334,15 @@ const styles = StyleSheet.create({
   avatars: { flexDirection: 'row', alignItems: 'center' },
   avatarOverlap: { marginLeft: -14 },
   heroStreak: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(255,255,255,0.2)', paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999 },
+  heroStreakAtRisk: { backgroundColor: 'rgba(255,180,80,0.35)' },
   heroStreakText: { color: '#fff', fontWeight: '700', fontSize: 13 },
   quickRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
   quickItem: { alignItems: 'center', flex: 1, gap: 6 },
   quickIcon: { width: 56, height: 56, borderRadius: 18, alignItems: 'center', justifyContent: 'center', borderWidth: StyleSheet.hairlineWidth },
   quickLabel: { fontSize: 11, fontWeight: '600', textAlign: 'center' },
   section: { marginTop: 18 },
+  partnerMomentBlock: { marginTop: 14 },
+  streakSection: { gap: 10 },
   prompt: { fontSize: 18, lineHeight: 26, marginBottom: 14, fontWeight: '600' },
   responseInput: { borderWidth: 1, borderRadius: 12, padding: 12, minHeight: 64, fontSize: 15, marginBottom: 12, textAlignVertical: 'top' },
   answered: { flexDirection: 'row', alignItems: 'center', gap: 8, borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 12 },
@@ -342,7 +354,4 @@ const styles = StyleSheet.create({
   eventTime: { fontSize: 13, marginTop: 2 },
   suggestion: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16, borderRadius: 18, borderWidth: StyleSheet.hairlineWidth },
   suggestionText: { flex: 1, fontSize: 15, lineHeight: 21, fontWeight: '600' },
-  recapCard: { flexDirection: 'row', alignItems: 'center', gap: 14 },
-  recapTitle: { fontSize: 16, fontWeight: '800' },
-  recapSub: { fontSize: 13, marginTop: 2 },
 });

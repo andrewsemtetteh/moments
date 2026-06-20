@@ -168,6 +168,7 @@ export function MomentHistoryModal() {
       playback: 'focus',
       sectionLabel,
       returnToHistory: true,
+      homeWindowOnly: false,
     });
   };
 

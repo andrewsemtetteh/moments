@@ -149,9 +149,14 @@ export function MomentStoryViewer() {
 
   useEffect(() => {
     if (!viewer || !moment || !user || isMine) return;
-    void api.markMomentViewed(moment.id, user.id).then(() => {
-      queryClient.invalidateQueries({ queryKey: ['moments', relationship?.id] });
-    });
+    void api
+      .markMomentViewed(moment.id, user.id)
+      .then(() => {
+        queryClient.invalidateQueries({ queryKey: ['moments', relationship?.id] });
+      })
+      .catch(() => {
+        /* non-blocking */
+      });
   }, [viewer, moment?.id, user?.id, isMine, relationship?.id, queryClient]);
 
   useEffect(() => {

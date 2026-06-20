@@ -2,10 +2,19 @@ import { FREE_ALBUM_STORAGE_BYTES } from '@/constants/design-system';
 import * as Crypto from 'expo-crypto';
 import { getFirstName } from '@/lib/avatar-initial';
 import { extractChatStoragePath } from '@/lib/chat-media';
+import {
+  buildOverviewFromLogs,
+  getLocalTimezoneOffsetMinutes,
+  mapRpcOverview,
+  type MoodHistoryFilter,
+  type RpcMoodHistoryOverview,
+  resolveMoodFilterUserId,
+} from '@/lib/mood-history';
 import { extractMomentsStoragePath, hydrateMomentsMedia } from '@/lib/moment-media';
+import { legacyStreakToStatus, parseStreakStatus } from '@/lib/streak';
 import { SharedAlbumStorageLimitError } from '@/lib/shared-album';
 import { hydrateSharedAlbumItems } from '@/lib/shared-album-media';
-import { isMissingTableError } from '@/lib/network-error';
+import { isMissingTableError, getErrorMessage } from '@/lib/network-error';
 import { hasActiveUserSubscription } from '@/lib/subscription';
 import { supabase } from '@/lib/supabase';
 import type {
@@ -21,6 +30,7 @@ import type {
     Notification,
     Relationship,
     SharedGoal,
+    StreakStatus,
     Streak,
     StreamingConnection,
     SubscriptionTier,
@@ -53,6 +63,34 @@ function generateInviteCode(): string {
     code += chars.charAt(Math.floor(Math.random() * chars.length));
   }
   return code;
+}
+
+function pickPrimaryRelationship(relationships: Relationship[], userId: string): Relationship | null {
+  if (relationships.length === 0) return null;
+
+  const score = (rel: Relationship) => {
+    if (rel.status === 'active' && rel.user_1_id && rel.user_2_id) return 400;
+    if (rel.status === 'pending' && rel.user_2_id) return 300;
+    if (rel.status === 'pending' && rel.user_1_id === userId && !rel.user_2_id) return 200;
+    return 100;
+  };
+
+  return [...relationships].sort((a, b) => {
+    const diff = score(b) - score(a);
+    if (diff !== 0) return diff;
+    return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+  })[0];
+}
+
+export async function fetchPartnerProfile(userId: string): Promise<UserProfile | null> {
+  const { data, error } = await supabase.from('users').select('*').eq('id', userId).maybeSingle();
+  if (!error && data) return data as UserProfile;
+
+  const { data: rpcData, error: rpcError } = await supabase.rpc('get_partner_profile', {
+    p_user_id: userId,
+  });
+  if (rpcError || !rpcData) return null;
+  return rpcData as UserProfile;
 }
 
 export async function fetchProfile(userId: string): Promise<UserProfile | null> {
@@ -114,17 +152,19 @@ export async function fetchRelationship(userId: string): Promise<{
     .or(`user_1_id.eq.${userId},user_2_id.eq.${userId}`)
     .neq('status', 'ended')
     .order('created_at', { ascending: false })
-    .limit(1);
+    .limit(10);
 
   if (error || !relationships?.length) return { relationship: null, partner: null };
 
-  const relationship = relationships[0] as Relationship;
+  const relationship = pickPrimaryRelationship(relationships as Relationship[], userId);
+  if (!relationship) return { relationship: null, partner: null };
+
   const partnerId =
     relationship.user_1_id === userId ? relationship.user_2_id : relationship.user_1_id;
 
   let partner: UserProfile | null = null;
   if (partnerId) {
-    partner = await fetchProfile(partnerId);
+    partner = await fetchPartnerProfile(partnerId);
   }
 
   return { relationship, partner };
@@ -215,34 +255,48 @@ export async function endEmptySoloRelationships(userId: string): Promise<void> {
   await Promise.all(soloSpaces.map((rel) => leaveRelationship(userId, rel.id)));
 }
 
-export async function joinRelationship(userId: string, inviteCode: string) {
-  const normalizedCode = inviteCode.toUpperCase().trim();
+function normalizeInviteCode(code: string): string {
+  return code.toUpperCase().replace(/[^A-Z0-9]/g, '').trim();
+}
 
-  const { data: rel, error: findError } = await supabase
-    .from('relationships')
-    .select('*')
-    .eq('invite_code', normalizedCode)
-    .eq('status', 'pending')
-    .is('user_2_id', null)
-    .single();
+function mapJoinError(error: { message?: string; details?: string }): Error {
+  const message = error.message ?? error.details ?? 'Please check the code and try again.';
+  if (message.includes('Invalid or expired invite code')) {
+    return new Error('Invalid or expired invite code');
+  }
+  if (message.includes('your own code')) {
+    return new Error("That's your own code. Share it with your partner, or enter their code instead.");
+  }
+  return new Error(message);
+}
 
-  if (findError || !rel) throw new Error('Invalid or expired invite code');
+export type JoinRelationshipResult = {
+  relationship: Relationship;
+  partner: UserProfile | null;
+};
 
-  if (rel.user_1_id === userId) {
-    throw new Error("That's your own code. Share it with your partner, or enter their code instead.");
+export async function joinRelationship(userId: string, inviteCode: string): Promise<JoinRelationshipResult> {
+  const normalizedCode = normalizeInviteCode(inviteCode);
+
+  if (normalizedCode.length < 6) {
+    throw new Error('Invalid or expired invite code');
   }
 
-  await endEmptySoloRelationships(userId);
+  const { data, error } = await supabase.rpc('join_relationship_by_invite', {
+    p_invite_code: normalizedCode,
+  });
 
-  const { data, error } = await supabase
-    .from('relationships')
-    .update({ user_2_id: userId, status: 'active', invite_code: null })
-    .eq('id', rel.id)
-    .select()
-    .single();
+  if (error) throw mapJoinError(error);
 
-  if (error) throw error;
-  return syncRelationshipSubscription(data as Relationship, [data.user_1_id, userId]);
+  const rel = data as Relationship | null;
+  if (!rel) throw new Error('Invalid or expired invite code');
+
+  const relationship = await syncRelationshipSubscription(rel, [rel.user_1_id, userId]);
+  const partnerId =
+    relationship.user_1_id === userId ? relationship.user_2_id : relationship.user_1_id;
+  const partner = partnerId ? await fetchPartnerProfile(partnerId) : null;
+
+  return { relationship, partner };
 }
 export async function ensureInviteCode(relationshipId: string): Promise<Relationship> {
   const { data: rel, error } = await supabase
@@ -305,14 +359,14 @@ export async function createMoment(
   },
   options?: { senderName?: string | null; partnerUserId?: string | null },
 ) {
-  const { data, error } = await supabase
-    .from('moments')
-    .insert({ relationship_id: relationshipId, user_id: userId, ...moment })
-    .select()
-    .single();
+  const { data, error } = await supabase.rpc('create_moment', {
+    p_relationship_id: relationshipId,
+    p_type: moment.type,
+    p_media_url: moment.media_url,
+    p_content: null,
+  });
   if (error) throw error;
-
-  await supabase.rpc('update_streak', { p_relationship_id: relationshipId });
+  if (!data) throw new Error('Could not create moment');
 
   const partnerId = options?.partnerUserId;
   if (partnerId && partnerId !== userId) {
@@ -331,22 +385,10 @@ export async function fetchMomentById(momentId: string) {
   return hydrated;
 }
 
-export async function markMomentViewed(momentId: string, userId: string) {
-  const { data: m, error: fetchError } = await supabase
-    .from('moments')
-    .select('viewed_by')
-    .eq('id', momentId)
-    .maybeSingle();
-  if (fetchError) throw fetchError;
-  if (!m) return;
-
-  const viewed = (m.viewed_by as string[] | null) ?? [];
-  if (viewed.includes(userId)) return;
-
-  const { error } = await supabase
-    .from('moments')
-    .update({ viewed_by: [...viewed, userId] })
-    .eq('id', momentId);
+export async function markMomentViewed(momentId: string, _userId: string) {
+  const { error } = await supabase.rpc('mark_moment_viewed', {
+    p_moment_id: momentId,
+  });
   if (error) throw error;
 }
 
@@ -561,8 +603,6 @@ export async function sendMessage(
     .single();
   if (error) throw error;
 
-  await supabase.rpc('update_streak', { p_relationship_id: relationshipId });
-
   const partnerId = options?.partnerUserId;
   if (partnerId && partnerId !== senderId) {
     await notifyPartnerNewMessage(relationshipId, partnerId, options?.senderName, data as Message);
@@ -694,25 +734,52 @@ export async function createJournalEntry(
     .select()
     .single();
   if (error) throw error;
-
-  await supabase.rpc('update_streak', { p_relationship_id: relationshipId });
   return data as JournalEntry;
 }
 
-export async function fetchLatestMoods(relationshipId: string) {
-  const { data, error } = await supabase
-    .from('mood_logs')
-    .select('*')
-    .eq('relationship_id', relationshipId)
-    .order('created_at', { ascending: false })
-    .limit(10);
-  if (error) throw error;
+export async function fetchLatestMoods(relationshipId: string, memberIds?: string[]) {
+  const {
+    data: { user: authUser },
+  } = await supabase.auth.getUser();
+
+  let userIds = uniqueUserIds([...(memberIds ?? []), authUser?.id]);
+
+  if (userIds.length === 0) {
+    const { data: rel, error: relError } = await supabase
+      .from('relationships')
+      .select('user_1_id, user_2_id')
+      .eq('id', relationshipId)
+      .maybeSingle();
+    if (relError) throw relError;
+    userIds = uniqueUserIds([rel?.user_1_id, rel?.user_2_id, authUser?.id]);
+  }
+
+  if (userIds.length === 0) return {};
+
+  const rows = await Promise.all(
+    userIds.map(async (userId) => {
+      const { data, error } = await supabase
+        .from('mood_logs')
+        .select('*')
+        .eq('relationship_id', relationshipId)
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (error) throw error;
+      return data as MoodLog | null;
+    }),
+  );
 
   const latest: Record<string, MoodLog> = {};
-  for (const log of data as MoodLog[]) {
-    if (!latest[log.user_id]) latest[log.user_id] = log;
+  for (const log of rows) {
+    if (log) latest[log.user_id] = log;
   }
   return latest;
+}
+
+function uniqueUserIds(ids: (string | null | undefined)[]): string[] {
+  return [...new Set(ids.filter(Boolean) as string[])];
 }
 
 /** Most-used moods for a user, most frequent first. */
@@ -736,16 +803,164 @@ export async function fetchMoodFrequency(relationshipId: string, userId: string,
     .map(([mood]) => mood);
 }
 
-export async function updateMood(relationshipId: string, userId: string, mood: string) {
+/** Paginated mood history for a relationship. */
+export async function fetchMoodHistoryPage(
+  relationshipId: string,
+  options?: {
+    limit?: number;
+    before?: string;
+    filterUserId?: string | null;
+  },
+) {
+  const limit = options?.limit ?? 50;
+  const { data, error } = await supabase.rpc('get_mood_history_page', {
+    p_relationship_id: relationshipId,
+    p_limit: limit,
+    p_before: options?.before ?? null,
+    p_filter_user_id: options?.filterUserId ?? null,
+  });
+
+  if (!error) {
+    return (data ?? []) as MoodLog[];
+  }
+
+  let query = supabase
+    .from('mood_logs')
+    .select('*')
+    .eq('relationship_id', relationshipId)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+
+  if (options?.filterUserId) {
+    query = query.eq('user_id', options.filterUserId);
+  }
+  if (options?.before) {
+    query = query.lt('created_at', options.before);
+  }
+
+  const fallback = await query;
+  if (fallback.error) throw fallback.error;
+  return (fallback.data ?? []) as MoodLog[];
+}
+
+export async function fetchMoodHistoryOverview(
+  relationshipId: string,
+  options: {
+    filter: MoodHistoryFilter;
+    userId: string;
+    partnerId?: string | null;
+    days?: number;
+    weeks?: number;
+  },
+) {
+  const filterUserId = resolveMoodFilterUserId(options.filter, options.userId, options.partnerId);
+  const offsetMinutes = getLocalTimezoneOffsetMinutes();
+
+  const { data, error } = await supabase.rpc('get_mood_history_overview', {
+    p_relationship_id: relationshipId,
+    p_filter_user_id: filterUserId,
+    p_days: options.days ?? 14,
+    p_weeks: options.weeks ?? 8,
+    p_offset_minutes: offsetMinutes,
+  });
+
+  if (!error && data) {
+    return mapRpcOverview(data as RpcMoodHistoryOverview, options.userId, options.partnerId);
+  }
+
+  let query = supabase
+    .from('mood_logs')
+    .select('*')
+    .eq('relationship_id', relationshipId)
+    .order('created_at', { ascending: false })
+    .limit(500);
+
+  if (filterUserId) {
+    query = query.eq('user_id', filterUserId);
+  }
+
+  const fallback = await query;
+  if (fallback.error) throw fallback.error;
+  return buildOverviewFromLogs((fallback.data ?? []) as MoodLog[], options.userId, options.partnerId);
+}
+
+/** @deprecated Use fetchMoodHistoryPage */
+export async function fetchMoodHistory(relationshipId: string, limit = 200) {
+  return fetchMoodHistoryPage(relationshipId, { limit });
+}
+
+export async function updateMood(relationshipId: string, mood: string) {
+  const { data: rpcData, error: rpcError } = await supabase.rpc('log_mood', {
+    p_relationship_id: relationshipId,
+    p_mood: mood,
+  });
+
+  if (!rpcError && rpcData) {
+    return rpcData as MoodLog;
+  }
+
+  const missingRpc =
+    rpcError &&
+    typeof rpcError === 'object' &&
+    (('code' in rpcError && String(rpcError.code) === 'PGRST202') ||
+      getErrorMessage(rpcError)?.includes('log_mood'));
+
+  if (rpcError && !missingRpc) {
+    throw rpcError;
+  }
+
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+  if (authError || !user) throw authError ?? new Error('Not authenticated');
+
   const { data, error } = await supabase
     .from('mood_logs')
-    .insert({ relationship_id: relationshipId, user_id: userId, mood })
+    .insert({ relationship_id: relationshipId, user_id: user.id, mood })
     .select()
     .single();
   if (error) throw error;
   return data as MoodLog;
 }
 
+export async function fetchStreakStatus(relationshipId: string): Promise<StreakStatus | null> {
+  const { data, error } = await supabase.rpc('get_streak_status', {
+    p_relationship_id: relationshipId,
+  });
+  if (!error && data) {
+    return parseStreakStatus(data);
+  }
+
+  const { data: row, error: rowError } = await supabase
+    .from('streaks')
+    .select('current_streak, longest_streak, last_active_date, restorable_streak, restorable_lost_at')
+    .eq('relationship_id', relationshipId)
+    .maybeSingle();
+  if (rowError || !row) return null;
+  const status = legacyStreakToStatus(relationshipId, row);
+  const canRestore =
+    status.current_streak === 0 &&
+    typeof row.restorable_streak === 'number' &&
+    row.restorable_streak > 0;
+  return {
+    ...status,
+    can_restore_streak: canRestore,
+    restorable_streak: canRestore ? row.restorable_streak : null,
+    restorable_lost_at:
+      typeof row.restorable_lost_at === 'string' ? row.restorable_lost_at : null,
+  };
+}
+
+export async function restoreStreak(relationshipId: string): Promise<StreakStatus | null> {
+  const { data, error } = await supabase.rpc('restore_streak', {
+    p_relationship_id: relationshipId,
+  });
+  if (error) throw error;
+  return parseStreakStatus(data);
+}
+
+/** @deprecated use fetchStreakStatus */
 export async function fetchStreak(relationshipId: string) {
   const { data, error } = await supabase
     .from('streaks')
@@ -849,6 +1064,26 @@ export async function fetchNotifications(userId: string) {
     .limit(50);
   if (error) throw error;
   return data as Notification[];
+}
+
+export async function markNotificationsRead(notificationIds?: string[]) {
+  const { error } = await supabase.rpc('mark_notifications_read', {
+    p_notification_ids: notificationIds?.length ? notificationIds : null,
+  });
+  if (error) throw error;
+}
+
+export async function registerPushToken(token: string | null) {
+  const { error } = await supabase.rpc('register_push_token', {
+    p_token: token,
+  });
+  if (error) throw error;
+}
+
+export async function dispatchPendingPushNotifications(limit = 10) {
+  await invokeEdgeFunction<{ sent?: number; skipped?: number }>('send-push-notification', {
+    limit,
+  });
 }
 
 export async function uploadMedia(
@@ -1230,13 +1465,14 @@ export async function sendPartnerNotification(
   type: string,
   content: string,
 ) {
-  const { error } = await supabase.from('notifications').insert({
-    relationship_id: relationshipId,
-    user_id: partnerUserId,
-    type,
-    content,
+  const { error } = await supabase.rpc('create_partner_notification', {
+    p_relationship_id: relationshipId,
+    p_recipient_id: partnerUserId,
+    p_type: type,
+    p_content: content,
   });
   if (error && !isMissingTableError(error)) throw error;
+  void dispatchPendingPushNotifications();
 }
 
 export async function notifyWatchPartyStarted(

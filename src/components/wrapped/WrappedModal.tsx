@@ -48,6 +48,7 @@ export function WrappedModal() {
             <Text style={styles.heroSub}>Your private {year} recap</Text>
           </LinearGradient>
           <StatCard colors={colors} label="Moments shared" value={String(moments.length)} icon="camera" />
+          <StatCard colors={colors} label="Current streak" value={`${streak?.current_streak ?? 0} days`} icon="fire" />
           <StatCard colors={colors} label="Longest streak" value={`${streak?.longest_streak ?? 0} days`} icon="star" />
           <StatCard colors={colors} label="Journal entries" value={String(journalEntries?.length ?? 0)} icon="journal" />
           {topMood ? (
@@ -75,7 +76,7 @@ function StatCard({
 }: {
   label: string;
   value: string;
-  icon: 'camera' | 'star' | 'journal' | 'heart';
+  icon: 'camera' | 'star' | 'journal' | 'heart' | 'fire';
   colors: ReturnType<typeof useTheme>['colors'];
 }) {
   return (

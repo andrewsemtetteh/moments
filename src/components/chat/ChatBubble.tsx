@@ -95,7 +95,7 @@ export function ChatBubble({
   }));
 
   return (
-    <View style={[styles.row, isSelf && styles.rowSelf]}>
+    <View style={[styles.row, isSelf ? styles.rowSelf : styles.rowPartner]}>
       {!isSelf && isUnread && (
         <View style={[styles.unreadDot, { backgroundColor: colors.accent }]} />
       )}
@@ -204,7 +204,7 @@ export function ChatBubble({
         <View
           style={[
             styles.reactions,
-            isSelf && { alignSelf: 'flex-end' },
+            isSelf ? styles.reactionsSelf : styles.reactionsPartner,
             { backgroundColor: colors.surfaceElevated, borderColor: colors.border },
           ]}>
           {reactions.map(([emoji, users]) => (
@@ -222,6 +222,7 @@ export function ChatBubble({
 const styles = StyleSheet.create({
   row: { marginBottom: 4, paddingHorizontal: 6, position: 'relative' },
   rowSelf: { alignItems: 'flex-end' },
+  rowPartner: { alignItems: 'flex-start' },
   unreadDot: {
     position: 'absolute',
     left: 0,
@@ -267,6 +268,7 @@ const styles = StyleSheet.create({
   time: { fontSize: 11 },
   reactions: {
     flexDirection: 'row',
+    alignSelf: 'flex-start',
     gap: 4,
     marginTop: -4,
     marginHorizontal: 8,
@@ -274,6 +276,9 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
     borderRadius: 12,
     borderWidth: StyleSheet.hairlineWidth,
+    maxWidth: '82%',
   },
+  reactionsSelf: { alignSelf: 'flex-end' },
+  reactionsPartner: { alignSelf: 'flex-start' },
   reactionText: { fontSize: 13 },
 });

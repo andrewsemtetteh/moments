@@ -16,8 +16,21 @@ export function toUserFacingNetworkError(error: unknown, fallback: string): Erro
   if (isNetworkFetchError(error)) {
     return new Error('Could not reach Moments servers. Check your internet connection and try again.');
   }
+  const message = getErrorMessage(error);
+  if (message) return new Error(message);
   if (error instanceof Error) return error;
   return new Error(fallback);
+}
+
+export function getErrorMessage(error: unknown): string | null {
+  if (!error || typeof error !== 'object') return null;
+  if ('message' in error && typeof error.message === 'string' && error.message.trim()) {
+    return error.message;
+  }
+  if ('error_description' in error && typeof error.error_description === 'string') {
+    return error.error_description;
+  }
+  return null;
 }
 
 export function isMissingTableError(error: unknown): boolean {

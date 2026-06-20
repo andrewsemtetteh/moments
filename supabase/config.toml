@@ -9,6 +9,14 @@ major_version = 15
 [auth]
 enabled = true
 
+[auth.email.template.confirmation]
+subject = "Your Moments verification code"
+content_path = "./supabase/templates/confirmation.html"
+
+[auth.email.template.magic_link]
+subject = "Your Moments sign-in code"
+content_path = "./supabase/templates/magic_link.html"
+
 [storage]
 enabled = true
 
@@ -22,4 +30,7 @@ verify_jwt = true
 verify_jwt = true
 
 [functions.update-mood]
+verify_jwt = true
+
+[functions.send-push-notification]
 verify_jwt = true

@@ -5,8 +5,10 @@ import { MoodPickerModal } from '@/components/home/MoodPickerModal';
 import { Icon } from '@/components/ui/Icon';
 import { MOOD_COLORS, MOOD_EMOJI, MOOD_LABELS, type ThemeColors } from '@/constants/design-system';
 import { useMoodFrequency } from '@/hooks/queries';
+import { useEnsurePartner } from '@/hooks/useEnsurePartner';
 import { useTheme } from '@/hooks/useTheme';
-import { getModalMoods, getQuickMoods, shouldShowMoodExpand } from '@/lib/mood-options';
+import { getFirstName } from '@/lib/avatar-initial';
+import { getDefaultQuickMoods, getModalMoods, getQuickMoods, shouldShowMoodExpand } from '@/lib/mood-options';
 import { useAuthStore, useRelationshipStore } from '@/stores';
 import type { MoodLog } from '@/types/database';
 
@@ -19,17 +21,29 @@ interface MoodSnapshotProps {
 export function MoodSnapshot({ moods, onSelectMood, onViewHistory }: MoodSnapshotProps) {
   const { colors } = useTheme();
   const user = useAuthStore((s) => s.user);
+  const relationship = useRelationshipStore((s) => s.relationship);
   const partner = useRelationshipStore((s) => s.partner);
-  const { data: frequentMoods = [] } = useMoodFrequency();
+  useEnsurePartner();
+  const { data: frequentMoods = [], isPending: moodsLoading } = useMoodFrequency();
   const [showAllMoods, setShowAllMoods] = useState(false);
 
-  const myMood = user ? moods[user.id] : null;
-  const partnerMood = partner ? moods[partner.id] : null;
+  const partnerId =
+    partner?.id ??
+    (user && relationship
+      ? relationship.user_1_id === user.id
+        ? relationship.user_2_id
+        : relationship.user_1_id
+      : null);
 
-  const quickMoods = useMemo(
-    () => getQuickMoods(frequentMoods, myMood?.mood),
-    [frequentMoods, myMood?.mood],
-  );
+  const myMood = user ? moods[user.id] : null;
+  const partnerMood = partnerId ? moods[partnerId] : null;
+
+  const quickMoods = useMemo(() => {
+    if (moodsLoading) {
+      return getDefaultQuickMoods();
+    }
+    return getQuickMoods(frequentMoods, myMood?.mood);
+  }, [moodsLoading, frequentMoods, myMood?.mood]);
   const modalMoods = useMemo(() => getModalMoods(quickMoods), [quickMoods]);
   const showExpand = shouldShowMoodExpand(quickMoods);
 
@@ -50,9 +64,9 @@ export function MoodSnapshot({ moods, onSelectMood, onViewHistory }: MoodSnapsho
       </View>
 
       <View style={styles.row}>
-        <MoodBubble name="You" mood={myMood?.mood} colors={colors} />
+        <MoodBubble name="Me" mood={myMood?.mood} colors={colors} />
         <View style={[styles.divider, { backgroundColor: colors.border }]} />
-        <MoodBubble name={partner?.name ?? 'Partner'} mood={partnerMood?.mood} colors={colors} />
+        <MoodBubble name={getFirstName(partner?.name) ?? 'Partner'} mood={partnerMood?.mood} colors={colors} />
       </View>
 
       {onSelectMood && (

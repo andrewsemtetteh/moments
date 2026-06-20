@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useLocalSearchParams } from 'expo-router';
+import { useEffect, useState } from 'react';
 import { Alert, StyleSheet } from 'react-native';
 
 import { ActivitiesIntroSection } from '@/components/activities/ActivitiesIntroSection';
@@ -14,13 +15,37 @@ import { useDailyChallenge, useRealtimeSubscription } from '@/hooks/queries';
 import * as api from '@/services/api';
 import { useRelationshipStore } from '@/stores';
 
+const EXPLORE_MODAL_KEYS = new Set<ExploreModalKey>([
+  'cards',
+  'games',
+  'quiz',
+  'bucket',
+  'goals',
+  'gratitude',
+  'daily',
+  'trivia',
+  'quizLive',
+  'compliment',
+  'twoTruths',
+  'truth',
+  'memory',
+  'playlist',
+  'watch',
+]);
+
 export default function ActivitiesScreen() {
+  const { open } = useLocalSearchParams<{ open?: string }>();
   const relationship = useRelationshipStore((s) => s.relationship);
   const partner = useRelationshipStore((s) => s.partner);
   const { data: challenge } = useDailyChallenge();
   const [activeModal, setActiveModal] = useState<ExploreModalKey | null>(null);
 
   useRealtimeSubscription('activities');
+
+  useEffect(() => {
+    if (!open || !EXPLORE_MODAL_KEYS.has(open as ExploreModalKey)) return;
+    setActiveModal(open as ExploreModalKey);
+  }, [open]);
 
   const addToCalendar = async (title: string) => {
     if (!relationship) return;

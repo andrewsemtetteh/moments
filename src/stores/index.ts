@@ -6,6 +6,7 @@ import type { CallMode, CallPhase } from '@/lib/call-types';
 import type { Relationship, UserProfile, Moment, SharedAlbumItem } from '@/types/database';
 import type { MomentReplyContext } from '@/lib/moment-reply';
 import type { ChatOfflineItem } from '@/lib/chat-offline-queue';
+import { filterMomentsForHome } from '@/lib/moment-display';
 
 export type MomentViewerPlayback = 'story' | 'focus';
 
@@ -112,6 +113,8 @@ interface UIState {
       returnToHistory?: boolean;
       returnToAlbum?: boolean;
       returnToPartnerProfile?: boolean;
+      /** When true (default for story), only moments from the last 24h are shown. */
+      homeWindowOnly?: boolean;
     },
   ) => void;
   closeMomentViewer: () => void;
@@ -180,18 +183,27 @@ export const useUIStore = create<UIState>((set) => ({
     })),
   setMomentHistoryScrollY: (momentHistoryScrollY) => set({ momentHistoryScrollY }),
   setSharedAlbumScrollY: (sharedAlbumScrollY) => set({ sharedAlbumScrollY }),
-  openMomentViewer: (moments, startIndex = 0, options) =>
+  openMomentViewer: (moments, startIndex = 0, options) => {
+    const playback = options?.playback ?? 'story';
+    const applyHomeWindow = options?.homeWindowOnly ?? playback === 'story';
+    const list = applyHomeWindow ? filterMomentsForHome(moments) : moments;
+    if (list.length === 0) return;
+    const requested = moments[startIndex];
+    const resolvedIndex =
+      requested != null ? Math.max(0, list.findIndex((m) => m.id === requested.id)) : startIndex;
+    const safeIndex = resolvedIndex >= 0 ? resolvedIndex : 0;
     set({
       momentViewer: {
-        moments,
-        startIndex: Math.max(0, Math.min(startIndex, Math.max(moments.length - 1, 0))),
-        playback: options?.playback ?? 'story',
+        moments: list,
+        startIndex: Math.max(0, Math.min(safeIndex, list.length - 1)),
+        playback,
         sectionLabel: options?.sectionLabel,
         returnToHistory: options?.returnToHistory,
         returnToAlbum: options?.returnToAlbum,
         returnToPartnerProfile: options?.returnToPartnerProfile,
       },
-    }),
+    });
+  },
   closeMomentViewer: () =>
     set((state) => ({
       momentViewer: null,

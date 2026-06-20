@@ -1,6 +1,6 @@
 import * as AppleAuthentication from 'expo-apple-authentication';
-import * as QueryParams from 'expo-auth-session/build/QueryParams';
 import { makeRedirectUri } from 'expo-auth-session';
+import * as QueryParams from 'expo-auth-session/build/QueryParams';
 import * as WebBrowser from 'expo-web-browser';
 import { Platform } from 'react-native';
 
@@ -10,11 +10,15 @@ WebBrowser.maybeCompleteAuthSession();
 
 export type OAuthProvider = 'google' | 'apple';
 
-function getRedirectUri() {
+export function getAuthRedirectUri() {
   return makeRedirectUri({
     scheme: 'moments',
     path: 'auth/callback',
   });
+}
+
+function getRedirectUri() {
+  return getAuthRedirectUri();
 }
 
 export function isRecoveryCallbackUrl(url: string) {

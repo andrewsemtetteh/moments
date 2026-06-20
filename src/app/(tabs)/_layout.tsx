@@ -2,8 +2,15 @@ import { Redirect, Tabs } from 'expo-router';
 import { Platform } from 'react-native';
 
 import { AppTabBar } from '@/components/layout/AppTabBar';
+import { NotificationSync } from '@/components/layout/NotificationSync';
 import { PartnerProfileModal } from '@/components/profile/PartnerProfileModal';
 import { WatchTogetherModal } from '@/components/watch/WatchTogetherModal';
+import { useRealtimeSubscription } from '@/hooks/queries';
+
+function TabsRealtimeSync() {
+  useRealtimeSubscription('streaks');
+  return null;
+}
 
 export default function TabsLayout() {
   if (Platform.OS === 'web') {
@@ -12,6 +19,8 @@ export default function TabsLayout() {
 
   return (
     <>
+      <TabsRealtimeSync />
+      <NotificationSync />
       <Tabs
         tabBar={(props) => <AppTabBar {...props} />}
         screenOptions={{ headerShown: false }}>

@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { PromptLink } from '@/components/ui/PromptLink';
 import { PrimaryButton } from '@/components/ui/primitives';
 import { useTheme } from '@/hooks/useTheme';
+import { markRelationshipOnboardingDone } from '@/lib/onboarding-storage';
 import { queryClient } from '@/providers/AppProviders';
 import * as api from '@/services/api';
 import { useAuthStore, useRelationshipStore } from '@/stores';
@@ -25,8 +26,8 @@ export default function JoinRelationshipScreen() {
     if (!user || !code.trim()) return;
     setLoading(true);
     try {
-      await api.joinRelationship(user.id, code.trim());
-      const { relationship, partner } = await api.fetchRelationship(user.id);
+      const { relationship, partner } = await api.joinRelationship(user.id, code.trim());
+      await markRelationshipOnboardingDone(user.id);
       setRelationship(relationship);
       setPartner(partner);
       queryClient.clear();
@@ -61,7 +62,7 @@ export default function JoinRelationshipScreen() {
           placeholder="ABC123"
           placeholderTextColor={colors.textTertiary}
           value={code}
-          onChangeText={(t) => setCode(t.toUpperCase())}
+          onChangeText={(t) => setCode(t.toUpperCase().replace(/[^A-Z0-9]/g, ''))}
           autoCapitalize="characters"
           maxLength={6}
           autoFocus
@@ -81,7 +82,7 @@ export default function JoinRelationshipScreen() {
           <PromptLink
             prompt="Starting fresh?"
             linkLabel="Create a relationship"
-            href="/(onboarding)/create-relationship"
+            href="/(onboarding)/anniversary-setup"
           />
         )}
       </View>

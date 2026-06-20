@@ -1,9 +1,9 @@
 import { useQueryClient } from '@tanstack/react-query';
 import {
-    RecordingPresets,
-    requestRecordingPermissionsAsync,
-    setAudioModeAsync,
-    useAudioRecorder,
+  RecordingPresets,
+  requestRecordingPermissionsAsync,
+  setAudioModeAsync,
+  useAudioRecorder,
 } from 'expo-audio';
 import * as Contacts from 'expo-contacts/legacy';
 import * as DocumentPicker from 'expo-document-picker';
@@ -13,19 +13,19 @@ import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-    Alert,
-    FlatList,
-    Keyboard,
-    KeyboardAvoidingView,
-    PanResponder,
-    Platform,
-    Pressable,
-    StyleSheet,
-    Text,
-    TextInput,
-    View,
-    type NativeScrollEvent,
-    type NativeSyntheticEvent,
+  Alert,
+  FlatList,
+  Keyboard,
+  KeyboardAvoidingView,
+  PanResponder,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -44,20 +44,21 @@ import { LoadingState } from '@/components/home/MoodSnapshot';
 import { SwipeDismissView } from '@/components/layout/SwipeDismissView';
 import { Icon } from '@/components/ui/Icon';
 import { Avatar } from '@/components/ui/primitives';
+import { FullScreenImageModal } from '@/components/ui/FullScreenImageModal';
 import {
-    useInfiniteMessages,
-    useMessageActions,
-    useRealtimeSubscription,
-    useSendMessage,
+  useInfiniteMessages,
+  useMessageActions,
+  useRealtimeSubscription,
+  useSendMessage,
 } from '@/hooks/queries';
 import { useOpenPartnerProfile } from '@/hooks/useOpenPartnerProfile';
 import { usePartnerPresence } from '@/hooks/usePartnerPresence';
 import { useStartCall } from '@/hooks/useStartCall';
 import { useTheme } from '@/hooks/useTheme';
 import { encodeAttachment } from '@/lib/chat-attachments';
+import { buildChatListItems, type ChatListItem } from '@/lib/chat-list';
 import { messagePreviewLabel } from '@/lib/chat-media';
 import { flushChatOfflineQueue } from '@/lib/chat-offline-flush';
-import { buildChatListItems, type ChatListItem } from '@/lib/chat-list';
 import { getCurrentPlace } from '@/lib/location';
 import { goBackOrReplace } from '@/lib/router';
 import { supabase } from '@/lib/supabase';
@@ -82,6 +83,7 @@ export default function ChatScreen() {
   const clearChatDraft = useUIStore((s) => s.clearChatDraft);
   const setChatMomentReply = useUIStore((s) => s.setChatMomentReply);
   const openPartnerProfileView = useOpenPartnerProfile();
+  const [showPartnerPhoto, setShowPartnerPhoto] = useState(false);
   const offlineQueue = useOfflineStore((s) => s.queue);
   const addToQueue = useOfflineStore((s) => s.addToQueue);
   const removeFromQueue = useOfflineStore((s) => s.removeFromQueue);
@@ -141,6 +143,24 @@ export default function ChatScreen() {
   const { react, pin, deleteForMe, deleteForAll } = useMessageActions();
 
   useRealtimeSubscription('messages');
+
+  useEffect(() => {
+    if (!relationship?.id || !user?.id || partner?.id) return;
+    const partnerId =
+      relationship.user_1_id === user.id ? relationship.user_2_id : relationship.user_1_id;
+    if (!partnerId) return;
+
+    let cancelled = false;
+    void api.fetchPartnerProfile(partnerId).then((profile) => {
+      if (!cancelled && profile) {
+        useRelationshipStore.getState().setPartner(profile);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [relationship?.id, relationship?.user_1_id, relationship?.user_2_id, user?.id, partner?.id]);
 
   const scrollToLatest = useCallback((animated = true) => {
     requestAnimationFrame(() => {
@@ -873,6 +893,8 @@ export default function ChatScreen() {
         <Pressable
           style={styles.headerProfile}
           onPress={openPartnerProfileView}
+          onLongPress={() => setShowPartnerPhoto(true)}
+          delayLongPress={400}
           accessibilityRole="button"
           accessibilityLabel="View partner info">
           <Avatar name={partner?.name} imageUrl={partner?.avatar_url} size={40} />
@@ -1169,6 +1191,14 @@ export default function ChatScreen() {
         visible={showCamera}
         onClose={() => setShowCamera(false)}
         onCapture={handleCameraCapture}
+      />
+
+      <FullScreenImageModal
+        visible={showPartnerPhoto}
+        imageUrl={partner?.avatar_url}
+        fallbackName={partner?.name}
+        title={partner?.name ?? 'Partner'}
+        onClose={() => setShowPartnerPhoto(false)}
       />
     </View>
   );

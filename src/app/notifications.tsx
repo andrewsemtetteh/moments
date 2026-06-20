@@ -1,18 +1,22 @@
 import { formatDistanceToNow } from 'date-fns';
 import { Redirect, useRouter } from 'expo-router';
+import { useEffect } from 'react';
 import { FlatList, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { openFromNotificationType } from '@/components/layout/NotificationSync';
 import { SwipeDismissView } from '@/components/layout/SwipeDismissView';
 import { Icon, type IconName } from '@/components/ui/Icon';
-import { useNotifications } from '@/hooks/queries';
+import { useMarkNotificationsRead, useNotifications } from '@/hooks/queries';
 import { useTheme } from '@/hooks/useTheme';
 import { useUIStore } from '@/stores';
+import type { Notification } from '@/types/database';
 
 const TYPE_ICON: Record<string, IconName> = {
   moment: 'camera',
   message: 'chat',
   mood: 'heart',
+  mood_update: 'heart',
   challenge: 'sparkles',
   streak: 'fire',
   activity: 'gamepad',
@@ -30,18 +34,19 @@ export default function NotificationsScreen() {
   const router = useRouter();
   const { colors } = useTheme();
   const { data: notifications } = useNotifications();
+  const markRead = useMarkNotificationsRead();
   const openWatchTogether = useUIStore((s) => s.openWatchTogether);
   const goBack = () => router.back();
 
-  const openNotification = (type: string) => {
-    if (type === 'watch_party' || type === 'watch_party_nudge') {
-      openWatchTogether();
-      router.back();
+  useEffect(() => {
+    markRead.mutate(undefined);
+  }, []);
+
+  const handleOpen = (item: Notification) => {
+    if (!item.read) {
+      markRead.mutate([item.id]);
     }
-    if (type === 'watch_party_scheduled') {
-      openWatchTogether('hub');
-      router.back();
-    }
+    openFromNotificationType(item.type, router, openWatchTogether);
   };
 
   return (
@@ -75,7 +80,7 @@ export default function NotificationsScreen() {
         }
         renderItem={({ item }) => (
           <Pressable
-            onPress={() => openNotification(item.type)}
+            onPress={() => handleOpen(item)}
             style={[styles.item, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <View style={[styles.itemIcon, { backgroundColor: colors.accentSoft }]}>
               <Icon name={TYPE_ICON[item.type] ?? 'bell'} size={18} color={colors.accent} />

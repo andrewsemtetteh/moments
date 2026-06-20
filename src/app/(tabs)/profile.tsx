@@ -25,6 +25,7 @@ import { usePlusGate } from '@/hooks/usePlusGate';
 import { useSubscription } from '@/hooks/useSubscription';
 import { useTheme } from '@/hooks/useTheme';
 import { getRelationshipAnniversaryDate } from '@/lib/anniversary';
+import { markRelationshipOnboardingDone } from '@/lib/onboarding-storage';
 import { pickAndUploadSharedAlbumMedia } from '@/lib/pick-shared-album-media';
 import { SharedAlbumStorageLimitError } from '@/lib/shared-album';
 import { formatSubscriptionExpiry } from '@/lib/subscription';
@@ -50,6 +51,7 @@ export default function ProfileScreen() {
   const resetAuth = useAuthStore((s) => s.reset);
   const resetRelationship = useRelationshipStore((s) => s.reset);
   const setShowSharedAlbum = useUIStore((s) => s.setShowSharedAlbum);
+  const setShowWrapped = useUIStore((s) => s.setShowWrapped);
   const setShowMomentCreator = useUIStore((s) => s.setShowMomentCreator);
   const openPartnerProfile = useOpenPartnerProfile();
 
@@ -206,9 +208,12 @@ export default function ProfileScreen() {
         onPress: async () => {
           try {
             await api.leaveRelationship(user.id, relationship.id);
-            resetRelationship();
+            await markRelationshipOnboardingDone(user.id);
             queryClient.clear();
-            router.replace('/(onboarding)/create-relationship');
+            await supabase.auth.signOut();
+            resetAuth();
+            resetRelationship();
+            router.replace('/(auth)/login');
           } catch (e) {
             Alert.alert('Could not leave', e instanceof Error ? e.message : 'Please try again.');
           }
@@ -373,9 +378,33 @@ export default function ProfileScreen() {
 
         <View style={styles.statsRow}>
           <StatPill value={timelineMoments.length} label="Moments" />
-          <StatPill value={streak?.current_streak ?? 0} label="Streak" />
+          <StatPill value={streak?.current_streak ?? 0} label={streak?.at_risk ? 'Streak ⚠' : 'Streak'} />
           <StatPill value={bucketList?.filter((b) => b.status === 'completed').length ?? 0} label="Done" />
         </View>
+
+        <Pressable
+          onPress={() => setShowWrapped(true)}
+          style={({ pressed }) => [
+            styles.wrappedCard,
+            {
+              backgroundColor: colors.surfaceElevated,
+              borderColor: colors.border,
+              opacity: pressed ? 0.92 : 1,
+            },
+          ]}
+          accessibilityRole="button"
+          accessibilityLabel={`Wrapped ${new Date().getFullYear()}`}>
+          <Icon name="star" size={24} color={colors.accent} filled />
+          <View style={styles.wrappedCopy}>
+            <Text style={[styles.wrappedTitle, { color: colors.text }]}>
+              Wrapped {new Date().getFullYear()}
+            </Text>
+            <Text style={[styles.wrappedSub, { color: colors.textSecondary }]}>
+              Your year together — moments, streaks, and highlights
+            </Text>
+          </View>
+          <Icon name="chevronRight" size={20} color={colors.textSecondary} />
+        </Pressable>
 
         {/* Subscription banner */}
         <Pressable onPress={() => router.push('/pro')}>
@@ -537,18 +566,38 @@ export default function ProfileScreen() {
             </Card>
 
             <SectionTitle>Appearance</SectionTitle>
-            <View style={styles.themeRow}>
+            <View style={styles.themeGrid}>
               {THEME_META.map((t) => {
                 const active = theme === t.key;
                 return (
-                  <Pressable key={t.key} onPress={() => setTheme(t.key)} style={styles.themeItem}>
-                    <View style={[styles.swatch, { backgroundColor: t.swatch, borderColor: active ? colors.accent : colors.border, borderWidth: active ? 2.5 : 1 }]}>
-                      {active && <Icon name="check" size={18} color={colors.accent} />}
-                    </View>
-                    <Text style={{ color: active ? colors.text : colors.textSecondary, fontSize: 11, fontWeight: '600' }}>
-                      {t.label}
-                    </Text>
-                  </Pressable>
+                  <View key={t.key} style={styles.themeCell}>
+                    <Pressable
+                      onPress={() => setTheme(t.key)}
+                      style={styles.themeItem}
+                      accessibilityRole="button"
+                      accessibilityLabel={`${t.label} theme`}
+                      accessibilityState={{ selected: active }}>
+                      <View
+                        style={[
+                          styles.swatch,
+                          {
+                            backgroundColor: t.swatch,
+                            borderColor: active ? colors.accent : colors.border,
+                            borderWidth: active ? 2.5 : 1,
+                          },
+                        ]}>
+                        {active ? <Icon name="check" size={20} color={colors.accent} /> : null}
+                      </View>
+                      <Text
+                        style={[
+                          styles.themeLabel,
+                          { color: active ? colors.text : colors.textSecondary },
+                        ]}
+                        numberOfLines={2}>
+                        {t.label}
+                      </Text>
+                    </Pressable>
+                  </View>
                 );
               })}
             </View>
@@ -729,10 +778,24 @@ const styles = StyleSheet.create({
   segment: { flexDirection: 'row', borderRadius: 14, padding: 4, marginTop: 20, borderWidth: StyleSheet.hairlineWidth },
   segmentItem: { flex: 1, alignItems: 'center', paddingVertical: 9, borderRadius: 10 },
   tabBody: { marginTop: 18 },
+  wrappedCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    marginTop: 16,
+    padding: 16,
+    borderRadius: 18,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  wrappedCopy: { flex: 1 },
+  wrappedTitle: { fontSize: 16, fontWeight: '800' },
+  wrappedSub: { fontSize: 13, marginTop: 2 },
   journalType: { fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 },
-  themeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 14, marginBottom: 20 },
-  themeItem: { alignItems: 'center', gap: 6, width: 56 },
-  swatch: { width: 52, height: 52, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+  themeGrid: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: 20 },
+  themeCell: { width: '20%', alignItems: 'center', marginBottom: 18, paddingHorizontal: 2 },
+  themeItem: { alignItems: 'center', gap: 8, width: '100%' },
+  themeLabel: { fontSize: 12, fontWeight: '600', textAlign: 'center', lineHeight: 15, minHeight: 30, width: '100%' },
+  swatch: { width: 60, height: 60, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
   settingRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16 },
   settingLeft: { flexDirection: 'row', alignItems: 'center', gap: 14, flex: 1 },
   settingTitle: { fontSize: 15, fontWeight: '600' },

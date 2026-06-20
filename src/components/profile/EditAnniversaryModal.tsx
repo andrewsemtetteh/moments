@@ -1,4 +1,4 @@
-import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
+import DateTimePicker, { type DateTimePickerChangeEvent } from '@react-native-community/datetimepicker';
 import * as Haptics from 'expo-haptics';
 import { useEffect, useState } from 'react';
 import { Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
@@ -27,13 +27,12 @@ export function EditAnniversaryModal({ visible, value, saving = false, onClose, 
     }
   }, [visible, value]);
 
-  const onChange = (_event: DateTimePickerEvent, date?: Date) => {
-    if (Platform.OS === 'android') {
-      setShowAndroidPicker(false);
-      if (date) setDraft(date);
-      return;
-    }
-    if (date) setDraft(date);
+  const onValueChange = (_event: DateTimePickerChangeEvent, date: Date) => {
+    setDraft(date);
+  };
+
+  const onDismiss = () => {
+    if (Platform.OS === 'android') setShowAndroidPicker(false);
   };
 
   const save = () => {
@@ -62,7 +61,8 @@ export function EditAnniversaryModal({ visible, value, saving = false, onClose, 
               mode="date"
               display="spinner"
               maximumDate={new Date()}
-              onChange={onChange}
+              onValueChange={onValueChange}
+              onDismiss={onDismiss}
               themeVariant={colors.isDark ? 'dark' : 'light'}
               style={styles.picker}
             />
@@ -72,7 +72,8 @@ export function EditAnniversaryModal({ visible, value, saving = false, onClose, 
               mode="date"
               display="default"
               maximumDate={new Date()}
-              onChange={onChange}
+              onValueChange={onValueChange}
+              onDismiss={onDismiss}
             />
           ) : (
             <Pressable

@@ -36,15 +36,8 @@ Deno.serve(async (req) => {
     const partnerId = rel.user_1_id === user.id ? rel.user_2_id : rel.user_1_id;
 
     if (partnerId) {
-      await supabase.from('notifications').insert({
-        relationship_id,
-        user_id: partnerId,
-        type: 'mood_update',
-        content: `Your partner shared their mood: ${content}`,
-      });
+      await supabase.rpc('update_streak', { p_relationship_id: relationship_id });
     }
-
-    await supabase.rpc('update_streak', { p_relationship_id: relationship_id });
 
     return new Response(JSON.stringify({ success: true }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

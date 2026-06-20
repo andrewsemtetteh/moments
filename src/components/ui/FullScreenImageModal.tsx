@@ -3,19 +3,22 @@ import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Icon } from '@/components/ui/Icon';
+import { Avatar } from '@/components/ui/primitives';
 
 interface Props {
   visible: boolean;
   imageUrl: string | null | undefined;
   title?: string | null;
+  fallbackName?: string | null;
   onClose: () => void;
 }
 
-export function FullScreenImageModal({ visible, imageUrl, title, onClose }: Props) {
+export function FullScreenImageModal({ visible, imageUrl, title, fallbackName, onClose }: Props) {
   const insets = useSafeAreaInsets();
   const uri = imageUrl?.trim() || null;
+  const showFallback = visible && !uri && !!fallbackName?.trim();
 
-  if (!uri) return null;
+  if (!visible || (!uri && !showFallback)) return null;
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
@@ -40,7 +43,11 @@ export function FullScreenImageModal({ visible, imageUrl, title, onClose }: Prop
         </View>
 
         <View style={[styles.imageWrap, { paddingBottom: insets.bottom + 8 }]}>
-          <Image source={{ uri }} style={styles.image} contentFit="contain" transition={200} />
+          {uri ? (
+            <Image source={{ uri }} style={styles.image} contentFit="contain" transition={200} />
+          ) : (
+            <Avatar name={fallbackName} size={160} colorsOverride={['#ffffff', '#ffffff']} />
+          )}
         </View>
       </View>
     </Modal>

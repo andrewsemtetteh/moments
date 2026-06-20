@@ -19,6 +19,7 @@ import { PasswordInput } from '@/components/auth/PasswordInput';
 import { SocialAuthButtons } from '@/components/auth/SocialAuthButtons';
 import { PrimaryButton } from '@/components/ui/primitives';
 import { useTheme } from '@/hooks/useTheme';
+import { registerAccount, formatAuthError } from '@/lib/auth-otp';
 import { hydrateAuthSession } from '@/lib/auth-session';
 import { supabase } from '@/lib/supabase';
 
@@ -35,25 +36,30 @@ export default function SignupScreen() {
     if (!name.trim() || !email || !password || !agreedToTerms) return;
     setLoading(true);
     try {
-      const { data, error } = await supabase.auth.signUp({
+      const result = await registerAccount({
         email,
         password,
-        options: { data: { name: name.trim() } },
+        name: name.trim(),
       });
-      if (error) throw error;
 
-      if (data.session) {
-        await hydrateAuthSession(data.session);
+      if (result.error) throw result.error;
+
+      if (result.session) {
+        await hydrateAuthSession(result.session);
         router.replace('/(onboarding)/profile-setup');
         return;
       }
 
+      if (!result.needsVerification) {
+        throw new Error('Could not finish sign up. Please try again.');
+      }
+
       router.push({
-        pathname: '/(auth)/verify-otp',
-        params: { email: email.trim(), type: 'signup' },
+        pathname: '/(auth)/check-email',
+        params: { email: result.email, type: 'signup' },
       });
     } catch (e: unknown) {
-      Alert.alert('Sign up failed', e instanceof Error ? e.message : 'Please try again');
+      Alert.alert('Sign up failed', formatAuthError(e));
     } finally {
       setLoading(false);
     }

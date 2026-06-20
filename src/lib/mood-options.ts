@@ -2,23 +2,29 @@ import { MOOD_EMOJI } from '@/constants/design-system';
 
 export const ALL_MOOD_KEYS = Object.keys(MOOD_EMOJI);
 
-/** Original default moods shown when there is no history yet */
+/** Default quick moods when there is no history yet */
 export const PRIMARY_MOOD_KEYS = ['happy', 'excited', 'calm', 'stressed', 'lonely'] as const;
 
 export const MAX_QUICK_MOODS = 4;
 
 export function getQuickMoods(frequentMoods: string[], currentMood?: string): string[] {
-  if (frequentMoods.length === 0) {
-    return [...PRIMARY_MOOD_KEYS];
-  }
+  const result: string[] = [];
 
-  const ranked = frequentMoods.filter((m) => ALL_MOOD_KEYS.includes(m)).slice(0, MAX_QUICK_MOODS);
+  const push = (mood: string) => {
+    if (result.length >= MAX_QUICK_MOODS) return;
+    if (!ALL_MOOD_KEYS.includes(mood) || result.includes(mood)) return;
+    result.push(mood);
+  };
 
-  if (currentMood && ALL_MOOD_KEYS.includes(currentMood) && !ranked.includes(currentMood)) {
-    return [currentMood, ...ranked].slice(0, MAX_QUICK_MOODS);
-  }
+  if (currentMood) push(currentMood);
 
-  return ranked.length > 0 ? ranked : [...PRIMARY_MOOD_KEYS];
+  for (const mood of frequentMoods) push(mood);
+
+  for (const mood of PRIMARY_MOOD_KEYS) push(mood);
+
+  for (const mood of ALL_MOOD_KEYS) push(mood);
+
+  return result;
 }
 
 /** Moods for the More sheet — everything not already in the quick row */
@@ -29,4 +35,9 @@ export function getModalMoods(quickMoods: string[]): string[] {
 
 export function shouldShowMoodExpand(quickMoods: string[]): boolean {
   return getModalMoods(quickMoods).length > 0;
+}
+
+/** Stable defaults for the quick row (loading + empty history). */
+export function getDefaultQuickMoods(): string[] {
+  return PRIMARY_MOOD_KEYS.slice(0, MAX_QUICK_MOODS);
 }
