@@ -1,12 +1,11 @@
 import * as Haptics from 'expo-haptics';
 import { usePathname, useRouter } from 'expo-router';
-import { useMemo } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Icon, type IconName } from '@/components/ui/Icon';
 import { Avatar } from '@/components/ui/primitives';
-import { useNotifications, useUnreadMessageCount } from '@/hooks/queries';
+import { useUnreadMessageCount, useUnreadNotificationCount } from '@/hooks/queries';
 import { useOpenPartnerProfile } from '@/hooks/useOpenPartnerProfile';
 import { useTheme } from '@/hooks/useTheme';
 import { formatBadgeCount } from '@/lib/format-badge';
@@ -27,13 +26,8 @@ export function AppHeader({ showChat = true, showWatchTogether = true }: AppHead
   const openWatchTogether = useUIStore((s) => s.openWatchTogether);
   const openPartnerProfile = useOpenPartnerProfile();
   const partner = useRelationshipStore((s) => s.partner);
-  const { data: notifications } = useNotifications();
+  const { data: unreadNotifications = 0 } = useUnreadNotificationCount();
   const { data: unreadMessages = 0 } = useUnreadMessageCount();
-
-  const unreadNotifications = useMemo(
-    () => (notifications ?? []).filter((n) => !n.read).length,
-    [notifications],
-  );
 
   return (
     <View style={[styles.header, { paddingTop: insets.top + 6, backgroundColor: colors.background }]}>
@@ -96,9 +90,9 @@ export function AppHeader({ showChat = true, showWatchTogether = true }: AppHead
         <HeaderIconButton
           icon="bell"
           label={unreadNotifications > 0 ? `${unreadNotifications} unread notifications` : 'Notifications'}
-          active={pathname.includes('/notifications')}
           onPress={() => router.push('/notifications')}
           badge={unreadNotifications}
+          filledWhenActive={false}
         />
       </View>
     </View>
@@ -112,6 +106,7 @@ function HeaderIconButton({
   onLongPress,
   badge = 0,
   active = false,
+  filledWhenActive = true,
 }: {
   icon: IconName;
   label: string;
@@ -119,9 +114,11 @@ function HeaderIconButton({
   onLongPress?: () => void;
   badge?: number;
   active?: boolean;
+  filledWhenActive?: boolean;
 }) {
   const { colors } = useTheme();
   const showBadge = badge > 0;
+  const isHighlighted = active && filledWhenActive;
 
   return (
     <Pressable
@@ -132,19 +129,21 @@ function HeaderIconButton({
       accessibilityRole="button"
       hitSlop={6}
       style={({ pressed }) => [styles.iconSlot, pressed && styles.iconPressed]}>
-      <Icon
-        name={icon}
-        size={26}
-        color={active ? colors.accent : colors.textSecondary}
-        filled={active}
-      />
-      {showBadge && (
-        <View style={[styles.badge, { backgroundColor: colors.error, borderColor: colors.background }]}>
-          <Text style={[styles.badgeText, { color: '#FFFFFF' }]} numberOfLines={1}>
-            {formatBadgeCount(badge)}
-          </Text>
-        </View>
-      )}
+      <View style={styles.iconWrap}>
+        <Icon
+          name={icon}
+          size={26}
+          color={isHighlighted ? colors.accent : colors.textSecondary}
+          filled={isHighlighted}
+        />
+        {showBadge && (
+          <View style={[styles.badge, { backgroundColor: colors.error, borderColor: colors.background }]}>
+            <Text style={[styles.badgeText, { color: '#FFFFFF' }]} numberOfLines={1}>
+              {formatBadgeCount(badge)}
+            </Text>
+          </View>
+        )}
+      </View>
     </Pressable>
   );
 }
@@ -172,23 +171,31 @@ const styles = StyleSheet.create({
     height: 44,
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'visible',
+  },
+  iconWrap: {
+    width: 26,
+    height: 26,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'visible',
   },
   iconPressed: { opacity: 0.65 },
   badge: {
     position: 'absolute',
-    top: 2,
-    right: 0,
-    minWidth: 18,
-    height: 18,
+    top: -5,
+    right: -7,
+    minWidth: 17,
+    height: 17,
     borderRadius: 9,
     borderWidth: 2,
-    paddingHorizontal: 4,
+    paddingHorizontal: 3,
     alignItems: 'center',
     justifyContent: 'center',
   },
   badgeText: {
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: '800',
-    lineHeight: 12,
+    lineHeight: 11,
   },
 });

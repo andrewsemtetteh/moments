@@ -15,6 +15,7 @@ import { useAuthStore, useRelationshipStore, useUIStore } from '@/stores';
 import type {
     Message,
     MoodLog,
+    Notification,
     StreamingConnection,
     WatchlistItem,
     WatchSession,
@@ -333,18 +334,6 @@ export function useStreak() {
   });
 }
 
-export function useMarkNotificationsRead() {
-  const queryClient = useQueryClient();
-  const user = useAuthStore((s) => s.user);
-
-  return useMutation({
-    mutationFn: (notificationIds?: string[]) => api.markNotificationsRead(notificationIds),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['notifications', user?.id] });
-    },
-  });
-}
-
 export function useDailyChallenge() {
   const relationship = useRelationshipStore((s) => s.relationship);
   return useQuery({
@@ -408,12 +397,121 @@ export function useExperienceMutations() {
 }
 */
 
+export function useNotificationFeed() {
+  const user = useAuthStore((s) => s.user);
+  return useInfiniteQuery({
+    queryKey: ['notifications', user?.id, 'feed'],
+    queryFn: ({ pageParam }) =>
+      api.fetchNotificationsPage(user!.id, {
+        before: pageParam as string | undefined,
+        limit: 30,
+      }),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (lastPage) =>
+      lastPage.length === 30 ? lastPage[lastPage.length - 1]?.created_at : undefined,
+    enabled: !!user?.id,
+  });
+}
+
+/** Flat list wrapper — used by NotificationSync and legacy callers. */
 export function useNotifications() {
+  const feed = useNotificationFeed();
+  const data = useMemo(() => feed.data?.pages.flat(), [feed.data]);
+  return {
+    ...feed,
+    data,
+  };
+}
+
+export function useUnreadNotificationCount() {
   const user = useAuthStore((s) => s.user);
   return useQuery({
-    queryKey: ['notifications', user?.id],
-    queryFn: () => api.fetchNotifications(user!.id),
-    enabled: !!user,
+    queryKey: ['notificationUnreadCount', user?.id],
+    queryFn: () => api.fetchUnreadNotificationCount(user!.id),
+    enabled: !!user?.id,
+    staleTime: 15_000,
+  });
+}
+
+function invalidateNotificationQueries(queryClient: ReturnType<typeof useQueryClient>, userId?: string) {
+  if (userId) {
+    queryClient.invalidateQueries({ queryKey: ['notifications', userId] });
+    queryClient.invalidateQueries({ queryKey: ['notificationUnreadCount', userId] });
+  } else {
+    queryClient.invalidateQueries({ queryKey: ['notifications'] });
+    queryClient.invalidateQueries({ queryKey: ['notificationUnreadCount'] });
+  }
+}
+
+let notificationInvalidateTimer: ReturnType<typeof setTimeout> | null = null;
+
+function debouncedInvalidateNotificationQueries(
+  queryClient: ReturnType<typeof useQueryClient>,
+  userId?: string,
+) {
+  if (notificationInvalidateTimer) clearTimeout(notificationInvalidateTimer);
+  notificationInvalidateTimer = setTimeout(() => {
+    notificationInvalidateTimer = null;
+    invalidateNotificationQueries(queryClient, userId);
+  }, 400);
+}
+
+export function useMarkNotificationsRead() {
+  const queryClient = useQueryClient();
+  const user = useAuthStore((s) => s.user);
+
+  return useMutation({
+    mutationFn: (notificationIds?: string[]) => api.markNotificationsRead(notificationIds),
+    onSuccess: (_data, notificationIds) => {
+      const userId = user?.id;
+      if (userId) {
+        queryClient.setQueryData<{ pages: Notification[][]; pageParams: unknown[] }>(
+          ['notifications', userId, 'feed'],
+          (old) => {
+            if (!old) return old;
+            const markAll = !notificationIds?.length;
+            const idSet = new Set(notificationIds ?? []);
+            return {
+              ...old,
+              pages: old.pages.map((page) =>
+                page.map((n) =>
+                  markAll || idSet.has(n.id) ? { ...n, read: true } : n,
+                ),
+              ),
+            };
+          },
+        );
+        if (!notificationIds?.length) {
+          queryClient.setQueryData(['notificationUnreadCount', userId], 0);
+        } else {
+          queryClient.invalidateQueries({ queryKey: ['notificationUnreadCount', userId] });
+        }
+      }
+    },
+  });
+}
+
+export function useDeleteNotification() {
+  const queryClient = useQueryClient();
+  const user = useAuthStore((s) => s.user);
+
+  return useMutation({
+    mutationFn: (notificationId: string) => api.deleteNotification(notificationId, user!.id),
+    onSuccess: () => {
+      invalidateNotificationQueries(queryClient, user?.id);
+    },
+  });
+}
+
+export function useClearNotifications() {
+  const queryClient = useQueryClient();
+  const user = useAuthStore((s) => s.user);
+
+  return useMutation({
+    mutationFn: () => api.clearAllNotifications(user!.id),
+    onSuccess: () => {
+      invalidateNotificationQueries(queryClient, user?.id);
+    },
   });
 }
 
@@ -499,7 +597,7 @@ export function useRealtimeSubscription(
           }
           if (table === 'notifications') {
             const userId = useAuthStore.getState().user?.id;
-            qc.invalidateQueries({ queryKey: ['notifications', userId] });
+            debouncedInvalidateNotificationQueries(qc, userId);
             void import('@/lib/push-notifications').then(({ dispatchPendingPushNotifications }) =>
               dispatchPendingPushNotifications(),
             );

@@ -92,7 +92,7 @@ Deno.serve(async (req) => {
     }>;
 
     if (rows.length === 0) {
-      return new Response(JSON.stringify({ sent: 0 }), {
+      return new Response(JSON.stringify({ sent: 0, skipped: 0 }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
@@ -158,8 +158,10 @@ Deno.serve(async (req) => {
     });
   } catch (e) {
     const message = e instanceof Error ? e.message : 'Unknown error';
-    return new Response(JSON.stringify({ error: message }), {
-      status: 400,
+    console.error('send-push-notification failed:', message);
+    // Return 200 so clients treating non-2xx as fatal do not crash; body carries the error.
+    return new Response(JSON.stringify({ sent: 0, skipped: 0, error: message }), {
+      status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }

@@ -1056,14 +1056,53 @@ export async function unsaveExperience(relationshipId: string, experienceId: str
 */
 
 export async function fetchNotifications(userId: string) {
-  const { data, error } = await supabase
+  return fetchNotificationsPage(userId, { limit: 50 });
+}
+
+export async function fetchNotificationsPage(
+  userId: string,
+  options?: { limit?: number; before?: string },
+) {
+  const limit = options?.limit ?? 30;
+  let query = supabase
     .from('notifications')
     .select('*')
     .eq('user_id', userId)
     .order('created_at', { ascending: false })
-    .limit(50);
+    .limit(limit);
+
+  if (options?.before) {
+    query = query.lt('created_at', options.before);
+  }
+
+  const { data, error } = await query;
   if (error) throw error;
-  return data as Notification[];
+  return (data ?? []) as Notification[];
+}
+
+export async function fetchUnreadNotificationCount(userId: string) {
+  const { count, error } = await supabase
+    .from('notifications')
+    .select('*', { count: 'exact', head: true })
+    .eq('user_id', userId)
+    .eq('read', false);
+
+  if (error) throw error;
+  return count ?? 0;
+}
+
+export async function deleteNotification(notificationId: string, userId: string) {
+  const { error } = await supabase
+    .from('notifications')
+    .delete()
+    .eq('id', notificationId)
+    .eq('user_id', userId);
+  if (error) throw error;
+}
+
+export async function clearAllNotifications(userId: string) {
+  const { error } = await supabase.from('notifications').delete().eq('user_id', userId);
+  if (error) throw error;
 }
 
 export async function markNotificationsRead(notificationIds?: string[]) {
@@ -1081,9 +1120,13 @@ export async function registerPushToken(token: string | null) {
 }
 
 export async function dispatchPendingPushNotifications(limit = 10) {
-  await invokeEdgeFunction<{ sent?: number; skipped?: number }>('send-push-notification', {
-    limit,
-  });
+  try {
+    await invokeEdgeFunction<{ sent?: number; skipped?: number }>('send-push-notification', {
+      limit,
+    });
+  } catch {
+    // Best-effort: und deployed edge functions or missing push tokens must not crash the app.
+  }
 }
 
 export async function uploadMedia(
