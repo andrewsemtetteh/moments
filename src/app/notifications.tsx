@@ -25,6 +25,7 @@ import {
 } from '@/hooks/queries';
 import { useTheme } from '@/hooks/useTheme';
 import {
+  filterInboxNotifications,
   formatNotificationTime,
   groupNotificationsBySection,
   NOTIFICATION_TYPE_ICON,
@@ -68,7 +69,10 @@ function NotificationsScreenNative() {
   const [pullRefreshing, setPullRefreshing] = useState(false);
   const markedOnFocusRef = useRef(false);
 
-  const items = useMemo(() => data?.pages.flat() ?? [], [data]);
+  const items = useMemo(
+    () => filterInboxNotifications(data?.pages.flat() ?? []),
+    [data],
+  );
   const sections = useMemo(() => groupNotificationsBySection(items), [items]);
   const hasItems = items.length > 0;
 
@@ -190,7 +194,7 @@ function NotificationsScreenNative() {
                 </View>
                 <Text style={[styles.emptyTitle, { color: colors.text }]}>No notifications yet</Text>
                 <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
-                  When your partner sends a message, moment, or mood update, it&apos;ll show up here.
+                  When your partner shares a moment, mood, plan, or streak update, it&apos;ll show up here.
                 </Text>
               </View>
             }

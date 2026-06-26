@@ -222,12 +222,17 @@ Every request must verify:
 
 ## 7.3 Rate Limiting
 
-Protect against abuse:
+Edge Functions enforce Postgres-backed sliding-window limits via `consume_rate_limit` (service_role only):
 
-* message spam
-* moment spam
-* invite brute force
-* activity flooding
+| Function | Scope | Limit |
+| --- | --- | --- |
+| `generate-activity` | per user + per relationship | 20/day user, 40/day relationship |
+| `generate-daily-challenge` | per relationship | 12/hour |
+| `generate-quiz-live` | per relationship | 15/hour |
+| `update-mood` | per user | 60/hour |
+| `send-push-notification` | per user | 120/hour |
+
+Exceeded limits return HTTP `429` (or a soft `rate_limited` flag for push dispatch).
 
 ---
 

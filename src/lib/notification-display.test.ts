@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { formatNotificationTime } from '@/lib/notification-display';
+import { filterInboxNotifications, formatNotificationTime } from '@/lib/notification-display';
 
 describe('formatNotificationTime', () => {
   it('shows seconds for very recent items', () => {
@@ -30,5 +30,17 @@ describe('formatNotificationTime', () => {
     yesterday.setDate(yesterday.getDate() - 1);
     yesterday.setHours(18, 30, 0, 0);
     expect(formatNotificationTime(yesterday.toISOString(), now.getTime())).toMatch(/^Yesterday ·/);
+  });
+});
+
+describe('filterInboxNotifications', () => {
+  it('excludes chat message notifications', () => {
+    const items = [
+      { id: '1', type: 'moment' as const },
+      { id: '2', type: 'message' as const },
+      { id: '3', type: 'message_new' as const },
+      { id: '4', type: 'streak' as const },
+    ];
+    expect(filterInboxNotifications(items).map((n) => n.id)).toEqual(['1', '4']);
   });
 });

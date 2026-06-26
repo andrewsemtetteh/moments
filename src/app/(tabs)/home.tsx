@@ -1,12 +1,14 @@
+import { useQueryClient, type InfiniteData } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Pressable, RefreshControl, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Platform, Pressable, RefreshControl, StyleSheet, Text, TextInput, View } from 'react-native';
 
+import { AnimatedStreakFire } from '@/components/home/AnimatedStreakFire';
 import { MoodSnapshot } from '@/components/home/MoodSnapshot';
-import { StreakBadge } from '@/components/home/StreakBadge';
-import { StreakRestoreBanner } from '@/components/home/StreakRestoreBanner';
+import { StreakDayTracker } from '@/components/home/StreakDayTracker';
+import { StreakEndCard } from '@/components/home/StreakEndCard';
 import { AppHeader } from '@/components/layout/AppHeader';
 import { ScreenContainer } from '@/components/layout/ScreenContainer';
 import { TabScreenScroll } from '@/components/layout/TabScreenScroll';
@@ -32,6 +34,9 @@ import { shouldShowEntryPaywall } from '@/lib/paywall-storage';
 import { openActivities, openCalendar, openChat } from '@/lib/router';
 import * as api from '@/services/api';
 import { useAuthStore, useRelationshipStore, useUIStore } from '@/stores';
+import type { Moment } from '@/types/database';
+
+const HOME_REFRESH_TIMEOUT_MS = 8_000;
 
 const QUICK_ACTIONS: { id: string; label: string; icon: IconName }[] = [
   { id: 'bored', label: "We're bored", icon: 'dice' },
@@ -54,12 +59,14 @@ export default function HomeScreen() {
   const markPaywallShownThisSession = useUIStore((s) => s.markPaywallShownThisSession);
   const [refreshing, setRefreshing] = useState(false);
   const [dailyResponse, setDailyResponse] = useState('');
+  const queryClient = useQueryClient();
+  const refreshInFlightRef = useRef(false);
 
-  const { data: moods, refetch: refetchMoods } = useMoods();
+  const { data: moods } = useMoods();
   const { data: streak, refetch: refetchStreak } = useStreak();
   const { data: challenge, refetch: refetchChallenge } = useDailyChallenge();
-  const { data: events, refetch: refetchEvents } = useCalendarEvents();
-  const { data: momentsData, refetch: refetchMoments } = useMoments();
+  const { data: events } = useCalendarEvents();
+  const { data: momentsData } = useMoments();
   const updateMood = useUpdateMood();
 
   useRealtimeSubscription('moments');
@@ -71,14 +78,17 @@ export default function HomeScreen() {
     if (isPlus || paywallShownThisSession || !relationship || relationship.status === 'ended') return;
 
     let cancelled = false;
-    void shouldShowEntryPaywall().then((show) => {
-      if (cancelled || !show) return;
-      markPaywallShownThisSession();
-      openPaywall();
-    });
+    const timer = setTimeout(() => {
+      void shouldShowEntryPaywall().then((show) => {
+        if (cancelled || !show) return;
+        markPaywallShownThisSession();
+        openPaywall();
+      });
+    }, 800);
 
     return () => {
       cancelled = true;
+      clearTimeout(timer);
     };
   }, [isPlus, paywallShownThisSession, relationship, markPaywallShownThisSession, openPaywall]);
 
@@ -104,11 +114,67 @@ export default function HomeScreen() {
   }, [momentsData, user, partner]);
   const upcomingEvents = events?.slice(0, 3) ?? [];
 
-  const onRefresh = useCallback(async () => {
+  const relationshipId = relationship?.id;
+
+  const onRefresh = useCallback(() => {
+    if (!relationshipId || refreshInFlightRef.current) return;
+
+    refreshInFlightRef.current = true;
     setRefreshing(true);
-    await Promise.all([refetchMoods(), refetchStreak(), refetchChallenge(), refetchEvents(), refetchMoments()]);
-    setRefreshing(false);
-  }, [refetchMoods, refetchStreak, refetchChallenge, refetchEvents, refetchMoments]);
+
+    let finished = false;
+    const finishRefresh = () => {
+      if (finished) return;
+      finished = true;
+      setRefreshing(false);
+      refreshInFlightRef.current = false;
+    };
+
+    const timeoutId = setTimeout(finishRefresh, HOME_REFRESH_TIMEOUT_MS);
+
+    void (async () => {
+      try {
+        queryClient.setQueryData<InfiniteData<Moment[]>>(
+          ['moments', relationshipId],
+          (current) => {
+            if (!current?.pages.length) return current;
+            return {
+              pages: current.pages.slice(0, 1),
+              pageParams: current.pageParams.slice(0, 1),
+            };
+          },
+        );
+
+        await Promise.allSettled([
+          queryClient.refetchQueries({ queryKey: ['moods', relationshipId], type: 'active' }),
+          queryClient.refetchQueries({ queryKey: ['streak', relationshipId], type: 'active' }),
+          queryClient.refetchQueries({ queryKey: ['daily-challenge', relationshipId], type: 'active' }),
+          queryClient.refetchQueries({ queryKey: ['calendar', relationshipId], type: 'active' }),
+          queryClient.refetchQueries({ queryKey: ['moments', relationshipId], type: 'active' }),
+          queryClient.refetchQueries({
+            queryKey: ['moodFrequency', relationshipId, user?.id],
+            type: 'active',
+          }),
+        ]);
+      } finally {
+        clearTimeout(timeoutId);
+        finishRefresh();
+      }
+    })();
+  }, [queryClient, relationshipId, user?.id]);
+
+  const refreshControl = useMemo(
+    () => (
+      <RefreshControl
+        refreshing={refreshing}
+        onRefresh={onRefresh}
+        tintColor={colors.accent}
+        colors={[colors.accent]}
+        progressViewOffset={Platform.OS === 'android' ? 0 : undefined}
+      />
+    ),
+    [colors.accent, onRefresh, refreshing],
+  );
 
   const submitDailyResponse = async () => {
     if (!challenge || !relationship || !user || !dailyResponse.trim()) return;
@@ -135,7 +201,7 @@ export default function HomeScreen() {
       <AppHeader />
       <TabScreenScroll
         showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />}
+        refreshControl={refreshControl}
         contentContainerStyle={styles.scroll}>
         {/* Hero */}
         <LinearGradient
@@ -163,7 +229,13 @@ export default function HomeScreen() {
                   styles.heroStreak,
                   streak.at_risk && styles.heroStreakAtRisk,
                 ]}>
-                <Icon name="fire" size={18} color="#fff" filled strokeWidth={1.6} />
+                <AnimatedStreakFire
+                  color="#fff"
+                  size={18}
+                  animate={streak.current_streak > 0 || streak.at_risk}
+                  pulse={streak.at_risk}
+                  periodic={streak.at_risk ? 3_500 : 5_500}
+                />
                 <Text style={styles.heroStreakText}>
                   {streak.current_streak > 0
                     ? `${streak.current_streak} day${streak.current_streak === 1 ? '' : 's'}`
@@ -173,6 +245,13 @@ export default function HomeScreen() {
             )}
           </View>
         </LinearGradient>
+
+        {streak && (
+          <View style={styles.streakTracker}>
+            <StreakDayTracker status={streak} joinedAt={relationship?.created_at} />
+            <StreakEndCard status={streak} />
+          </View>
+        )}
 
         {/* Quick actions */}
         <View style={styles.quickRow}>
@@ -203,13 +282,6 @@ export default function HomeScreen() {
             onViewHistory={() => setShowMoodHistory(true)}
           />
         </View>
-
-        {streak && (
-          <View style={[styles.section, styles.streakSection]}>
-            <StreakBadge status={streak} />
-            <StreakRestoreBanner status={streak} />
-          </View>
-        )}
 
         {challenge && (
           <View style={styles.section}>
@@ -336,13 +408,13 @@ const styles = StyleSheet.create({
   heroStreak: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(255,255,255,0.2)', paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999 },
   heroStreakAtRisk: { backgroundColor: 'rgba(255,180,80,0.35)' },
   heroStreakText: { color: '#fff', fontWeight: '700', fontSize: 13 },
+  streakTracker: { marginBottom: 18, gap: 10 },
   quickRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
   quickItem: { alignItems: 'center', flex: 1, gap: 6 },
   quickIcon: { width: 56, height: 56, borderRadius: 18, alignItems: 'center', justifyContent: 'center', borderWidth: StyleSheet.hairlineWidth },
   quickLabel: { fontSize: 11, fontWeight: '600', textAlign: 'center' },
   section: { marginTop: 18 },
   partnerMomentBlock: { marginTop: 14 },
-  streakSection: { gap: 10 },
   prompt: { fontSize: 18, lineHeight: 26, marginBottom: 14, fontWeight: '600' },
   responseInput: { borderWidth: 1, borderRadius: 12, padding: 12, minHeight: 64, fontSize: 15, marginBottom: 12, textAlignVertical: 'top' },
   answered: { flexDirection: 'row', alignItems: 'center', gap: 8, borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 12 },

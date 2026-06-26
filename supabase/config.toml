@@ -34,3 +34,6 @@ verify_jwt = true
 
 [functions.send-push-notification]
 verify_jwt = true
+
+[functions.generate-quiz-live]
+verify_jwt = true

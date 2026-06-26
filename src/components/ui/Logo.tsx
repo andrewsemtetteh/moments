@@ -1,29 +1,24 @@
-import { View } from 'react-native';
-import Svg, { Defs, LinearGradient as SvgGradient, Stop, Path } from 'react-native-svg';
+import { Image, type ImageStyle } from 'expo-image';
+import { StyleProp, View } from 'react-native';
 
+import { MOMENTS_LOGO_PNG, MOMENTS_LOGO_SVG } from '@/constants/brand-assets';
 import { useTheme } from '@/hooks/useTheme';
 
-/** Two interlocking hearts forming the Moments mark. */
-export function LogoMark({ size = 72 }: { size?: number }) {
-  const { colors } = useTheme();
+type LogoMarkProps = {
+  size?: number;
+  /** SVG scales cleanly in UI; PNG for contexts that need a raster source. */
+  variant?: 'svg' | 'png';
+  style?: StyleProp<ImageStyle>;
+};
+
+export function LogoMark({ size = 72, variant = 'svg', style }: LogoMarkProps) {
   return (
-    <Svg width={size} height={size} viewBox="0 0 100 100">
-      <Defs>
-        <SvgGradient id="moments-grad" x1="0" y1="0" x2="1" y2="1">
-          <Stop offset="0" stopColor={colors.gradient[0]} />
-          <Stop offset="1" stopColor={colors.gradient[1]} />
-        </SvgGradient>
-      </Defs>
-      <Path
-        d="M50 84C30 70 16 58 16 42c0-11 8-19 18-19 7 0 12 4 16 9 4-5 9-9 16-9 10 0 18 8 18 19 0 16-14 28-34 42Z"
-        fill="url(#moments-grad)"
-      />
-      <Path
-        d="M50 70c-8-6-16-13-19-21 3 4 7 6 12 6 3 0 5-1 7-2 2 1 4 2 7 2 5 0 9-2 12-6-3 8-11 15-19 21Z"
-        fill={colors.background}
-        opacity={0.22}
-      />
-    </Svg>
+    <Image
+      source={variant === 'png' ? MOMENTS_LOGO_PNG : MOMENTS_LOGO_SVG}
+      style={[{ width: size, height: size }, style]}
+      contentFit="contain"
+      accessibilityLabel="Moments"
+    />
   );
 }
 

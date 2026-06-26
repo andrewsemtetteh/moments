@@ -1,16 +1,16 @@
 import { useRouter } from 'expo-router';
 import { useEffect, useRef } from 'react';
-import { ActivityIndicator, Animated, Easing, StyleSheet, Text, View } from 'react-native';
+import { Animated, Easing, StyleSheet, View } from 'react-native';
 
 import { LogoMark } from '@/components/ui/Logo';
 import { ScreenBackground } from '@/components/ui/primitives';
-import { useTheme } from '@/hooks/useTheme';
+import { isIntroCompleted } from '@/lib/intro-storage';
 import { isAvatarPromptDone, isRelationshipOnboardingDone } from '@/lib/onboarding-storage';
+import { PREVIEW_GET_STARTED_ON_LAUNCH, PREVIEW_WELCOME_ON_LAUNCH } from '@/lib/welcome-design-preview';
 import { useAuthStore, useRelationshipStore } from '@/stores';
 
 export default function IndexScreen() {
   const router = useRouter();
-  const { colors } = useTheme();
   const isLoading = useAuthStore((s) => s.isLoading);
   const session = useAuthStore((s) => s.session);
   const relationship = useRelationshipStore((s) => s.relationship);
@@ -32,11 +32,21 @@ export default function IndexScreen() {
     let cancelled = false;
 
     async function route() {
-      await new Promise((r) => setTimeout(r, 500));
       if (cancelled) return;
 
+      if (PREVIEW_GET_STARTED_ON_LAUNCH) {
+        router.replace('/(auth)/get-started');
+        return;
+      }
+
+      if (PREVIEW_WELCOME_ON_LAUNCH) {
+        router.replace('/(auth)/welcome');
+        return;
+      }
+
       if (!session) {
-        router.replace('/(auth)/login');
+        const seenIntro = await isIntroCompleted();
+        router.replace(seenIntro ? '/(auth)/login' : '/(auth)/welcome');
         return;
       }
       if (!relationship) {
@@ -74,13 +84,10 @@ export default function IndexScreen() {
     <ScreenBackground>
       <View style={styles.center}>
         <Animated.View style={{ opacity: fade, transform: [{ scale }], alignItems: 'center' }}>
-          <LogoMark size={84} />
-          <Text style={[styles.wordmark, { color: colors.text }]}>Moments</Text>
-          <Text style={[styles.tagline, { color: colors.textSecondary }]}>Closer, every day</Text>
+          <LogoMark size={160} />
+          {/* <Text style={[styles.wordmark, { color: colors.text }]}>Moments</Text>
+          <Text style={[styles.tagline, { color: colors.textSecondary }]}>Closer, every day</Text> */}
         </Animated.View>
-      </View>
-      <View style={styles.loader}>
-        <ActivityIndicator color={colors.accent} />
       </View>
     </ScreenBackground>
   );
@@ -88,7 +95,6 @@ export default function IndexScreen() {
 
 const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  wordmark: { fontSize: 34, fontWeight: '800', letterSpacing: -1, marginTop: 16 },
-  tagline: { fontSize: 15, marginTop: 6, letterSpacing: 0.3 },
-  loader: { position: 'absolute', bottom: 80, left: 0, right: 0, alignItems: 'center' },
+  // wordmark: { fontSize: 34, fontWeight: '800', letterSpacing: -1, marginTop: 16 },
+  // tagline: { fontSize: 15, marginTop: 6, letterSpacing: 0.3 },
 });

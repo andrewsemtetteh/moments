@@ -1,27 +1,22 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+import { getAuthUser } from '../_shared/auth.ts';
+import { handleOptions, jsonResponse } from '../_shared/cors.ts';
+import { enforceRateLimit, RATE_LIMITS, RateLimitError } from '../_shared/rate-limit.ts';
 
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
+  const options = handleOptions(req);
+  if (options) return options;
 
   try {
-    const authHeader = req.headers.get('Authorization');
-    if (!authHeader) throw new Error('Unauthorized');
+    const { user, supabase } = await getAuthUser(req);
+    const { relationship_id } = await req.json();
 
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_ANON_KEY')!,
-      { global: { headers: { Authorization: authHeader } } },
+    if (!relationship_id) throw new Error('relationship_id is required');
+
+    await enforceRateLimit(
+      { functionName: 'update-mood', userId: user.id },
+      RATE_LIMITS.updateMood.maxHits,
+      RATE_LIMITS.updateMood.windowSeconds,
     );
-
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Unauthorized');
-
-    const { relationship_id, user_id, type, content } = await req.json();
 
     const { data: rel } = await supabase
       .from('relationships')
@@ -39,13 +34,12 @@ Deno.serve(async (req) => {
       await supabase.rpc('update_streak', { p_relationship_id: relationship_id });
     }
 
-    return new Response(JSON.stringify({ success: true }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
+    return jsonResponse({ success: true });
   } catch (e) {
-    return new Response(JSON.stringify({ error: e.message }), {
-      status: 400,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
+    if (e instanceof RateLimitError) {
+      return jsonResponse({ error: e.message }, 429);
+    }
+    const message = e instanceof Error ? e.message : 'Request failed';
+    return jsonResponse({ error: message }, 400);
   }
 });

@@ -57,8 +57,11 @@ export type IconName =
   | 'document'
   | 'expand'
   | 'reply'
+  | 'restore'
+  | 'rewind'
   | 'moreVertical'
-  | 'edit';
+  | 'edit'
+  | 'warning';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
 
@@ -118,8 +121,11 @@ const ICON_MAP: Record<IconName, { outline: IoniconName; filled: IoniconName }> 
   document: { outline: 'document-outline', filled: 'document' },
   expand: { outline: 'expand-outline', filled: 'expand' },
   reply: { outline: 'arrow-undo-outline', filled: 'arrow-undo' },
+  restore: { outline: 'refresh-outline', filled: 'refresh' },
+  rewind: { outline: 'play-back-outline', filled: 'play-back' },
   moreVertical: { outline: 'ellipsis-vertical', filled: 'ellipsis-vertical' },
   edit: { outline: 'create-outline', filled: 'create' },
+  warning: { outline: 'warning-outline', filled: 'warning' },
 };
 
 interface IconProps {

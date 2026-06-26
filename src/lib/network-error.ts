@@ -4,15 +4,34 @@ export function isNetworkFetchError(error: unknown): boolean {
     'message' in error && typeof error.message === 'string'
       ? error.message.toLowerCase()
       : String(error).toLowerCase();
+  const details =
+    'details' in error && typeof error.details === 'string'
+      ? error.details.toLowerCase()
+      : '';
+  const combined = `${message} ${details}`;
   return (
-    message.includes('fetch failed') ||
-    message.includes('network request failed') ||
-    message.includes('network error') ||
-    message.includes('failed to fetch')
+    combined.includes('fetch failed') ||
+    combined.includes('network request failed') ||
+    combined.includes('network error') ||
+    combined.includes('failed to fetch') ||
+    combined.includes('unknownhostexception') ||
+    combined.includes('unable to resolve host') ||
+    combined.includes('no address associated with hostname')
   );
 }
 
+export function isJwtExpiredError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+  const code = 'code' in error ? String(error.code) : '';
+  const message =
+    'message' in error && typeof error.message === 'string' ? error.message.toLowerCase() : '';
+  return code === 'PGRST303' || message.includes('jwt expired');
+}
+
 export function toUserFacingNetworkError(error: unknown, fallback: string): Error {
+  if (isJwtExpiredError(error)) {
+    return new Error('Your session expired. Please sign in again.');
+  }
   if (isNetworkFetchError(error)) {
     return new Error('Could not reach Moments servers. Check your internet connection and try again.');
   }

@@ -121,17 +121,15 @@ export default function ChatScreen() {
   const initialScrollDoneRef = useRef(false);
 
   const {
-    data: messagesData,
-    isLoading,
+    messages,
+    isFetching,
+    isError,
+    isFetched,
     fetchNextPage,
     hasNextPage,
     isFetchingNextPage,
     refetch,
   } = useInfiniteMessages();
-  const messages = useMemo(
-    () => messagesData?.pages.reduceRight<Message[]>((acc, page) => [...page, ...acc], []) ?? [],
-    [messagesData?.pages],
-  );
   const { isOnline: partnerOnline, lastSeenAt: partnerLastSeenAt } = usePartnerPresence(
     relationship?.id,
     user?.id,
@@ -776,6 +774,8 @@ export default function ChatScreen() {
 
   const onListScroll = useCallback(
     (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+      if (!isFetched) return;
+
       const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
       nearBottomRef.current =
         contentOffset.y + layoutMeasurement.height >= contentSize.height - 120;
@@ -792,7 +792,7 @@ export default function ChatScreen() {
         });
       }
     },
-    [hasNextPage, isFetchingNextPage, fetchNextPage],
+    [hasNextPage, isFetchingNextPage, fetchNextPage, isFetched],
   );
 
   const closeChat = useCallback(() => {
@@ -800,6 +800,11 @@ export default function ChatScreen() {
   }, [router]);
 
   const hasText = text.trim().length > 0;
+  const canLoadMessages = !!relationship?.id && !!user?.id;
+  const showMessagesLoader = canLoadMessages && !isFetched && isFetching && !isOffline;
+  const messagesErrorText = isOffline
+    ? 'You appear to be offline. Messages will load when you reconnect.'
+    : "Couldn't load messages.";
   const kbOffset = Platform.OS === 'ios' ? insets.top + HEADER_CONTENT_HEIGHT : 0;
   const listPad = 8;
   const inputBarPad = 6;
@@ -951,8 +956,17 @@ export default function ChatScreen() {
             />
           ) : (
             <ChatWallpaper style={styles.flex}>
-              {isLoading ? (
+              {showMessagesLoader ? (
                 <LoadingState />
+              ) : isError || isOffline ? (
+                <View style={styles.messagesError}>
+                  <Text style={[styles.messagesErrorText, { color: colors.textSecondary }]}>
+                    {messagesErrorText}
+                  </Text>
+                  <Pressable onPress={() => void refetch()} hitSlop={8}>
+                    <Text style={[styles.messagesRetry, { color: colors.accent }]}>Tap to retry</Text>
+                  </Pressable>
+                </View>
               ) : (
                 <FlatList
                   ref={listRef}
@@ -1221,6 +1235,15 @@ const styles = StyleSheet.create({
   listWithProfileIntro: { justifyContent: 'center' },
   loadOlder: { paddingVertical: 12, alignItems: 'center' },
   loadOlderText: { fontSize: 12, fontWeight: '600' },
+  messagesError: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    paddingHorizontal: 24,
+  },
+  messagesErrorText: { fontSize: 14, fontWeight: '600', textAlign: 'center' },
+  messagesRetry: { fontSize: 14, fontWeight: '700' },
 
   // Typing bubble
   typingBubble: { paddingHorizontal: 12, paddingBottom: 8 },

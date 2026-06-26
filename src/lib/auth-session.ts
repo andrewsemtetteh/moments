@@ -1,5 +1,7 @@
 import type { Session, User } from '@supabase/supabase-js';
 
+import { ensureValidSession, invalidateLocalSession, isJwtExpiredLike } from '@/lib/auth-token';
+import { getSupabase } from '@/lib/supabase';
 import * as api from '@/services/api';
 import { useAuthStore, useRelationshipStore } from '@/stores';
 
@@ -20,17 +22,55 @@ export async function ensureUserProfile(authUser: User) {
   });
 }
 
-export async function hydrateAuthSession(session: Session) {
-  const profile = await ensureUserProfile(session.user);
-  useAuthStore.getState().setUser(profile);
-  useAuthStore.getState().setSession(true);
+export async function hydrateAuthSession(session: Session, retried = false) {
+  const activeSession = await ensureValidSession(session);
+  if (!activeSession?.user) {
+    await invalidateLocalSession();
+    return;
+  }
 
-  const { relationship, partner } = await api.fetchRelationship(session.user.id);
-  useRelationshipStore.getState().setRelationship(relationship);
-  useRelationshipStore.getState().setPartner(partner);
+  try {
+    const [profile, { relationship, partner }] = await Promise.all([
+      ensureUserProfile(activeSession.user),
+      api.fetchRelationship(activeSession.user.id),
+    ]);
+
+    useAuthStore.getState().setUser(profile);
+    useAuthStore.getState().setSession(true);
+    useRelationshipStore.getState().setRelationship(relationship);
+    useRelationshipStore.getState().setPartner(partner);
+  } catch (error) {
+    if (isJwtExpiredLike(error) && !retried) {
+      const refreshed = await ensureValidSession();
+      if (refreshed?.user) {
+        return hydrateAuthSession(refreshed, true);
+      }
+      await invalidateLocalSession();
+      return;
+    }
+    throw error;
+  }
 }
 
 export async function clearAuthSession() {
   useAuthStore.getState().reset();
   useRelationshipStore.getState().reset();
+}
+
+/** Sign out, clear cached queries, and reset local auth state. Falls back to local-only sign-out if the network fails. */
+export async function signOutUser(): Promise<void> {
+  const supabase = getSupabase();
+  const { queryClient } = await import('@/providers/AppProviders');
+  queryClient.clear();
+
+  try {
+    const { error } = await supabase.auth.signOut();
+    if (error) {
+      await supabase.auth.signOut({ scope: 'local' });
+    }
+  } catch {
+    await supabase.auth.signOut({ scope: 'local' });
+  }
+
+  await clearAuthSession();
 }

@@ -3,6 +3,17 @@ import { format, isThisWeek, isToday, isYesterday } from 'date-fns';
 import type { IconName } from '@/components/ui/Icon';
 import type { Notification } from '@/types/database';
 
+/** Chat belongs in the message tab — not the notifications page inbox. */
+export const CHAT_NOTIFICATION_TYPES = new Set(['message', 'message_new']);
+
+export function isInboxNotification(notification: Pick<Notification, 'type'>): boolean {
+  return !CHAT_NOTIFICATION_TYPES.has(notification.type);
+}
+
+export function filterInboxNotifications<T extends Pick<Notification, 'type'>>(items: T[]): T[] {
+  return items.filter(isInboxNotification);
+}
+
 export const NOTIFICATION_TYPE_ICON: Record<string, IconName> = {
   moment: 'camera',
   message: 'chat',

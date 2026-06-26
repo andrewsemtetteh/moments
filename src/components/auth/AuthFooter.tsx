@@ -34,8 +34,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flexWrap: 'wrap',
     gap: 6,
-    marginTop: 32,
-    paddingTop: 8,
+    marginTop: 24,
+    paddingTop: 4,
   },
   prompt: {
     fontSize: 15,

@@ -1,45 +1,28 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
-
-async function getAuthUser(req: Request) {
-  const authHeader = req.headers.get('Authorization');
-  if (!authHeader) throw new Error('Unauthorized');
-
-  const supabase = createClient(
-    Deno.env.get('SUPABASE_URL')!,
-    Deno.env.get('SUPABASE_ANON_KEY')!,
-    { global: { headers: { Authorization: authHeader } } },
-  );
-
-  const { data: { user }, error } = await supabase.auth.getUser();
-  if (error || !user) throw new Error('Unauthorized');
-  return { user, supabase };
-}
-
-async function verifyRelationship(supabase: ReturnType<typeof createClient>, userId: string, relationshipId: string) {
-  const { data, error } = await supabase
-    .from('relationships')
-    .select('id, status')
-    .eq('id', relationshipId)
-    .or(`user_1_id.eq.${userId},user_2_id.eq.${userId}`)
-    .single();
-
-  if (error || !data) throw new Error('Not a member of this relationship');
-  return data;
-}
+import { getAuthUser, verifyRelationship } from '../_shared/auth.ts';
+import { corsHeaders, handleOptions, jsonResponse } from '../_shared/cors.ts';
+import { enforceRateLimit, RATE_LIMITS, RateLimitError } from '../_shared/rate-limit.ts';
 
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
+  const options = handleOptions(req);
+  if (options) return options;
 
   try {
     const { user, supabase } = await getAuthUser(req);
     const { mood, budget, time_available, relationship_id } = await req.json();
 
+    if (!relationship_id) throw new Error('relationship_id is required');
+
     await verifyRelationship(supabase, user.id, relationship_id);
+    await enforceRateLimit(
+      { functionName: 'generate-activity', userId: user.id },
+      RATE_LIMITS.generateActivity.maxHits,
+      RATE_LIMITS.generateActivity.windowSeconds,
+    );
+    await enforceRateLimit(
+      { functionName: 'generate-activity', relationshipId: relationship_id },
+      RATE_LIMITS.generateActivity.maxHits * 2,
+      RATE_LIMITS.generateActivity.windowSeconds,
+    );
 
     const anthropicKey = Deno.env.get('ANTHROPIC_API_KEY');
     let activities;
@@ -76,13 +59,12 @@ Deno.serve(async (req) => {
       ];
     }
 
-    return new Response(JSON.stringify({ activities }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
+    return jsonResponse({ activities });
   } catch (e) {
-    return new Response(JSON.stringify({ error: e.message }), {
-      status: 400,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
+    if (e instanceof RateLimitError) {
+      return jsonResponse({ error: e.message }, 429);
+    }
+    const message = e instanceof Error ? e.message : 'Request failed';
+    return jsonResponse({ error: message }, 400);
   }
 });

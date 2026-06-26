@@ -221,7 +221,7 @@ export function MomentHistoryModal() {
         selectedMoments
           .filter((m) => m.media_url)
           .map(async (m) => ({
-            url: (await signMomentsMediaUrl(m.media_url)) ?? m.media_url!,
+            url: (await signMomentsMediaUrl(m.media_url, 'full')) ?? m.media_url!,
             isVideo: m.type === 'video',
           })),
       );
@@ -426,9 +426,7 @@ export function MomentHistoryModal() {
                 { backgroundColor: chrome.accent },
                 pressed && { opacity: 0.9 },
               ]}>
-              <View style={[styles.recapIcon, { borderColor: chrome.onAccent }]}>
-                <Icon name="plus" size={16} color={chrome.onAccent} />
-              </View>
+              <Icon name="film" size={20} color={chrome.onAccent} filled />
               <Text style={[styles.recapText, { color: chrome.onAccent }]}>Create recap</Text>
             </Pressable>
           </View>
@@ -522,14 +520,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 22,
     paddingVertical: 14,
     borderRadius: 999,
-  },
-  recapIcon: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    borderWidth: 2,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   recapText: { fontSize: 16, fontWeight: '800' },
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32, gap: 12 },

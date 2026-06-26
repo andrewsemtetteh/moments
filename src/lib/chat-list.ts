@@ -1,4 +1,4 @@
-import { format, isToday, isYesterday } from 'date-fns';
+import { format, isSameWeek, isThisWeek, isToday, isYesterday, subWeeks } from 'date-fns';
 
 import type { Message } from '@/types/database';
 
@@ -7,11 +7,33 @@ export type ChatListItem =
   | { type: 'unread'; id: string; count: number }
   | { type: 'message'; id: string; message: Message };
 
-function formatDateLabel(iso: string) {
+const WEEK_OPTS = { weekStartsOn: 1 as const };
+
+/** Date pill between message groups in chat. */
+export function formatChatDateLabel(iso: string, now = Date.now()): string {
   const date = new Date(iso);
+  const nowDate = new Date(now);
+
   if (isToday(date)) return 'Today';
   if (isYesterday(date)) return 'Yesterday';
+
+  if (isThisWeek(date, WEEK_OPTS)) {
+    return format(date, 'EEEE');
+  }
+
+  if (isSameWeek(date, subWeeks(nowDate, 1), WEEK_OPTS)) {
+    return `Last ${format(date, 'EEEE')}`;
+  }
+
+  if (date.getFullYear() === nowDate.getFullYear()) {
+    return format(date, 'MMMM d');
+  }
+
   return format(date, 'MMMM d, yyyy');
+}
+
+function formatDateLabel(iso: string) {
+  return formatChatDateLabel(iso);
 }
 
 export function buildChatListItems(

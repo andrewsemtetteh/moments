@@ -12,7 +12,8 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { PrimaryButton } from '@/components/ui/primitives';
+import { AuthPrimaryButton } from '@/components/auth/AuthPrimaryButton';
+import { AuthScreenEnter } from '@/components/auth/AuthMotion';
 import { useTheme } from '@/hooks/useTheme';
 import {
   formatAuthError,
@@ -82,11 +83,11 @@ export default function CheckEmailScreen() {
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}>
-          <View style={styles.content}>
+          <AuthScreenEnter style={styles.content}>
             <Text style={[styles.title, { color: colors.text }]}>{title}</Text>
             <Text style={[styles.subtitle, { color: colors.textSecondary }]}>{subtitle}</Text>
 
-            <PrimaryButton
+            <AuthPrimaryButton
               label="Back to sign in"
               onPress={() => router.replace('/(auth)/login')}
             />
@@ -113,7 +114,7 @@ export default function CheckEmailScreen() {
               hitSlop={8}>
               <Text style={[styles.back, { color: colors.textSecondary }]}>Go back</Text>
             </Pressable>
-          </View>
+          </AuthScreenEnter>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -123,10 +124,10 @@ export default function CheckEmailScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   inner: { flex: 1 },
-  scrollContent: { flexGrow: 1, paddingHorizontal: 24, paddingVertical: 32, justifyContent: 'center' },
-  content: { width: '100%', maxWidth: 400, alignSelf: 'center', gap: 24 },
-  title: { fontSize: 28, fontWeight: '800', textAlign: 'center', letterSpacing: -0.5 },
-  subtitle: { fontSize: 15, textAlign: 'center', lineHeight: 22 },
+  scrollContent: { flexGrow: 1, paddingHorizontal: 24, paddingVertical: 28, justifyContent: 'center' },
+  content: { width: '100%', maxWidth: 400, alignSelf: 'center', gap: 20 },
+  title: { fontSize: 26, fontWeight: '800', textAlign: 'center', letterSpacing: -0.5 },
+  subtitle: { fontSize: 15, textAlign: 'center', lineHeight: 21 },
   resend: { textAlign: 'center', fontSize: 15, fontWeight: '600' },
   back: { textAlign: 'center', fontSize: 15 },
 });

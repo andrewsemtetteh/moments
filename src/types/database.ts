@@ -217,7 +217,12 @@ export interface StreakStatus {
   /** True only while streak is 0 and a prior streak was saved — before any new activity. */
   can_restore_streak: boolean;
   restorable_streak: number | null;
+  /** ISO timestamp when the streak was lost; restore is valid for 24 hours after this. */
   restorable_lost_at: string | null;
+  /** Calendar dates (YYYY-MM-DD) when both partners were active. */
+  active_days?: string[];
+  /** Calendar dates (YYYY-MM-DD) with any qualifying couple activity. */
+  activity_days?: string[];
 }
 
 export interface DailyChallenge {

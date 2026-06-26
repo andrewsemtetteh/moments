@@ -7,25 +7,30 @@ import {
     ScrollView,
     StyleSheet,
     Text,
-    TextInput,
     View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { LogoMark } from '@/components/ui/Logo';
 import { AuthFooter } from '@/components/auth/AuthFooter';
-import { PrimaryButton } from '@/components/ui/primitives';
+import { AuthScreenEnter } from '@/components/auth/AuthMotion';
+import { AuthTextField } from '@/components/auth/AuthTextField';
+import { AuthPrimaryButton } from '@/components/auth/AuthPrimaryButton';
 import { useTheme } from '@/hooks/useTheme';
 import { sendPasswordResetLink, formatAuthError } from '@/lib/auth-otp';
+import { sanitizeEmailInput } from '@/lib/sanitize-input';
 
 export default function ForgotPasswordScreen() {
   const router = useRouter();
   const { colors } = useTheme();
   const params = useLocalSearchParams<{ email?: string }>();
-  const [email, setEmail] = useState(typeof params.email === 'string' ? params.email : '');
+  const [email, setEmail] = useState(
+    typeof params.email === 'string' ? sanitizeEmailInput(params.email) : '',
+  );
   const [loading, setLoading] = useState(false);
 
   const handleSend = async () => {
-    const trimmed = email.trim();
+    const trimmed = sanitizeEmailInput(email).trim();
     if (!trimmed) return;
 
     setLoading(true);
@@ -50,8 +55,9 @@ export default function ForgotPasswordScreen() {
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}>
-          <View style={styles.content}>
+          <AuthScreenEnter style={styles.content}>
             <View style={styles.brand}>
+              <LogoMark size={64} />
               <Text style={[styles.title, { color: colors.text }]}>Reset password</Text>
               <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
                 Enter your email and we&apos;ll send a 6-digit code to verify it&apos;s you.
@@ -59,17 +65,15 @@ export default function ForgotPasswordScreen() {
             </View>
 
             <View style={styles.form}>
-              <TextInput
-                style={[styles.input, { color: colors.text, backgroundColor: colors.surface, borderColor: colors.border }]}
-                placeholder="Email"
-                placeholderTextColor={colors.textTertiary}
+              <AuthTextField
+                label="Email"
                 autoCapitalize="none"
                 keyboardType="email-address"
                 autoComplete="email"
                 value={email}
-                onChangeText={setEmail}
+                onChangeText={(text) => setEmail(sanitizeEmailInput(text))}
               />
-              <PrimaryButton
+              <AuthPrimaryButton
                 label={loading ? 'Sending…' : 'Send code'}
                 onPress={handleSend}
                 loading={loading}
@@ -78,7 +82,7 @@ export default function ForgotPasswordScreen() {
             </View>
 
             <AuthFooter prompt="Remember your password?" linkLabel="Back to sign in" href="/(auth)/login" />
-          </View>
+          </AuthScreenEnter>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -91,19 +95,12 @@ const styles = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
     paddingHorizontal: 24,
-    paddingVertical: 32,
+    paddingVertical: 28,
     justifyContent: 'center',
   },
   content: { width: '100%', maxWidth: 400, alignSelf: 'center' },
-  brand: { alignItems: 'center', marginBottom: 32 },
-  title: { fontSize: 28, fontWeight: '800', textAlign: 'center', letterSpacing: -0.5 },
-  subtitle: { fontSize: 16, textAlign: 'center', marginTop: 10, lineHeight: 22, maxWidth: 300 },
-  form: { gap: 12 },
-  input: {
-    borderWidth: 1,
-    borderRadius: 14,
-    paddingHorizontal: 16,
-    paddingVertical: 15,
-    fontSize: 16,
-  },
+  brand: { alignItems: 'center', marginBottom: 24, gap: 12 },
+  title: { fontSize: 26, fontWeight: '800', textAlign: 'center', letterSpacing: -0.5 },
+  subtitle: { fontSize: 15, textAlign: 'center', marginTop: 8, lineHeight: 21, maxWidth: 300 },
+  form: { gap: 10 },
 });

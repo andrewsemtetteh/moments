@@ -47,24 +47,28 @@ export function ChangePasswordModal({
             Enter your current password, then choose a new one with at least 6 characters.
           </Text>
           <PasswordInput
-            placeholder="Current password"
+            label="Current password"
             autoComplete="current-password"
             value={currentPassword}
             onChangeText={onChangeCurrent}
+            labelBackgroundColor={colors.backgroundElevated}
             containerStyle={styles.input}
           />
           <PasswordInput
-            placeholder="New password"
+            label="New password"
+            minLength={6}
             autoComplete="new-password"
             value={newPassword}
             onChangeText={onChangeNew}
+            labelBackgroundColor={colors.backgroundElevated}
             containerStyle={styles.input}
           />
           <PasswordInput
-            placeholder="Confirm new password"
+            label="Confirm new password"
             autoComplete="new-password"
             value={confirmPassword}
             onChangeText={onChangeConfirm}
+            labelBackgroundColor={colors.backgroundElevated}
             containerStyle={styles.input}
           />
           {newPassword.length > 0 && newPassword === currentPassword && (

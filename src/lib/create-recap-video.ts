@@ -69,7 +69,7 @@ async function ensureWorkDir(): Promise<string> {
 }
 
 async function downloadMedia(url: string, dest: string): Promise<string> {
-  const signed = (await signMomentsMediaUrl(url)) ?? url;
+  const signed = (await signMomentsMediaUrl(url, 'full')) ?? url;
   const result = await downloadAsync(signed, dest);
   return result.uri;
 }

@@ -3,13 +3,14 @@ import { useEffect, useRef } from 'react';
 import { Platform } from 'react-native';
 
 import { useNotifications, useRealtimeSubscription } from '@/hooks/queries';
+import { isInboxNotification } from '@/lib/notification-display';
 import {
-  configureNotificationPresentation,
-  dispatchPendingPushNotifications,
-  presentLocalNotification,
-  registerForPushNotifications,
-  subscribeToAppStatePushDispatch,
-  subscribeToNotificationResponses,
+    configureNotificationPresentation,
+    dispatchPendingPushNotifications,
+    presentLocalNotification,
+    registerForPushNotifications,
+    subscribeToAppStatePushDispatch,
+    subscribeToNotificationResponses,
 } from '@/lib/push-notifications';
 import { useAuthStore, useRelationshipStore } from '@/stores';
 import type { Notification } from '@/types/database';
@@ -64,6 +65,7 @@ export function NotificationSync() {
       seenIdsRef.current.add(notification.id);
 
       if (!isOwnUnreadNotification(notification, user.id)) continue;
+      if (!isInboxNotification(notification)) continue;
 
       void presentLocalNotification(notification);
     }

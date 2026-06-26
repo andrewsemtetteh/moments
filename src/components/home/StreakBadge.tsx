@@ -1,8 +1,9 @@
 import { StyleSheet, Text, View } from 'react-native';
 
-import { Icon } from '@/components/ui/Icon';
+import { AnimatedStreakFire } from '@/components/home/AnimatedStreakFire';
 import { useTheme } from '@/hooks/useTheme';
 import { streakCountLabel, streakSubtitle } from '@/lib/streak';
+import { streakFireColor } from '@/lib/streak-colors';
 import type { StreakStatus } from '@/types/database';
 
 interface StreakBadgeProps {
@@ -13,6 +14,7 @@ export function StreakBadge({ status }: StreakBadgeProps) {
   const { colors } = useTheme();
   const atRisk = status.at_risk;
   const active = status.current_streak > 0;
+  const fireColor = streakFireColor(active || atRisk, atRisk, colors.textTertiary);
 
   return (
     <View
@@ -24,19 +26,12 @@ export function StreakBadge({ status }: StreakBadgeProps) {
           borderWidth: atRisk ? 1.5 : StyleSheet.hairlineWidth,
         },
       ]}>
-      <View
-        style={[
-          styles.fireWrap,
-          { backgroundColor: atRisk ? `${colors.warning}22` : colors.accentSoft },
-        ]}>
-        <Icon
-          name="fire"
-          size={26}
-          color={active ? (atRisk ? colors.warning : colors.accent) : colors.textTertiary}
-          filled
-          strokeWidth={1.6}
-        />
-      </View>
+      <AnimatedStreakFire
+        color={fireColor}
+        size={26}
+        animate={active}
+        pulse={atRisk}
+      />
       <View style={styles.text}>
         <Text style={[styles.count, { color: colors.text }]}>
           {active ? streakCountLabel(status.current_streak) : 'No active streak'}
@@ -62,7 +57,6 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 18,
   },
-  fireWrap: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
   text: { flex: 1 },
   count: { fontSize: 18, fontWeight: '800' },
   best: { fontSize: 13, marginTop: 2 },

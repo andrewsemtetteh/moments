@@ -1,9 +1,8 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+import { getAuthUser } from '../_shared/auth.ts';
+import { handleOptions, jsonResponse } from '../_shared/cors.ts';
+import { enforceRateLimit, RATE_LIMITS, RateLimitError } from '../_shared/rate-limit.ts';
 
 type ExpoPushMessage = {
   to: string;
@@ -53,22 +52,17 @@ async function sendExpoPush(messages: ExpoPushMessage[]) {
 }
 
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
+  const options = handleOptions(req);
+  if (options) return options;
 
   try {
-    const authHeader = req.headers.get('Authorization');
-    if (!authHeader) throw new Error('Unauthorized');
+    const { user, supabase: supabaseUser } = await getAuthUser(req);
 
-    const supabaseUser = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_ANON_KEY')!,
-      { global: { headers: { Authorization: authHeader } } },
+    await enforceRateLimit(
+      { functionName: 'send-push-notification', userId: user.id },
+      RATE_LIMITS.sendPushNotification.maxHits,
+      RATE_LIMITS.sendPushNotification.windowSeconds,
     );
-
-    const {
-      data: { user },
-    } = await supabaseUser.auth.getUser();
-    if (!user) throw new Error('Unauthorized');
 
     const body = await req.json().catch(() => ({}));
     const limit = typeof body.limit === 'number' ? body.limit : 10;
@@ -92,9 +86,7 @@ Deno.serve(async (req) => {
     }>;
 
     if (rows.length === 0) {
-      return new Response(JSON.stringify({ sent: 0, skipped: 0 }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      return jsonResponse({ sent: 0, skipped: 0 });
     }
 
     const userIds = [...new Set(rows.map((row) => row.user_id))];
@@ -153,16 +145,13 @@ Deno.serve(async (req) => {
         .in('id', skippedIds);
     }
 
-    return new Response(JSON.stringify({ sent: messages.length, skipped: skippedIds.length }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
+    return jsonResponse({ sent: messages.length, skipped: skippedIds.length });
   } catch (e) {
+    if (e instanceof RateLimitError) {
+      return jsonResponse({ sent: 0, skipped: 0, error: e.message, rate_limited: true });
+    }
     const message = e instanceof Error ? e.message : 'Unknown error';
     console.error('send-push-notification failed:', message);
-    // Return 200 so clients treating non-2xx as fatal do not crash; body carries the error.
-    return new Response(JSON.stringify({ sent: 0, skipped: 0, error: message }), {
-      status: 200,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
+    return jsonResponse({ sent: 0, skipped: 0, error: message });
   }
 });

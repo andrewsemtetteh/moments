@@ -2,6 +2,7 @@ import { useRef } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { useTheme } from '@/hooks/useTheme';
+import { sanitizeOtpInput } from '@/lib/sanitize-input';
 
 const LENGTH = 6;
 
@@ -17,7 +18,7 @@ export function OtpCodeInput({ value, onChange, autoFocus = true }: Props) {
   const digits = Array.from({ length: LENGTH }, (_, i) => value[i] ?? '');
 
   const handleChange = (text: string) => {
-    onChange(text.replace(/\D/g, '').slice(0, LENGTH));
+    onChange(sanitizeOtpInput(text));
   };
 
   return (

@@ -3,9 +3,10 @@ import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tansta
 import { useEffect, useMemo, useRef } from 'react';
 import { Alert } from 'react-native';
 
-import { isMissingTableError, toUserFacingNetworkError, getErrorMessage } from '@/lib/network-error';
 import type { MoodHistoryFilter } from '@/lib/mood-history';
 import { resolveMoodFilterUserId as resolveMoodHistoryUserId } from '@/lib/mood-history';
+import { getErrorMessage, isMissingTableError, toUserFacingNetworkError } from '@/lib/network-error';
+import { filterInboxNotifications } from '@/lib/notification-display';
 import { getEffectiveTier } from '@/lib/subscription';
 import { supabase } from '@/lib/supabase';
 import { scheduleWatchReminder } from '@/lib/watch-reminders';
@@ -110,31 +111,36 @@ const MESSAGES_PAGE_SIZE = 50;
 export function useInfiniteMessages() {
   const relationship = useRelationshipStore((s) => s.relationship);
   const user = useAuthStore((s) => s.user);
+  const userId = user?.id;
 
-  return useInfiniteQuery({
-    queryKey: ['messages', relationship?.id],
+  const query = useInfiniteQuery({
+    queryKey: ['messages', relationship?.id, userId],
     queryFn: ({ pageParam }) =>
       api.fetchMessages(relationship!.id, MESSAGES_PAGE_SIZE, pageParam as string | undefined),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (lastPage) =>
       lastPage.length < MESSAGES_PAGE_SIZE ? undefined : lastPage[0]?.created_at,
-    enabled: !!relationship?.id && !!user?.id,
+    enabled: !!relationship?.id && !!userId,
     staleTime: 30_000,
-    select: (data) => ({
-      ...data,
-      pages: data.pages.map((page) => page.filter((m) => !(m.hidden_for ?? []).includes(user!.id))),
-    }),
   });
+
+  const messages = useMemo(() => {
+    if (!userId) return [];
+    return (
+      query.data?.pages.reduceRight<Message[]>((acc, page) => {
+        const visible = page.filter((m) => !(m.hidden_for ?? []).includes(userId));
+        return [...visible, ...acc];
+      }, []) ?? []
+    );
+  }, [query.data?.pages, userId]);
+
+  return { ...query, messages };
 }
 
 /** @deprecated use useInfiniteMessages — kept for callers that need a flat list */
 export function useMessages() {
   const query = useInfiniteMessages();
-  const messages = useMemo(
-    () => query.data?.pages.reduceRight<Message[]>((acc, page) => [...page, ...acc], []) ?? [],
-    [query.data?.pages],
-  );
-  return { ...query, data: messages };
+  return { ...query, data: query.messages };
 }
 
 export function useUnreadMessageCount() {
@@ -321,13 +327,7 @@ export function useStreak() {
 
   return useQuery({
     queryKey: ['streak', relationship?.id],
-    queryFn: async () => {
-      const status = await api.fetchStreakStatus(relationship!.id);
-      void import('@/lib/push-notifications').then(({ dispatchPendingPushNotifications }) =>
-        dispatchPendingPushNotifications(),
-      );
-      return status;
-    },
+    queryFn: async () => api.fetchStreakStatus(relationship!.id),
     enabled: !!relationship?.id,
     staleTime: 30_000,
     refetchInterval: 5 * 60_000,
@@ -416,7 +416,10 @@ export function useNotificationFeed() {
 /** Flat list wrapper — used by NotificationSync and legacy callers. */
 export function useNotifications() {
   const feed = useNotificationFeed();
-  const data = useMemo(() => feed.data?.pages.flat(), [feed.data]);
+  const data = useMemo(
+    () => filterInboxNotifications(feed.data?.pages.flat() ?? []),
+    [feed.data],
+  );
   return {
     ...feed,
     data,
@@ -444,6 +447,22 @@ function invalidateNotificationQueries(queryClient: ReturnType<typeof useQueryCl
 }
 
 let notificationInvalidateTimer: ReturnType<typeof setTimeout> | null = null;
+let messageInvalidateTimer: ReturnType<typeof setTimeout> | null = null;
+
+function debouncedInvalidateMessageQueries(
+  queryClient: ReturnType<typeof useQueryClient>,
+  relationshipId: string,
+  userId?: string,
+) {
+  if (messageInvalidateTimer) clearTimeout(messageInvalidateTimer);
+  messageInvalidateTimer = setTimeout(() => {
+    messageInvalidateTimer = null;
+    queryClient.invalidateQueries({ queryKey: ['messages', relationshipId] });
+    if (userId) {
+      queryClient.invalidateQueries({ queryKey: ['unreadMessages', relationshipId, userId] });
+    }
+  }, 400);
+}
 
 function debouncedInvalidateNotificationQueries(
   queryClient: ReturnType<typeof useQueryClient>,
@@ -563,9 +582,8 @@ export function useRealtimeSubscription(
           const qc = queryClientRef.current;
           qc.invalidateQueries({ queryKey: [table === 'mood_logs' ? 'moods' : table.replace('_logs', ''), relationship.id] });
           if (table === 'messages') {
-            qc.invalidateQueries({ queryKey: ['messages', relationship.id] });
             const userId = useAuthStore.getState().user?.id;
-            qc.invalidateQueries({ queryKey: ['unreadMessages', relationship.id, userId] });
+            debouncedInvalidateMessageQueries(qc, relationship.id, userId);
           }
           if (table === 'watch_sessions') {
             qc.invalidateQueries({ queryKey: ['watchSession', relationship.id] });

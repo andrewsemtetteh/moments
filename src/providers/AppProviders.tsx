@@ -1,9 +1,11 @@
-import { ReactNode, useEffect } from 'react';
-import { Platform } from 'react-native';
+import { ReactNode, useEffect, useRef } from 'react';
+import { AppState, Platform } from 'react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import NetInfo from '@react-native-community/netinfo';
+import Ionicons from '@expo/vector-icons/Ionicons';
 
 import { clearAuthSession, hydrateAuthSession } from '@/lib/auth-session';
+import { ensureValidSession, invalidateLocalSession } from '@/lib/auth-token';
 import { getRememberMe } from '@/lib/remember-me-storage';
 import { getSupabase } from '@/lib/supabase';
 import { CallProvider } from '@/providers/CallProvider';
@@ -22,6 +24,11 @@ const queryClient = new QueryClient({
 function AuthSync({ children }: { children: ReactNode }) {
   const setLoading = useAuthStore((s) => s.setLoading);
   const setOffline = useUIStore((s) => s.setOffline);
+  const bootstrappedRef = useRef(false);
+
+  useEffect(() => {
+    void Ionicons.loadFont();
+  }, []);
 
   useEffect(() => {
     if (Platform.OS === 'web') {
@@ -30,51 +37,77 @@ function AuthSync({ children }: { children: ReactNode }) {
     }
 
     const supabase = getSupabase();
+    supabase.auth.startAutoRefresh();
+
+    const appStateSub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') {
+        supabase.auth.startAutoRefresh();
+        void ensureValidSession().catch(() => undefined);
+      } else {
+        void supabase.auth.stopAutoRefresh();
+      }
+    });
 
     const unsubscribeNet = NetInfo.addEventListener((state) => {
       setOffline(!state.isConnected);
     });
 
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
+    void (async () => {
       try {
         const rememberMe = await getRememberMe();
         if (!rememberMe) {
           queryClient.clear();
-          await supabase.auth.signOut({ scope: 'local' });
-          await clearAuthSession();
+          await invalidateLocalSession();
           return;
         }
 
+        const activeSession = await ensureValidSession();
         queryClient.clear();
-        if (session?.user) {
-          await hydrateAuthSession(session);
+        if (activeSession?.user) {
+          await hydrateAuthSession(activeSession);
         } else {
           await clearAuthSession();
         }
+      } catch {
+        queryClient.clear();
+        await invalidateLocalSession();
       } finally {
+        bootstrappedRef.current = true;
         setLoading(false);
       }
-    });
+    })();
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === 'TOKEN_REFRESHED') return;
-      try {
-        queryClient.clear();
-        if (session?.user) {
-          await hydrateAuthSession(session);
-        } else {
-          await clearAuthSession();
-        }
-      } finally {
-        setLoading(false);
-      }
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'INITIAL_SESSION' || event === 'TOKEN_REFRESHED') return;
+
+      // Never await inside onAuthStateChange — it blocks Supabase's auth lock and breaks refresh.
+      queueMicrotask(() => {
+        void (async () => {
+          if (!bootstrappedRef.current && event === 'SIGNED_IN') return;
+
+          try {
+            queryClient.clear();
+            if (session?.user) {
+              await hydrateAuthSession(session);
+            } else {
+              await clearAuthSession();
+            }
+          } catch {
+            await invalidateLocalSession();
+          } finally {
+            setLoading(false);
+          }
+        })();
+      });
     });
 
     return () => {
       subscription.unsubscribe();
       unsubscribeNet();
+      appStateSub.remove();
+      void supabase.auth.stopAutoRefresh();
     };
   }, [setLoading, setOffline]);
 
@@ -83,6 +116,7 @@ function AuthSync({ children }: { children: ReactNode }) {
 
 function WebProviders({ children }: { children: ReactNode }) {
   useEffect(() => {
+    void Ionicons.loadFont();
     useAuthStore.getState().setLoading(false);
   }, []);
   return <>{children}</>;

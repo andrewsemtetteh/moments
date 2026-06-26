@@ -1,20 +1,25 @@
 import { FREE_ALBUM_STORAGE_BYTES } from '@/constants/design-system';
-import * as Crypto from 'expo-crypto';
-import { getFirstName } from '@/lib/avatar-initial';
 import { extractChatStoragePath } from '@/lib/chat-media';
-import {
-  buildOverviewFromLogs,
-  getLocalTimezoneOffsetMinutes,
-  mapRpcOverview,
-  type MoodHistoryFilter,
-  type RpcMoodHistoryOverview,
-  resolveMoodFilterUserId,
-} from '@/lib/mood-history';
 import { extractMomentsStoragePath, hydrateMomentsMedia } from '@/lib/moment-media';
-import { legacyStreakToStatus, parseStreakStatus } from '@/lib/streak';
+import {
+    buildOverviewFromLogs,
+    getLocalTimezoneOffsetMinutes,
+    mapRpcOverview,
+    resolveMoodFilterUserId,
+    type MoodHistoryFilter,
+    type RpcMoodHistoryOverview,
+} from '@/lib/mood-history';
+import { getErrorMessage, isMissingTableError } from '@/lib/network-error';
+import {
+    clientFallbackQuestions,
+    computeRoundPoints,
+    mergeScores,
+    parseQuizQuestions,
+} from '@/lib/quiz-live';
 import { SharedAlbumStorageLimitError } from '@/lib/shared-album';
 import { hydrateSharedAlbumItems } from '@/lib/shared-album-media';
-import { isMissingTableError, getErrorMessage } from '@/lib/network-error';
+import { createStorageSignedUrl } from '@/lib/storage-cdn';
+import { legacyStreakToStatus, parseStreakStatus, withEffectiveStreakRestore } from '@/lib/streak';
 import { hasActiveUserSubscription } from '@/lib/subscription';
 import { supabase } from '@/lib/supabase';
 import type {
@@ -25,13 +30,15 @@ import type {
     JournalEntry,
     Message,
     Moment,
-    SharedAlbumItem,
     MoodLog,
     Notification,
+    QuizLiveQuestion,
+    QuizLiveSession,
     Relationship,
+    SharedAlbumItem,
     SharedGoal,
-    StreakStatus,
     Streak,
+    StreakStatus,
     StreamingConnection,
     SubscriptionTier,
     UserProfile,
@@ -41,15 +48,9 @@ import type {
     WatchReaction,
     WatchSession,
     WatchVote,
-    QuizLiveSession,
-    QuizLiveQuestion,
 } from '@/types/database';
-import {
-  computeRoundPoints,
-  mergeScores,
-  parseQuizQuestions,
-  clientFallbackQuestions,
-} from '@/lib/quiz-live';
+import { format, startOfDay } from 'date-fns';
+import * as Crypto from 'expo-crypto';
 
 async function readUriAsArrayBuffer(uri: string): Promise<ArrayBuffer> {
   const response = await fetch(uri);
@@ -480,11 +481,8 @@ export async function uploadSharedAlbumMedia(path: string, uri: string, contentT
   });
   if (error) throw error;
 
-  const { data: signed, error: signError } = await supabase.storage
-    .from('shared-album')
-    .createSignedUrl(data.path, 60 * 60 * 24 * 365 * 5);
-  if (signError) throw signError;
-  return { path: data.path, signedUrl: signed.signedUrl, byteLength: arrayBuffer.byteLength };
+  const signedUrl = await createStorageSignedUrl('shared-album', data.path, { size: 'full' });
+  return { path: data.path, signedUrl, byteLength: arrayBuffer.byteLength };
 }
 
 export async function createSharedAlbumItem(
@@ -603,36 +601,7 @@ export async function sendMessage(
     .single();
   if (error) throw error;
 
-  const partnerId = options?.partnerUserId;
-  if (partnerId && partnerId !== senderId) {
-    await notifyPartnerNewMessage(relationshipId, partnerId, options?.senderName, data as Message);
-  }
-
   return data as Message;
-}
-
-export async function notifyPartnerNewMessage(
-  relationshipId: string,
-  partnerUserId: string,
-  senderName: string | null | undefined,
-  message: Pick<Message, 'content' | 'media_type'>,
-) {
-  const label = getFirstName(senderName) ?? 'Your partner';
-  const text = message.content?.trim();
-  let preview: string;
-  if (text) {
-    preview = text.length > 80 ? `${text.slice(0, 77)}…` : text;
-    preview = `${label}: ${preview}`;
-  } else if (message.media_type === 'image') {
-    preview = `${label} sent you a photo`;
-  } else if (message.media_type === 'video') {
-    preview = `${label} sent you a video`;
-  } else if (message.media_type === 'voice') {
-    preview = `${label} sent you a voice message`;
-  } else {
-    preview = `${label} sent you a message`;
-  }
-  await sendPartnerNotification(relationshipId, partnerUserId, 'message', preview);
 }
 
 export async function markMessagesRead(relationshipId: string, userId: string) {
@@ -928,8 +897,22 @@ export async function fetchStreakStatus(relationshipId: string): Promise<StreakS
   const { data, error } = await supabase.rpc('get_streak_status', {
     p_relationship_id: relationshipId,
   });
+
+  const activityDays = await fetchRelationshipActivityDays(relationshipId);
+
   if (!error && data) {
-    return parseStreakStatus(data);
+    const status = parseStreakStatus(data);
+    if (!status) return null;
+
+    const activeDays = await fetchStreakActiveDays(relationshipId);
+    const mergedActive = mergeDayLists(status.active_days, activeDays);
+    const mergedActivity = mergeDayLists(status.activity_days, activityDays);
+
+    return withEffectiveStreakRestore({
+      ...status,
+      active_days: mergedActive.length > 0 ? mergedActive : undefined,
+      activity_days: mergedActivity.length > 0 ? mergedActivity : activityDays,
+    });
   }
 
   const { data: row, error: rowError } = await supabase
@@ -943,13 +926,93 @@ export async function fetchStreakStatus(relationshipId: string): Promise<StreakS
     status.current_streak === 0 &&
     typeof row.restorable_streak === 'number' &&
     row.restorable_streak > 0;
-  return {
+  const activeDays = await fetchStreakActiveDays(relationshipId);
+  return withEffectiveStreakRestore({
     ...status,
     can_restore_streak: canRestore,
     restorable_streak: canRestore ? row.restorable_streak : null,
     restorable_lost_at:
       typeof row.restorable_lost_at === 'string' ? row.restorable_lost_at : null,
-  };
+    active_days: mergeDayLists(activeDays),
+    activity_days: activityDays,
+  });
+}
+
+function mergeDayLists(...lists: (string[] | undefined)[]): string[] {
+  const out = new Set<string>();
+  for (const list of lists) {
+    for (const day of list ?? []) {
+      out.add(day);
+    }
+  }
+  return [...out].sort();
+}
+
+function trackActivityDate(dates: Set<string>, value: string | null | undefined) {
+  if (!value) return;
+  const parsed = new Date(value.includes('T') ? value : `${value}T12:00:00`);
+  if (Number.isNaN(parsed.getTime())) return;
+  dates.add(format(startOfDay(parsed), 'yyyy-MM-dd'));
+}
+
+async function fetchRelationshipActivityDays(relationshipId: string): Promise<string[]> {
+  const since = new Date();
+  since.setFullYear(since.getFullYear() - 1);
+  const sinceIso = since.toISOString();
+  const dates = new Set<string>();
+
+  const [moments, messages, moods, journal, challenges] = await Promise.all([
+    supabase
+      .from('moments')
+      .select('created_at')
+      .eq('relationship_id', relationshipId)
+      .gte('created_at', sinceIso),
+    supabase
+      .from('messages')
+      .select('created_at')
+      .eq('relationship_id', relationshipId)
+      .gte('created_at', sinceIso),
+    supabase
+      .from('mood_logs')
+      .select('created_at')
+      .eq('relationship_id', relationshipId)
+      .gte('created_at', sinceIso),
+    supabase
+      .from('journal_entries')
+      .select('created_at')
+      .eq('relationship_id', relationshipId)
+      .eq('is_private', false)
+      .gte('created_at', sinceIso),
+    supabase
+      .from('daily_challenges')
+      .select('challenge_date, user_1_response, user_2_response')
+      .eq('relationship_id', relationshipId)
+      .gte('challenge_date', sinceIso.slice(0, 10)),
+  ]);
+
+  for (const row of moments.data ?? []) trackActivityDate(dates, row.created_at);
+  for (const row of messages.data ?? []) trackActivityDate(dates, row.created_at);
+  for (const row of moods.data ?? []) trackActivityDate(dates, row.created_at);
+  for (const row of journal.data ?? []) trackActivityDate(dates, row.created_at);
+  for (const row of challenges.data ?? []) {
+    if (row.user_1_response || row.user_2_response) {
+      trackActivityDate(dates, row.challenge_date);
+    }
+  }
+
+  return [...dates].sort();
+}
+
+async function fetchStreakActiveDays(relationshipId: string): Promise<string[]> {
+  const { data, error } = await supabase
+    .from('streak_active_days')
+    .select('activity_date')
+    .eq('relationship_id', relationshipId)
+    .order('activity_date', { ascending: true });
+  if (error || !data) return [];
+  return data
+    .map((row) => row.activity_date)
+    .filter((d): d is string => typeof d === 'string');
 }
 
 export async function restoreStreak(relationshipId: string): Promise<StreakStatus | null> {
@@ -957,7 +1020,8 @@ export async function restoreStreak(relationshipId: string): Promise<StreakStatu
     p_relationship_id: relationshipId,
   });
   if (error) throw error;
-  return parseStreakStatus(data);
+  const status = parseStreakStatus(data);
+  return status ? withEffectiveStreakRestore(status) : null;
 }
 
 /** @deprecated use fetchStreakStatus */
@@ -1068,6 +1132,7 @@ export async function fetchNotificationsPage(
     .from('notifications')
     .select('*')
     .eq('user_id', userId)
+    .not('type', 'in', '(message,message_new)')
     .order('created_at', { ascending: false })
     .limit(limit);
 
@@ -1085,7 +1150,8 @@ export async function fetchUnreadNotificationCount(userId: string) {
     .from('notifications')
     .select('*', { count: 'exact', head: true })
     .eq('user_id', userId)
-    .eq('read', false);
+    .eq('read', false)
+    .not('type', 'in', '(message,message_new)');
 
   if (error) throw error;
   return count ?? 0;
@@ -1143,16 +1209,9 @@ export async function uploadMedia(
   });
   if (error) throw error;
 
-  if (bucket === 'moments') {
-    const { data: signed, error: signError } = await supabase.storage
-      .from('moments')
-      .createSignedUrl(data.path, 60 * 60 * 24 * 365 * 5);
-    if (signError) throw signError;
-    return signed.signedUrl;
-  }
-
-  const { data: urlData } = supabase.storage.from(bucket).getPublicUrl(data.path);
-  return urlData.publicUrl;
+  return createStorageSignedUrl(bucket, data.path, {
+    size: bucket === 'profiles' ? 'thumb' : 'full',
+  });
 }
 
 /** Upload moment media to the private `moments` bucket; returns a long-lived signed URL. */
@@ -1170,11 +1229,7 @@ export async function uploadChatMedia(path: string, uri: string, contentType: st
   });
   if (error) throw error;
 
-  const { data: signed, error: signError } = await supabase.storage
-    .from('chat')
-    .createSignedUrl(data.path, 60 * 60 * 24 * 365 * 5);
-  if (signError) throw signError;
-  return signed.signedUrl;
+  return createStorageSignedUrl('chat', data.path, { size: 'full' });
 }
 
 /** Upload avatar to private profiles bucket; returns a long-lived signed URL. */
@@ -1188,11 +1243,7 @@ export async function uploadProfileAvatar(userId: string, uri: string) {
   });
   if (error) throw error;
 
-  const { data: signed, error: signError } = await supabase.storage
-    .from('profiles')
-    .createSignedUrl(data.path, 60 * 60 * 24 * 365 * 5);
-  if (signError) throw signError;
-  return signed.signedUrl;
+  return createStorageSignedUrl('profiles', data.path, { size: 'thumb' });
 }
 
 export async function invokeEdgeFunction<T>(

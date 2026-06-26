@@ -9,6 +9,7 @@ import {
 import { SymbolView } from 'expo-symbols';
 import { Pressable, useColorScheme, View, StyleSheet } from 'react-native';
 
+import { LogoMark } from '@/components/ui/Logo';
 import { ExternalLink } from './external-link';
 import { ThemedText } from './themed-text';
 import { ThemedView } from './themed-view';
@@ -54,6 +55,7 @@ export function CustomTabList(props: TabListProps) {
   return (
     <View {...props} style={styles.tabListContainer}>
       <ThemedView type="backgroundElement" style={styles.innerContainer}>
+        <LogoMark size={28} />
         <ThemedText type="smallBold" style={styles.brandText}>
           Moments
         </ThemedText>

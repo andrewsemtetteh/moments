@@ -36,10 +36,13 @@ const ExpoSecureStoreAdapter = {
 };
 
 function getAuthStorage() {
-  if (!isBrowser) return noopStorage;
-  if (Platform.OS === 'web') return AsyncStorage;
+  if (Platform.OS === 'web') {
+    return isBrowser ? AsyncStorage : noopStorage;
+  }
   return ExpoSecureStoreAdapter;
 }
+
+const isWeb = Platform.OS === 'web';
 
 function createSupabaseClient(): SupabaseClient {
   if (!supabaseUrl || !supabaseAnonKey) {
@@ -54,12 +57,38 @@ function createSupabaseClient(): SupabaseClient {
     {
       auth: {
         storage: getAuthStorage(),
-        autoRefreshToken: isBrowser,
-        persistSession: isBrowser,
-        detectSessionInUrl: Platform.OS === 'web' && isBrowser,
+        autoRefreshToken: true,
+        persistSession: true,
+        detectSessionInUrl: isWeb && isBrowser,
+        flowType: 'pkce',
+      },
+      global: {
+        fetch: createAuthAwareFetch(),
       },
     },
   );
+}
+
+function createAuthAwareFetch(): typeof fetch {
+  return async (input, init) => {
+    const response = await fetch(input, init);
+    if (response.status !== 401) return response;
+
+    try {
+      const body = await response.clone().json();
+      if (body?.code !== 'PGRST303' && body?.message !== 'JWT expired') {
+        return response;
+      }
+    } catch {
+      return response;
+    }
+
+    const { ensureValidSession } = await import('@/lib/auth-token');
+    const session = await ensureValidSession();
+    if (!session) return response;
+
+    return fetch(input, init);
+  };
 }
 
 /** Lazy client — avoids SSR `window is not defined` on web static render. */

@@ -1,14 +1,16 @@
 import * as Haptics from 'expo-haptics';
-import { usePathname, useRouter } from 'expo-router';
+import { useFocusEffect, usePathname, useRouter } from 'expo-router';
+import { useCallback, useMemo } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Icon, type IconName } from '@/components/ui/Icon';
 import { Avatar } from '@/components/ui/primitives';
-import { useUnreadMessageCount, useUnreadNotificationCount } from '@/hooks/queries';
+import { useNotifications, useUnreadMessageCount, useUnreadNotificationCount } from '@/hooks/queries';
 import { useOpenPartnerProfile } from '@/hooks/useOpenPartnerProfile';
 import { useTheme } from '@/hooks/useTheme';
 import { formatBadgeCount } from '@/lib/format-badge';
+import { filterInboxNotifications } from '@/lib/notification-display';
 import { useRelationshipStore, useUIStore } from '@/stores';
 
 const APP_NAME = 'Moments';
@@ -26,8 +28,23 @@ export function AppHeader({ showChat = true, showWatchTogether = true }: AppHead
   const openWatchTogether = useUIStore((s) => s.openWatchTogether);
   const openPartnerProfile = useOpenPartnerProfile();
   const partner = useRelationshipStore((s) => s.partner);
-  const { data: unreadNotifications = 0 } = useUnreadNotificationCount();
+  const { data: unreadNotificationsCount = 0, refetch: refetchUnreadNotifications } =
+    useUnreadNotificationCount();
+  const { data: notifications } = useNotifications();
   const { data: unreadMessages = 0 } = useUnreadMessageCount();
+
+  const unreadNotifications = useMemo(() => {
+    const fromFeed = filterInboxNotifications(notifications ?? []).filter(
+      (notification) => !notification.read,
+    ).length;
+    return Math.max(unreadNotificationsCount, fromFeed);
+  }, [notifications, unreadNotificationsCount]);
+
+  useFocusEffect(
+    useCallback(() => {
+      void refetchUnreadNotifications();
+    }, [refetchUnreadNotifications]),
+  );
 
   return (
     <View style={[styles.header, { paddingTop: insets.top + 6, backgroundColor: colors.background }]}>
@@ -93,6 +110,7 @@ export function AppHeader({ showChat = true, showWatchTogether = true }: AppHead
           onPress={() => router.push('/notifications')}
           badge={unreadNotifications}
           filledWhenActive={false}
+          badgePlacement="trailing"
         />
       </View>
     </View>
@@ -107,6 +125,7 @@ function HeaderIconButton({
   badge = 0,
   active = false,
   filledWhenActive = true,
+  badgePlacement = 'default',
 }: {
   icon: IconName;
   label: string;
@@ -115,10 +134,13 @@ function HeaderIconButton({
   badge?: number;
   active?: boolean;
   filledWhenActive?: boolean;
+  badgePlacement?: 'default' | 'trailing';
 }) {
   const { colors } = useTheme();
   const showBadge = badge > 0;
   const isHighlighted = active && filledWhenActive;
+  const badgePositionStyle =
+    badgePlacement === 'trailing' ? styles.badgeTrailing : styles.badgeDefault;
 
   return (
     <Pressable
@@ -136,13 +158,18 @@ function HeaderIconButton({
           color={isHighlighted ? colors.accent : colors.textSecondary}
           filled={isHighlighted}
         />
-        {showBadge && (
-          <View style={[styles.badge, { backgroundColor: colors.error, borderColor: colors.background }]}>
+        {showBadge ? (
+          <View
+            style={[
+              styles.badge,
+              badgePositionStyle,
+              { backgroundColor: colors.error, borderColor: colors.background },
+            ]}>
             <Text style={[styles.badgeText, { color: '#FFFFFF' }]} numberOfLines={1}>
               {formatBadgeCount(badge)}
             </Text>
           </View>
-        )}
+        ) : null}
       </View>
     </Pressable>
   );
@@ -152,17 +179,19 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
+    paddingHorizontal: 14,
     paddingBottom: 8,
+    overflow: 'visible',
   },
   side: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
+    overflow: 'visible',
   },
   left: { justifyContent: 'flex-start' },
-  right: { justifyContent: 'flex-end' },
+  right: { justifyContent: 'flex-end', paddingRight: 2 },
   center: { flexShrink: 1, maxWidth: '52%', alignItems: 'center' },
   centerRow: { flexDirection: 'row', alignItems: 'center', gap: 8, maxWidth: '100%' },
   title: { fontSize: 18, fontWeight: '800', letterSpacing: -0.4, flexShrink: 1 },
@@ -183,19 +212,25 @@ const styles = StyleSheet.create({
   iconPressed: { opacity: 0.65 },
   badge: {
     position: 'absolute',
-    top: -5,
-    right: -7,
-    minWidth: 17,
-    height: 17,
-    borderRadius: 9,
+    minWidth: 22,
+    height: 22,
+    borderRadius: 11,
     borderWidth: 2,
-    paddingHorizontal: 3,
+    paddingHorizontal: 5,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  badgeDefault: {
+    top: -8,
+    right: -10,
+  },
+  badgeTrailing: {
+    top: -8,
+    right: -4,
+  },
   badgeText: {
-    fontSize: 9,
+    fontSize: 12,
     fontWeight: '800',
-    lineHeight: 11,
+    lineHeight: 14,
   },
 });

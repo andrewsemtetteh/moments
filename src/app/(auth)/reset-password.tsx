@@ -11,10 +11,13 @@ import {
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { LogoMark } from '@/components/ui/Logo';
 import { PasswordInput } from '@/components/auth/PasswordInput';
-import { PrimaryButton } from '@/components/ui/primitives';
+import { AuthScreenEnter } from '@/components/auth/AuthMotion';
+import { AuthPrimaryButton } from '@/components/auth/AuthPrimaryButton';
 import { useTheme } from '@/hooks/useTheme';
 import { hydrateAuthSession } from '@/lib/auth-session';
+import { sanitizePasswordInput } from '@/lib/sanitize-input';
 import { supabase } from '@/lib/supabase';
 
 export default function ResetPasswordScreen() {
@@ -40,11 +43,13 @@ export default function ResetPasswordScreen() {
   }, [router]);
 
   const handleSave = async () => {
-    if (password.length < 6 || password !== confirmPassword) return;
+    const cleanPassword = sanitizePasswordInput(password);
+    const cleanConfirm = sanitizePasswordInput(confirmPassword);
+    if (cleanPassword.length < 6 || cleanPassword !== cleanConfirm) return;
 
     setLoading(true);
     try {
-      const { error } = await supabase.auth.updateUser({ password });
+      const { error } = await supabase.auth.updateUser({ password: cleanPassword });
       if (error) throw error;
 
       const { data: { session } } = await supabase.auth.getSession();
@@ -74,8 +79,9 @@ export default function ResetPasswordScreen() {
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}>
-          <View style={styles.content}>
+          <AuthScreenEnter style={styles.content}>
             <View style={styles.brand}>
+              <LogoMark size={64} />
               <Text style={[styles.title, { color: colors.text }]}>Choose a new password</Text>
               <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
                 Enter a new password with at least 6 characters.
@@ -84,28 +90,29 @@ export default function ResetPasswordScreen() {
 
             <View style={styles.form}>
               <PasswordInput
-                placeholder="New password"
+                label="New password"
+                minLength={6}
                 autoComplete="new-password"
                 value={password}
-                onChangeText={setPassword}
+                onChangeText={(text) => setPassword(sanitizePasswordInput(text))}
               />
               <PasswordInput
-                placeholder="Confirm new password"
+                label="Confirm new password"
                 autoComplete="new-password"
                 value={confirmPassword}
-                onChangeText={setConfirmPassword}
+                onChangeText={(text) => setConfirmPassword(sanitizePasswordInput(text))}
               />
               {confirmPassword.length > 0 && password !== confirmPassword && (
                 <Text style={[styles.error, { color: colors.error }]}>Passwords do not match</Text>
               )}
-              <PrimaryButton
+              <AuthPrimaryButton
                 label={loading ? 'Saving…' : 'Update password'}
                 onPress={handleSave}
                 loading={loading}
                 disabled={!canSave}
               />
             </View>
-          </View>
+          </AuthScreenEnter>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -118,13 +125,13 @@ const styles = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
     paddingHorizontal: 24,
-    paddingVertical: 32,
+    paddingVertical: 28,
     justifyContent: 'center',
   },
   content: { width: '100%', maxWidth: 400, alignSelf: 'center' },
-  brand: { alignItems: 'center', marginBottom: 32 },
-  title: { fontSize: 28, fontWeight: '800', textAlign: 'center', letterSpacing: -0.5 },
-  subtitle: { fontSize: 16, textAlign: 'center', marginTop: 10, lineHeight: 22, maxWidth: 300 },
-  form: { gap: 12 },
+  brand: { alignItems: 'center', marginBottom: 24, gap: 12 },
+  title: { fontSize: 26, fontWeight: '800', textAlign: 'center', letterSpacing: -0.5 },
+  subtitle: { fontSize: 15, textAlign: 'center', marginTop: 8, lineHeight: 21, maxWidth: 300 },
+  form: { gap: 10 },
   error: { fontSize: 13, marginTop: -4 },
 });

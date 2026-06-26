@@ -19,10 +19,12 @@ A private, couples-only relationship platform built with React Native (Expo), Su
 
 3. **Apply database schema**
    ```bash
-   npx supabase link --project-ref your-project-ref
-   npx supabase db push
+   npm run db:cli:install   # first time on Windows: downloads CLI to tools/
+   tools\supabase.exe login
+   tools\supabase.exe link --project-ref your-project-ref
+   npm run db:push:all
    ```
-   Or paste `supabase/migrations/20250613000000_initial_schema.sql` into the Supabase SQL editor.
+   Or paste migration SQL from `supabase/migrations/` into the Supabase SQL editor.
 
 4. **Deploy Edge Functions** (optional, for AI features)
    ```bash

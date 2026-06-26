@@ -85,6 +85,7 @@ interface UIState {
   showPaywall: boolean;
   showPartnerProfile: boolean;
   showWatchTogether: boolean;
+  streakMilestoneCount: number | null;
   watchInitialView: 'hub' | 'start' | 'watchlist' | 'schedule';
   chatDraft: string | null;
   chatMomentReply: MomentReplyContext | null;
@@ -133,6 +134,8 @@ interface UIState {
   closePartnerProfile: () => void;
   openWatchTogether: (view?: 'hub' | 'start' | 'watchlist' | 'schedule') => void;
   closeWatchTogether: () => void;
+  openStreakMilestone: (count: number) => void;
+  closeStreakMilestone: () => void;
   markPaywallShownThisSession: () => void;
   setTypingUsers: (users: string[]) => void;
   setTabBarOverlayHeight: (height: number) => void;
@@ -157,6 +160,7 @@ export const useUIStore = create<UIState>((set) => ({
   showPartnerProfile: false,
   showWatchTogether: false,
   watchInitialView: 'hub',
+  streakMilestoneCount: null,
   chatDraft: null,
   chatMomentReply: null,
   paywallShownThisSession: false,
@@ -228,6 +232,8 @@ export const useUIStore = create<UIState>((set) => ({
   closePartnerProfile: () => set({ showPartnerProfile: false }),
   openWatchTogether: (view = 'hub') => set({ showWatchTogether: true, watchInitialView: view }),
   closeWatchTogether: () => set({ showWatchTogether: false }),
+  openStreakMilestone: (count) => set({ streakMilestoneCount: count }),
+  closeStreakMilestone: () => set({ streakMilestoneCount: null }),
   markPaywallShownThisSession: () => set({ paywallShownThisSession: true }),
   setTypingUsers: (typingUsers) => set({ typingUsers }),
   setTabBarOverlayHeight: (tabBarOverlayHeight) => set({ tabBarOverlayHeight }),

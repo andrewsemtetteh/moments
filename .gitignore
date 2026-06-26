@@ -33,6 +33,11 @@ yarn-error.*
 # local env files
 .env
 .env*.local
+.env.docker
+
+# local Supabase CLI binary (run npm run db:cli:install)
+tools/supabase.exe
+tools/*.tar.gz
 
 # typescript
 *.tsbuildinfo

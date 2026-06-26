@@ -115,16 +115,16 @@ export function SocialAuthButtons({ onSuccess, requireTerms = false, agreedToTer
 
 const styles = StyleSheet.create({
   container: {
-    gap: 12,
-    marginTop: 8,
+    gap: 10,
+    marginTop: 6,
   },
   btn: {
-    paddingVertical: 14,
-    paddingHorizontal: 20,
-    borderRadius: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 52,
+    minHeight: 48,
   },
   btnContent: {
     flexDirection: 'row',
@@ -133,14 +133,14 @@ const styles = StyleSheet.create({
   },
   appleBtn: {},
   appleBtnText: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '600',
   },
   googleBtn: {
     borderWidth: 1,
   },
   googleBtnText: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '600',
   },
   dividerRow: {

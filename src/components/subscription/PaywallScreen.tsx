@@ -2,12 +2,12 @@ import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useState } from 'react';
 import {
-    Alert,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    View,
+  Alert,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -16,13 +16,13 @@ import { Icon } from '@/components/ui/Icon';
 import { PrimaryButton } from '@/components/ui/primitives';
 import { Radius } from '@/constants/design-system';
 import {
-    getTrialCtaLabel,
-    getTrialPriceLine,
-    PLUS_FEATURES,
-    SUBSCRIPTION_PLANS,
-    TRIAL_DAYS,
-    TRIAL_STEPS,
-    type SubscriptionPlanId,
+  getTrialCtaLabel,
+  getTrialPriceLine,
+  PLUS_FEATURE_ITEMS,
+  SUBSCRIPTION_PLANS,
+  TRIAL_DAYS,
+  TRIAL_STEPS,
+  type SubscriptionPlanId,
 } from '@/constants/subscription';
 import { useTheme } from '@/hooks/useTheme';
 
@@ -35,7 +35,7 @@ type Props = {
 export function PaywallScreen({ onClose, showClose = true, onSubscribe }: Props) {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
-  const [selectedPlan, setSelectedPlan] = useState<SubscriptionPlanId>('yearly');
+  const [selectedPlan, setSelectedPlan] = useState<SubscriptionPlanId>('weekly');
   const [loading, setLoading] = useState(false);
 
   const selected = SUBSCRIPTION_PLANS.find((p) => p.id === selectedPlan)!;
@@ -60,116 +60,134 @@ export function PaywallScreen({ onClose, showClose = true, onSubscribe }: Props)
 
   return (
     <SwipeDismissView edge="end" onDismiss={onClose ?? (() => undefined)} enabled={!!(showClose && onClose)}>
-    <View style={[styles.root, { backgroundColor: colors.background }]}>
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 24 }]}>
-        <LinearGradient
-          colors={colors.gradient}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={[styles.hero, { paddingTop: insets.top + 12 }]}>
-          {showClose && onClose && (
-            <Pressable
-              onPress={onClose}
-              accessibilityLabel="Close"
-              hitSlop={8}
-              style={[styles.closeBtn, { top: insets.top + 8, backgroundColor: 'rgba(255,255,255,0.22)' }]}>
-              <Icon name="close" size={20} color="#fff" />
-            </Pressable>
-          )}
-
-          <Text style={styles.heroEyebrow}>Closer, every day</Text>
-          <Text style={styles.heroTitle}>Moments Plus</Text>
-          <Text style={styles.heroTrial}>{TRIAL_DAYS}-day free trial included</Text>
-          <Text style={styles.heroFeatures}>{PLUS_FEATURES}</Text>
-          <Text style={styles.heroNote}>One subscription per relationship.</Text>
-        </LinearGradient>
-
-        <View style={[styles.timelineCard, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
-          <Text style={[styles.timelineHeading, { color: colors.text }]}>How your free trial works</Text>
-          {TRIAL_STEPS.map((step, index) => (
-            <View key={step.day} style={styles.timelineRow}>
-              <View style={styles.timelineRail}>
-                <View style={[styles.timelineDot, { backgroundColor: colors.accent }]}>
-                  <Icon name={step.icon} size={14} color={colors.onAccent} filled />
-                </View>
-                {index < TRIAL_STEPS.length - 1 && (
-                  <View style={[styles.timelineLine, { backgroundColor: colors.accentSoft }]} />
-                )}
-              </View>
-              <View style={styles.timelineCopy}>
-                <Text style={[styles.timelineTitle, { color: colors.text }]}>{step.title}</Text>
-                <Text style={[styles.timelineBody, { color: colors.textSecondary }]}>{step.body}</Text>
-              </View>
-            </View>
-          ))}
-        </View>
-
-        <View style={styles.plans}>
-          {SUBSCRIPTION_PLANS.map((plan) => {
-            const active = plan.id === selectedPlan;
-            return (
+      <View style={[styles.root, { backgroundColor: colors.background }]}>
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 24 }]}>
+          <LinearGradient
+            colors={colors.gradient}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={[styles.hero, { paddingTop: insets.top + 12 }]}>
+            {showClose && onClose && (
               <Pressable
-                key={plan.id}
-                onPress={() => {
-                  Haptics.selectionAsync();
-                  setSelectedPlan(plan.id);
-                }}
-                style={[
-                  styles.planCard,
-                  {
-                    backgroundColor: active ? colors.accentSoft : colors.surface,
-                    borderColor: active ? colors.accent : colors.border,
-                  },
-                ]}>
-                {plan.badge && (
-                  <View style={[styles.planBadge, { backgroundColor: colors.accent }]}>
-                    <Text style={[styles.planBadgeText, { color: colors.onAccent }]}>{plan.badge}</Text>
-                  </View>
-                )}
-                <View style={[styles.planRadio, { borderColor: active ? colors.accent : colors.border }]}>
-                  {active && <View style={[styles.planRadioFill, { backgroundColor: colors.accent }]} />}
-                </View>
-                <View style={styles.planCopy}>
-                  <Text style={[styles.planLabel, { color: colors.text }]}>{plan.label}</Text>
-                  <Text style={[styles.planSub, { color: colors.textSecondary }]}>{plan.sublabel}</Text>
-                </View>
-                <View style={styles.planPriceCol}>
-                  <Text style={[styles.planTrialTag, { color: colors.accent }]}>{TRIAL_DAYS}-day free</Text>
-                  {plan.compareAt && (
-                    <Text style={[styles.planCompare, { color: colors.textTertiary }]}>{plan.compareAt}</Text>
-                  )}
-                  <Text style={[styles.planPrice, { color: colors.text }]}>
-                    {plan.price}
-                    <Text style={[styles.planPeriod, { color: colors.textSecondary }]}>{plan.period}</Text>
-                  </Text>
-                </View>
+                onPress={onClose}
+                accessibilityLabel="Close"
+                hitSlop={8}
+                style={[styles.closeBtn, { top: insets.top + 8, backgroundColor: 'rgba(255,255,255,0.22)' }]}>
+                <Icon name="close" size={20} color="#fff" />
               </Pressable>
-            );
-          })}
-        </View>
+            )}
 
-        <Text style={[styles.priceSummary, { color: colors.text }]}>
-          {getTrialPriceLine(selectedPlan)}
-        </Text>
-        <Text style={[styles.priceNote, { color: colors.textSecondary }]}>
-          {selected.label} plan · cancel anytime before day {TRIAL_DAYS + 1}
-        </Text>
+            <Text style={styles.heroEyebrow}>Closer, every day</Text>
+            <Text style={styles.heroTitle}>Moments Plus</Text>
+            <Text style={styles.heroTrial}>{TRIAL_DAYS}-day free trial included</Text>
+            <Text style={styles.heroNote}>One subscription unlocks Plus for both of you.</Text>
+          </LinearGradient>
 
-        <PrimaryButton
-          label={loading ? 'Starting…' : getTrialCtaLabel()}
-          onPress={handleSubscribe}
-          loading={loading}
-          style={styles.cta}
-        />
-        <Text style={[styles.cancelNote, { color: colors.textSecondary }]}>Cancel anytime</Text>
+          <View style={[styles.featuresCard, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
+            <Text style={[styles.featuresHeading, { color: colors.text }]}>What Plus unlocks</Text>
+            <Text style={[styles.featuresSubheading, { color: colors.textSecondary }]}>
+              Everything below is gated on the Free plan today.
+            </Text>
+            {PLUS_FEATURE_ITEMS.map((feature) => (
+              <View key={feature.title} style={[styles.featureRow, { borderTopColor: colors.border }]}>
+                <View style={[styles.featureIconWrap, { backgroundColor: colors.accentSoft }]}>
+                  <Icon name={feature.icon} size={18} color={colors.accent} filled />
+                </View>
+                <View style={styles.featureCopy}>
+                  <Text style={[styles.featureTitle, { color: colors.text }]}>{feature.title}</Text>
+                  <Text style={[styles.featureLimit, { color: colors.textSecondary }]}>{feature.freeLimit}</Text>
+                </View>
+                <Icon name="check" size={18} color={colors.success} filled />
+              </View>
+            ))}
+          </View>
 
-        <Pressable onPress={handleRestore} hitSlop={8} style={styles.restore}>
-          <Text style={[styles.restoreText, { color: colors.textSecondary }]}>Restore purchase</Text>
-        </Pressable>
-      </ScrollView>
-    </View>
+          <View style={[styles.timelineCard, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
+            <Text style={[styles.timelineHeading, { color: colors.text }]}>How your free trial works</Text>
+            {TRIAL_STEPS.map((step, index) => (
+              <View key={step.day} style={styles.timelineRow}>
+                <View style={styles.timelineRail}>
+                  <View style={[styles.timelineDot, { backgroundColor: colors.accent }]}>
+                    <Icon name={step.icon} size={14} color={colors.onAccent} filled />
+                  </View>
+                  {index < TRIAL_STEPS.length - 1 && (
+                    <View style={[styles.timelineLine, { backgroundColor: colors.accentSoft }]} />
+                  )}
+                </View>
+                <View style={styles.timelineCopy}>
+                  <Text style={[styles.timelineTitle, { color: colors.text }]}>{step.title}</Text>
+                  <Text style={[styles.timelineBody, { color: colors.textSecondary }]}>{step.body}</Text>
+                </View>
+              </View>
+            ))}
+          </View>
+
+          <View style={styles.plans}>
+            {SUBSCRIPTION_PLANS.map((plan) => {
+              const active = plan.id === selectedPlan;
+              return (
+                <Pressable
+                  key={plan.id}
+                  onPress={() => {
+                    Haptics.selectionAsync();
+                    setSelectedPlan(plan.id);
+                  }}
+                  style={[
+                    styles.planCard,
+                    {
+                      backgroundColor: active ? colors.accentSoft : colors.surface,
+                      borderColor: active ? colors.accent : colors.border,
+                    },
+                  ]}>
+                  {plan.badge && (
+                    <View style={[styles.planBadge, { backgroundColor: colors.accent }]}>
+                      <Text style={[styles.planBadgeText, { color: colors.onAccent }]}>{plan.badge}</Text>
+                    </View>
+                  )}
+                  <View style={[styles.planRadio, { borderColor: active ? colors.accent : colors.border }]}>
+                    {active && <View style={[styles.planRadioFill, { backgroundColor: colors.accent }]} />}
+                  </View>
+                  <View style={styles.planCopy}>
+                    <Text style={[styles.planLabel, { color: colors.text }]}>{plan.label}</Text>
+                    <Text style={[styles.planSub, { color: colors.textSecondary }]}>{plan.sublabel}</Text>
+                  </View>
+                  <View style={styles.planPriceCol}>
+                    <Text style={[styles.planTrialTag, { color: colors.accent }]}>{TRIAL_DAYS}-day free</Text>
+                    {plan.compareAt && (
+                      <Text style={[styles.planCompare, { color: colors.textTertiary }]}>{plan.compareAt}</Text>
+                    )}
+                    <Text style={[styles.planPrice, { color: colors.text }]}>
+                      {plan.price}
+                      <Text style={[styles.planPeriod, { color: colors.textSecondary }]}>{plan.period}</Text>
+                    </Text>
+                  </View>
+                </Pressable>
+              );
+            })}
+          </View>
+
+          <Text style={[styles.priceSummary, { color: colors.text }]}>
+            {getTrialPriceLine(selectedPlan)}
+          </Text>
+          <Text style={[styles.priceNote, { color: colors.textSecondary }]}>
+            {selected.label} plan · cancel anytime before day {TRIAL_DAYS + 1}
+          </Text>
+
+          <PrimaryButton
+            label={loading ? 'Starting…' : getTrialCtaLabel()}
+            onPress={handleSubscribe}
+            loading={loading}
+            style={styles.cta}
+          />
+          <Text style={[styles.cancelNote, { color: colors.textSecondary }]}>Cancel anytime</Text>
+
+          <Pressable onPress={handleRestore} hitSlop={8} style={styles.restore}>
+            <Text style={[styles.restoreText, { color: colors.textSecondary }]}>Restore purchase</Text>
+          </Pressable>
+        </ScrollView>
+      </View>
     </SwipeDismissView>
   );
 }
@@ -179,7 +197,7 @@ const styles = StyleSheet.create({
   scroll: { flexGrow: 1 },
   hero: {
     paddingHorizontal: 24,
-    paddingBottom: 36,
+    paddingBottom: 32,
     borderBottomLeftRadius: Radius.xl,
     borderBottomRightRadius: Radius.xl,
   },
@@ -210,30 +228,56 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 15,
     fontWeight: '700',
-    marginBottom: 12,
-  },
-  heroFeatures: {
-    color: 'rgba(255,255,255,0.92)',
-    fontSize: 15,
-    lineHeight: 22,
     marginBottom: 10,
   },
   heroNote: {
-    color: 'rgba(255,255,255,0.78)',
-    fontSize: 13,
+    color: 'rgba(255,255,255,0.82)',
+    fontSize: 14,
     fontWeight: '600',
+    lineHeight: 20,
   },
+  featuresCard: {
+    marginHorizontal: 20,
+    marginTop: 24,
+    borderRadius: Radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 4,
+  },
+  featuresHeading: {
+    fontSize: 18,
+    fontWeight: '800',
+    marginBottom: 4,
+  },
+  featuresSubheading: {
+    fontSize: 13,
+    lineHeight: 18,
+    marginBottom: 8,
+  },
+  featureRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 13,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  featureIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  featureCopy: { flex: 1, gap: 2 },
+  featureTitle: { fontSize: 15, fontWeight: '700', lineHeight: 20 },
+  featureLimit: { fontSize: 12, lineHeight: 16 },
   timelineCard: {
     marginHorizontal: 20,
-    marginTop: -22,
+    marginTop: 20,
     borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
     padding: 18,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.12,
-    shadowRadius: 16,
-    elevation: 6,
   },
   timelineHeading: {
     fontSize: 18,

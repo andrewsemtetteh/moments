@@ -1,9 +1,6 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+import { getAuthUser, verifyRelationship } from '../_shared/auth.ts';
+import { handleOptions, jsonResponse } from '../_shared/cors.ts';
+import { enforceRateLimit, RATE_LIMITS, RateLimitError } from '../_shared/rate-limit.ts';
 
 type QuizQuestion = {
   question: string;
@@ -11,32 +8,6 @@ type QuizQuestion = {
   options: string[];
   correctIndex?: number;
 };
-
-async function getAuthUser(req: Request) {
-  const authHeader = req.headers.get('Authorization');
-  if (!authHeader) throw new Error('Unauthorized');
-
-  const supabase = createClient(
-    Deno.env.get('SUPABASE_URL')!,
-    Deno.env.get('SUPABASE_ANON_KEY')!,
-    { global: { headers: { Authorization: authHeader } } },
-  );
-
-  const { data: { user }, error } = await supabase.auth.getUser();
-  if (error || !user) throw new Error('Unauthorized');
-  return { user, supabase };
-}
-
-async function verifyRelationship(supabase: ReturnType<typeof createClient>, userId: string, relationshipId: string) {
-  const { data, error } = await supabase
-    .from('relationships')
-    .select('id')
-    .eq('id', relationshipId)
-    .or(`user_1_id.eq.${userId},user_2_id.eq.${userId}`)
-    .single();
-
-  if (error || !data) throw new Error('Not a member of this relationship');
-}
 
 function fallbackQuestions(topic: string): QuizQuestion[] {
   const t = topic.toLowerCase();
@@ -116,7 +87,8 @@ function normalizeQuestions(raw: unknown, topic: string): QuizQuestion[] {
 }
 
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
+  const options = handleOptions(req);
+  if (options) return options;
 
   try {
     const { user, supabase } = await getAuthUser(req);
@@ -127,6 +99,11 @@ Deno.serve(async (req) => {
     }
 
     await verifyRelationship(supabase, user.id, relationship_id);
+    await enforceRateLimit(
+      { functionName: 'generate-quiz-live', relationshipId: relationship_id },
+      RATE_LIMITS.generateQuizLive.maxHits,
+      RATE_LIMITS.generateQuizLive.windowSeconds,
+    );
 
     const questionCount = Math.min(8, Math.max(4, Number(count) || 6));
     const anthropicKey = Deno.env.get('ANTHROPIC_API_KEY');
@@ -173,13 +150,12 @@ Return ONLY a JSON array of objects:
       questions = fallbackQuestions(topic);
     }
 
-    return new Response(JSON.stringify({ questions: questions.slice(0, questionCount) }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
+    return jsonResponse({ questions: questions.slice(0, questionCount) });
   } catch (e) {
-    return new Response(JSON.stringify({ error: e instanceof Error ? e.message : 'Failed to generate quiz' }), {
-      status: 400,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
+    if (e instanceof RateLimitError) {
+      return jsonResponse({ error: e.message }, 429);
+    }
+    const message = e instanceof Error ? e.message : 'Failed to generate quiz';
+    return jsonResponse({ error: message }, 400);
   }
 });

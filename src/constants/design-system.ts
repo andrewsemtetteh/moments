@@ -19,7 +19,9 @@ export type AppTheme =
   | 'cream'
   | 'twilight'
   | 'cloud'
-  | 'burgundy';
+  | 'burgundy'
+  | 'welcome'
+  | 'tethered';
 
 export interface ThemeColors {
   /** Identity */
@@ -669,6 +671,64 @@ export const Themes: Record<AppTheme, ThemeColors> = {
     chatReadReceipt: '#53BDEB',
     shadow: '#000000',
   },
+  welcome: {
+    isDark: false,
+    glass: false,
+    background: '#FAFAF8',
+    backgroundElevated: '#FFF5F9',
+    surface: '#F3EEF1',
+    surfaceElevated: '#FFFFFF',
+    surfaceGlass: 'rgba(0,0,0,0.04)',
+    text: '#141418',
+    textSecondary: '#5E5E68',
+    textTertiary: '#9A9AA5',
+    onAccent: '#FFFFFF',
+    accent: '#E5577A',
+    accentSoft: 'rgba(229,87,122,0.12)',
+    accentMuted: '#FBE4EB',
+    gradient: ['#FF7A98', '#FF9E84'],
+    gradientHero: ['#FAFAF8', '#FFF0F5', '#F5F0FF'],
+    border: 'rgba(0,0,0,0.08)',
+    borderStrong: 'rgba(0,0,0,0.14)',
+    success: '#2E9E6B',
+    warning: '#C99A3E',
+    error: '#E0414F',
+    chatBubbleSelf: '#DCF8C6',
+    chatBubblePartner: '#FFFFFF',
+    chatBackground: '#F0EBEE',
+    chatBubbleSelfText: '#0A0A0A',
+    chatReadReceipt: '#53BDEB',
+    shadow: '#5A5A6B',
+  },
+  tethered: {
+    isDark: true,
+    glass: false,
+    background: '#240810',
+    backgroundElevated: '#3D0E18',
+    surface: '#2E0C14',
+    surfaceElevated: '#38101C',
+    surfaceGlass: 'rgba(255,180,200,0.06)',
+    text: '#FFF5F7',
+    textSecondary: 'rgba(255,245,247,0.72)',
+    textTertiary: 'rgba(255,245,247,0.55)',
+    onAccent: '#FFFFFF',
+    accent: '#FF8FA8',
+    accentSoft: 'rgba(255,143,168,0.14)',
+    accentMuted: '#5C1824',
+    gradient: ['#FF8FA8', '#FFB0C0'],
+    gradientHero: ['#5C1824', '#3D0E18', '#240810'],
+    border: 'rgba(255,255,255,0.10)',
+    borderStrong: 'rgba(255,255,255,0.55)',
+    success: '#46C98B',
+    warning: '#E5B567',
+    error: '#FF5C6C',
+    chatBubbleSelf: '#FF8FA8',
+    chatBubblePartner: '#38101C',
+    chatBackground: '#3D0E18',
+    chatBubbleSelfText: '#FFFFFF',
+    chatReadReceipt: '#53BDEB',
+    shadow: '#000000',
+  },
 };
 
 /** Screen backdrop gradient — glass keeps its pastel mesh; others anchor to background. */
@@ -703,6 +763,8 @@ export const THEME_META: { key: AppTheme; label: string; swatch: string }[] = [
   { key: 'twilight', label: 'Twilight', swatch: '#362F4F' },
   { key: 'cloud', label: 'Cloud', swatch: '#F5F5F5' },
   { key: 'burgundy', label: 'Burgundy', swatch: '#760031' },
+  { key: 'welcome', label: 'Welcome', swatch: '#FAFAF8' },
+  { key: 'tethered', label: 'Tethered', swatch: '#5C1824' },
 ];
 
 export const MOOD_EMOJI: Record<string, string> = {

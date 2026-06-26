@@ -57,12 +57,11 @@ export function HistoryActionDock({
         />
         <View style={[styles.divider, { backgroundColor: chrome.border }]} />
         <DockAction
-          icon="plus"
+          icon="film"
           label="Recap"
           tone="neutral"
           chrome={chrome}
           disabled={disabled}
-          recapIcon
           onPress={onRecap}
         />
       </View>
@@ -78,7 +77,6 @@ function DockAction({
   disabled,
   loading,
   iconFilled,
-  recapIcon,
   onPress,
 }: {
   icon: IconName;
@@ -88,7 +86,6 @@ function DockAction({
   disabled?: boolean;
   loading?: boolean;
   iconFilled?: boolean;
-  recapIcon?: boolean;
   onPress: () => void;
 }) {
   const iconColor =
@@ -123,16 +120,11 @@ function DockAction({
           { backgroundColor: chrome.surfaceSoft },
           tone === 'danger' && !disabled && { backgroundColor: `${chrome.error}24` },
           tone === 'primary' && { backgroundColor: chrome.accent },
-          recapIcon && {
-            borderWidth: 2,
-            borderColor: chrome.text,
-            backgroundColor: 'transparent',
-          },
         ]}>
         {loading ? (
           <ActivityIndicator color={iconColor} size="small" />
         ) : (
-          <Icon name={icon} size={recapIcon ? 16 : 20} color={iconColor} filled={iconFilled} />
+          <Icon name={icon} size={20} color={iconColor} filled={iconFilled} />
         )}
       </View>
       <Text style={[styles.label, { color: labelColor }]} numberOfLines={1}>

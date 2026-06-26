@@ -25,12 +25,12 @@ import { usePlusGate } from '@/hooks/usePlusGate';
 import { useSubscription } from '@/hooks/useSubscription';
 import { useTheme } from '@/hooks/useTheme';
 import { getRelationshipAnniversaryDate } from '@/lib/anniversary';
+import { signOutUser } from '@/lib/auth-session';
 import { markRelationshipOnboardingDone } from '@/lib/onboarding-storage';
 import { pickAndUploadSharedAlbumMedia } from '@/lib/pick-shared-album-media';
 import { SharedAlbumStorageLimitError } from '@/lib/shared-album';
 import { formatSubscriptionExpiry } from '@/lib/subscription';
 import { supabase } from '@/lib/supabase';
-import { queryClient } from '@/providers/AppProviders';
 import * as api from '@/services/api';
 import { useAuthStore, useRelationshipStore, useUIStore } from '@/stores';
 
@@ -48,8 +48,6 @@ export default function ProfileScreen() {
   const partner = useRelationshipStore((s) => s.partner);
   const user = useAuthStore((s) => s.user);
   const setUser = useAuthStore((s) => s.setUser);
-  const resetAuth = useAuthStore((s) => s.reset);
-  const resetRelationship = useRelationshipStore((s) => s.reset);
   const setShowSharedAlbum = useUIStore((s) => s.setShowSharedAlbum);
   const setShowWrapped = useUIStore((s) => s.setShowWrapped);
   const setShowMomentCreator = useUIStore((s) => s.setShowMomentCreator);
@@ -159,10 +157,12 @@ export default function ProfileScreen() {
   };
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
-    resetAuth();
-    resetRelationship();
-    router.replace('/(auth)/login');
+    try {
+      await signOutUser();
+      router.replace('/(auth)/login');
+    } catch (e) {
+      Alert.alert('Sign out failed', e instanceof Error ? e.message : 'Please try again.');
+    }
   };
 
   const handleDeleteAccount = () => {
@@ -172,10 +172,12 @@ export default function ProfileScreen() {
         text: 'Delete',
         style: 'destructive',
         onPress: async () => {
-          await supabase.auth.signOut();
-          resetAuth();
-          resetRelationship();
-          router.replace('/(auth)/login');
+          try {
+            await signOutUser();
+            router.replace('/(auth)/login');
+          } catch (e) {
+            Alert.alert('Sign out failed', e instanceof Error ? e.message : 'Please try again.');
+          }
         },
       },
     ]);
@@ -209,10 +211,7 @@ export default function ProfileScreen() {
           try {
             await api.leaveRelationship(user.id, relationship.id);
             await markRelationshipOnboardingDone(user.id);
-            queryClient.clear();
-            await supabase.auth.signOut();
-            resetAuth();
-            resetRelationship();
+            await signOutUser();
             router.replace('/(auth)/login');
           } catch (e) {
             Alert.alert('Could not leave', e instanceof Error ? e.message : 'Please try again.');

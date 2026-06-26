@@ -1,8 +1,7 @@
-import { Image } from 'expo-image';
 import { StyleSheet, View } from 'react-native';
-import Animated, { Keyframe, Easing } from 'react-native-reanimated';
+import Animated, { Easing, Keyframe } from 'react-native-reanimated';
 
-import classes from './animated-icon.module.css';
+import { LogoMark } from '@/components/ui/Logo';
 
 const DURATION = 300;
 
@@ -40,39 +39,12 @@ const logoKeyframe = new Keyframe({
   },
 });
 
-const glowKeyframe = new Keyframe({
-  0: {
-    transform: [{ rotateZ: '-180deg' }, { scale: 0.8 }],
-    opacity: 0,
-  },
-  [DURATION / 1000]: {
-    transform: [{ rotateZ: '0deg' }, { scale: 1 }],
-    opacity: 1,
-    easing: Easing.elastic(0.7),
-  },
-  100: {
-    transform: [{ rotateZ: '7200deg' }],
-  },
-});
-
-/** Web hero logo — same animation shell as Expo template, Moments branding. */
 export function AnimatedIcon() {
   return (
     <View style={styles.iconContainer}>
-      <Animated.View entering={glowKeyframe.duration(60 * 1000 * 4)} style={styles.glow}>
-        <Image style={styles.glow} source={require('@/assets/images/logo-glow.png')} />
-      </Animated.View>
-
-      <Animated.View style={styles.background} entering={keyframe.duration(DURATION)}>
-        <div className={classes.momentsLogoBackground} />
-      </Animated.View>
-
+      <Animated.View style={styles.background} entering={keyframe.duration(DURATION)} />
       <Animated.View style={styles.imageContainer} entering={logoKeyframe.duration(DURATION)}>
-        <Image
-          style={styles.image}
-          source={require('@/assets/images/icon.png')}
-          contentFit="cover"
-        />
+        <LogoMark size={96} />
       </Animated.View>
     </View>
   );
@@ -88,24 +60,15 @@ const styles = StyleSheet.create({
     width: 128,
     height: 128,
   },
-  glow: {
-    width: 201,
-    height: 201,
-    position: 'absolute',
-  },
   iconContainer: {
     justifyContent: 'center',
     alignItems: 'center',
     width: 128,
     height: 128,
   },
-  image: {
-    width: 128,
-    height: 128,
-    borderRadius: 40,
-    zIndex: 3,
-  },
   background: {
+    backgroundColor: '#FAFAF8',
+    borderRadius: 40,
     width: 128,
     height: 128,
     position: 'absolute',

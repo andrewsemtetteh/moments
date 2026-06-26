@@ -2,13 +2,14 @@
   "expo": {
     "name": "Moments",
     "slug": "moments",
+    "owner": "andrewsemtetteh",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/images/moments.png",
     "scheme": "moments",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/expo.icon",
+      "icon": "./assets/images/moments.png",
       "bundleIdentifier": "com.moments.app",
       "supportsTablet": false,
       "usesAppleSignIn": true
@@ -17,16 +18,15 @@
       "package": "com.moments.app",
       "adaptiveIcon": {
         "backgroundColor": "#FAFAF8",
-        "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "backgroundImage": "./assets/images/android-icon-background.png",
-        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+        "foregroundImage": "./assets/images/moments.png",
+        "monochromeImage": "./assets/images/moments.png"
       },
       "predictiveBackGestureEnabled": false,
       "softwareKeyboardLayoutMode": "resize"
     },
     "web": {
       "output": "static",
-      "favicon": "./assets/images/favicon.png"
+      "favicon": "./assets/images/moments.png"
     },
     "plugins": [
       "expo-router",
@@ -36,9 +36,11 @@
         "expo-splash-screen",
         {
           "backgroundColor": "#FAFAF8",
+          "image": "./assets/images/moments.png",
+          "imageWidth": 200,
           "android": {
-            "image": "./assets/images/splash-icon.png",
-            "imageWidth": 76
+            "image": "./assets/images/moments.png",
+            "imageWidth": 200
           }
         }
       ],
@@ -95,6 +97,9 @@
     "extra": {
       "router": {
         "root": "./src/app"
+      },
+      "eas": {
+        "projectId": "febe8159-67a5-41d8-988f-1b1291698f57"
       }
     }
   }
