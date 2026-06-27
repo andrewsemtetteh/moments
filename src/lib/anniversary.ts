@@ -22,6 +22,15 @@ export function formatAnniversaryForDb(date: Date): string {
   return `${y}-${m}-${d}`;
 }
 
+const ANNIVERSARY_ISO_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
+export function isValidAnniversaryIso(value: string): boolean {
+  if (!ANNIVERSARY_ISO_PATTERN.test(value)) return false;
+  const parsed = parseAnniversaryDate(value);
+  if (Number.isNaN(parsed.getTime())) return false;
+  return formatAnniversaryForDb(parsed) === value;
+}
+
 export function getRelationshipAnniversaryDate(relationship: Pick<Relationship, 'anniversary_date' | 'created_at'>): Date {
   if (relationship.anniversary_date) {
     return parseAnniversaryDate(relationship.anniversary_date);

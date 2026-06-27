@@ -1,5 +1,4 @@
 import * as Haptics from 'expo-haptics';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
@@ -42,12 +41,7 @@ export default function AuthWelcomeScreen() {
             <Text style={styles.headline}>Your shared life</Text>
 
             <View style={styles.accentLineWrap}>
-              <LinearGradient
-                colors={[colors.gradient[0], colors.gradient[1], colors.accent]}
-                start={{ x: 0, y: 0.5 }}
-                end={{ x: 1, y: 0.5 }}
-                style={styles.accentLineBg}
-              />
+              <View style={styles.accentLineBg} pointerEvents="none" />
               <Text style={[styles.accentLine, { color: colors.accent }]}>Starts here</Text>
             </View>
           </View>
@@ -108,10 +102,10 @@ const styles = StyleSheet.create({
     marginTop: 2,
     alignItems: 'center',
     justifyContent: 'center',
+    position: 'relative',
   },
   accentLineBg: {
-    ...StyleSheet.absoluteFillObject,
-    opacity: 0.14,
+    ...StyleSheet.absoluteFill,
     borderRadius: 8,
   },
   accentLine: {

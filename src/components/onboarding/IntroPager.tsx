@@ -1,15 +1,15 @@
 import * as Haptics from 'expo-haptics';
 import { useCallback, useRef, useState } from 'react';
 import {
-  Dimensions,
-  FlatList,
-  NativeScrollEvent,
-  NativeSyntheticEvent,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-  type ListRenderItem,
+    Dimensions,
+    FlatList,
+    NativeScrollEvent,
+    NativeSyntheticEvent,
+    Pressable,
+    StyleSheet,
+    Text,
+    View,
+    type ListRenderItem,
 } from 'react-native';
 
 import { AuthPrimaryButton } from '@/components/auth/AuthPrimaryButton';

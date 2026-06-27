@@ -61,7 +61,8 @@ export type IconName =
   | 'rewind'
   | 'moreVertical'
   | 'edit'
-  | 'warning';
+  | 'warning'
+  | 'key';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
 
@@ -126,6 +127,7 @@ const ICON_MAP: Record<IconName, { outline: IoniconName; filled: IoniconName }> 
   moreVertical: { outline: 'ellipsis-vertical', filled: 'ellipsis-vertical' },
   edit: { outline: 'create-outline', filled: 'create' },
   warning: { outline: 'warning-outline', filled: 'warning' },
+  key: { outline: 'key-outline', filled: 'key' },
 };
 
 interface IconProps {

@@ -9,7 +9,8 @@ import {
     type MoodHistoryFilter,
     type RpcMoodHistoryOverview,
 } from '@/lib/mood-history';
-import { getErrorMessage, isMissingTableError } from '@/lib/network-error';
+import { isValidAnniversaryIso } from '@/lib/anniversary';
+import { getErrorMessage, isMissingColumnError, isMissingTableError, isNoRowsUpdatedError, isRpcNotFoundError, toUserFacingNetworkError } from '@/lib/network-error';
 import {
     clientFallbackQuestions,
     computeRoundPoints,
@@ -35,6 +36,7 @@ import type {
     QuizLiveQuestion,
     QuizLiveSession,
     Relationship,
+    RelationshipType,
     SharedAlbumItem,
     SharedGoal,
     Streak,
@@ -116,7 +118,9 @@ export async function createProfile(profile: Pick<UserProfile, 'id' | 'email' | 
 
 export async function updateProfile(userId: string, updates: Partial<UserProfile>) {
   const { data, error } = await supabase.from('users').update(updates).eq('id', userId).select().single();
-  if (error) throw error;
+  if (error) {
+    throwSaveError(error, 'Could not save. Please try again.', 'gender');
+  }
   return data;
 }
 
@@ -223,8 +227,14 @@ export async function setUserSubscription(
   return { profile, relationship };
 }
 
-export async function createRelationship(userId: string, name: string, anniversaryDate?: string | null) {
+export async function createRelationship(
+  userId: string,
+  name: string,
+  options?: { anniversaryDate?: string | null; relationshipType?: RelationshipType | null },
+) {
   const inviteCode = generateInviteCode();
+  const anniversaryDate = options?.anniversaryDate;
+  const relationshipType = options?.relationshipType;
   const { data, error } = await supabase
     .from('relationships')
     .insert({
@@ -233,6 +243,7 @@ export async function createRelationship(userId: string, name: string, anniversa
       invite_code: inviteCode,
       status: 'pending',
       ...(anniversaryDate ? { anniversary_date: anniversaryDate } : {}),
+      ...(relationshipType ? { relationship_type: relationshipType } : {}),
     })
     .select()
     .single();
@@ -1269,6 +1280,39 @@ export async function trackEvent(
   });
 }
 
+function throwSaveError(error: unknown, fallback: string, columnHint?: string): never {
+  if (isNoRowsUpdatedError(error)) {
+    throw new Error('Unable to save changes. Try signing out and back in.');
+  }
+  if (columnHint && isMissingColumnError(error, columnHint)) {
+    throw new Error(
+      'This feature is not available on the server yet. Apply the latest database migrations and try again.',
+    );
+  }
+  throw toUserFacingNetworkError(error, fallback);
+}
+
+export async function updateRelationshipAnniversary(relationshipId: string, anniversaryDate: string) {
+  if (!isValidAnniversaryIso(anniversaryDate)) {
+    throw new Error('Please pick a valid anniversary date.');
+  }
+
+  const { data, error } = await supabase.rpc('set_relationship_anniversary', {
+    p_relationship_id: relationshipId,
+    p_anniversary_date: anniversaryDate,
+  });
+
+  if (!error && data) {
+    return data as Relationship;
+  }
+
+  if (error && !isRpcNotFoundError(error, 'set_relationship_anniversary')) {
+    throwSaveError(error, 'Could not save your anniversary. Please try again.', 'anniversary_date');
+  }
+
+  return updateRelationship(relationshipId, { anniversary_date: anniversaryDate });
+}
+
 export async function updateRelationship(relationshipId: string, updates: Partial<Relationship>) {
   const { data, error } = await supabase
     .from('relationships')
@@ -1276,7 +1320,9 @@ export async function updateRelationship(relationshipId: string, updates: Partia
     .eq('id', relationshipId)
     .select()
     .single();
-  if (error) throw error;
+  if (error) {
+    throwSaveError(error, 'Could not save. Please try again.', 'anniversary_date');
+  }
   return data as Relationship;
 }
 

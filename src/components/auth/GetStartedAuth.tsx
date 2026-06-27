@@ -22,6 +22,7 @@ import { Radius, Spacing } from '@/constants/design-system';
 import { hydrateAuthSession } from '@/lib/auth-session';
 import { markIntroCompleted } from '@/lib/intro-storage';
 import { signInWithApple, signInWithGoogle } from '@/lib/oauth';
+import { goBackOrReplace } from '@/lib/router';
 import { supabase } from '@/lib/supabase';
 
 type Props = {
@@ -84,13 +85,7 @@ export function GetStartedAuth({ showBack = true }: Props) {
     router.push('/(auth)/login');
   };
 
-  const handleBack = () => {
-    if (router.canGoBack()) {
-      router.back();
-      return;
-    }
-    router.replace('/(auth)/welcome');
-  };
+  const handleBack = () => goBackOrReplace(router, '/(auth)/welcome');
 
   return (
     <SwipeDismissView onDismiss={handleBack} enabled={showBack && !busy}>

@@ -1,6 +1,7 @@
 import type { Session, User } from '@supabase/supabase-js';
 
 import { ensureValidSession, invalidateLocalSession, isJwtExpiredLike } from '@/lib/auth-token';
+import { markIntroCompleted } from '@/lib/intro-storage';
 import { getSupabase } from '@/lib/supabase';
 import * as api from '@/services/api';
 import { useAuthStore, useRelationshipStore } from '@/stores';
@@ -39,6 +40,7 @@ export async function hydrateAuthSession(session: Session, retried = false) {
     useAuthStore.getState().setSession(true);
     useRelationshipStore.getState().setRelationship(relationship);
     useRelationshipStore.getState().setPartner(partner);
+    await markIntroCompleted();
   } catch (error) {
     if (isJwtExpiredLike(error) && !retried) {
       const refreshed = await ensureValidSession();

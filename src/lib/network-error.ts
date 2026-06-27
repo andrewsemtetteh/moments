@@ -64,3 +64,34 @@ export function isMissingTableError(error: unknown): boolean {
     message.includes('does not exist')
   );
 }
+
+export function isMissingColumnError(error: unknown, column?: string): boolean {
+  if (!error || typeof error !== 'object') return false;
+  const code = 'code' in error ? String(error.code) : '';
+  const message =
+    'message' in error && typeof error.message === 'string' ? error.message.toLowerCase() : '';
+  const mentionsColumn = column ? message.includes(column.toLowerCase()) : message.includes('column');
+  return (
+    code === 'PGRST204' ||
+    code === '42703' ||
+    (mentionsColumn &&
+      (message.includes('does not exist') ||
+        message.includes('could not find') ||
+        message.includes('schema cache')))
+  );
+}
+
+export function isRpcNotFoundError(error: unknown, rpcName?: string): boolean {
+  if (!error || typeof error !== 'object') return false;
+  const code = 'code' in error ? String(error.code) : '';
+  const message =
+    'message' in error && typeof error.message === 'string' ? error.message.toLowerCase() : '';
+  const mentionsRpc = rpcName ? message.includes(rpcName.toLowerCase()) : message.includes('function');
+  return code === 'PGRST202' || (mentionsRpc && message.includes('could not find'));
+}
+
+export function isNoRowsUpdatedError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+  const code = 'code' in error ? String(error.code) : '';
+  return code === 'PGRST116';
+}

@@ -1,53 +1,78 @@
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AnniversaryDatePicker } from '@/components/onboarding/AnniversaryDatePicker';
+import { OnboardingChrome } from '@/components/onboarding/OnboardingChrome';
 import { PrimaryButton } from '@/components/ui/primitives';
 import { PromptLink } from '@/components/ui/PromptLink';
-import { useTheme } from '@/hooks/useTheme';
+import { Spacing } from '@/constants/design-system';
 import { formatAnniversaryForDb } from '@/lib/anniversary';
-import { markRelationshipOnboardingDone } from '@/lib/onboarding-storage';
+import { goToOnboardingBack } from '@/lib/onboarding-navigation';
+import { isAvatarPromptDone } from '@/lib/onboarding-storage';
+import { needsProfileSetup, profileSetupEntryRoute } from '@/lib/profile-setup';
 import { useAuthStore } from '@/stores';
 
 export default function AnniversarySetupScreen() {
   const router = useRouter();
-  const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
   const user = useAuthStore((s) => s.user);
   const [anniversaryDate, setAnniversaryDate] = useState(formatAnniversaryForDb(new Date()));
 
-  const goToCreate = async (date: string | null) => {
-    if (user) await markRelationshipOnboardingDone(user.id);
+  useEffect(() => {
+    let cancelled = false;
+
+    async function guardProfile() {
+      if (!user) {
+        router.replace('/(auth)/login');
+        return;
+      }
+      const avatarDone = await isAvatarPromptDone(user.id);
+      if (cancelled) return;
+      if (needsProfileSetup(user, avatarDone)) {
+        router.replace(profileSetupEntryRoute(user, avatarDone) as never);
+      }
+    }
+
+    void guardProfile();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [router, user]);
+
+  const goToRelationshipType = (date: string | null) => {
     router.push({
-      pathname: '/(onboarding)/create-relationship',
+      pathname: '/(onboarding)/relationship-type',
       params: date ? { anniversaryDate: date } : { anniversarySkipped: '1' },
     });
   };
 
+  const goBack = () => goToOnboardingBack(router, 'anniversary-setup');
+
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={styles.content}>
+    <OnboardingChrome stepId="anniversary-setup" onBack={goBack}>
+      <View style={[styles.content, { paddingBottom: insets.bottom + Spacing.lg, paddingHorizontal: Spacing.lg }]}>
         <AnniversaryDatePicker value={anniversaryDate} onChange={setAnniversaryDate} />
 
         <PrimaryButton
           label="Continue"
-          onPress={() => goToCreate(anniversaryDate)}
+          onPress={() => goToRelationshipType(anniversaryDate)}
           style={styles.btn}
         />
 
         <PromptLink
           prompt="Not sure yet?"
           linkLabel="Skip for now"
-          onPress={() => goToCreate(null)}
+          onPress={() => goToRelationshipType(null)}
         />
       </View>
-    </SafeAreaView>
+    </OnboardingChrome>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  content: { flex: 1, padding: 24, justifyContent: 'center', alignItems: 'center' },
+  content: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   btn: { width: '100%', marginTop: 28 },
 });

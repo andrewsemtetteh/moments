@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+/** User has passed first-run welcome / auth entry; skip marketing welcome when signed out. */
 const INTRO_COMPLETED_KEY = 'moments_intro_completed';
 
 export async function markIntroCompleted() {

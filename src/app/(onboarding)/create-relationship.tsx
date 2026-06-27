@@ -2,20 +2,31 @@ import * as Clipboard from 'expo-clipboard';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Alert, Pressable, Share, StyleSheet, Text, TextInput, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import * as Haptics from 'expo-haptics';
 
+import { OnboardingChrome } from '@/components/onboarding/OnboardingChrome';
 import { Icon } from '@/components/ui/Icon';
 import { colorWithAlpha, PrimaryButton } from '@/components/ui/primitives';
 import { PromptLink } from '@/components/ui/PromptLink';
+import { Spacing } from '@/constants/design-system';
 import { useTheme } from '@/hooks/useTheme';
 import { markRelationshipOnboardingDone } from '@/lib/onboarding-storage';
+import {
+  buildOnboardingRelationshipParams,
+  hasChosenSpacePath,
+  hasCompletedPreSpaceOnboarding,
+  paramsFromSearch,
+  type OnboardingRelationshipParams,
+} from '@/lib/onboarding-relationship-params';
+import { goToOnboardingBack } from '@/lib/onboarding-navigation';
 import * as api from '@/services/api';
 import { useAuthStore, useRelationshipStore } from '@/stores';
-import * as Haptics from 'expo-haptics';
 
 export default function CreateRelationshipScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ anniversaryDate?: string; anniversarySkipped?: string }>();
+  const insets = useSafeAreaInsets();
+  const params = useLocalSearchParams<OnboardingRelationshipParams>();
   const { colors } = useTheme();
   const user = useAuthStore((s) => s.user);
   const relationship = useRelationshipStore((s) => s.relationship);
@@ -24,12 +35,11 @@ export default function CreateRelationshipScreen() {
   const [inviteCode, setInviteCode] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const anniversaryDate =
-    typeof params.anniversaryDate === 'string' && params.anniversaryDate.length > 0
-      ? params.anniversaryDate
-      : null;
-  const cameFromAnniversaryStep =
-    anniversaryDate !== null || params.anniversarySkipped === '1';
+  const parsed = paramsFromSearch(params);
+  const anniversaryDate = parsed.anniversaryDate ?? null;
+  const cameFromOnboarding =
+    hasCompletedPreSpaceOnboarding(params) && params.spacePathChosen === 'create';
+  const relationshipType = parsed.relationshipType ?? null;
 
   const hasSoloSpace =
     !!relationship && relationship.status !== 'ended' && !relationship.user_2_id;
@@ -65,9 +75,26 @@ export default function CreateRelationshipScreen() {
   }, [relationship, inviteCode, hasSoloSpace, router, setRelationship]);
 
   useEffect(() => {
-    if (inviteCode || hasSoloSpace || cameFromAnniversaryStep) return;
+    if (inviteCode || hasSoloSpace || cameFromOnboarding) return;
+    if (hasCompletedPreSpaceOnboarding(params) && !hasChosenSpacePath(params)) {
+      router.replace({
+        pathname: '/(onboarding)/relationship-path',
+        params: buildOnboardingRelationshipParams(paramsFromSearch(params)),
+      });
+      return;
+    }
     router.replace('/(onboarding)/anniversary-setup');
-  }, [inviteCode, hasSoloSpace, cameFromAnniversaryStep, router]);
+  }, [
+    inviteCode,
+    hasSoloSpace,
+    cameFromOnboarding,
+    router,
+    params.anniversaryDate,
+    params.anniversarySkipped,
+    params.relationshipType,
+    params.relationshipTypeSkipped,
+    params.spacePathChosen,
+  ]);
 
   const create = async () => {
     if (!user) return;
@@ -87,7 +114,10 @@ export default function CreateRelationshipScreen() {
 
     setLoading(true);
     try {
-      const rel = await api.createRelationship(user.id, trimmed, anniversaryDate);
+      const rel = await api.createRelationship(user.id, trimmed, {
+        anniversaryDate,
+        relationshipType,
+      });
       await markRelationshipOnboardingDone(user.id);
       setRelationship(rel);
       setInviteCode(rel.invite_code);
@@ -114,12 +144,21 @@ export default function CreateRelationshipScreen() {
 
   const continueWithoutInvite = () => {
     Haptics.selectionAsync();
-    router.replace('/(tabs)/home');
+    router.replace({
+      pathname: '/(onboarding)/notification-prompt',
+      params: { next: 'home' },
+    });
   };
 
+  const goBack = () => goToOnboardingBack(router, 'create-relationship', parsed);
+
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={styles.content}>
+    <OnboardingChrome stepId="create-relationship" onBack={goBack}>
+      <View
+        style={[
+          styles.content,
+          { paddingBottom: insets.bottom + Spacing.lg, paddingHorizontal: Spacing.lg },
+        ]}>
         {!inviteCode ? (
           <>
             <Text style={[styles.title, { color: colors.text }]}>Create your relationship</Text>
@@ -141,7 +180,13 @@ export default function CreateRelationshipScreen() {
             <PromptLink
               prompt="Have an invite code?"
               linkLabel="Join instead"
-              href="/(onboarding)/join-relationship"
+              href={{
+                pathname: '/(onboarding)/join-relationship',
+                params: buildOnboardingRelationshipParams({
+                  ...parsed,
+                  spacePathChosen: 'join',
+                }),
+              }}
             />
           </>
         ) : (
@@ -194,13 +239,12 @@ export default function CreateRelationshipScreen() {
           </>
         )}
       </View>
-    </SafeAreaView>
+    </OnboardingChrome>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  content: { flex: 1, padding: 24, justifyContent: 'center', alignItems: 'center', width: '100%' },
+  content: { flex: 1, justifyContent: 'center', alignItems: 'center', width: '100%' },
   title: { fontSize: 28, fontWeight: '800', textAlign: 'center', letterSpacing: -0.5, width: '100%' },
   subtitle: { fontSize: 16, textAlign: 'center', lineHeight: 22, marginTop: 10, marginBottom: 8, maxWidth: 320 },
   inputLabel: { fontSize: 13, fontWeight: '700', width: '100%', marginTop: 28, marginBottom: 8, letterSpacing: 0.2 },

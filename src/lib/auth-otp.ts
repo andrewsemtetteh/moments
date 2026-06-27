@@ -1,6 +1,7 @@
 import type { SignUpWithPasswordCredentials } from '@supabase/supabase-js';
 
 import { getAuthRedirectUri } from '@/lib/oauth';
+import { defaultSignupName } from '@/lib/profile-setup';
 import { supabase } from '@/lib/supabase';
 
 export type EmailVerificationFlow = 'signup' | 'recovery';
@@ -52,11 +53,11 @@ export type RegisterAccountResult = {
 export async function registerAccount(params: {
   email: string;
   password: string;
-  name: string;
+  name?: string;
 }): Promise<RegisterAccountResult> {
   const email = normalizeAuthEmail(params.email);
   const password = params.password;
-  const name = params.name.trim();
+  const name = params.name?.trim() || defaultSignupName(email);
 
   const credentials: SignUpWithPasswordCredentials = {
     email,

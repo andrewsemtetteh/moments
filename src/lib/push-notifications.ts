@@ -30,26 +30,55 @@ export async function registerForPushNotifications(): Promise<string | null> {
     }
 
     const existing = await Notifications.getPermissionsAsync();
+    if (!existing.granted) return null;
+
+    return await registerPushTokenWithNotifications(Notifications);
+  } catch {
+    return null;
+  }
+}
+
+/** Onboarding soft prompt — asks for permission, then registers the token. */
+export async function requestPushNotificationPermission(): Promise<boolean> {
+  const Notifications = loadNotifications();
+  if (!Notifications || !Device.isDevice) return false;
+
+  try {
+    if (Platform.OS === 'android') {
+      await Notifications.setNotificationChannelAsync('default', {
+        name: 'Moments',
+        importance: Notifications.AndroidImportance.DEFAULT,
+      });
+    }
+
+    const existing = await Notifications.getPermissionsAsync();
     let granted = existing.granted;
     if (!granted) {
       const requested = await Notifications.requestPermissionsAsync();
       granted = requested.granted;
     }
-    if (!granted) return null;
+    if (!granted) return false;
 
-    const projectId = getExpoProjectId();
-    const tokenResult = projectId
-      ? await Notifications.getExpoPushTokenAsync({ projectId })
-      : await Notifications.getExpoPushTokenAsync();
-
-    const token = tokenResult.data;
-    if (!token) return null;
-
-    await api.registerPushToken(token);
-    return token;
+    const token = await registerPushTokenWithNotifications(Notifications);
+    return !!token;
   } catch {
-    return null;
+    return false;
   }
+}
+
+async function registerPushTokenWithNotifications(
+  Notifications: NonNullable<ReturnType<typeof loadNotifications>>,
+): Promise<string | null> {
+  const projectId = getExpoProjectId();
+  const tokenResult = projectId
+    ? await Notifications.getExpoPushTokenAsync({ projectId })
+    : await Notifications.getExpoPushTokenAsync();
+
+  const token = tokenResult.data;
+  if (!token) return null;
+
+  await api.registerPushToken(token);
+  return token;
 }
 
 export async function clearPushTokenRegistration(): Promise<void> {

@@ -29,12 +29,15 @@ export type ActivityStatus = 'pending' | 'in_progress' | 'completed';
 export type EventType = 'date' | 'anniversary' | 'reminder' | 'experience' | 'custom';
 export type JournalType = 'reflection' | 'gratitude' | 'memory' | 'emotion' | 'plan';
 export type SubscriptionTier = 'free' | 'plus';
+export type ProfileGender = 'male' | 'female' | 'other';
+export type RelationshipType = 'dating' | 'long_distance' | 'engaged' | 'married' | 'other';
 
 export interface UserProfile {
   id: string;
   email: string;
   name: string | null;
   avatar_url: string | null;
+  gender?: ProfileGender | null;
   subscription_tier?: SubscriptionTier;
   subscription_expires_at?: string | null;
   revenuecat_customer_id?: string | null;
@@ -59,6 +62,7 @@ export interface Relationship {
   subscription_tier?: SubscriptionTier;
   subscription_owner_id?: string | null;
   anniversary_date?: string | null;
+  relationship_type?: RelationshipType | null;
   created_at: string;
 }
 

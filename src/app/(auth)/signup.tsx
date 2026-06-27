@@ -11,7 +11,6 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { LogoMark } from '@/components/ui/Logo';
 import { AuthCheckbox } from '@/components/auth/AuthCheckbox';
 import { AuthFooter } from '@/components/auth/AuthFooter';
 import { AuthLegalLinks } from '@/components/auth/AuthLegalLinks';
@@ -20,43 +19,37 @@ import { AuthPrimaryButton } from '@/components/auth/AuthPrimaryButton';
 import { AuthTextField } from '@/components/auth/AuthTextField';
 import { PasswordInput } from '@/components/auth/PasswordInput';
 import { SocialAuthButtons } from '@/components/auth/SocialAuthButtons';
+import { LogoMark } from '@/components/ui/Logo';
 import { useTheme } from '@/hooks/useTheme';
 import { formatAuthError, registerAccount } from '@/lib/auth-otp';
 import { hydrateAuthSession } from '@/lib/auth-session';
-import {
-    sanitizeEmailInput,
-    sanitizeNameInput,
-    sanitizePasswordInput,
-} from '@/lib/sanitize-input';
+import { sanitizeEmailInput, sanitizePasswordInput } from '@/lib/sanitize-input';
 import { supabase } from '@/lib/supabase';
 
 export default function SignupScreen() {
   const router = useRouter();
   const { colors } = useTheme();
-  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const handleSignup = async () => {
-    const cleanName = sanitizeNameInput(name).trim();
     const cleanEmail = sanitizeEmailInput(email).trim();
     const cleanPassword = sanitizePasswordInput(password);
-    if (!cleanName || !cleanEmail || !cleanPassword || !agreedToTerms) return;
+    if (!cleanEmail || !cleanPassword || !agreedToTerms) return;
     setLoading(true);
     try {
       const result = await registerAccount({
         email: cleanEmail,
         password: cleanPassword,
-        name: cleanName,
       });
 
       if (result.error) throw result.error;
 
       if (result.session) {
         await hydrateAuthSession(result.session);
-        router.replace('/(onboarding)/profile-setup');
+        router.replace('/(onboarding)/profile-name');
         return;
       }
 
@@ -79,11 +72,11 @@ export default function SignupScreen() {
     const { data: { session } } = await supabase.auth.getSession();
     if (session) {
       await hydrateAuthSession(session);
-      router.replace('/(onboarding)/profile-setup');
+      router.replace('/(onboarding)/profile-name');
     }
   };
 
-  const canSubmit = name.trim().length > 0 && email.length > 0 && password.length >= 6 && agreedToTerms && !loading;
+  const canSubmit = email.length > 0 && password.length >= 6 && agreedToTerms && !loading;
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
@@ -102,12 +95,6 @@ export default function SignupScreen() {
             </View>
 
             <View style={styles.form}>
-              <AuthTextField
-                label="Your name"
-                autoComplete="name"
-                value={name}
-                onChangeText={(text) => setName(sanitizeNameInput(text))}
-              />
               <AuthTextField
                 label="Email"
                 autoCapitalize="none"

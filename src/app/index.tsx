@@ -5,8 +5,8 @@ import { Animated, Easing, StyleSheet, View } from 'react-native';
 import { LogoMark } from '@/components/ui/Logo';
 import { ScreenBackground } from '@/components/ui/primitives';
 import { isIntroCompleted } from '@/lib/intro-storage';
-import { isAvatarPromptDone, isRelationshipOnboardingDone } from '@/lib/onboarding-storage';
-import { PREVIEW_GET_STARTED_ON_LAUNCH, PREVIEW_WELCOME_ON_LAUNCH } from '@/lib/welcome-design-preview';
+import { isAvatarPromptDone, isNotificationPromptDone, isOnboardingPaywallDone, isRelationshipOnboardingDone } from '@/lib/onboarding-storage';
+import { needsProfileSetup, profileSetupEntryRoute } from '@/lib/profile-setup';
 import { useAuthStore, useRelationshipStore } from '@/stores';
 
 export default function IndexScreen() {
@@ -34,28 +34,18 @@ export default function IndexScreen() {
     async function route() {
       if (cancelled) return;
 
-      if (PREVIEW_GET_STARTED_ON_LAUNCH) {
-        router.replace('/(auth)/get-started');
-        return;
-      }
-
-      if (PREVIEW_WELCOME_ON_LAUNCH) {
-        router.replace('/(auth)/welcome');
-        return;
-      }
-
       if (!session) {
-        const seenIntro = await isIntroCompleted();
-        router.replace(seenIntro ? '/(auth)/login' : '/(auth)/welcome');
+        const hasUsedAuthBefore = await isIntroCompleted();
+        router.replace(hasUsedAuthBefore ? '/(auth)/login' : '/(auth)/welcome');
         return;
       }
       if (!relationship) {
-        if (user && !user.avatar_url && !(await isAvatarPromptDone(user.id))) {
-          router.replace('/(onboarding)/profile-setup');
+        if (user && needsProfileSetup(user, await isAvatarPromptDone(user.id))) {
+          router.replace(profileSetupEntryRoute(user, await isAvatarPromptDone(user.id)) as never);
         } else if (user && (await isRelationshipOnboardingDone(user.id))) {
           router.replace({
-            pathname: '/(onboarding)/create-relationship',
-            params: { anniversarySkipped: '1' },
+            pathname: '/(onboarding)/relationship-path',
+            params: { anniversarySkipped: '1', relationshipTypeSkipped: '1' },
           });
         } else {
           router.replace('/(onboarding)/anniversary-setup');
@@ -63,11 +53,35 @@ export default function IndexScreen() {
         return;
       }
       if (relationship.status === 'pending' && !relationship.user_2_id) {
-        router.replace('/(tabs)/home');
+        if (user && !(await isNotificationPromptDone(user.id))) {
+          router.replace({
+            pathname: '/(onboarding)/notification-prompt',
+            params: { next: 'home' },
+          });
+        } else if (user && !(await isOnboardingPaywallDone(user.id))) {
+          router.replace({
+            pathname: '/pro',
+            params: { from: 'onboarding', next: 'home' },
+          });
+        } else {
+          router.replace('/(tabs)/home');
+        }
         return;
       }
       if (relationship.status === 'pending') {
-        router.replace('/(onboarding)/welcome');
+        if (user && !(await isNotificationPromptDone(user.id))) {
+          router.replace({
+            pathname: '/(onboarding)/notification-prompt',
+            params: { next: 'welcome' },
+          });
+        } else if (user && !(await isOnboardingPaywallDone(user.id))) {
+          router.replace({
+            pathname: '/pro',
+            params: { from: 'onboarding', next: 'welcome' },
+          });
+        } else {
+          router.replace('/(onboarding)/welcome');
+        }
         return;
       }
       router.replace('/(tabs)/home');

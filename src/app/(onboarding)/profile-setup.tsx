@@ -2,20 +2,25 @@ import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { OnboardingChrome } from '@/components/onboarding/OnboardingChrome';
 import { Icon } from '@/components/ui/Icon';
 import { PrimaryButton } from '@/components/ui/primitives';
+import { Spacing } from '@/constants/design-system';
 import { useTheme } from '@/hooks/useTheme';
 import { ensureUserProfile } from '@/lib/auth-session';
 import { markAvatarPromptDone } from '@/lib/onboarding-storage';
+import { goToOnboardingBack } from '@/lib/onboarding-navigation';
+import { needsProfileName } from '@/lib/profile-setup';
 import { supabase } from '@/lib/supabase';
 import * as api from '@/services/api';
 import { useAuthStore } from '@/stores';
 
 export default function ProfileSetupScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const user = useAuthStore((s) => s.user);
   const setUser = useAuthStore((s) => s.setUser);
@@ -24,11 +29,19 @@ export default function ProfileSetupScreen() {
   const [bootstrapping, setBootstrapping] = useState(!user);
 
   useEffect(() => {
+    if (!user) return;
+    if (needsProfileName(user)) {
+      router.replace('/(onboarding)/profile-name');
+      return;
+    }
+    setAvatarUri(user.avatar_url);
+  }, [user, router]);
+
+  useEffect(() => {
     let cancelled = false;
 
     async function bootstrapProfile() {
       if (user) {
-        setAvatarUri(user.avatar_url);
         setBootstrapping(false);
         return;
       }
@@ -43,7 +56,6 @@ export default function ProfileSetupScreen() {
         const profile = await ensureUserProfile(session.user);
         if (cancelled) return;
         setUser(profile);
-        setAvatarUri(profile.avatar_url);
       } catch (e: unknown) {
         Alert.alert(
           'Setup unavailable',
@@ -78,24 +90,28 @@ export default function ProfileSetupScreen() {
     }
   };
 
-  const continue_ = async () => {
+  const continue_ = async (skipPhoto = false) => {
     const activeUser = useAuthStore.getState().user;
     if (!activeUser) return;
     setLoading(true);
     try {
-      let avatarUrl = activeUser.avatar_url;
+      let currentUser = activeUser;
 
-      if (avatarUri && avatarUri !== activeUser.avatar_url && !avatarUri.startsWith('http')) {
-        avatarUrl = await api.uploadProfileAvatar(activeUser.id, avatarUri);
+      if (!skipPhoto) {
+        let avatarUrl = currentUser.avatar_url;
+
+        if (avatarUri && avatarUri !== currentUser.avatar_url && !avatarUri.startsWith('http')) {
+          avatarUrl = await api.uploadProfileAvatar(currentUser.id, avatarUri);
+        }
+
+        if (avatarUrl && avatarUrl !== currentUser.avatar_url) {
+          currentUser = await api.updateProfile(currentUser.id, { avatar_url: avatarUrl });
+          setUser(currentUser);
+        }
       }
 
-      if (avatarUrl && avatarUrl !== activeUser.avatar_url) {
-        const updated = await api.updateProfile(activeUser.id, { avatar_url: avatarUrl });
-        setUser(updated);
-      }
-
-      await markAvatarPromptDone(activeUser.id);
-      router.push('/(onboarding)/anniversary-setup');
+      await markAvatarPromptDone(currentUser.id);
+      router.push('/(onboarding)/profile-gender');
     } catch (e: unknown) {
       Alert.alert('Error', e instanceof Error ? e.message : 'Could not save profile photo');
     } finally {
@@ -103,60 +119,62 @@ export default function ProfileSetupScreen() {
     }
   };
 
-  const displayName = user?.name?.trim() || 'there';
+  const goBack = () => goToOnboardingBack(router, 'profile-setup');
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={styles.content}>
-        <Text style={[styles.title, { color: colors.text }]}>Add a profile photo</Text>
-        <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-          Hi {displayName} 
-        </Text>
+    <OnboardingChrome stepId="profile-setup" onBack={goBack}>
+      <ScrollView
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: insets.bottom + Spacing.lg, paddingHorizontal: Spacing.lg },
+        ]}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}>
+        <View style={styles.content}>
+          <Text style={[styles.title, { color: colors.text }]}>Add a profile photo</Text>
+          <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
+            Help your partner recognize you. You can always change this later.
+          </Text>
 
-        <Pressable
-          onPress={pickPhoto}
-          disabled={bootstrapping}
-          style={[styles.avatarWrap, { borderColor: colors.border, backgroundColor: colors.surface }]}
-          accessibilityLabel="Choose profile photo">
-          {avatarUri ? (
-            <Image source={{ uri: avatarUri }} style={styles.avatarImage} contentFit="cover" />
-          ) : (
-            <View style={[styles.avatarPlaceholder, { backgroundColor: colors.surfaceElevated }]}>
-              <Icon name="camera" size={32} color={colors.textSecondary} />
+          <Pressable
+            onPress={pickPhoto}
+            disabled={bootstrapping}
+            style={[styles.avatarWrap, { borderColor: colors.border, backgroundColor: colors.surface }]}
+            accessibilityLabel="Choose profile photo">
+            {avatarUri ? (
+              <Image source={{ uri: avatarUri }} style={styles.avatarImage} contentFit="cover" />
+            ) : (
+              <View style={[styles.avatarPlaceholder, { backgroundColor: colors.surfaceElevated }]}>
+                <Icon name="camera" size={32} color={colors.textSecondary} />
+              </View>
+            )}
+            <View style={[styles.editBadge, { backgroundColor: colors.accent }]}>
+              <Icon name="plus" size={16} color={colors.onAccent} strokeWidth={2.5} />
             </View>
-          )}
-          <View style={[styles.editBadge, { backgroundColor: colors.accent }]}>
-            <Icon name="plus" size={16} color={colors.onAccent} strokeWidth={2.5} />
-          </View>
-        </Pressable>
+          </Pressable>
 
-        <Text style={[styles.hint, { color: colors.textTertiary }]}>Tap to choose from your library</Text>
+          <Text style={[styles.hint, { color: colors.textTertiary }]}>Optional</Text>
 
-        <PrimaryButton
-          label={loading ? 'Saving…' : 'Continue'}
-          onPress={continue_}
-          loading={loading}
-          disabled={bootstrapping}
-          style={styles.btn}
-        />
+          <PrimaryButton
+            label={loading ? 'Saving…' : 'Continue'}
+            onPress={() => continue_()}
+            loading={loading}
+            disabled={bootstrapping}
+            style={styles.btn}
+          />
 
-        <Pressable
-          onPress={async () => {
-            const activeUser = useAuthStore.getState().user;
-            if (activeUser) await markAvatarPromptDone(activeUser.id);
-            router.push('/(onboarding)/anniversary-setup');
-          }}
-          disabled={bootstrapping || loading}>
-          <Text style={[styles.skip, { color: colors.textSecondary }]}>Skip for now</Text>
-        </Pressable>
-      </View>
-    </SafeAreaView>
+          <Pressable onPress={() => continue_(true)} disabled={bootstrapping || loading}>
+            <Text style={[styles.skip, { color: colors.textSecondary }]}>Skip photo for now</Text>
+          </Pressable>
+        </View>
+      </ScrollView>
+    </OnboardingChrome>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  content: { flex: 1, padding: 24, justifyContent: 'center', alignItems: 'center' },
+  scrollContent: { flexGrow: 1, justifyContent: 'center' },
+  content: { flex: 1, justifyContent: 'center', alignItems: 'center', minHeight: 400 },
   title: { fontSize: 28, fontWeight: '800', textAlign: 'center', letterSpacing: -0.5 },
   subtitle: { fontSize: 16, textAlign: 'center', lineHeight: 22, marginTop: 10, maxWidth: 300 },
   avatarWrap: {
@@ -164,7 +182,7 @@ const styles = StyleSheet.create({
     height: 140,
     borderRadius: 70,
     borderWidth: 2,
-    marginTop: 32,
+    marginTop: 28,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'visible',

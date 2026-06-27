@@ -12,6 +12,8 @@ import { ScreenContainer } from '@/components/layout/ScreenContainer';
 import { TabScreenScroll } from '@/components/layout/TabScreenScroll';
 import { ChangePasswordModal } from '@/components/profile/ChangePasswordModal';
 import { EditFieldModal } from '@/components/profile/EditFieldModal';
+import { EditGenderModal } from '@/components/profile/EditGenderModal';
+import { EditRelationshipTypeModal } from '@/components/profile/EditRelationshipTypeModal';
 import { LocationSharingSettings } from '@/components/profile/LocationSharingSettings';
 import { ProfileAnniversarySection } from '@/components/profile/ProfileAnniversarySection';
 import { SharedAlbum } from '@/components/profile/SharedAlbum';
@@ -26,6 +28,8 @@ import { useSubscription } from '@/hooks/useSubscription';
 import { useTheme } from '@/hooks/useTheme';
 import { getRelationshipAnniversaryDate } from '@/lib/anniversary';
 import { signOutUser } from '@/lib/auth-session';
+import { profileGenderLabel } from '@/lib/profile-gender';
+import { relationshipTypeLabel } from '@/lib/relationship-type';
 import { markRelationshipOnboardingDone } from '@/lib/onboarding-storage';
 import { pickAndUploadSharedAlbumMedia } from '@/lib/pick-shared-album-media';
 import { SharedAlbumStorageLimitError } from '@/lib/shared-album';
@@ -33,6 +37,7 @@ import { formatSubscriptionExpiry } from '@/lib/subscription';
 import { supabase } from '@/lib/supabase';
 import * as api from '@/services/api';
 import { useAuthStore, useRelationshipStore, useUIStore } from '@/stores';
+import type { ProfileGender, RelationshipType } from '@/types/database';
 
 const PROFILE_TABS = [
   { key: 'album', label: 'Album' },
@@ -64,6 +69,14 @@ export default function ProfileScreen() {
   const [savingEdit, setSavingEdit] = useState(false);
   const [avatarSaving, setAvatarSaving] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [showGenderModal, setShowGenderModal] = useState(false);
+  const [genderDraft, setGenderDraft] = useState<ProfileGender | null>(user?.gender ?? null);
+  const [savingGender, setSavingGender] = useState(false);
+  const [showRelationshipTypeModal, setShowRelationshipTypeModal] = useState(false);
+  const [relationshipTypeDraft, setRelationshipTypeDraft] = useState<RelationshipType | null>(
+    relationship?.relationship_type ?? null,
+  );
+  const [savingRelationshipType, setSavingRelationshipType] = useState(false);
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -293,6 +306,60 @@ export default function ProfileScreen() {
     setShowPasswordModal(true);
   };
 
+  const openGenderModal = () => {
+    setGenderDraft(user?.gender ?? null);
+    setShowGenderModal(true);
+  };
+
+  const closeGenderModal = () => {
+    setShowGenderModal(false);
+    setGenderDraft(user?.gender ?? null);
+  };
+
+  const saveGender = async () => {
+    if (!user || !genderDraft) return;
+
+    setSavingGender(true);
+    try {
+      const updated = await api.updateProfile(user.id, { gender: genderDraft });
+      setUser(updated);
+      closeGenderModal();
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (e) {
+      Alert.alert('Could not save', e instanceof Error ? e.message : 'Please try again.');
+    } finally {
+      setSavingGender(false);
+    }
+  };
+
+  const openRelationshipTypeModal = () => {
+    setRelationshipTypeDraft(relationship?.relationship_type ?? null);
+    setShowRelationshipTypeModal(true);
+  };
+
+  const closeRelationshipTypeModal = () => {
+    setShowRelationshipTypeModal(false);
+    setRelationshipTypeDraft(relationship?.relationship_type ?? null);
+  };
+
+  const saveRelationshipType = async () => {
+    if (!relationship || !relationshipTypeDraft) return;
+
+    setSavingRelationshipType(true);
+    try {
+      const updated = await api.updateRelationship(relationship.id, {
+        relationship_type: relationshipTypeDraft,
+      });
+      setRelationship(updated);
+      closeRelationshipTypeModal();
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (e) {
+      Alert.alert('Could not save', e instanceof Error ? e.message : 'Please try again.');
+    } finally {
+      setSavingRelationshipType(false);
+    }
+  };
+
   const closePasswordModal = () => {
     setShowPasswordModal(false);
     setCurrentPassword('');
@@ -399,7 +466,7 @@ export default function ProfileScreen() {
               Wrapped {new Date().getFullYear()}
             </Text>
             <Text style={[styles.wrappedSub, { color: colors.textSecondary }]}>
-              Your year together — moments, streaks, and highlights
+              See your year together in moments, streaks, and highlights
             </Text>
           </View>
           <Icon name="chevronRight" size={20} color={colors.textSecondary} />
@@ -548,6 +615,13 @@ export default function ProfileScreen() {
                 onPress={() => openEdit('name', user?.name ?? '')}
               />
               <SettingEditItem
+                icon="compass"
+                label="Gender"
+                value={profileGenderLabel(user?.gender)}
+                colors={colors}
+                onPress={openGenderModal}
+              />
+              <SettingEditItem
                 icon="journal"
                 label="Email"
                 value={user?.email ?? ''}
@@ -611,6 +685,13 @@ export default function ProfileScreen() {
                   value={relationship.relationship_name?.trim() || 'Our Moments'}
                   colors={colors}
                   onPress={() => openEdit('space', relationship.relationship_name ?? '')}
+                />
+                <SettingEditItem
+                  icon="compass"
+                  label="Relationship type"
+                  value={relationshipTypeLabel(relationship.relationship_type)}
+                  colors={colors}
+                  onPress={openRelationshipTypeModal}
                   last
                 />
               </Card>
@@ -677,6 +758,24 @@ export default function ProfileScreen() {
         onChangeConfirm={setConfirmPassword}
         onClose={closePasswordModal}
         onSave={savePassword}
+      />
+
+      <EditGenderModal
+        visible={showGenderModal}
+        value={genderDraft}
+        saving={savingGender}
+        onChange={setGenderDraft}
+        onClose={closeGenderModal}
+        onSave={saveGender}
+      />
+
+      <EditRelationshipTypeModal
+        visible={showRelationshipTypeModal}
+        value={relationshipTypeDraft}
+        saving={savingRelationshipType}
+        onChange={setRelationshipTypeDraft}
+        onClose={closeRelationshipTypeModal}
+        onSave={saveRelationshipType}
       />
     </ScreenContainer>
   );

@@ -1,9 +1,9 @@
 import { Redirect, Tabs } from 'expo-router';
 import { Platform } from 'react-native';
 
+import { StreakMilestoneSync } from '@/components/home/StreakMilestoneSync';
 import { AppTabBar } from '@/components/layout/AppTabBar';
 import { NotificationSync } from '@/components/layout/NotificationSync';
-import { StreakMilestoneSync } from '@/components/home/StreakMilestoneSync';
 import { PartnerProfileModal } from '@/components/profile/PartnerProfileModal';
 import { WatchTogetherModal } from '@/components/watch/WatchTogetherModal';
 import { useRealtimeSubscription } from '@/hooks/queries';

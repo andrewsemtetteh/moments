@@ -4,7 +4,8 @@ import { Alert, StyleSheet, Text, View } from 'react-native';
 
 import { AnniversaryCountdownMilestone } from '@/components/profile/AnniversaryCountdownMilestone';
 import { EditAnniversaryModal } from '@/components/profile/EditAnniversaryModal';
-import { getRelationshipAnniversaryIso, hasCustomAnniversaryDate } from '@/lib/anniversary';
+import { getRelationshipAnniversaryIso, hasCustomAnniversaryDate, isValidAnniversaryIso } from '@/lib/anniversary';
+import { toUserFacingNetworkError } from '@/lib/network-error';
 import { useTheme } from '@/hooks/useTheme';
 import * as api from '@/services/api';
 import { useRelationshipStore } from '@/stores';
@@ -24,14 +25,20 @@ export function ProfileAnniversarySection() {
   const usingDefault = !hasCustomAnniversaryDate(relationship);
 
   const saveAnniversary = async (isoDate: string) => {
+    if (!isValidAnniversaryIso(isoDate)) {
+      Alert.alert('Invalid date', 'Please pick a valid anniversary date.');
+      return;
+    }
+
     setSaving(true);
     try {
-      const updated = await api.updateRelationship(relationship.id, { anniversary_date: isoDate });
+      const updated = await api.updateRelationshipAnniversary(relationship.id, isoDate);
       setRelationship(updated);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setEditOpen(false);
     } catch (e) {
-      Alert.alert('Could not save', e instanceof Error ? e.message : 'Please try again.');
+      const err = toUserFacingNetworkError(e, 'Please try again.');
+      Alert.alert('Could not save', err.message);
     } finally {
       setSaving(false);
     }
@@ -44,7 +51,7 @@ export function ProfileAnniversarySection() {
           <AnniversaryCountdownMilestone anniversaryIso={anniversaryIso} onEdit={() => setEditOpen(true)} />
           {usingDefault ? (
             <Text style={[styles.defaultHint, { color: colors.textTertiary }]}>
-              Using your join date — tap to set your real anniversary
+              Using your join date. Tap to set your real anniversary
             </Text>
           ) : null}
         </View>
