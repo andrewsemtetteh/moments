@@ -1,8 +1,6 @@
 import { Platform } from 'react-native';
 
 import { MoodHistoryModal } from '@/components/home/MoodHistoryModal';
-import { SharedAlbumModal } from '@/components/profile/SharedAlbumModal';
-import { SharedAlbumViewer } from '@/components/profile/SharedAlbumViewer';
 import { MomentCreatorModal } from '@/components/moments/MomentCreatorModal';
 import { MomentHistoryModal } from '@/components/moments/MomentHistoryModal';
 import { MomentRecapVideoModal } from '@/components/moments/MomentRecapVideoModal';
@@ -19,8 +17,6 @@ export function AppModals() {
     <>
       <MomentCreatorModal />
       <MomentHistoryModal />
-      <SharedAlbumModal />
-      <SharedAlbumViewer />
       <MomentRecapVideoModal />
       <MomentStoryViewer />
       <WrappedModal />

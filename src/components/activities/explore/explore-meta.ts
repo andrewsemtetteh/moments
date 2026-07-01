@@ -9,7 +9,7 @@ export interface ExploreMeta {
   emoji: string;
 }
 
-export const EXPLORE_META: Record<Exclude<ExploreModalKey, 'watch'>, ExploreMeta> = {
+export const EXPLORE_META: Record<ExploreModalKey, ExploreMeta> = {
   cards: {
     eyebrow: 'CONNECT',
     title: 'Conversation Cards',

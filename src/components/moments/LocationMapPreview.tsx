@@ -8,7 +8,10 @@ import { useTheme } from '@/hooks/useTheme';
 export interface MapMarker {
   latitude: number;
   longitude: number;
+  /** Tooltip text on the map pin. */
   label?: string;
+  /** Profile name used for avatar initials when there is no photo. */
+  name?: string | null;
   color?: string;
   avatarUrl?: string | null;
 }
@@ -30,6 +33,7 @@ function buildMapHtml(markers: MapMarker[], interactive: boolean): string {
       lat: m.latitude,
       lng: m.longitude,
       label: m.label ?? '',
+      name: m.name?.trim() || m.label?.trim() || '',
       color: m.color ?? '#e85d75',
       avatarUrl: m.avatarUrl?.trim() || '',
     })),
@@ -42,7 +46,7 @@ function buildMapHtml(markers: MapMarker[], interactive: boolean): string {
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <style>
-      html, body, #map { margin: 0; padding: 0; width: 100%; height: 100%; background: #e8e4df; }
+      html, body, #map { margin: 0; padding: 0; width: 100%; height: 100%; background: #1a1a1a; }
       .leaflet-control-attribution { font-size: 9px !important; }
       .pin-label { font-size: 11px; font-weight: 700; white-space: nowrap; }
       .avatar-pin-wrap { background: transparent !important; border: none !important; }
@@ -68,28 +72,44 @@ function buildMapHtml(markers: MapMarker[], interactive: boolean): string {
         doubleClickZoom: ${interactive ? 'true' : 'false'},
         touchZoom: ${interactive ? 'true' : 'false'},
       });
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
         maxZoom: 19,
-        attribution: '&copy; OpenStreetMap',
+        attribution: '&copy; Esri',
       }).addTo(map);
 
       var group = [];
+      function avatarInitial(name) {
+        var trimmed = String(name || '').trim();
+        if (!trimmed) return '?';
+        var first = trimmed.split(/\\s+/)[0];
+        return first ? first.charAt(0).toUpperCase() : '?';
+      }
+
       markers.forEach(function(m) {
-        var ring = m.color || '#e85d75';
+        var ring = m.color || '#5b8def';
         var label = escapeHtml(m.label || '');
-        var initial = label ? label.charAt(0).toUpperCase() : '?';
+        var initial = avatarInitial(m.name || m.label);
+        var avatarSize = 30;
+        var pointerH = 11;
+        var pointerW = 14;
+        var pinW = 36;
+        var pinH = avatarSize + pointerH;
         var face = m.avatarUrl
-          ? '<img src="' + escapeHtml(m.avatarUrl) + '" alt="" style="width:100%;height:100%;object-fit:cover;display:block;" />'
-          : '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:' + ring + ';color:#fff;font-size:12px;font-weight:800;">' + initial + '</div>';
+          ? '<img src="' + escapeHtml(m.avatarUrl) + '" alt="" style="width:100%;height:100%;object-fit:cover;display:block;border-radius:50%;" />'
+          : '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;border-radius:50%;background:linear-gradient(135deg,#ffffff 0%,#f4f4f4 100%);color:' + ring + ';font-size:11px;font-weight:800;letter-spacing:-0.3px;">' + initial + '</div>';
         var icon = L.divIcon({
           className: 'avatar-pin-wrap',
-          html: '<div style="width:44px;height:44px;box-sizing:border-box;border-radius:50%;border:3px solid ' + ring + ';background:#fff;padding:2px;box-shadow:0 2px 10px rgba(0,0,0,0.28);overflow:hidden;">' + face + '</div>',
-          iconSize: [44, 44],
-          iconAnchor: [22, 22],
+          html:
+            '<div style="width:' + pinW + 'px;display:flex;flex-direction:column;align-items:center;filter:drop-shadow(0 3px 8px rgba(0,0,0,0.32));">' +
+              '<div style="width:' + avatarSize + 'px;height:' + avatarSize + 'px;box-sizing:border-box;border-radius:50%;border:2.5px solid ' + ring + ';background:#fff;padding:2px;overflow:hidden;">' + face + '</div>' +
+              '<div style="width:0;height:0;margin-top:-1px;border-left:' + (pointerW / 2) + 'px solid transparent;border-right:' + (pointerW / 2) + 'px solid transparent;border-top:' + pointerH + 'px solid ' + ring + ';"></div>' +
+            '</div>',
+          iconSize: [pinW, pinH],
+          iconAnchor: [pinW / 2, pinH],
         });
         var marker = L.marker([m.lat, m.lng], { icon: icon }).addTo(map);
         if (label) {
-          marker.bindTooltip('<span class="pin-label">' + label + '</span>', { direction: 'top', offset: [0, -24] });
+          marker.bindTooltip('<span class="pin-label">' + label + '</span>', { direction: 'top', offset: [0, -pinH - 6] });
         }
         group.push(marker);
       });

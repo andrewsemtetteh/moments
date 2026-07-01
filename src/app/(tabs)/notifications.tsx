@@ -24,6 +24,7 @@ import {
   useNotificationFeed,
 } from '@/hooks/queries';
 import { useTheme } from '@/hooks/useTheme';
+import { toUserFacingNetworkError } from '@/lib/network-error';
 import {
   filterInboxNotifications,
   formatNotificationTime,
@@ -31,8 +32,7 @@ import {
   NOTIFICATION_TYPE_ICON,
   NOTIFICATION_TYPE_LABEL,
 } from '@/lib/notification-display';
-import { toUserFacingNetworkError } from '@/lib/network-error';
-import { useUIStore } from '@/stores';
+import { goBackOrReplace } from '@/lib/router';
 import type { Notification } from '@/types/database';
 
 export default function NotificationsScreen() {
@@ -47,8 +47,9 @@ function NotificationsScreenNative() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
-  const openWatchTogether = useUIStore((s) => s.openWatchTogether);
-  const goBack = () => router.back();
+  const goBack = useCallback(() => {
+    goBackOrReplace(router, '/(tabs)/home');
+  }, [router]);
 
   const {
     data,
@@ -98,7 +99,7 @@ function NotificationsScreenNative() {
   }, [refetch]);
 
   const handleOpen = (item: Notification) => {
-    openFromNotificationType(item.type, router, openWatchTogether);
+    openFromNotificationType(item.type, router);
   };
 
   const confirmDelete = (item: Notification) => {
@@ -129,102 +130,103 @@ function NotificationsScreenNative() {
   ).message;
 
   return (
-    <View style={[styles.root, { backgroundColor: colors.background, paddingTop: insets.top }]}>
+    <View style={[styles.root, { backgroundColor: colors.background }]}>
       <SwipeDismissView edge="start" onDismiss={goBack} style={styles.flex}>
-        <View style={styles.header}>
-          <Pressable
-            onPress={goBack}
-            accessibilityRole="button"
-            accessibilityLabel="Go back"
-            hitSlop={8}
-            style={({ pressed }) => [styles.headerSide, pressed && styles.pressed]}>
-            <Icon name="chevronLeft" size={26} color={colors.textSecondary} />
-          </Pressable>
-          <Text style={[styles.title, { color: colors.text }]} numberOfLines={1}>
-            Notifications
-          </Text>
-          {hasItems ? (
+        <View style={[styles.flex, { paddingTop: insets.top + 6 }]}>
+          <View style={styles.header}>
             <Pressable
-              onPress={confirmClearAll}
-              disabled={clearAll.isPending}
+              onPress={goBack}
               accessibilityRole="button"
-              accessibilityLabel="Clear all notifications"
-              style={({ pressed }) => [styles.headerSide, pressed && styles.pressed]}>
-              <Text style={[styles.clearText, { color: colors.accent }]}>Clear</Text>
+              accessibilityLabel="Go back"
+              hitSlop={8}
+              style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]}>
+              <Icon name="chevronLeft" size={26} color={colors.textSecondary} />
             </Pressable>
+            <Text style={[styles.title, { color: colors.text }]} numberOfLines={1}>
+              Notifications
+            </Text>
+          </View>
+
+          {isLoading ? (
+            <View style={styles.centered}>
+              <ActivityIndicator color={colors.accent} size="large" />
+            </View>
+          ) : isError ? (
+            <View style={styles.centered}>
+              <Text style={[styles.errorTitle, { color: colors.text }]}>Couldn&apos;t load notifications</Text>
+              <Text style={[styles.errorBody, { color: colors.textSecondary }]}>{errorMessage}</Text>
+              <PrimaryButton label="Try again" onPress={() => void refetch()} />
+            </View>
           ) : (
-            <View style={styles.headerSide} />
+            <SectionList
+              sections={sections}
+              keyExtractor={(item) => item.id}
+              style={styles.flex}
+              contentContainerStyle={[
+                styles.listContent,
+                { paddingBottom: insets.bottom + 24 },
+                !hasItems && styles.listContentEmpty,
+              ]}
+              stickySectionHeadersEnabled={false}
+              showsVerticalScrollIndicator={false}
+              refreshControl={
+                <RefreshControl
+                  refreshing={pullRefreshing}
+                  tintColor={colors.accent}
+                  colors={[colors.accent]}
+                  onRefresh={() => void onPullRefresh()}
+                />
+              }
+              ListEmptyComponent={
+                <View style={styles.empty}>
+                  <View style={[styles.emptyIcon, { backgroundColor: colors.surfaceElevated }]}>
+                    <Icon name="bell" size={28} color={colors.textTertiary} />
+                  </View>
+                  <Text style={[styles.emptyTitle, { color: colors.text }]}>No notifications yet</Text>
+                  <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
+                    When your partner shares a moment, mood, plan, or streak update, it&apos;ll show up here.
+                  </Text>
+                </View>
+              }
+              renderSectionHeader={({ section: { title, key } }) => (
+                <Text
+                  style={[
+                    styles.sectionTitle,
+                    key === sections[0]?.key && styles.sectionTitleFirst,
+                    { color: colors.textSecondary },
+                  ]}>
+                  {title}
+                </Text>
+              )}
+              ItemSeparatorComponent={() => (
+                <View style={[styles.itemSeparator, { backgroundColor: colors.border }]} />
+              )}
+              SectionSeparatorComponent={() => <View style={styles.sectionGap} />}
+              renderItem={({ item }) => (
+                <NotificationRow
+                  item={item}
+                  colors={colors}
+                  onPress={() => handleOpen(item)}
+                  onLongPress={() => confirmDelete(item)}
+                />
+              )}
+              ListFooterComponent={
+                hasNextPage ? (
+                  <Pressable
+                    onPress={() => void fetchNextPage()}
+                    disabled={isFetchingNextPage}
+                    style={[styles.loadMore, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
+                    {isFetchingNextPage ? (
+                      <ActivityIndicator color={colors.accent} />
+                    ) : (
+                      <Text style={[styles.loadMoreText, { color: colors.accent }]}>Load older notifications</Text>
+                    )}
+                  </Pressable>
+                ) : null
+              }
+            />
           )}
         </View>
-
-        {isLoading ? (
-          <View style={styles.centered}>
-            <ActivityIndicator color={colors.accent} size="large" />
-          </View>
-        ) : isError ? (
-          <View style={styles.centered}>
-            <Text style={[styles.errorTitle, { color: colors.text }]}>Couldn&apos;t load notifications</Text>
-            <Text style={[styles.errorBody, { color: colors.textSecondary }]}>{errorMessage}</Text>
-            <PrimaryButton label="Try again" onPress={() => void refetch()} />
-          </View>
-        ) : (
-          <SectionList
-            sections={sections}
-            keyExtractor={(item) => item.id}
-            style={styles.flex}
-            contentContainerStyle={[
-              styles.listContent,
-              { paddingBottom: insets.bottom + 24 },
-              !hasItems && styles.listContentEmpty,
-            ]}
-            stickySectionHeadersEnabled={false}
-            showsVerticalScrollIndicator={false}
-            refreshControl={
-              <RefreshControl
-                refreshing={pullRefreshing}
-                tintColor={colors.accent}
-                colors={[colors.accent]}
-                onRefresh={() => void onPullRefresh()}
-              />
-            }
-            ListEmptyComponent={
-              <View style={styles.empty}>
-                <View style={[styles.emptyIcon, { backgroundColor: colors.surfaceElevated }]}>
-                  <Icon name="bell" size={28} color={colors.textTertiary} />
-                </View>
-                <Text style={[styles.emptyTitle, { color: colors.text }]}>No notifications yet</Text>
-                <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
-                  When your partner shares a moment, mood, plan, or streak update, it&apos;ll show up here.
-                </Text>
-              </View>
-            }
-            renderSectionHeader={({ section: { title } }) => (
-              <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>{title}</Text>
-            )}
-            renderItem={({ item }) => (
-              <NotificationRow
-                item={item}
-                colors={colors}
-                onPress={() => handleOpen(item)}
-                onLongPress={() => confirmDelete(item)}
-              />
-            )}
-            ListFooterComponent={
-              hasNextPage ? (
-                <Pressable
-                  onPress={() => void fetchNextPage()}
-                  disabled={isFetchingNextPage}
-                  style={[styles.loadMore, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
-                  {isFetchingNextPage ? (
-                    <ActivityIndicator color={colors.accent} />
-                  ) : (
-                    <Text style={[styles.loadMoreText, { color: colors.accent }]}>Load older notifications</Text>
-                  )}
-                </Pressable>
-              ) : null
-            }
-          />
-        )}
       </SwipeDismissView>
     </View>
   );
@@ -250,16 +252,9 @@ function NotificationRow({
       onLongPress={onLongPress}
       delayLongPress={400}
       accessibilityHint="Long press to delete"
-      style={({ pressed }) => [
-        styles.item,
-        {
-          backgroundColor: item.read ? colors.surface : colors.accentSoft,
-          borderColor: item.read ? colors.border : `${colors.accent}44`,
-        },
-        pressed && styles.pressed,
-      ]}>
-      <View style={[styles.itemIcon, { backgroundColor: colors.surface }]}>
-        <Icon name={iconName} size={18} color={colors.accent} />
+      style={({ pressed }) => [styles.item, pressed && styles.pressed]}>
+      <View style={styles.itemIcon}>
+        <Icon name={iconName} size={20} color={colors.accent} />
       </View>
       <View style={styles.itemBody}>
         <View style={styles.itemMeta}>
@@ -268,62 +263,74 @@ function NotificationRow({
             {formatNotificationTime(item.created_at)}
           </Text>
         </View>
-        <Text style={[styles.itemContent, { color: colors.text }]}>{item.content}</Text>
+        <Text
+          style={[
+            styles.itemContent,
+            { color: colors.text },
+            !item.read && styles.itemContentUnread,
+          ]}>
+          {item.content}
+        </Text>
       </View>
       {!item.read ? <View style={[styles.unreadDot, { backgroundColor: colors.accent }]} /> : null}
     </Pressable>
   );
 }
 
-const HEADER_SIDE = 44;
-
 const styles = StyleSheet.create({
   root: { flex: 1 },
   flex: { flex: 1 },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingBottom: 8,
-    minHeight: HEADER_SIDE,
-  },
-  headerSide: {
-    width: HEADER_SIDE,
-    height: HEADER_SIDE,
+    position: 'relative',
     alignItems: 'center',
     justifyContent: 'center',
+    paddingHorizontal: 16,
+    paddingBottom: 8,
+    minHeight: 44,
+  },
+  backBtn: {
+    position: 'absolute',
+    left: 16,
+    top: 0,
+    bottom: 0,
+    width: 32,
+    justifyContent: 'center',
+    alignItems: 'flex-start',
+    zIndex: 1,
   },
   title: {
-    flex: 1,
     textAlign: 'center',
     fontSize: 18,
     fontWeight: '800',
     letterSpacing: -0.4,
   },
-  clearText: { fontSize: 14, fontWeight: '700' },
-  listContent: { paddingHorizontal: 16, paddingTop: 4, gap: 10 },
+  listContent: { paddingHorizontal: 16, paddingTop: 4 },
   listContentEmpty: { flexGrow: 1, justifyContent: 'center' },
   sectionTitle: {
-    fontSize: 13,
-    fontWeight: '800',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginTop: 12,
-    marginBottom: 8,
+    fontSize: 15,
+    fontWeight: '600',
+    marginTop: 14,
+    marginBottom: 2,
   },
+  sectionTitleFirst: {
+    marginTop: 4,
+  },
+  sectionGap: { height: 8 },
   item: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 12,
-    padding: 14,
-    borderRadius: 16,
-    borderWidth: StyleSheet.hairlineWidth,
-    marginBottom: 10,
+    paddingTop: 6,
+    paddingBottom: 10,
+  },
+  itemSeparator: {
+    height: StyleSheet.hairlineWidth,
+    marginLeft: 40,
   },
   itemIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 28,
+    height: 28,
+    marginTop: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -336,6 +343,7 @@ const styles = StyleSheet.create({
   },
   itemType: { fontSize: 12, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.4 },
   itemContent: { fontSize: 15, lineHeight: 21 },
+  itemContentUnread: { fontWeight: '600' },
   itemTime: { fontSize: 12, fontWeight: '600', flexShrink: 0 },
   unreadDot: {
     width: 8,

@@ -32,18 +32,12 @@ import { getFirstName } from '@/lib/avatar-initial';
 import { enrichMomentsWithAuthors, filterMediaMoments, filterMomentsForHome } from '@/lib/moment-display';
 import { shouldShowEntryPaywall } from '@/lib/paywall-storage';
 import { openActivities, openCalendar, openChat } from '@/lib/router';
+import { emptyStreakStatus } from '@/lib/streak';
 import * as api from '@/services/api';
 import { useAuthStore, useRelationshipStore, useUIStore } from '@/stores';
 import type { Moment } from '@/types/database';
 
 const HOME_REFRESH_TIMEOUT_MS = 8_000;
-
-const QUICK_ACTIONS: { id: string; label: string; icon: IconName }[] = [
-  { id: 'bored', label: "We're bored", icon: 'dice' },
-  { id: 'moment', label: 'Send moment', icon: 'camera' },
-  { id: 'plan', label: 'Make plans', icon: 'calendar' },
-  { id: 'journal', label: 'Journal', icon: 'journal' },
-];
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -51,7 +45,7 @@ export default function HomeScreen() {
   const relationship = useRelationshipStore((s) => s.relationship);
   const partner = useRelationshipStore((s) => s.partner);
   const user = useAuthStore((s) => s.user);
-  const setShowMomentCreator = useUIStore((s) => s.setShowMomentCreator);
+  const session = useAuthStore((s) => s.session);
   const setShowMoodHistory = useUIStore((s) => s.setShowMoodHistory);
   const openPaywall = useUIStore((s) => s.openPaywall);
   const openPartnerProfile = useOpenPartnerProfile();
@@ -115,6 +109,11 @@ export default function HomeScreen() {
   const upcomingEvents = events?.slice(0, 3) ?? [];
 
   const relationshipId = relationship?.id;
+
+  const streakStatus = useMemo(
+    () => streak ?? emptyStreakStatus(relationshipId ?? 'pending'),
+    [streak, relationshipId],
+  );
 
   const onRefresh = useCallback(() => {
     if (!relationshipId || refreshInFlightRef.current) return;
@@ -183,13 +182,6 @@ export default function HomeScreen() {
     await Promise.all([refetchChallenge(), refetchStreak()]);
   };
 
-  const onQuickAction = (id: string) => {
-    if (id === 'bored') openActivities('games');
-    else if (id === 'moment') setShowMomentCreator(true);
-    else if (id === 'plan') openCalendar({ create: true });
-    else if (id === 'journal') router.push('/journal');
-  };
-
   const smartSuggestion = getSmartSuggestion(moods ?? {}, upcomingEvents.length, partner?.name);
   const myResponded =
     challenge && user && relationship
@@ -223,50 +215,38 @@ export default function HomeScreen() {
                 <Avatar name={partner?.name} imageUrl={partner?.avatar_url} size={38} colorsOverride={['#ffffff', '#ffffff']} />
               </Pressable>
             </View>
-            {streak && (
+            {session ? (
               <View
                 style={[
                   styles.heroStreak,
-                  streak.at_risk && styles.heroStreakAtRisk,
+                  streakStatus.at_risk && styles.heroStreakAtRisk,
                 ]}>
                 <AnimatedStreakFire
                   color="#fff"
                   size={18}
-                  animate={streak.current_streak > 0 || streak.at_risk}
-                  pulse={streak.at_risk}
-                  periodic={streak.at_risk ? 3_500 : 5_500}
+                  animate={streakStatus.current_streak > 0 || streakStatus.at_risk}
+                  pulse={streakStatus.at_risk}
+                  periodic={streakStatus.at_risk ? 3_500 : 5_500}
                 />
                 <Text style={styles.heroStreakText}>
-                  {streak.current_streak > 0
-                    ? `${streak.current_streak} day${streak.current_streak === 1 ? '' : 's'}`
+                  {streakStatus.current_streak > 0
+                    ? `${streakStatus.current_streak} day${streakStatus.current_streak === 1 ? '' : 's'}`
                     : 'Start streak'}
                 </Text>
               </View>
-            )}
+            ) : null}
           </View>
         </LinearGradient>
 
-        {streak && (
+        {session ? (
           <View style={styles.streakTracker}>
-            <StreakDayTracker status={streak} joinedAt={relationship?.created_at} />
-            <StreakEndCard status={streak} />
+            <StreakDayTracker status={streakStatus} joinedAt={relationship?.created_at} />
+            {streak ? <StreakEndCard status={streak} /> : null}
           </View>
-        )}
-
-        {/* Quick actions */}
-        <View style={styles.quickRow}>
-          {QUICK_ACTIONS.map((a) => (
-            <Pressable key={a.id} onPress={() => onQuickAction(a.id)} style={styles.quickItem}>
-              <View style={[styles.quickIcon, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                <Icon name={a.icon} size={22} color={colors.accent} />
-              </View>
-              <Text style={[styles.quickLabel, { color: colors.textSecondary }]}>{a.label}</Text>
-            </Pressable>
-          ))}
-        </View>
+        ) : null}
 
         {homePartnerMoments.length > 0 && (
-          <View style={styles.section}>
+          <View>
             <SectionTitle>Moments</SectionTitle>
             <MomentsStrip moments={stripMoments} partnerOnly />
             <View style={styles.partnerMomentBlock}>
@@ -275,7 +255,7 @@ export default function HomeScreen() {
           </View>
         )}
 
-        <View style={styles.section}>
+        <View>
           <MoodSnapshot
             moods={moods ?? {}}
             onSelectMood={(m) => updateMood.mutate(m)}
@@ -284,7 +264,7 @@ export default function HomeScreen() {
         </View>
 
         {challenge && (
-          <View style={styles.section}>
+          <View>
             <SectionTitle>Daily Question</SectionTitle>
             <Card>
               <Text style={[styles.prompt, { color: colors.text }]}>{challenge.prompt}</Text>
@@ -311,7 +291,7 @@ export default function HomeScreen() {
         )}
 
         {upcomingEvents.length > 0 && (
-          <View style={styles.section}>
+          <View>
             <SectionTitle action="Calendar" onAction={() => openCalendar()}>
               Coming Up
             </SectionTitle>
@@ -332,7 +312,7 @@ export default function HomeScreen() {
           </View>
         )}
 
-        <View style={styles.section}>
+        <View>
           <Pressable onPress={smartSuggestion.onPress}>
             <LinearGradient
               colors={[colors.accentSoft, colors.surface]}
@@ -398,8 +378,8 @@ function getSmartSuggestion(
 }
 
 const styles = StyleSheet.create({
-  scroll: { paddingHorizontal: 16, paddingTop: 4 },
-  hero: { borderRadius: 24, padding: 20, marginBottom: 18 },
+  scroll: { paddingHorizontal: 16, paddingTop: 4, gap: 18 },
+  hero: { borderRadius: 24, padding: 20 },
   greeting: { color: 'rgba(255,255,255,0.85)', fontSize: 14, fontWeight: '600' },
   heroName: { color: '#fff', fontSize: 26, fontWeight: '800', marginTop: 2, letterSpacing: -0.5 },
   heroFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 18 },
@@ -408,12 +388,7 @@ const styles = StyleSheet.create({
   heroStreak: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(255,255,255,0.2)', paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999 },
   heroStreakAtRisk: { backgroundColor: 'rgba(255,180,80,0.35)' },
   heroStreakText: { color: '#fff', fontWeight: '700', fontSize: 13 },
-  streakTracker: { marginBottom: 18, gap: 10 },
-  quickRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
-  quickItem: { alignItems: 'center', flex: 1, gap: 6 },
-  quickIcon: { width: 56, height: 56, borderRadius: 18, alignItems: 'center', justifyContent: 'center', borderWidth: StyleSheet.hairlineWidth },
-  quickLabel: { fontSize: 11, fontWeight: '600', textAlign: 'center' },
-  section: { marginTop: 18 },
+  streakTracker: { gap: 10 },
   partnerMomentBlock: { marginTop: 14 },
   prompt: { fontSize: 18, lineHeight: 26, marginBottom: 14, fontWeight: '600' },
   responseInput: { borderWidth: 1, borderRadius: 12, padding: 12, minHeight: 64, fontSize: 15, marginBottom: 12, textAlignVertical: 'top' },

@@ -198,6 +198,7 @@ export function PartnerProfileModal() {
         latitude: subject.location_latitude!,
         longitude: subject.location_longitude!,
         label: subject.name?.trim() || 'Partner',
+        name: subject.name,
         color: '#5b8def',
         avatarUrl: subject.avatar_url,
       },

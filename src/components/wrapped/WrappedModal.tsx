@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Icon } from '@/components/ui/Icon';
 import { MOOD_EMOJI, MOOD_LABELS } from '@/constants/design-system';
-import { useJournalEntries, useMoments, useMoodFrequency, useStreak } from '@/hooks/queries';
+import { useMoments, useMoodFrequency, useStreak } from '@/hooks/queries';
 import { useTheme } from '@/hooks/useTheme';
 import { useAuthStore, useRelationshipStore, useUIStore } from '@/stores';
 
@@ -19,7 +19,6 @@ export function WrappedModal() {
   const user = useAuthStore((s) => s.user);
   const { data: momentsData } = useMoments();
   const { data: streak } = useStreak();
-  const { data: journalEntries } = useJournalEntries();
   const { data: moodFreq = [] } = useMoodFrequency();
 
   if (!visible) return null;
@@ -33,11 +32,16 @@ export function WrappedModal() {
     <Modal visible animationType="slide" presentationStyle="pageSheet" onRequestClose={close}>
       <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>
         <View style={styles.header}>
-          <Pressable onPress={close}>
-            <Text style={{ color: colors.textSecondary }}>Close</Text>
+          <Pressable
+            onPress={close}
+            hitSlop={12}
+            style={[styles.closeBtn, { backgroundColor: colors.surfaceElevated }]}
+            accessibilityRole="button"
+            accessibilityLabel="Close">
+            <Icon name="close" size={22} color={colors.text} />
           </Pressable>
           <Text style={[styles.title, { color: colors.text }]}>Wrapped {year}</Text>
-          <View style={{ width: 48 }} />
+          <View style={styles.closeBtn} />
         </View>
         <ScrollView contentContainerStyle={styles.scroll}>
           <LinearGradient colors={colors.gradient} style={styles.hero}>
@@ -50,7 +54,6 @@ export function WrappedModal() {
           <StatCard colors={colors} label="Moments shared" value={String(moments.length)} icon="camera" />
           <StatCard colors={colors} label="Current streak" value={`${streak?.current_streak ?? 0} days`} icon="fire" />
           <StatCard colors={colors} label="Longest streak" value={`${streak?.longest_streak ?? 0} days`} icon="star" />
-          <StatCard colors={colors} label="Journal entries" value={String(journalEntries?.length ?? 0)} icon="journal" />
           {topMood ? (
             <StatCard
               colors={colors}
@@ -93,6 +96,7 @@ function StatCard({
 const styles = StyleSheet.create({
   container: { flex: 1 },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingBottom: 12 },
+  closeBtn: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
   title: { fontSize: 17, fontWeight: '700' },
   scroll: { padding: 16, gap: 12, paddingBottom: 40 },
   hero: { borderRadius: 24, padding: 24, marginBottom: 8 },

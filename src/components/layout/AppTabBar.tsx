@@ -10,6 +10,8 @@ import { Radius } from '@/constants/design-system';
 import { useTheme } from '@/hooks/useTheme';
 import { useAuthStore, useUIStore } from '@/stores';
 
+const TAB_ICON_SIZE = 28;
+
 const LEFT_TABS: { name: string; icon: IconName; label: string }[] = [
   { name: 'home', icon: 'home', label: 'Home' },
   { name: 'activities', icon: 'gamepad', label: 'Play' },
@@ -53,12 +55,12 @@ export function AppTabBar({ state, navigation }: TabBarLikeProps) {
       <Pressable key={tab.name} onPress={() => go(tab.name)} style={styles.tab} hitSlop={6}>
         {isProfile ? (
           <View style={[styles.profileAvatar, focused && { borderColor: colors.accent, borderWidth: 2 }]}>
-            <Avatar name={user?.name} imageUrl={user?.avatar_url} size={26} />
+            <Avatar name={user?.name} imageUrl={user?.avatar_url} size={TAB_ICON_SIZE} />
           </View>
         ) : (
           <Icon
             name={tab.icon}
-            size={26}
+            size={TAB_ICON_SIZE}
             color={focused ? colors.accent : colors.textSecondary}
             filled={focused}
           />
@@ -97,7 +99,7 @@ export function AppTabBar({ state, navigation }: TabBarLikeProps) {
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={[styles.fab, { shadowColor: colors.accent }]}>
-              <Icon name="plus" size={28} color="#fff" />
+              <Icon name="plus" size={TAB_ICON_SIZE} color="#fff" />
             </LinearGradient>
           </Pressable>
         </View>
@@ -140,9 +142,9 @@ const styles = StyleSheet.create({
   },
   label: { fontSize: 10, fontWeight: '700' },
   profileAvatar: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: TAB_ICON_SIZE,
+    height: TAB_ICON_SIZE,
+    borderRadius: TAB_ICON_SIZE / 2,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',

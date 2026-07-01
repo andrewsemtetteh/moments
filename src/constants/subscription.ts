@@ -1,11 +1,8 @@
 import type { IconName } from '@/components/ui/Icon';
 import {
-  FREE_ALBUM_STORAGE_BYTES,
   FREE_DAILY_MOMENTS,
-  FREE_JOURNAL_ENTRIES,
   FREE_TIMELINE_MOMENTS,
 } from '@/constants/design-system';
-import { FREE_WATCH_PARTIES_PER_WEEK } from '@/constants/watch-together';
 
 /** Source of truth — see src/docs/MONETIZATION.md §4 */
 export const MONTHLY_PRICE_USD = 6.99;
@@ -28,10 +25,6 @@ export function formatUsd(amount: number): string {
   return `$${amount.toFixed(2)}`;
 }
 
-function formatAlbumLimit(bytes: number): string {
-  return `${Math.round(bytes / (1024 * 1024))} MB`;
-}
-
 /** Plus-gated features — mirrors `requirePlus` call sites and free-tier limits in the app. */
 export type PlusFeatureItem = {
   icon: IconName;
@@ -46,29 +39,9 @@ export const PLUS_FEATURE_ITEMS: PlusFeatureItem[] = [
     freeLimit: `${FREE_DAILY_MOMENTS} per day on Free`,
   },
   {
-    icon: 'journal',
-    title: 'Unlimited journal entries',
-    freeLimit: `${FREE_JOURNAL_ENTRIES} entries on Free`,
-  },
-  {
     icon: 'list',
     title: 'Full moment timeline',
     freeLimit: `${FREE_TIMELINE_MOMENTS} recent moments on Free`,
-  },
-  {
-    icon: 'image',
-    title: 'Unlimited shared album storage',
-    freeLimit: `${formatAlbumLimit(FREE_ALBUM_STORAGE_BYTES)} on Free`,
-  },
-  {
-    icon: 'film',
-    title: 'Unlimited watch parties',
-    freeLimit: `${FREE_WATCH_PARTIES_PER_WEEK} per week on Free`,
-  },
-  {
-    icon: 'videocam',
-    title: 'Video calls during watch',
-    freeLimit: 'Plus only',
   },
   {
     icon: 'fire',
@@ -81,7 +54,7 @@ export const TRIAL_STEPS: { day: string; title: string; body: string; icon: Icon
   {
     day: 'Today',
     title: 'Today',
-    body: 'Unlock unlimited moments, journal, timeline, shared album, watch parties, and streak restore for both of you.',
+    body: 'Unlock unlimited moments, timeline, and streak restore for both of you.',
     icon: 'lock',
   },
   {

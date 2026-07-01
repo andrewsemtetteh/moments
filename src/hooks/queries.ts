@@ -1,5 +1,5 @@
 import type { RealtimeChannel } from '@supabase/supabase-js';
-import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClient, type InfiniteData, type QueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useRef } from 'react';
 import { Alert } from 'react-native';
 
@@ -7,6 +7,8 @@ import type { MoodHistoryFilter } from '@/lib/mood-history';
 import { resolveMoodFilterUserId as resolveMoodHistoryUserId } from '@/lib/mood-history';
 import { getErrorMessage, isMissingTableError, toUserFacingNetworkError } from '@/lib/network-error';
 import { filterInboxNotifications } from '@/lib/notification-display';
+import { emptyStreakStatus } from '@/lib/streak';
+import { getCachedStreakStatus, setCachedStreakStatus } from '@/lib/streak-cache';
 import { getEffectiveTier } from '@/lib/subscription';
 import { supabase } from '@/lib/supabase';
 import { scheduleWatchReminder } from '@/lib/watch-reminders';
@@ -107,21 +109,85 @@ export function useDeleteSharedAlbumItem() {
 }
 
 const MESSAGES_PAGE_SIZE = 50;
+const MESSAGES_STALE_MS = 5 * 60_000;
+const HOME_STALE_MS = 5 * 60_000;
+const HOME_GC_MS = 30 * 60_000;
+
+export function streakQueryKey(relationshipId?: string) {
+  return ['streak', relationshipId] as const;
+}
+
+export function moodsQueryKey(relationshipId?: string) {
+  return ['moods', relationshipId] as const;
+}
+
+export async function resolveStreakStatus(relationshipId: string) {
+  const status = await api.fetchStreakStatus(relationshipId);
+  const resolved = status ?? emptyStreakStatus(relationshipId);
+  await setCachedStreakStatus(relationshipId, resolved);
+  return resolved;
+}
+
+export async function warmStreakCache(
+  queryClient: QueryClient,
+  relationshipId: string,
+) {
+  const cached = await getCachedStreakStatus(relationshipId);
+  if (cached) {
+    queryClient.setQueryData(streakQueryKey(relationshipId), cached);
+  }
+  await queryClient.prefetchQuery({
+    queryKey: streakQueryKey(relationshipId),
+    queryFn: () => resolveStreakStatus(relationshipId),
+    staleTime: HOME_STALE_MS,
+  });
+}
+
+export function messagesQueryKey(relationshipId?: string, userId?: string) {
+  return ['messages', relationshipId, userId] as const;
+}
+
+export function applyMessagesReadInCache(
+  queryClient: QueryClient,
+  relationshipId: string,
+  userId: string,
+) {
+  const readAt = new Date().toISOString();
+  queryClient.setQueryData<InfiniteData<Message[]>>(
+    messagesQueryKey(relationshipId, userId),
+    (old) => {
+      if (!old) return old;
+      return {
+        ...old,
+        pages: old.pages.map((page) =>
+          page.map((message) =>
+            message.sender_id !== userId && !message.read_at
+              ? { ...message, read_at: readAt }
+              : message,
+          ),
+        ),
+      };
+    },
+  );
+}
 
 export function useInfiniteMessages() {
   const relationship = useRelationshipStore((s) => s.relationship);
   const user = useAuthStore((s) => s.user);
   const userId = user?.id;
+  const relationshipId = relationship?.id;
 
   const query = useInfiniteQuery({
-    queryKey: ['messages', relationship?.id, userId],
+    queryKey: messagesQueryKey(relationshipId, userId),
     queryFn: ({ pageParam }) =>
-      api.fetchMessages(relationship!.id, MESSAGES_PAGE_SIZE, pageParam as string | undefined),
+      api.fetchMessages(relationshipId!, MESSAGES_PAGE_SIZE, pageParam as string | undefined),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (lastPage) =>
       lastPage.length < MESSAGES_PAGE_SIZE ? undefined : lastPage[0]?.created_at,
-    enabled: !!relationship?.id && !!userId,
-    staleTime: 30_000,
+    enabled: !!relationshipId && !!userId,
+    staleTime: MESSAGES_STALE_MS,
+    gcTime: 30 * 60_000,
+    placeholderData: keepPreviousData,
   });
 
   const messages = useMemo(() => {
@@ -244,7 +310,7 @@ export function useMoods() {
   const relationship = useRelationshipStore((s) => s.relationship);
   const user = useAuthStore((s) => s.user);
   return useQuery({
-    queryKey: ['moods', relationship?.id],
+    queryKey: moodsQueryKey(relationship?.id),
     queryFn: () => {
       const rel = useRelationshipStore.getState().relationship;
       const currentUser = useAuthStore.getState().user;
@@ -256,6 +322,9 @@ export function useMoods() {
       return api.fetchLatestMoods(relationship!.id, memberIds);
     },
     enabled: !!relationship?.id && !!user?.id,
+    staleTime: HOME_STALE_MS,
+    gcTime: HOME_GC_MS,
+    placeholderData: keepPreviousData,
     refetchInterval: 60_000,
   });
 }
@@ -324,12 +393,25 @@ export function useRestoreStreak() {
 
 export function useStreak() {
   const relationship = useRelationshipStore((s) => s.relationship);
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    const id = relationship?.id;
+    if (!id || queryClient.getQueryData(streakQueryKey(id))) return;
+    void getCachedStreakStatus(id).then((cached) => {
+      if (cached) {
+        queryClient.setQueryData(streakQueryKey(id), cached);
+      }
+    });
+  }, [relationship?.id, queryClient]);
 
   return useQuery({
-    queryKey: ['streak', relationship?.id],
-    queryFn: async () => api.fetchStreakStatus(relationship!.id),
+    queryKey: streakQueryKey(relationship?.id),
+    queryFn: () => resolveStreakStatus(relationship!.id),
     enabled: !!relationship?.id,
-    staleTime: 30_000,
+    staleTime: HOME_STALE_MS,
+    gcTime: HOME_GC_MS,
+    placeholderData: keepPreviousData,
     refetchInterval: 5 * 60_000,
   });
 }

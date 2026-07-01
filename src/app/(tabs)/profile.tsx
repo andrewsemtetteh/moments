@@ -16,34 +16,23 @@ import { EditGenderModal } from '@/components/profile/EditGenderModal';
 import { EditRelationshipTypeModal } from '@/components/profile/EditRelationshipTypeModal';
 import { LocationSharingSettings } from '@/components/profile/LocationSharingSettings';
 import { ProfileAnniversarySection } from '@/components/profile/ProfileAnniversarySection';
-import { SharedAlbum } from '@/components/profile/SharedAlbum';
 import { Icon, type IconName } from '@/components/ui/Icon';
 import { LogoMark } from '@/components/ui/Logo';
-import { Avatar, Card, PrimaryButton, SectionTitle, StatPill } from '@/components/ui/primitives';
+import { Avatar, Card, PrimaryButton, SectionTitle } from '@/components/ui/primitives';
 import { THEME_META } from '@/constants/design-system';
-import { useBucketList, useJournalEntries, useMoments, useSharedAlbum, useStreak, useUploadSharedAlbumItem } from '@/hooks/queries';
 import { useOpenPartnerProfile } from '@/hooks/useOpenPartnerProfile';
-import { usePlusGate } from '@/hooks/usePlusGate';
 import { useSubscription } from '@/hooks/useSubscription';
 import { useTheme } from '@/hooks/useTheme';
 import { getRelationshipAnniversaryDate } from '@/lib/anniversary';
 import { signOutUser } from '@/lib/auth-session';
+import { markRelationshipOnboardingDone } from '@/lib/onboarding-storage';
 import { profileGenderLabel } from '@/lib/profile-gender';
 import { relationshipTypeLabel } from '@/lib/relationship-type';
-import { markRelationshipOnboardingDone } from '@/lib/onboarding-storage';
-import { pickAndUploadSharedAlbumMedia } from '@/lib/pick-shared-album-media';
-import { SharedAlbumStorageLimitError } from '@/lib/shared-album';
 import { formatSubscriptionExpiry } from '@/lib/subscription';
 import { supabase } from '@/lib/supabase';
 import * as api from '@/services/api';
 import { useAuthStore, useRelationshipStore, useUIStore } from '@/stores';
 import type { ProfileGender, RelationshipType } from '@/types/database';
-
-const PROFILE_TABS = [
-  { key: 'album', label: 'Album' },
-  { key: 'journal', label: 'Journal' },
-  { key: 'settings', label: 'Settings' },
-] as const;
 
 export default function ProfileScreen() {
   const router = useRouter();
@@ -53,16 +42,10 @@ export default function ProfileScreen() {
   const partner = useRelationshipStore((s) => s.partner);
   const user = useAuthStore((s) => s.user);
   const setUser = useAuthStore((s) => s.setUser);
-  const setShowSharedAlbum = useUIStore((s) => s.setShowSharedAlbum);
   const setShowWrapped = useUIStore((s) => s.setShowWrapped);
   const setShowMomentCreator = useUIStore((s) => s.setShowMomentCreator);
   const openPartnerProfile = useOpenPartnerProfile();
 
-  const { data: momentsData } = useMoments();
-  const { data: streak } = useStreak();
-  const { data: journalEntries } = useJournalEntries();
-  const { data: bucketList } = useBucketList();
-  const [tab, setTab] = useState<'album' | 'journal' | 'settings'>('album');
   const [inviteCode, setInviteCode] = useState<string | null>(relationship?.invite_code ?? null);
   const [editField, setEditField] = useState<'name' | 'space' | 'email' | null>(null);
   const [editDraft, setEditDraft] = useState('');
@@ -126,48 +109,11 @@ export default function ProfileScreen() {
     });
   };
 
-  const { data: sharedAlbumItems = [] } = useSharedAlbum();
-  const uploadAlbumItem = useUploadSharedAlbumItem();
-  const [albumUploading, setAlbumUploading] = useState(false);
-
-  const timelineMoments = momentsData?.pages.flat() ?? [];
   const relationshipDuration = relationship
     ? formatDistanceToNow(getRelationshipAnniversaryDate(relationship), { addSuffix: false })
     : '';
-  const { isPlus, isOwner, limits, albumStorageUsedBytes } = useSubscription();
-  const { requirePlus } = usePlusGate();
+  const { isPlus, isOwner } = useSubscription();
   const plusExpiryLabel = formatSubscriptionExpiry(user?.subscription_expires_at);
-
-  const openSharedAlbum = () => setShowSharedAlbum(true);
-  const unlockSharedAlbum = () => {
-    requirePlus('Unlimited shared album storage');
-  };
-
-  const addAlbumMedia = async () => {
-    if (albumUploading || !user || !relationship) return;
-    if (!isPlus && albumStorageUsedBytes >= limits.albumStorageBytes) {
-      unlockSharedAlbum();
-      return;
-    }
-    setAlbumUploading(true);
-    try {
-      await pickAndUploadSharedAlbumMedia((payload) => uploadAlbumItem.mutateAsync(payload), {
-        isPlus,
-        usedBytes: albumStorageUsedBytes,
-        storageLimitBytes: Number.isFinite(limits.albumStorageBytes)
-          ? limits.albumStorageBytes
-          : undefined,
-      });
-    } catch (error) {
-      if (error instanceof SharedAlbumStorageLimitError) {
-        unlockSharedAlbum();
-      } else {
-        Alert.alert('Upload failed', error instanceof Error ? error.message : 'Please try again.');
-      }
-    } finally {
-      setAlbumUploading(false);
-    }
-  };
 
   const handleLogout = async () => {
     try {
@@ -442,12 +388,6 @@ export default function ProfileScreen() {
 
         <ProfileAnniversarySection />
 
-        <View style={styles.statsRow}>
-          <StatPill value={timelineMoments.length} label="Moments" />
-          <StatPill value={streak?.current_streak ?? 0} label={streak?.at_risk ? 'Streak ⚠' : 'Streak'} />
-          <StatPill value={bucketList?.filter((b) => b.status === 'completed').length ?? 0} label="Done" />
-        </View>
-
         <Pressable
           onPress={() => setShowWrapped(true)}
           style={({ pressed }) => [
@@ -542,57 +482,7 @@ export default function ProfileScreen() {
           </Card>
         )}
 
-        {/* Tabs */}
-        <View style={[styles.segment, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
-          {PROFILE_TABS.map((t) => (
-            <Pressable
-              key={t.key}
-              onPress={() => setTab(t.key)}
-              style={[styles.segmentItem, tab === t.key && { backgroundColor: colors.surface }]}>
-              <Text style={{ color: tab === t.key ? colors.text : colors.textSecondary, fontWeight: '700', fontSize: 13 }}>
-                {t.label}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
-
-        {tab === 'album' && (
-          <View style={styles.tabBody}>
-            <SharedAlbum
-              items={sharedAlbumItems}
-              usedBytes={albumStorageUsedBytes}
-              storageLimitBytes={limits.albumStorageBytes}
-              isPlus={isPlus}
-              onOpenFull={openSharedAlbum}
-              onUnlockStorage={unlockSharedAlbum}
-              onAddMedia={() => void addAlbumMedia()}
-            />
-          </View>
-        )}
-
-        {tab === 'journal' && (
-          <View style={styles.tabBody}>
-            <SectionTitle action="New entry" onAction={() => router.push('/journal/compose' as Href)}>
-              Journal
-            </SectionTitle>
-            {!journalEntries || journalEntries.length === 0 ? (
-              <EmptyState icon="journal" text="Write your first journal entry" />
-            ) : (
-              journalEntries.slice(0, 10).map((e) => (
-                <Card key={e.id} style={{ marginBottom: 10 }}>
-                  <Text style={[styles.journalType, { color: colors.accent }]}>{e.type}</Text>
-                  <Text style={{ color: colors.text, lineHeight: 21 }}>{e.content}</Text>
-                  <Text style={{ color: colors.textTertiary, fontSize: 12, marginTop: 8 }}>
-                    {formatDistanceToNow(new Date(e.created_at), { addSuffix: true })}
-                  </Text>
-                </Card>
-              ))
-            )}
-          </View>
-        )}
-
-        {tab === 'settings' && (
-          <View style={styles.tabBody}>
+        <View style={styles.tabBody}>
             <SectionTitle>Account</SectionTitle>
             <Card style={styles.accountCard}>
               <Pressable onPress={changeProfilePhoto} style={styles.accountPhotoRow} disabled={avatarSaving}>
@@ -731,8 +621,7 @@ export default function ProfileScreen() {
               <LogoMark size={32} />
               <Text style={{ color: colors.textTertiary, fontSize: 12, marginTop: 6 }}>Moments · Closer, every day</Text>
             </View>
-          </View>
-        )}
+        </View>
       </TabScreenScroll>
 
       <EditFieldModal
@@ -850,18 +739,6 @@ function SettingItem({
   );
 }
 
-function EmptyState({ icon, text }: { icon: IconName; text: string }) {
-  const { colors } = useTheme();
-  return (
-    <View style={styles.empty}>
-      <View style={[styles.emptyIcon, { backgroundColor: colors.surfaceElevated }]}>
-        <Icon name={icon} size={26} color={colors.textTertiary} />
-      </View>
-      <Text style={{ color: colors.textSecondary }}>{text}</Text>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   scroll: { padding: 16 },
   overview: { borderRadius: 24, padding: 22, alignItems: 'center' },
@@ -869,12 +746,9 @@ const styles = StyleSheet.create({
   heartBetween: { paddingHorizontal: 10 },
   relName: { fontSize: 24, fontWeight: '800', color: '#fff', marginTop: 14 },
   partner: { fontSize: 14, color: 'rgba(255,255,255,0.9)', marginTop: 4 },
-  statsRow: { flexDirection: 'row', gap: 10, marginTop: 16 },
   subBanner: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16, borderRadius: 18, marginTop: 16 },
   subTitle: { color: '#fff', fontWeight: '800', fontSize: 15 },
   subDesc: { color: 'rgba(255,255,255,0.9)', fontSize: 13, marginTop: 1 },
-  segment: { flexDirection: 'row', borderRadius: 14, padding: 4, marginTop: 20, borderWidth: StyleSheet.hairlineWidth },
-  segmentItem: { flex: 1, alignItems: 'center', paddingVertical: 9, borderRadius: 10 },
   tabBody: { marginTop: 18 },
   wrappedCard: {
     flexDirection: 'row',
@@ -888,7 +762,6 @@ const styles = StyleSheet.create({
   wrappedCopy: { flex: 1 },
   wrappedTitle: { fontSize: 16, fontWeight: '800' },
   wrappedSub: { fontSize: 13, marginTop: 2 },
-  journalType: { fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 },
   themeGrid: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: 20 },
   themeCell: { width: '20%', alignItems: 'center', marginBottom: 18, paddingHorizontal: 2 },
   themeItem: { alignItems: 'center', gap: 8, width: '100%' },
@@ -903,8 +776,6 @@ const styles = StyleSheet.create({
   accountPhotoCopy: { flex: 1 },
   leaveCard: { marginBottom: 8 },
   privacySection: { marginTop: 16 },
-  empty: { alignItems: 'center', gap: 12, paddingVertical: 32 },
-  emptyIcon: { width: 60, height: 60, borderRadius: 30, alignItems: 'center', justifyContent: 'center' },
   brandFooter: { alignItems: 'center', marginTop: 28 },
   inviteCard: { marginTop: 16 },
   inviteTitle: { fontSize: 17, fontWeight: '800', marginBottom: 4 },

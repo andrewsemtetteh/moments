@@ -1,7 +1,6 @@
-import * as Haptics from 'expo-haptics';
 import { useFocusEffect, usePathname, useRouter } from 'expo-router';
 import { useCallback, useMemo } from 'react';
-import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Icon, type IconName } from '@/components/ui/Icon';
@@ -11,21 +10,20 @@ import { useOpenPartnerProfile } from '@/hooks/useOpenPartnerProfile';
 import { useTheme } from '@/hooks/useTheme';
 import { formatBadgeCount } from '@/lib/format-badge';
 import { filterInboxNotifications } from '@/lib/notification-display';
-import { useRelationshipStore, useUIStore } from '@/stores';
+import { useRelationshipStore } from '@/stores';
 
 const APP_NAME = 'Moments';
+const HEADER_ICON_SIZE = 28;
 
 interface AppHeaderProps {
   showChat?: boolean;
-  showWatchTogether?: boolean;
 }
 
-export function AppHeader({ showChat = true, showWatchTogether = true }: AppHeaderProps) {
+export function AppHeader({ showChat = true }: AppHeaderProps) {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const pathname = usePathname();
   const { colors } = useTheme();
-  const openWatchTogether = useUIStore((s) => s.openWatchTogether);
   const openPartnerProfile = useOpenPartnerProfile();
   const partner = useRelationshipStore((s) => s.partner);
   const { data: unreadNotificationsCount = 0, refetch: refetchUnreadNotifications } =
@@ -85,29 +83,10 @@ export function AppHeader({ showChat = true, showWatchTogether = true }: AppHead
       </Pressable>
 
       <View style={[styles.side, styles.right]}>
-        {showWatchTogether && (
-          <HeaderIconButton
-            icon="film"
-            label="Watch together"
-            onPress={() => {
-              void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              openWatchTogether();
-            }}
-            onLongPress={() => {
-              void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-              Alert.alert('Watch Together', 'Quick actions', [
-                { text: 'Continue last session', onPress: () => openWatchTogether('hub') },
-                { text: 'Start a watch party', onPress: () => openWatchTogether('start') },
-                { text: 'View watchlist', onPress: () => openWatchTogether('watchlist') },
-                { text: 'Cancel', style: 'cancel' },
-              ]);
-            }}
-          />
-        )}
         <HeaderIconButton
           icon="bell"
           label={unreadNotifications > 0 ? `${unreadNotifications} unread notifications` : 'Notifications'}
-          onPress={() => router.push('/notifications')}
+          onPress={() => router.push('/(tabs)/notifications')}
           badge={unreadNotifications}
           filledWhenActive={false}
           badgePlacement="trailing"
@@ -154,7 +133,7 @@ function HeaderIconButton({
       <View style={styles.iconWrap}>
         <Icon
           name={icon}
-          size={26}
+          size={HEADER_ICON_SIZE}
           color={isHighlighted ? colors.accent : colors.textSecondary}
           filled={isHighlighted}
         />
@@ -203,8 +182,8 @@ const styles = StyleSheet.create({
     overflow: 'visible',
   },
   iconWrap: {
-    width: 26,
-    height: 26,
+    width: HEADER_ICON_SIZE,
+    height: HEADER_ICON_SIZE,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'visible',

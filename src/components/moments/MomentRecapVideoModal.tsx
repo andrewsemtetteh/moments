@@ -102,8 +102,8 @@ export function MomentRecapVideoModal() {
     <Modal visible animationType="slide" presentationStyle="fullScreen" onRequestClose={close}>
       <View style={[styles.root, { backgroundColor: colors.background, paddingTop: insets.top }]}>
         <View style={styles.header}>
-          <Pressable onPress={close} hitSlop={12}>
-            <Text style={{ color: colors.textSecondary }}>Close</Text>
+          <Pressable onPress={close} hitSlop={12} style={styles.headerIcon} accessibilityLabel="Close">
+            <Icon name="close" size={26} color={colors.text} />
           </Pressable>
           <Text style={[styles.title, { color: colors.text }]}>Moment recap</Text>
           <View style={styles.headerSide}>
@@ -181,6 +181,7 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
   },
   headerSide: { width: 40, alignItems: 'flex-end' },
+  headerIcon: { width: 40, alignItems: 'center' },
   title: { fontSize: 17, fontWeight: '700' },
   centered: {
     flex: 1,

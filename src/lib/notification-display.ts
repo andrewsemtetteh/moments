@@ -1,4 +1,9 @@
-import { format, isThisWeek, isToday, isYesterday } from 'date-fns';
+import {
+  differenceInCalendarDays,
+  format,
+  isValid,
+  parse,
+} from 'date-fns';
 
 import type { IconName } from '@/components/ui/Icon';
 import type { Notification } from '@/types/database';
@@ -42,9 +47,23 @@ export const NOTIFICATION_TYPE_LABEL: Record<string, string> = {
   watch_party_scheduled: 'Watch Together',
 };
 
-/** Relative time with minutes / hours — not plain "Today". */
+/**
+ * Gmail / Apple Mail style grouping:
+ * Today → Yesterday → Previous 7 days → Previous 30 days → by month.
+ */
+export const NOTIFICATION_SECTION_ORDER = [
+  'Today',
+  'Yesterday',
+  'Previous 7 days',
+  'Previous 30 days',
+] as const;
+
+export type NotificationSectionTitle = (typeof NOTIFICATION_SECTION_ORDER)[number] | string;
+
+/** Relative timestamp shown on each row. */
 export function formatNotificationTime(iso: string, now = Date.now()): string {
   const date = new Date(iso);
+  const ref = new Date(now);
   const diffMs = Math.max(0, now - date.getTime());
 
   if (diffMs < 45_000) return 'Just now';
@@ -56,23 +75,45 @@ export function formatNotificationTime(iso: string, now = Date.now()): string {
   if (minutes < 60) return minutes === 1 ? '1 min ago' : `${minutes} min ago`;
 
   const hours = Math.floor(minutes / 60);
-  if (isToday(date)) return hours === 1 ? '1 hr ago' : `${hours} hr ago`;
+  const daysAgo = Math.max(0, differenceInCalendarDays(ref, date));
 
-  if (isYesterday(date)) return `Yesterday · ${format(date, 'h:mm a')}`;
+  if (daysAgo === 0) return hours === 1 ? '1 hr ago' : `${hours} hr ago`;
 
-  if (isThisWeek(date, { weekStartsOn: 1 })) return format(date, 'EEE · h:mm a');
+  if (daysAgo === 1) return `${format(date, 'h:mm a')} · Yesterday`;
 
-  if (date.getFullYear() === new Date(now).getFullYear()) return format(date, 'MMM d · h:mm a');
+  if (daysAgo <= 7) return `${format(date, 'h:mm a')} · ${format(date, 'EEE')}`;
+  if (daysAgo <= 30) return `${format(date, 'h:mm a')} · ${format(date, 'MMM d')}`;
 
-  return format(date, 'MMM d, yyyy · h:mm a');
+  if (date.getFullYear() === ref.getFullYear()) return `${format(date, 'h:mm a')} · ${format(date, 'MMM d')}`;
+
+  return `${format(date, 'h:mm a')} · ${format(date, 'MMM d, yyyy')}`;
 }
 
-export function notificationSectionTitle(iso: string, now = Date.now()): string {
+export function notificationSectionTitle(iso: string, now = Date.now()): NotificationSectionTitle {
   const date = new Date(iso);
-  if (isToday(date)) return 'Today';
-  if (isYesterday(date)) return 'Yesterday';
-  if (isThisWeek(date, { weekStartsOn: 1 })) return 'This week';
-  return 'Earlier';
+  const ref = new Date(now);
+  const daysAgo = Math.max(0, differenceInCalendarDays(ref, date));
+
+  if (daysAgo === 0) return 'Today';
+  if (daysAgo === 1) return 'Yesterday';
+  if (daysAgo <= 7) return 'Previous 7 days';
+  if (daysAgo <= 30) return 'Previous 30 days';
+
+  return format(date, 'MMMM yyyy');
+}
+
+function notificationSectionSortIndex(title: string): number {
+  const fixedIndex = NOTIFICATION_SECTION_ORDER.indexOf(
+    title as (typeof NOTIFICATION_SECTION_ORDER)[number],
+  );
+  if (fixedIndex >= 0) return fixedIndex;
+
+  const parsed = parse(title, 'MMMM yyyy', new Date());
+  if (isValid(parsed)) {
+    return NOTIFICATION_SECTION_ORDER.length + (300_000 - (parsed.getFullYear() * 12 + parsed.getMonth()));
+  }
+
+  return 9999;
 }
 
 export interface NotificationSection {
@@ -82,19 +123,20 @@ export interface NotificationSection {
 }
 
 export function groupNotificationsBySection(items: Notification[]): NotificationSection[] {
-  const order: string[] = [];
   const map = new Map<string, Notification[]>();
 
   for (const item of items) {
     const title = notificationSectionTitle(item.created_at);
-    if (!map.has(title)) {
-      map.set(title, []);
-      order.push(title);
-    }
-    map.get(title)!.push(item);
+    const bucket = map.get(title) ?? [];
+    bucket.push(item);
+    map.set(title, bucket);
   }
 
-  return order.map((title) => ({
+  const titles = [...map.keys()].sort(
+    (a, b) => notificationSectionSortIndex(a) - notificationSectionSortIndex(b),
+  );
+
+  return titles.map((title) => ({
     key: title,
     title,
     data: map.get(title) ?? [],

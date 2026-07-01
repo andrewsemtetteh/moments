@@ -216,3 +216,22 @@ export function legacyStreakToStatus(
     active_days: [],
   };
 }
+
+/** Placeholder while streak cache warms — keeps home layout stable like mood. */
+export function emptyStreakStatus(relationshipId: string): StreakStatus {
+  return {
+    relationship_id: relationshipId,
+    current_streak: 0,
+    longest_streak: 0,
+    last_active_date: null,
+    at_risk: false,
+    both_active_today: false,
+    user_active_today: false,
+    partner_active_today: false,
+    can_restore_streak: false,
+    restorable_streak: null,
+    restorable_lost_at: null,
+    active_days: [],
+    activity_days: [],
+  };
+}

@@ -3,9 +3,10 @@ import { Platform } from 'react-native';
 
 import { StreakMilestoneSync } from '@/components/home/StreakMilestoneSync';
 import { AppTabBar } from '@/components/layout/AppTabBar';
+import { ChatMessageSync } from '@/components/layout/ChatMessageSync';
+import { HomeSync } from '@/components/layout/HomeSync';
 import { NotificationSync } from '@/components/layout/NotificationSync';
 import { PartnerProfileModal } from '@/components/profile/PartnerProfileModal';
-import { WatchTogetherModal } from '@/components/watch/WatchTogetherModal';
 import { useRealtimeSubscription } from '@/hooks/queries';
 import { useAuthStore } from '@/stores';
 
@@ -29,7 +30,9 @@ export default function TabsLayout() {
   return (
     <>
       <TabsRealtimeSync />
+      <HomeSync />
       <NotificationSync />
+      <ChatMessageSync />
       <StreakMilestoneSync />
       <Tabs
         tabBar={(props) => <AppTabBar {...props} />}
@@ -38,10 +41,10 @@ export default function TabsLayout() {
         <Tabs.Screen name="activities" />
         <Tabs.Screen name="calendar" />
         <Tabs.Screen name="profile" />
-        {/* Chat is reachable from the header, not the tab bar */}
+        {/* Chat and notifications are reachable from the header, not the tab bar */}
         <Tabs.Screen name="chat" options={{ href: null }} />
+        <Tabs.Screen name="notifications" options={{ href: null }} />
       </Tabs>
-      <WatchTogetherModal />
       <PartnerProfileModal />
     </>
   );

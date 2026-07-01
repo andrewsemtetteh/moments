@@ -101,7 +101,7 @@ export function LocationSharingSettings() {
               <View style={styles.legend}>
                 {myPlace && (
                   <Text style={[styles.legendItem, { color: colors.textSecondary }]}>
-                    <Text style={{ color: '#e85d75' }}>●</Text> You{myPlace.label ? ` · ${myPlace.label}` : ''}
+                    <Text style={{ color: '#e85d75' }}>●</Text> Me{myPlace.label ? ` · ${myPlace.label}` : ''}
                   </Text>
                 )}
                 {partnerOnMap && (

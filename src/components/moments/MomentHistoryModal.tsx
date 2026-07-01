@@ -1,17 +1,17 @@
 import * as Haptics from 'expo-haptics';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    Dimensions,
-    Modal,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    View,
-    type NativeScrollEvent,
-    type NativeSyntheticEvent,
+  ActivityIndicator,
+  Alert,
+  Dimensions,
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -25,10 +25,10 @@ import { useTheme } from '@/hooks/useTheme';
 import { downloadMultipleMomentMedia } from '@/lib/download-moment-media';
 import { getMockRecapMoments } from '@/lib/mock-recap-moments';
 import {
-    enrichMomentsWithAuthors,
-    filterMediaMoments,
-    getHistoryReactionBadge,
-    groupMomentsForHistory,
+  enrichMomentsWithAuthors,
+  filterMediaMoments,
+  getHistoryReactionBadge,
+  groupMomentsForHistory,
 } from '@/lib/moment-display';
 import { signMomentsMediaUrl } from '@/lib/moment-media';
 import { momentChrome } from '@/lib/moment-theme';
@@ -48,7 +48,6 @@ export function MomentHistoryModal() {
   const chrome = momentChrome(colors);
   const visible = useUIStore((s) => s.showMomentHistory);
   const setVisible = useUIStore((s) => s.setShowMomentHistory);
-  const setShowWrapped = useUIStore((s) => s.setShowWrapped);
   const openMomentRecapVideo = useUIStore((s) => s.openMomentRecapVideo);
   const setShowMomentCreator = useUIStore((s) => s.setShowMomentCreator);
   const openMomentViewer = useUIStore((s) => s.openMomentViewer);
@@ -196,9 +195,19 @@ export function MomentHistoryModal() {
       recapPreviewLockRef.current = false;
       return;
     }
+
+    const withMedia = displayMoments.filter((moment) => moment.media_url);
+    if (withMedia.length === 0) {
+      Alert.alert('Nothing to recap', 'Add at least one photo or video moment first.');
+      return;
+    }
+
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const sorted = [...withMedia].sort(
+      (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
+    );
     close();
-    setShowWrapped(true);
+    openMomentRecapVideo(sorted);
   };
 
   const openMockRecapPreview = () => {
@@ -291,6 +300,8 @@ export function MomentHistoryModal() {
 
   const selectionCount = selectedIds.size;
   const bottomPad = selecting ? insets.bottom + 118 : insets.bottom + 88;
+  const recapSurface = colors.isDark ? '#FFFFFF' : '#111111';
+  const recapInk = colors.isDark ? '#111111' : '#FFFFFF';
 
   return (
     <Modal visible animationType="slide" presentationStyle="fullScreen" onRequestClose={selecting ? exitSelection : close}>
@@ -423,11 +434,13 @@ export function MomentHistoryModal() {
               delayLongPress={400}
               style={({ pressed }) => [
                 styles.recapBtn,
-                { backgroundColor: chrome.accent },
+                { backgroundColor: recapSurface },
                 pressed && { opacity: 0.9 },
               ]}>
-              <Icon name="film" size={20} color={chrome.onAccent} filled />
-              <Text style={[styles.recapText, { color: chrome.onAccent }]}>Create recap</Text>
+              <View style={[styles.recapIcon, { borderColor: recapInk }]}>
+                <Icon name="plus" size={16} color={recapInk} />
+              </View>
+              <Text style={[styles.recapText, { color: recapInk }]}>Create recap</Text>
             </Pressable>
           </View>
         )}
@@ -520,6 +533,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 22,
     paddingVertical: 14,
     borderRadius: 999,
+  },
+  recapIcon: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   recapText: { fontSize: 16, fontWeight: '800' },
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32, gap: 12 },

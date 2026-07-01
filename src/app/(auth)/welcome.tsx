@@ -1,8 +1,13 @@
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
-import { StatusBar } from 'expo-status-bar';
+import { useEffect } from 'react';
 import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
-import Animated, { FadeIn } from 'react-native-reanimated';
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from 'react-native-reanimated';
+import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { CoupleOrbitArt } from '@/components/onboarding/CoupleOrbitArt';
@@ -24,13 +29,25 @@ export default function AuthWelcomeScreen() {
   const orbitSize = Math.min(screenWidth - 24, screenHeight * 0.54);
   const bottomInset = Math.max(insets.bottom, Spacing.lg);
 
+  const contentOpacity = useSharedValue(0);
+  const contentY = useSharedValue(14);
+
+  useEffect(() => {
+    contentOpacity.value = withTiming(1, { duration: 480 });
+    contentY.value = withTiming(0, { duration: 520 });
+  }, [contentOpacity, contentY]);
+
+  const contentStyle = useAnimatedStyle(() => ({
+    opacity: contentOpacity.value,
+    transform: [{ translateY: contentY.value }],
+  }));
+
   return (
     <View style={styles.screen}>
       <StatusBar style="light" />
       <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
         <Animated.View
-          entering={FadeIn.duration(400)}
-          style={[styles.content, { paddingBottom: bottomInset + Spacing.xxl }]}>
+          style={[styles.content, { paddingBottom: bottomInset + Spacing.xxl }, contentStyle]}>
           <View style={styles.orbitWrap}>
             <CoupleOrbitArt size={orbitSize} />
           </View>

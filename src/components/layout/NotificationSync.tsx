@@ -89,7 +89,6 @@ export function NotificationSync() {
 export function openFromNotificationType(
   type: string | undefined,
   router: { push: (href: Href) => void },
-  openWatchTogether?: (tab?: 'hub') => void,
 ) {
   switch (type) {
     case 'message':
@@ -99,17 +98,13 @@ export function openFromNotificationType(
     case 'mood_update':
     case 'streak':
     case 'moment':
-      router.push('/(tabs)/home');
-      break;
     case 'watch_party':
     case 'watch_party_nudge':
-      openWatchTogether?.();
-      break;
     case 'watch_party_scheduled':
-      openWatchTogether?.('hub');
+      router.push('/(tabs)/home');
       break;
     default:
-      router.push('/notifications');
+      router.push('/(tabs)/notifications');
       break;
   }
 }

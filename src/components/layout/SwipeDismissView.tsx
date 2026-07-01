@@ -1,27 +1,26 @@
-import { ReactNode } from 'react';
+import { type ReactNode } from 'react';
 import { StyleProp, ViewStyle } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
-    runOnJS,
-    useAnimatedStyle,
-    useSharedValue,
-    withSpring,
+  runOnJS,
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
 } from 'react-native-reanimated';
 
-const DISMISS_THRESHOLD = 72;
-const DISMISS_VELOCITY = 850;
+const DISMISS_THRESHOLD = 56;
+const DISMISS_VELOCITY = 650;
 
 /**
- * Which screen edge the back/close control sits on (LTR).
- * - `start` (left): swipe right to dismiss — chevronLeft / Back
- * - `end` (right): swipe left to dismiss — chevronRight / close on the right
+ * Full-screen swipe to dismiss. Vertical scroll in children is unaffected.
+ * - `start`: swipe right — notifications / back
+ * - `end`: swipe left — chat close
  */
 export type SwipeDismissEdge = 'start' | 'end';
 
 interface Props {
   children: ReactNode;
   onDismiss: () => void;
-  /** Match the side where the back/close button lives. */
   edge?: SwipeDismissEdge;
   style?: StyleProp<ViewStyle>;
   enabled?: boolean;
@@ -38,12 +37,13 @@ export function SwipeDismissView({
 
   const pan = Gesture.Pan()
     .enabled(enabled)
-    .activeOffsetX(edge === 'start' ? 18 : -18)
-    .failOffsetX(edge === 'start' ? -10 : 10)
+    .activeOffsetX(edge === 'start' ? 12 : -12)
+    .failOffsetX(edge === 'start' ? -8 : 8)
     .failOffsetY([-12, 12])
     .onUpdate((event) => {
       if (edge === 'start' && event.translationX > 0) {
         translateX.value = event.translationX;
+        return;
       }
       if (edge === 'end' && event.translationX < 0) {
         translateX.value = event.translationX;
@@ -60,7 +60,7 @@ export function SwipeDismissView({
         return;
       }
 
-      translateX.value = withSpring(0, { damping: 22, stiffness: 260 });
+      translateX.value = withSpring(0, { damping: 24, stiffness: 340 });
     });
 
   const animatedStyle = useAnimatedStyle(() => ({
@@ -69,7 +69,11 @@ export function SwipeDismissView({
 
   return (
     <GestureDetector gesture={pan}>
-      <Animated.View style={[{ flex: 1 }, style, animatedStyle]}>{children}</Animated.View>
+      <Animated.View
+        style={[{ flex: 1 }, style, animatedStyle]}
+        accessibilityLabel={edge === 'start' ? 'Swipe right to go back' : 'Swipe left to close'}>
+        {children}
+      </Animated.View>
     </GestureDetector>
   );
 }

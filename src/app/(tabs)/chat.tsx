@@ -14,7 +14,6 @@ import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
-  FlatList,
   Keyboard,
   KeyboardAvoidingView,
   PanResponder,
@@ -27,6 +26,7 @@ import {
   type NativeScrollEvent,
   type NativeSyntheticEvent,
 } from 'react-native';
+import { FlatList } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ChatAttachmentSheet } from '@/components/chat/ChatAttachmentSheet';
@@ -46,9 +46,9 @@ import { Icon } from '@/components/ui/Icon';
 import { Avatar } from '@/components/ui/primitives';
 import { FullScreenImageModal } from '@/components/ui/FullScreenImageModal';
 import {
+  applyMessagesReadInCache,
   useInfiniteMessages,
   useMessageActions,
-  useRealtimeSubscription,
   useSendMessage,
 } from '@/hooks/queries';
 import { useOpenPartnerProfile } from '@/hooks/useOpenPartnerProfile';
@@ -125,8 +125,8 @@ export default function ChatScreen() {
   const {
     messages,
     isFetching,
+    isPending,
     isError,
-    isFetched,
     fetchNextPage,
     hasNextPage,
     isFetchingNextPage,
@@ -139,8 +139,6 @@ export default function ChatScreen() {
   );
   const sendMessage = useSendMessage();
   const { react, pin, deleteForMe, deleteForAll } = useMessageActions();
-
-  useRealtimeSubscription('messages');
 
   useEffect(() => {
     if (!relationship?.id || !user?.id || partner?.id) return;
@@ -215,7 +213,7 @@ export default function ChatScreen() {
 
     const timer = setTimeout(() => {
       void api.markMessagesRead(relationship.id, user.id).then(() => {
-        queryClient.invalidateQueries({ queryKey: ['messages', relationship.id] });
+        applyMessagesReadInCache(queryClient, relationship.id, user.id);
         queryClient.invalidateQueries({ queryKey: ['unreadMessages', relationship.id, user.id] });
       });
     }, 1500);
@@ -794,7 +792,7 @@ export default function ChatScreen() {
 
   const onListScroll = useCallback(
     (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-      if (!isFetched) return;
+      if (isPending) return;
 
       const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
       nearBottomRef.current =
@@ -812,7 +810,7 @@ export default function ChatScreen() {
         });
       }
     },
-    [hasNextPage, isFetchingNextPage, fetchNextPage, isFetched],
+    [hasNextPage, isFetchingNextPage, fetchNextPage, isPending],
   );
 
   const closeChat = useCallback(() => {
@@ -821,7 +819,9 @@ export default function ChatScreen() {
 
   const hasText = text.trim().length > 0;
   const canLoadMessages = !!relationship?.id && !!user?.id;
-  const showMessagesLoader = canLoadMessages && !isFetched && isFetching && !isOffline;
+  const showMessagesLoader =
+    canLoadMessages && messages.length === 0 && (isPending || isFetching) && !isOffline;
+  const showMessagesError = (isError || isOffline) && messages.length === 0;
   const messagesErrorText = isOffline
     ? 'You appear to be offline. Messages will load when you reconnect.'
     : "Couldn't load messages.";
@@ -885,54 +885,53 @@ export default function ChatScreen() {
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
-      {/* Header sits outside swipe gesture so profile taps register reliably */}
-      <View
-        style={[
-          styles.header,
-          {
-            paddingTop: insets.top + 6,
-            backgroundColor: colors.background,
-            borderBottomColor: colors.border,
-          },
-        ]}>
-        <Pressable
-          style={styles.headerProfile}
-          onPress={openPartnerProfileView}
-          onLongPress={() => setShowPartnerPhoto(true)}
-          delayLongPress={400}
-          accessibilityRole="button"
-          accessibilityLabel="View partner info">
-          <Avatar name={partner?.name} imageUrl={partner?.avatar_url} size={40} />
-          <View style={styles.headerText}>
-            <Text style={[styles.headerName, { color: colors.text }]} numberOfLines={1}>
-              {partner?.name ?? 'Partner'}
-            </Text>
-            <PartnerStatusLine
-              isTyping={partnerTyping}
-              isOnline={partnerOnline}
-              lastSeenAt={partnerLastSeenAt}
-            />
-          </View>
-        </Pressable>
-
-        <View style={styles.headerActions}>
-          <Pressable onPress={() => startCall('video')} hitSlop={8} style={styles.headerIconSlot}>
-            <Icon name="videocam" size={24} color={colors.accent} />
-          </Pressable>
-          <Pressable onPress={() => startCall('audio')} hitSlop={8} style={styles.headerIconSlot}>
-            <Icon name="call" size={22} color={colors.accent} />
-          </Pressable>
-          <Pressable
-            onPress={closeChat}
-            hitSlop={10}
-            accessibilityLabel="Close chat"
-            style={styles.headerIconSlot}>
-            <Icon name="chevronRight" size={26} color={colors.accent} />
-          </Pressable>
-        </View>
-      </View>
-
       <SwipeDismissView edge="end" onDismiss={closeChat} style={styles.flex}>
+        <View
+          style={[
+            styles.header,
+            {
+              paddingTop: insets.top + 6,
+              backgroundColor: colors.background,
+              borderBottomColor: colors.border,
+            },
+          ]}>
+          <Pressable
+            style={styles.headerProfile}
+            onPress={openPartnerProfileView}
+            onLongPress={() => setShowPartnerPhoto(true)}
+            delayLongPress={400}
+            accessibilityRole="button"
+            accessibilityLabel="View partner info">
+            <Avatar name={partner?.name} imageUrl={partner?.avatar_url} size={40} />
+            <View style={styles.headerText}>
+              <Text style={[styles.headerName, { color: colors.text }]} numberOfLines={1}>
+                {partner?.name ?? 'Partner'}
+              </Text>
+              <PartnerStatusLine
+                isTyping={partnerTyping}
+                isOnline={partnerOnline}
+                lastSeenAt={partnerLastSeenAt}
+              />
+            </View>
+          </Pressable>
+
+          <View style={styles.headerActions}>
+            <Pressable onPress={() => startCall('video')} hitSlop={8} style={styles.headerIconSlot}>
+              <Icon name="videocam" size={24} color={colors.accent} />
+            </Pressable>
+            <Pressable onPress={() => startCall('audio')} hitSlop={8} style={styles.headerIconSlot}>
+              <Icon name="call" size={22} color={colors.accent} />
+            </Pressable>
+            <Pressable
+              onPress={closeChat}
+              hitSlop={10}
+              accessibilityLabel="Close chat"
+              style={styles.headerCloseBtn}>
+              <Icon name="chevronRight" size={26} color={colors.accent} />
+            </Pressable>
+          </View>
+        </View>
+
       {/* ── Pinned bar ── */}
       {latestPinned && (
         <Pressable
@@ -980,7 +979,7 @@ export default function ChatScreen() {
             <ChatWallpaper style={styles.flex}>
               {showMessagesLoader ? (
                 <LoadingState />
-              ) : isError || isOffline ? (
+              ) : showMessagesError ? (
                 <View style={styles.messagesError}>
                   <Text style={[styles.messagesErrorText, { color: colors.textSecondary }]}>
                     {messagesErrorText}
@@ -1227,7 +1226,8 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
+    paddingLeft: 8,
+    paddingRight: 8,
     paddingBottom: 8,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
@@ -1241,6 +1241,12 @@ const styles = StyleSheet.create({
   },
   headerActions: { flexDirection: 'row', alignItems: 'center' },
   headerIconSlot: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  headerCloseBtn: {
+    width: 30,
+    height: 44,
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+  },
   headerText: { flex: 1, minWidth: 0 },
   headerName: { fontSize: 16, fontWeight: '700' },
 

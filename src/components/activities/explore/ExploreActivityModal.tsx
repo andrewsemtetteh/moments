@@ -1,7 +1,4 @@
-import { useEffect } from 'react';
-
 import type { ExploreModalKey } from '@/components/activities/ExploreSection';
-import { useUIStore } from '@/stores';
 
 import {
   ComplimentJarScreen,
@@ -31,16 +28,7 @@ interface ExploreActivityModalProps {
 }
 
 export function ExploreActivityModal({ activeModal, onClose }: ExploreActivityModalProps) {
-  const openWatchTogether = useUIStore((s) => s.openWatchTogether);
-
-  useEffect(() => {
-    if (activeModal === 'watch') {
-      openWatchTogether('hub');
-      onClose();
-    }
-  }, [activeModal, onClose, openWatchTogether]);
-
-  if (!activeModal || activeModal === 'watch') return null;
+  if (!activeModal) return null;
 
   const meta = EXPLORE_META[activeModal];
 

@@ -3,7 +3,7 @@ import { useUIStore } from '@/stores';
 import type { Href } from 'expo-router';
 import { router, useRouter } from 'expo-router';
 
-export type AppTab = 'home' | 'activities' | 'calendar' | 'profile' | 'chat';
+export type AppTab = 'home' | 'activities' | 'calendar' | 'profile' | 'chat' | 'notifications';
 
 export function goBackOrReplace(routerInstance: ReturnType<typeof useRouter>, fallback: Href) {
   if (routerInstance.canGoBack()) {

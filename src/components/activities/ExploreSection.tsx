@@ -20,8 +20,7 @@ export type ExploreModalKey =
   | 'twoTruths'
   | 'truth'
   | 'memory'
-  | 'playlist'
-  | 'watch';
+  | 'playlist';
 
 interface ExploreItem {
   id: ExploreModalKey;
@@ -46,7 +45,6 @@ const CONNECT_ITEMS: ExploreItem[] = [
   { id: 'truth', title: 'Truth or Dare', tagline: 'Couples-safe cards', icon: 'fire', accent: '🔥' },
   { id: 'twoTruths', title: 'Two Truths & a Lie', tagline: 'Guess the fib', icon: 'eye', accent: '🃏' },
   { id: 'memory', title: 'Memory Quiz', tagline: 'How well do you remember?', icon: 'journal', accent: '🧩' },
-  { id: 'watch', title: 'Watch Together', tagline: 'Pick a service & start', icon: 'film', accent: '🍿' },
 ];
 
 const DAILY_ITEMS: ExploreItem[] = [

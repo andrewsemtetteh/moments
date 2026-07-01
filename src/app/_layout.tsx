@@ -20,6 +20,7 @@ function RootStack() {
           headerShown: false,
           contentStyle: { backgroundColor: colors.background },
           animation: 'fade',
+          detachInactiveScreens: false,
         }}>
         <Stack.Screen name="index" />
         <Stack.Screen name="(auth)" />
@@ -27,14 +28,6 @@ function RootStack() {
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="legal" />
         <Stack.Screen name="auth/callback" options={{ animation: 'none' }} />
-        <Stack.Screen
-          name="notifications"
-          options={{
-            animation: 'slide_from_right',
-            presentation: 'card',
-            gestureEnabled: true,
-          }}
-        />
         <Stack.Screen name="journal" />
         <Stack.Screen name="pro" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
       </Stack>

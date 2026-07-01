@@ -22,7 +22,8 @@ export function buildSharedLocationMarkers(
     pins.push({
       latitude: user.location_latitude!,
       longitude: user.location_longitude!,
-      label: user.name?.trim() || 'You',
+      label: 'Me',
+      name: user.name,
       color: YOU_COLOR,
       avatarUrl: user.avatar_url,
     });
@@ -36,6 +37,7 @@ export function buildSharedLocationMarkers(
       latitude: partner.location_latitude!,
       longitude: partner.location_longitude!,
       label: partner.name?.trim() || 'Partner',
+      name: partner.name,
       color: PARTNER_COLOR,
       avatarUrl: partner.avatar_url,
     });
