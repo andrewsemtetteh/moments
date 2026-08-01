@@ -77,7 +77,6 @@ interface UIState {
   momentViewer: MomentViewerState | null;
   momentHistoryScrollY: number;
   sharedAlbumScrollY: number;
-  showJournal: boolean;
   showWrapped: boolean;
   showMomentRecapVideo: boolean;
   recapVideoMoments: Moment[] | null;
@@ -86,6 +85,7 @@ interface UIState {
   showPartnerProfile: boolean;
   showWatchTogether: boolean;
   streakMilestoneCount: number | null;
+  streakSpark: { count: number; fromCount: number } | null;
   watchInitialView: 'hub' | 'start' | 'watchlist' | 'schedule';
   chatDraft: string | null;
   chatMomentReply: MomentReplyContext | null;
@@ -119,7 +119,6 @@ interface UIState {
     },
   ) => void;
   closeMomentViewer: () => void;
-  setShowJournal: (show: boolean) => void;
   setShowWrapped: (show: boolean) => void;
   openMomentRecapVideo: (moments: Moment[]) => void;
   closeMomentRecapVideo: () => void;
@@ -136,6 +135,8 @@ interface UIState {
   closeWatchTogether: () => void;
   openStreakMilestone: (count: number) => void;
   closeStreakMilestone: () => void;
+  openStreakSpark: (count: number, fromCount: number) => void;
+  closeStreakSpark: () => void;
   markPaywallShownThisSession: () => void;
   setTypingUsers: (users: string[]) => void;
   setTabBarOverlayHeight: (height: number) => void;
@@ -151,7 +152,6 @@ export const useUIStore = create<UIState>((set) => ({
   momentViewer: null,
   momentHistoryScrollY: 0,
   sharedAlbumScrollY: 0,
-  showJournal: false,
   showWrapped: false,
   showMomentRecapVideo: false,
   recapVideoMoments: null,
@@ -161,6 +161,7 @@ export const useUIStore = create<UIState>((set) => ({
   showWatchTogether: false,
   watchInitialView: 'hub',
   streakMilestoneCount: null,
+  streakSpark: null,
   chatDraft: null,
   chatMomentReply: null,
   paywallShownThisSession: false,
@@ -217,7 +218,6 @@ export const useUIStore = create<UIState>((set) => ({
         ? true
         : state.showPartnerProfile,
     })),
-  setShowJournal: (showJournal) => set({ showJournal }),
   setShowWrapped: (showWrapped) => set({ showWrapped }),
   openMomentRecapVideo: (moments) => set({ recapVideoMoments: moments, showMomentRecapVideo: true }),
   closeMomentRecapVideo: () => set({ recapVideoMoments: null, showMomentRecapVideo: false }),
@@ -234,6 +234,8 @@ export const useUIStore = create<UIState>((set) => ({
   closeWatchTogether: () => set({ showWatchTogether: false }),
   openStreakMilestone: (count) => set({ streakMilestoneCount: count }),
   closeStreakMilestone: () => set({ streakMilestoneCount: null }),
+  openStreakSpark: (count, fromCount) => set({ streakSpark: { count, fromCount } }),
+  closeStreakSpark: () => set({ streakSpark: null }),
   markPaywallShownThisSession: () => set({ paywallShownThisSession: true }),
   setTypingUsers: (typingUsers) => set({ typingUsers }),
   setTabBarOverlayHeight: (tabBarOverlayHeight) => set({ tabBarOverlayHeight }),

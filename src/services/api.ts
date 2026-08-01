@@ -20,6 +20,7 @@ import {
 import { SharedAlbumStorageLimitError } from '@/lib/shared-album';
 import { hydrateSharedAlbumItems } from '@/lib/shared-album-media';
 import { createStorageSignedUrl } from '@/lib/storage-cdn';
+import { challengeResponseField } from '@/lib/daily-prompt';
 import { legacyStreakToStatus, parseStreakStatus, withEffectiveStreakRestore } from '@/lib/streak';
 import { hasActiveUserSubscription } from '@/lib/subscription';
 import { supabase } from '@/lib/supabase';
@@ -28,7 +29,6 @@ import type {
     BucketListItem,
     CalendarEvent,
     DailyChallenge,
-    JournalEntry,
     Message,
     Moment,
     MoodLog,
@@ -635,6 +635,33 @@ export async function fetchUnreadMessageCount(relationshipId: string, userId: st
   return count ?? 0;
 }
 
+export async function fetchLatestMessage(
+  relationshipId: string,
+  userId: string,
+): Promise<Message | null> {
+  const { data, error } = await supabase
+    .from('messages')
+    .select('*')
+    .eq('relationship_id', relationshipId)
+    .order('created_at', { ascending: false })
+    .limit(12);
+
+  if (error) throw error;
+
+  const latest = ((data as Message[]) ?? []).find(
+    (message) => !(message.hidden_for ?? []).includes(userId) && !message.deleted_for_all,
+  );
+
+  return latest
+    ? {
+        ...latest,
+        reply_to_id: latest.reply_to_id ?? null,
+        deleted_for_all: latest.deleted_for_all ?? false,
+        hidden_for: latest.hidden_for ?? [],
+      }
+    : null;
+}
+
 export async function fetchActivities(relationshipId: string) {
   const { data, error } = await supabase
     .from('activities')
@@ -691,30 +718,6 @@ export async function createCalendarEvent(
     .single();
   if (error) throw error;
   return data as CalendarEvent;
-}
-
-export async function fetchJournalEntries(relationshipId: string) {
-  const { data, error } = await supabase
-    .from('journal_entries')
-    .select('*')
-    .eq('relationship_id', relationshipId)
-    .order('created_at', { ascending: false });
-  if (error) throw error;
-  return data as JournalEntry[];
-}
-
-export async function createJournalEntry(
-  relationshipId: string,
-  userId: string,
-  entry: { content: string; type: string; is_private?: boolean },
-) {
-  const { data, error } = await supabase
-    .from('journal_entries')
-    .insert({ relationship_id: relationshipId, user_id: userId, ...entry })
-    .select()
-    .single();
-  if (error) throw error;
-  return data as JournalEntry;
 }
 
 export async function fetchLatestMoods(relationshipId: string, memberIds?: string[]) {
@@ -972,7 +975,7 @@ async function fetchRelationshipActivityDays(relationshipId: string): Promise<st
   const sinceIso = since.toISOString();
   const dates = new Set<string>();
 
-  const [moments, messages, moods, journal, challenges] = await Promise.all([
+  const [moments, messages, moods, challenges] = await Promise.all([
     supabase
       .from('moments')
       .select('created_at')
@@ -989,12 +992,6 @@ async function fetchRelationshipActivityDays(relationshipId: string): Promise<st
       .eq('relationship_id', relationshipId)
       .gte('created_at', sinceIso),
     supabase
-      .from('journal_entries')
-      .select('created_at')
-      .eq('relationship_id', relationshipId)
-      .eq('is_private', false)
-      .gte('created_at', sinceIso),
-    supabase
       .from('daily_challenges')
       .select('challenge_date, user_1_response, user_2_response')
       .eq('relationship_id', relationshipId)
@@ -1004,7 +1001,6 @@ async function fetchRelationshipActivityDays(relationshipId: string): Promise<st
   for (const row of moments.data ?? []) trackActivityDate(dates, row.created_at);
   for (const row of messages.data ?? []) trackActivityDate(dates, row.created_at);
   for (const row of moods.data ?? []) trackActivityDate(dates, row.created_at);
-  for (const row of journal.data ?? []) trackActivityDate(dates, row.created_at);
   for (const row of challenges.data ?? []) {
     if (row.user_1_response || row.user_2_response) {
       trackActivityDate(dates, row.challenge_date);
@@ -1059,13 +1055,73 @@ export async function fetchDailyChallenge(relationshipId: string) {
   return data as DailyChallenge | null;
 }
 
+/** Ensure today's prompt exists (edge function, then client fallback). */
+export async function ensureDailyChallenge(relationshipId: string): Promise<DailyChallenge> {
+  const existing = await fetchDailyChallenge(relationshipId);
+  if (existing && existing.type !== 'skipped') return existing;
+  if (existing?.type === 'skipped') {
+    // Skipped row still occupies today — treat as needing a fresh prompt on that row
+  }
+
+  try {
+    const generated = await invokeEdgeFunction<DailyChallenge>('generate-daily-challenge', {
+      relationship_id: relationshipId,
+    });
+    if (generated?.id) return generated;
+  } catch {
+    // Fall through to client insert
+  }
+
+  const { getDailyQuestion } = await import('@/constants/activity-content');
+  const today = new Date().toISOString().split('T')[0];
+  const prompt = getDailyQuestion();
+
+  if (existing?.type === 'skipped') {
+    const { data, error } = await supabase
+      .from('daily_challenges')
+      .update({
+        prompt,
+        type: 'question',
+        user_1_response: null,
+        user_2_response: null,
+        completed: false,
+      })
+      .eq('id', existing.id)
+      .select()
+      .single();
+    if (error) throw error;
+    return data as DailyChallenge;
+  }
+
+  const { data, error } = await supabase
+    .from('daily_challenges')
+    .insert({
+      relationship_id: relationshipId,
+      prompt,
+      type: 'question',
+      challenge_date: today,
+    })
+    .select()
+    .single();
+
+  if (error) {
+    const raced = await fetchDailyChallenge(relationshipId);
+    if (raced) return raced;
+    throw error;
+  }
+
+  return data as DailyChallenge;
+}
+
 export async function respondToDailyChallenge(
   challengeId: string,
   userId: string,
   relationship: Relationship,
   response: string,
+  responderName?: string | null,
 ) {
-  const field = relationship.user_1_id === userId ? 'user_1_response' : 'user_2_response';
+  const field = challengeResponseField(relationship, userId);
+
   const { data, error } = await supabase
     .from('daily_challenges')
     .update({ [field]: response })
@@ -1073,7 +1129,94 @@ export async function respondToDailyChallenge(
     .select()
     .single();
   if (error) throw error;
-  return data as DailyChallenge;
+
+  const updated = data as DailyChallenge;
+  const bothIn = Boolean(updated.user_1_response && updated.user_2_response);
+
+  if (bothIn && !updated.completed) {
+    const { data: completedRow, error: completeError } = await supabase
+      .from('daily_challenges')
+      .update({ completed: true })
+      .eq('id', challengeId)
+      .select()
+      .single();
+    if (!completeError && completedRow) {
+      Object.assign(updated, completedRow);
+    }
+  }
+
+  // Never block the answer UX on notifications / push.
+  const partnerId =
+    relationship.user_1_id === userId ? relationship.user_2_id : relationship.user_1_id;
+  if (partnerId) {
+    void notifyPartnerPromptAnswered({
+      relationshipId: relationship.id,
+      partnerId,
+      challengeId,
+      userId,
+      bothIn,
+      responderName,
+    });
+  }
+
+  return updated;
+}
+
+async function notifyPartnerPromptAnswered({
+  relationshipId,
+  partnerId,
+  challengeId,
+  userId,
+  bothIn,
+  responderName,
+}: {
+  relationshipId: string;
+  partnerId: string;
+  challengeId: string;
+  userId: string;
+  bothIn: boolean;
+  responderName?: string | null;
+}) {
+  try {
+    const name = responderName?.trim() || 'Your partner';
+    const dedupKey = `prompt_answer:${challengeId}:${userId}:${bothIn ? 'reveal' : 'turn'}`;
+    let shouldNotify = true;
+    try {
+      const { data: claimed, error: dedupError } = await supabase.rpc('try_notification_dedup', {
+        p_relationship_id: relationshipId,
+        p_dedup_key: dedupKey,
+      });
+      if (!dedupError && claimed === false) shouldNotify = false;
+    } catch {
+      shouldNotify = true;
+    }
+
+    if (shouldNotify) {
+      await sendPartnerNotification(
+        relationshipId,
+        partnerId,
+        'challenge',
+        bothIn
+          ? `${name} answered today's question — you can both see the answers now`
+          : `${name} answered today's question. Your turn!`,
+      );
+    } else {
+      void dispatchPendingPushNotifications();
+    }
+  } catch {
+    // Notification must not block answering
+  }
+}
+
+export async function fetchDailyChallengeHistory(relationshipId: string, limit = 30) {
+  const { data, error } = await supabase
+    .from('daily_challenges')
+    .select('*')
+    .eq('relationship_id', relationshipId)
+    .order('challenge_date', { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return (data ?? []) as DailyChallenge[];
 }
 
 export async function fetchBucketList(relationshipId: string) {

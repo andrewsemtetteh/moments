@@ -98,6 +98,7 @@ export function openFromNotificationType(
     case 'mood_update':
     case 'streak':
     case 'moment':
+    case 'challenge':
     case 'watch_party':
     case 'watch_party_nudge':
     case 'watch_party_scheduled':

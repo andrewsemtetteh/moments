@@ -7,6 +7,7 @@ export type IconName =
   | 'plus'
   | 'calendar'
   | 'user'
+  | 'people'
   | 'chat'
   | 'messages'
   | 'journal'
@@ -37,7 +38,9 @@ export type IconName =
   | 'logout'
   | 'trash'
   | 'lock'
+  | 'time'
   | 'sparkles'
+  | 'question'
   | 'moon'
   | 'eye'
   | 'eyeOff'
@@ -72,6 +75,7 @@ const ICON_MAP: Record<IconName, { outline: IoniconName; filled: IoniconName }> 
   plus: { outline: 'add', filled: 'add' },
   calendar: { outline: 'calendar-outline', filled: 'calendar' },
   user: { outline: 'person-outline', filled: 'person' },
+  people: { outline: 'people-outline', filled: 'people' },
   chat: { outline: 'chatbubble-ellipses-outline', filled: 'chatbubble-ellipses' },
   messages: { outline: 'chatbubbles-outline', filled: 'chatbubbles' },
   journal: { outline: 'book-outline', filled: 'book' },
@@ -102,7 +106,9 @@ const ICON_MAP: Record<IconName, { outline: IoniconName; filled: IoniconName }> 
   logout: { outline: 'log-out-outline', filled: 'log-out' },
   trash: { outline: 'trash-outline', filled: 'trash' },
   lock: { outline: 'lock-closed-outline', filled: 'lock-closed' },
+  time: { outline: 'time-outline', filled: 'time' },
   sparkles: { outline: 'sparkles-outline', filled: 'sparkles' },
+  question: { outline: 'help-circle-outline', filled: 'help-circle' },
   moon: { outline: 'moon-outline', filled: 'moon' },
   eye: { outline: 'eye-outline', filled: 'eye' },
   eyeOff: { outline: 'eye-off-outline', filled: 'eye-off' },

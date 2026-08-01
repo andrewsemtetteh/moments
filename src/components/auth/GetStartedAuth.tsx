@@ -14,6 +14,8 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { AuthFooter } from '@/components/auth/AuthFooter';
+import { AuthLegalLinks } from '@/components/auth/AuthLegalLinks';
 import { AppleIcon, GoogleIcon } from '@/components/auth/OAuthBrandIcon';
 import { SwipeDismissView } from '@/components/layout/SwipeDismissView';
 import { Icon } from '@/components/ui/Icon';
@@ -79,12 +81,6 @@ export function GetStartedAuth({ showBack = true }: Props) {
     router.push('/(auth)/signup');
   };
 
-  const handleLogin = async () => {
-    void Haptics.selectionAsync();
-    await markIntroCompleted();
-    router.push('/(auth)/login');
-  };
-
   const handleBack = () => goBackOrReplace(router, '/(auth)/welcome');
 
   return (
@@ -143,23 +139,17 @@ export function GetStartedAuth({ showBack = true }: Props) {
             </Pressable>
           </View>
 
-          <Pressable onPress={handleLogin} hitSlop={10} style={styles.loginRow}>
-            <Text style={styles.loginText}>
-              Already have an account? <Text style={styles.loginLink}>Log in</Text>
-            </Text>
-          </Pressable>
+          <AuthFooter
+            prompt="Already have an account?"
+            linkLabel="Log in"
+            href="/(auth)/login"
+            onBeforeNavigate={markIntroCompleted}
+          />
 
-          <Text style={styles.legal}>
-            By continuing you agree to our{' '}
-            <Text style={styles.legalLink} onPress={() => router.push('/legal/terms')}>
-              Terms of Service
-            </Text>{' '}
-            and{' '}
-            <Text style={styles.legalLink} onPress={() => router.push('/legal/privacy')}>
-              Privacy Policy
-            </Text>
-            .
-          </Text>
+          <AuthLegalLinks
+            prefix="By continuing you agree to our"
+            style={styles.legalNotice}
+          />
         </View>
       </SafeAreaView>
       </View>
@@ -289,30 +279,8 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     letterSpacing: -0.2,
   },
-  loginRow: {
-    alignItems: 'center',
-    marginTop: 24,
-    paddingVertical: Spacing.sm,
-  },
-  loginText: {
-    color: 'rgba(255,255,255,0.72)',
-    fontSize: 15,
-  },
-  loginLink: {
-    color: '#FFFFFF',
-    fontWeight: '700',
-  },
-  legal: {
+  legalNotice: {
     marginTop: 16,
-    textAlign: 'center',
-    color: 'rgba(255,255,255,0.55)',
-    fontSize: 13,
-    lineHeight: 20,
     paddingHorizontal: 8,
-  },
-  legalLink: {
-    color: 'rgba(255,255,255,0.85)',
-    textDecorationLine: 'underline',
-    fontWeight: '500',
   },
 });

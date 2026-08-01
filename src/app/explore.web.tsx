@@ -66,10 +66,10 @@ export default function FeaturesScreen() {
             </ThemedText>
           </Collapsible>
 
-          <Collapsible title="Journal & mood">
+          <Collapsible title="Mood check-ins">
             <ThemedText type="small">
-              Check in on how you feel, write shared journal entries, and see a mood snapshot of
-              you and your partner on the home screen.
+              Check in on how you feel and see a mood snapshot of you and your partner on the home
+              screen.
             </ThemedText>
           </Collapsible>
 

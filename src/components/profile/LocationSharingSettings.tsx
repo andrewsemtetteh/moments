@@ -97,7 +97,7 @@ export function LocationSharingSettings() {
             </View>
           ) : markers.length > 0 ? (
             <>
-              <LocationMapPreview markers={markers} height={180} interactive />
+              <LocationMapPreview markers={markers} height={180} interactive={false} />
               <View style={styles.legend}>
                 {myPlace && (
                   <Text style={[styles.legendItem, { color: colors.textSecondary }]}>

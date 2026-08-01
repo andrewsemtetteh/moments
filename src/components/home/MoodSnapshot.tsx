@@ -55,7 +55,7 @@ export function MoodSnapshot({ moods, onSelectMood, onViewHistory }: MoodSnapsho
   return (
     <View style={[styles.container, { backgroundColor: colors.surface, borderColor: colors.border }]}>
       <View style={styles.headerRow}>
-        <Text style={[styles.label, { color: colors.textSecondary, marginBottom: 0 }]}>How we&apos;re feeling</Text>
+        <Text style={[styles.label, { color: colors.textSecondary }]}>How we&apos;re feeling</Text>
         {onViewHistory && (
           <Pressable onPress={onViewHistory} hitSlop={8}>
             <Text style={[styles.historyLink, { color: colors.accent }]}>History</Text>
@@ -158,7 +158,7 @@ export function LoadingState() {
 const styles = StyleSheet.create({
   container: { borderRadius: 20, padding: 18, borderWidth: StyleSheet.hairlineWidth },
   headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 },
-  label: { fontSize: 13, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.6 },
+  label: { fontSize: 13, fontWeight: '600' },
   historyLink: { fontSize: 13, fontWeight: '700' },
   row: { flexDirection: 'row', alignItems: 'center' },
   divider: { width: 1, height: 56, marginHorizontal: 12 },

@@ -1,9 +1,9 @@
 import {
-    addMonths,
-    format,
-    isAfter,
-    isBefore,
-    startOfMonth,
+  addMonths,
+  format,
+  isAfter,
+  isBefore,
+  startOfMonth,
 } from 'date-fns';
 import * as Haptics from 'expo-haptics';
 import { useMemo, useState } from 'react';
@@ -14,22 +14,24 @@ import { StreakDayCircle } from '@/components/home/StreakDayCircle';
 import { Icon } from '@/components/ui/Icon';
 import { Radius } from '@/constants/design-system';
 import { useTheme } from '@/hooks/useTheme';
-import { streakMotivationHeadline } from '@/lib/streak';
-import { STREAK_COLORS, streakFireColor } from '@/lib/streak-colors';
+import { getFirstName } from '@/lib/avatar-initial';
+import { streakSubtitle } from '@/lib/streak';
 import {
-    buildStreakMonth,
-    buildStreakWeek,
-    streakMonthNavBounds,
-    streakWeekLineSpan,
-    type StreakDayCell,
-    type StreakView,
+  STREAK_COLORS,
+  streakToneFromStatus,
+  streakWellColors,
+} from '@/lib/streak-colors';
+import {
+  buildStreakMonth,
+  buildStreakWeek,
+  streakMonthNavBounds,
+  streakWeekLineSpan,
+  type StreakDayCell,
+  type StreakView,
 } from '@/lib/streak-days';
+import { useRelationshipStore } from '@/stores';
 import type { StreakStatus } from '@/types/database';
 
-const TABS: { id: StreakView; label: string }[] = [
-  { id: 'week', label: '7 Day' },
-  { id: 'month', label: 'Month' },
-];
 const WEEK_DAYS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'] as const;
 
 interface StreakDayTrackerProps {
@@ -39,6 +41,8 @@ interface StreakDayTrackerProps {
 
 export function StreakDayTracker({ status, joinedAt }: StreakDayTrackerProps) {
   const { colors } = useTheme();
+  const partner = useRelationshipStore((s) => s.partner);
+  const partnerFirst = getFirstName(partner?.name) ?? 'Partner';
   const [view, setView] = useState<StreakView>('week');
   const bounds = useMemo(() => streakMonthNavBounds(joinedAt), [joinedAt]);
   const [month, setMonth] = useState(() => bounds.maxMonth);
@@ -50,38 +54,113 @@ export function StreakDayTracker({ status, joinedAt }: StreakDayTrackerProps) {
 
   const count = status.current_streak;
   const active = count > 0;
-  const atRisk = status.at_risk;
-  const fireColor = streakFireColor(
-    active || atRisk,
-    atRisk && !status.both_active_today,
-    colors.textTertiary,
-    status.both_active_today,
-  );
+  const atRisk = status.at_risk && active;
+  const tone = streakToneFromStatus(status);
+  const well = streakWellColors(tone, colors);
+  const statusLine = streakSubtitle(status);
+
+  const setTab = (next: StreakView) => {
+    if (next === view) return;
+    void Haptics.selectionAsync();
+    setView(next);
+  };
 
   return (
     <View
       style={[
         styles.card,
-        { backgroundColor: colors.surface, borderColor: colors.border },
+        {
+          backgroundColor: colors.surface,
+          borderColor: colors.border,
+        },
       ]}>
-      <View style={styles.hero}>
-        <AnimatedStreakFire
-          color={fireColor}
-          size={36}
-          animate={active || atRisk}
-          pulse={atRisk}
-        />
-        <Text style={[styles.count, { color: colors.text }]}>{count}</Text>
-        <Text style={[styles.countUnit, { color: atRisk ? colors.warning : colors.accent }]}>
-          day streak
-        </Text>
-        <Text style={[styles.headline, { color: colors.textSecondary }]}>
-          {streakMotivationHeadline(count)}
-        </Text>
+      <View style={styles.header}>
+        <View style={styles.heroRow}>
+          <View style={[styles.flameWell, { backgroundColor: well.well }]}>
+            <AnimatedStreakFire color={well.fire} size={28} animate={false} />
+          </View>
+
+          <View style={styles.heroCopy}>
+            <View style={styles.countRow}>
+              <Text style={[styles.count, { color: colors.text }]}>{count}</Text>
+              <Text style={[styles.countUnit, { color: well.label }]}>day streak</Text>
+            </View>
+            <Text style={[styles.statusLine, { color: colors.textSecondary }]} numberOfLines={2}>
+              {statusLine}
+            </Text>
+          </View>
+        </View>
+
+        <View style={[styles.segment, { backgroundColor: colors.surfaceElevated }]}>
+          <SegmentTab
+            label="Week"
+            selected={view === 'week'}
+            onPress={() => setTab('week')}
+            selectedColor={colors.surface}
+            textColor={colors.text}
+            mutedColor={colors.textTertiary}
+          />
+          <SegmentTab
+            label="Month"
+            selected={view === 'month'}
+            onPress={() => setTab('month')}
+            selectedColor={colors.surface}
+            textColor={colors.text}
+            mutedColor={colors.textTertiary}
+          />
+        </View>
       </View>
 
+      <View style={styles.checkRow}>
+        <CheckInChip
+          label="You"
+          done={status.user_active_today}
+          waiting={active && !status.user_active_today}
+          atRisk={atRisk && !status.user_active_today}
+          isDark={colors.isDark}
+          colors={{
+            text: colors.text,
+            muted: colors.textTertiary,
+            surface: colors.surfaceElevated,
+            border: colors.border,
+          }}
+        />
+        <CheckInChip
+          label={partnerFirst}
+          done={status.partner_active_today}
+          waiting={active && !status.partner_active_today}
+          atRisk={atRisk && !status.partner_active_today}
+          isDark={colors.isDark}
+          colors={{
+            text: colors.text,
+            muted: colors.textTertiary,
+            surface: colors.surfaceElevated,
+            border: colors.border,
+          }}
+        />
+        {status.longest_streak > 0 ? (
+          <View style={styles.bestWrap}>
+            <Text style={[styles.bestLabel, { color: colors.textTertiary }]}>Best</Text>
+            <Text style={[styles.bestValue, { color: colors.textSecondary }]}>
+              {status.longest_streak}d
+            </Text>
+          </View>
+        ) : null}
+      </View>
+
+      {atRisk ? (
+        <View style={[styles.riskBanner, { backgroundColor: well.bannerBg }]}>
+          <Icon name="warning" size={16} color={well.bannerText} filled />
+          <Text style={[styles.riskText, { color: well.bannerText }]}>
+            {status.user_active_today
+              ? `Waiting on ${partnerFirst} before midnight`
+              : 'Check in today to keep the flame alive'}
+          </Text>
+        </View>
+      ) : null}
+
       {view === 'week' ? (
-        <WeekStreakRow days={week} />
+        <WeekStreakRow days={week} labelColor={colors.textTertiary} todayColor={colors.text} />
       ) : (
         <StreakMonthCalendar
           month={month}
@@ -91,58 +170,132 @@ export function StreakDayTracker({ status, joinedAt }: StreakDayTrackerProps) {
           joinedAt={joinedAt}
         />
       )}
-
-      <View style={[styles.tabs, { borderTopColor: colors.border }]}>
-        {TABS.map((tab) => {
-          const selected = view === tab.id;
-          return (
-            <Pressable
-              key={tab.id}
-              onPress={() => setView(tab.id)}
-              style={styles.tab}
-              accessibilityRole="tab"
-              accessibilityState={{ selected }}>
-              <Text
-                style={[
-                  styles.tabLabel,
-                  { color: selected ? colors.text : colors.textTertiary },
-                ]}>
-                {tab.label}
-              </Text>
-              {selected ? (
-                <View style={[styles.tabIndicator, { backgroundColor: colors.accent }]} />
-              ) : null}
-            </Pressable>
-          );
-        })}
-      </View>
     </View>
   );
 }
 
-function WeekStreakRow({ days }: { days: StreakDayCell[] }) {
+function SegmentTab({
+  label,
+  selected,
+  onPress,
+  selectedColor,
+  textColor,
+  mutedColor,
+}: {
+  label: string;
+  selected: boolean;
+  onPress: () => void;
+  selectedColor: string;
+  textColor: string;
+  mutedColor: string;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={[styles.segmentTab, selected && { backgroundColor: selectedColor }]}
+      accessibilityRole="tab"
+      accessibilityState={{ selected }}>
+      <Text style={[styles.segmentLabel, { color: selected ? textColor : mutedColor }]}>
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
+
+function CheckInChip({
+  label,
+  done,
+  waiting,
+  atRisk = false,
+  isDark = false,
+  colors: c,
+}: {
+  label: string;
+  done: boolean;
+  waiting: boolean;
+  atRisk?: boolean;
+  isDark?: boolean;
+  colors: { text: string; muted: string; surface: string; border: string };
+}) {
+  const fill = done
+    ? isDark
+      ? STREAK_COLORS.activeSoftDark
+      : STREAK_COLORS.activeSoftLight
+    : atRisk
+      ? isDark
+        ? STREAK_COLORS.atRiskSoftDark
+        : STREAK_COLORS.atRiskSoftLight
+      : c.surface;
+  const border = done
+    ? STREAK_COLORS.active
+    : atRisk
+      ? STREAK_COLORS.atRisk
+      : c.border;
+  const dot = done
+    ? STREAK_COLORS.active
+    : atRisk
+      ? STREAK_COLORS.atRisk
+      : waiting
+        ? STREAK_COLORS.pending
+        : c.border;
+
+  return (
+    <View style={[styles.chip, { backgroundColor: fill, borderColor: border }]}>
+      <View style={[styles.chipDot, { backgroundColor: dot }]} />
+      <Text style={[styles.chipLabel, { color: done || atRisk ? c.text : c.muted }]} numberOfLines={1}>
+        {label}
+      </Text>
+      {done ? <Icon name="check" size={12} color={STREAK_COLORS.active} filled /> : null}
+    </View>
+  );
+}
+
+function WeekStreakRow({
+  days,
+  labelColor,
+  todayColor,
+}: {
+  days: StreakDayCell[];
+  labelColor: string;
+  todayColor: string;
+}) {
   const lineSpan = streakWeekLineSpan(days);
 
   return (
     <View style={styles.weekWrap}>
-      {lineSpan ? (
-        <View
-          style={[
-            styles.streakLine,
-            {
-              backgroundColor: STREAK_COLORS.success,
-              left: `${((lineSpan.start + 0.5) / days.length) * 100}%`,
-              width: `${((lineSpan.end - lineSpan.start) / days.length) * 100}%`,
-            },
-          ]}
-        />
-      ) : null}
-      <View style={styles.weekRow}>
+      <View style={styles.weekLabels}>
         {days.map((day) => (
-          <View key={day.date.toISOString()} style={styles.weekDay}>
-            <StreakDayCircle state={day.state} tone={day.tone} isToday={day.isToday} size="md" />
-          </View>
+          <Text
+            key={`label-${day.date.toISOString()}`}
+            style={[
+              styles.weekLabel,
+              { color: day.isToday ? todayColor : labelColor },
+              day.isToday && styles.weekLabelToday,
+            ]}>
+            {format(day.date, 'EEEEE')}
+          </Text>
         ))}
+      </View>
+      <View style={styles.weekTrack}>
+        {lineSpan ? (
+          <View
+            style={[
+              styles.streakLine,
+              {
+                backgroundColor: STREAK_COLORS.active,
+                left: `${((lineSpan.start + 0.5) / days.length) * 100}%`,
+                width: `${((lineSpan.end - lineSpan.start) / days.length) * 100}%`,
+              },
+            ]}
+          />
+        ) : null}
+        <View style={styles.weekRow}>
+          {days.map((day) => (
+            <View key={day.date.toISOString()} style={styles.weekDay}>
+              <StreakDayCircle state={day.state} tone={day.tone} isToday={day.isToday} size="md" />
+            </View>
+          ))}
+        </View>
       </View>
     </View>
   );
@@ -241,7 +394,7 @@ const monthStyles = StyleSheet.create({
   weekDay: { flex: 1, textAlign: 'center', fontSize: 11, fontWeight: '700', letterSpacing: 0.3 },
   grid: { flexDirection: 'row', flexWrap: 'wrap' },
   dayCell: {
-    width: `${100 / 7}%`,
+    width: `${100 / 7}%` as `${number}%`,
     minHeight: 44,
     alignItems: 'center',
     paddingTop: 2,
@@ -253,40 +406,147 @@ const styles = StyleSheet.create({
     borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
     paddingHorizontal: 16,
-    paddingTop: 18,
-    paddingBottom: 14,
-    gap: 16,
+    paddingTop: 16,
+    paddingBottom: 16,
+    gap: 14,
   },
-  hero: {
+  header: {
+    gap: 14,
+  },
+  heroRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    gap: 2,
+    gap: 14,
+  },
+  flameWell: {
+    width: 56,
+    height: 56,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  heroCopy: {
+    flex: 1,
+    gap: 4,
+    minWidth: 0,
+  },
+  countRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 8,
   },
   count: {
-    fontSize: 44,
+    fontSize: 36,
     fontWeight: '900',
-    letterSpacing: -2,
-    lineHeight: 48,
-    marginTop: 4,
+    letterSpacing: -1.5,
+    lineHeight: 40,
   },
   countUnit: {
     fontSize: 15,
     fontWeight: '700',
-    letterSpacing: 0.2,
+    letterSpacing: 0.1,
   },
-  headline: {
+  statusLine: {
     fontSize: 14,
     fontWeight: '600',
-    marginTop: 6,
-    textAlign: 'center',
+    lineHeight: 19,
+  },
+  segment: {
+    flexDirection: 'row',
+    alignSelf: 'stretch',
+    borderRadius: 12,
+    padding: 3,
+    gap: 2,
+  },
+  segmentTab: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    borderRadius: 10,
+  },
+  segmentLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  checkRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 999,
+    borderWidth: StyleSheet.hairlineWidth,
+    maxWidth: '42%',
+  },
+  chipDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+  },
+  chipLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+    flexShrink: 1,
+  },
+  bestWrap: {
+    marginLeft: 'auto',
+    alignItems: 'flex-end',
+    paddingLeft: 4,
+  },
+  bestLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    letterSpacing: 0.3,
+    textTransform: 'uppercase',
+  },
+  bestValue: {
+    fontSize: 14,
+    fontWeight: '800',
+    letterSpacing: -0.2,
+  },
+  riskBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 12,
+  },
+  riskText: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '700',
+    lineHeight: 18,
   },
   weekWrap: {
+    gap: 10,
+    paddingTop: 2,
+  },
+  weekLabels: {
+    flexDirection: 'row',
+  },
+  weekLabel: {
+    flex: 1,
+    textAlign: 'center',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  weekLabelToday: {
+    fontWeight: '800',
+  },
+  weekTrack: {
     position: 'relative',
-    paddingTop: 4,
     paddingBottom: 2,
   },
   streakLine: {
     position: 'absolute',
-    top: 22,
+    top: 18,
     height: 3,
     borderRadius: 2,
     opacity: 0.35,
@@ -300,26 +560,5 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     minWidth: 0,
-  },
-  tabs: {
-    flexDirection: 'row',
-    borderTopWidth: StyleSheet.hairlineWidth,
-    paddingTop: 12,
-    marginTop: -4,
-  },
-  tab: {
-    flex: 1,
-    alignItems: 'center',
-    gap: 6,
-    paddingVertical: 4,
-  },
-  tabLabel: {
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  tabIndicator: {
-    height: 2,
-    width: 28,
-    borderRadius: 1,
   },
 });

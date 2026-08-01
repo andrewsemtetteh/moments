@@ -28,7 +28,6 @@ function RootStack() {
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="legal" />
         <Stack.Screen name="auth/callback" options={{ animation: 'none' }} />
-        <Stack.Screen name="journal" />
         <Stack.Screen name="pro" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
       </Stack>
       <AppModals />

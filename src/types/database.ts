@@ -27,7 +27,6 @@ export type MoodType =
   | 'missing';
 export type ActivityStatus = 'pending' | 'in_progress' | 'completed';
 export type EventType = 'date' | 'anniversary' | 'reminder' | 'experience' | 'custom';
-export type JournalType = 'reflection' | 'gratitude' | 'memory' | 'emotion' | 'plan';
 export type SubscriptionTier = 'free' | 'plus';
 export type ProfileGender = 'male' | 'female' | 'other';
 export type RelationshipType = 'dating' | 'long_distance' | 'engaged' | 'married' | 'other';
@@ -136,17 +135,6 @@ export interface CalendarEvent {
   source: 'manual' | 'activity' | 'experience';
   description: string | null;
   created_at: string;
-}
-
-export interface JournalEntry {
-  id: string;
-  relationship_id: string;
-  user_id: string;
-  content: string;
-  type: JournalType;
-  is_private: boolean;
-  created_at: string;
-  author?: UserProfile;
 }
 
 export interface MoodLog {

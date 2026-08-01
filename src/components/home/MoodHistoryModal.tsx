@@ -14,6 +14,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { MoodHistoryOverview } from '@/components/home/MoodHistoryOverview';
 import { MoodHistoryTimeline } from '@/components/home/MoodHistoryTimeline';
+import { Icon } from '@/components/ui/Icon';
 import { PrimaryButton } from '@/components/ui/primitives';
 import { useMoodHistory, useMoodHistoryOverview } from '@/hooks/queries';
 import { useEnsurePartner } from '@/hooks/useEnsurePartner';
@@ -135,8 +136,8 @@ export function MoodHistoryModal() {
     <Modal visible animationType="slide" presentationStyle="pageSheet" onRequestClose={close}>
       <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>
         <View style={styles.header}>
-          <Pressable onPress={close} hitSlop={10} style={styles.headerSide}>
-            <Text style={{ color: colors.textSecondary, fontWeight: '700' }}>Close</Text>
+          <Pressable onPress={close} hitSlop={10} style={styles.headerSide} accessibilityLabel="Close">
+            <Icon name="close" size={24} color={colors.text} />
           </Pressable>
           <View style={styles.headerCenter}>
             <Text style={[styles.title, { color: colors.text }]}>Mood history</Text>

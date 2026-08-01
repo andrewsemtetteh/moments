@@ -33,11 +33,21 @@ Deno.serve(async (req) => {
     }
 
     const prompts = [
-      'What do you appreciate about your partner today?',
-      'Share a photo of where you are right now',
-      'What made you smile today?',
-      'Describe your ideal evening together',
-      'What\'s one thing you want to do together this week?',
+      'What made you smile about us today?',
+      'What is one small thing I did that you noticed?',
+      'If we had a free hour right now, what would you want to do?',
+      'What are you looking forward to with me this week?',
+      'What song or moment today reminded you of us?',
+      'What is something new you would like to try together?',
+      'When did you last feel proud of us?',
+      'What is your favorite way we reconnect after a busy day?',
+      'What would make tonight feel special?',
+      'What is one thing you are grateful for about our relationship?',
+      'If you could relive one day with me, which would it be?',
+      'What is a habit of mine you secretly love?',
+      'What adventure should we plan next?',
+      'What do you need more of from me right now?',
+      'What made you feel loved recently?',
     ];
 
     const prompt = prompts[Math.floor(Math.random() * prompts.length)];

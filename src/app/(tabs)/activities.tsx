@@ -60,7 +60,7 @@ export default function ActivitiesScreen() {
   };
 
   return (
-    <ScreenContainer padded={false}>
+    <ScreenContainer padded={false} tabSwipe>
       <AppHeader />
       <TabScreenScroll showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
         <ActivitiesIntroSection

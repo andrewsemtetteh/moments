@@ -22,6 +22,8 @@ function pushTitle(type: string): string {
       return 'Mood update';
     case 'streak':
       return 'Streak update';
+    case 'challenge':
+      return "Today's question";
     case 'watch_party':
     case 'watch_party_nudge':
       return 'Watch Together';

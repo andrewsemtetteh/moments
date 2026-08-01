@@ -80,20 +80,35 @@ export async function clearAuthSession() {
   useRelationshipStore.getState().reset();
 }
 
-/** Sign out, clear cached queries, and reset local auth state. Falls back to local-only sign-out if the network fails. */
+/** Sign out, clear cached queries, and reset local auth state.
+ * Clears local state first so the UI can leave immediately; remote revoke is best-effort with a short timeout. */
 export async function signOutUser(): Promise<void> {
-  const supabase = getSupabase();
   const { queryClient } = await import('@/providers/AppProviders');
   queryClient.clear();
+  await clearAuthSession();
+
+  const supabase = getSupabase();
+  const remoteSignOut = async () => {
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) {
+        await supabase.auth.signOut({ scope: 'local' });
+      }
+    } catch {
+      try {
+        await supabase.auth.signOut({ scope: 'local' });
+      } catch {
+        // Local session already cleared above.
+      }
+    }
+  };
 
   try {
-    const { error } = await supabase.auth.signOut();
-    if (error) {
-      await supabase.auth.signOut({ scope: 'local' });
-    }
+    await Promise.race([
+      remoteSignOut(),
+      new Promise<void>((resolve) => setTimeout(resolve, 2000)),
+    ]);
   } catch {
-    await supabase.auth.signOut({ scope: 'local' });
+    // Ignore — local auth is already cleared.
   }
-
-  await clearAuthSession();
 }

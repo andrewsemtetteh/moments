@@ -5,7 +5,6 @@ import {
   FREE_AI_REQUESTS,
   FREE_ALBUM_STORAGE_BYTES,
   FREE_DAILY_MOMENTS,
-  FREE_JOURNAL_ENTRIES,
   FREE_TIMELINE_MOMENTS,
 } from '@/constants/design-system';
 import {
@@ -14,7 +13,7 @@ import {
   hasActiveUserSubscription,
   isSubscriptionOwner,
 } from '@/lib/subscription';
-import { useJournalEntries, useMoments, useSharedAlbum } from '@/hooks/queries';
+import { useMoments, useSharedAlbum } from '@/hooks/queries';
 import { useAuthStore, useRelationshipStore } from '@/stores';
 
 export type Entitlement = 'free' | 'plus';
@@ -25,7 +24,6 @@ export function useSubscription() {
   const tier = getEffectiveTier(user, relationship);
   const isPlus = tier === 'plus';
   const { data: momentsData } = useMoments();
-  const { data: journalEntries } = useJournalEntries();
   const { data: sharedAlbumItems } = useSharedAlbum();
 
   const dailyMomentsUsed = useMemo(() => {
@@ -33,8 +31,6 @@ export function useSubscription() {
     const all = momentsData?.pages.flat() ?? [];
     return all.filter((m) => m.user_id === user?.id && new Date(m.created_at) >= today).length;
   }, [momentsData, user?.id]);
-
-  const journalCount = journalEntries?.length ?? 0;
 
   const albumStorageUsedBytes = useMemo(
     () => (sharedAlbumItems ?? []).reduce((sum, item) => sum + Number(item.file_size_bytes ?? 0), 0),
@@ -48,12 +44,10 @@ export function useSubscription() {
     canManageBilling: canManageBilling(user?.id, relationship, user),
     hasPersonalSubscription: hasActiveUserSubscription(user),
     dailyMomentsUsed,
-    journalCount,
     albumStorageUsedBytes,
     limits: {
       dailyMoments: isPlus ? Infinity : FREE_DAILY_MOMENTS,
       aiRequests: isPlus ? Infinity : FREE_AI_REQUESTS,
-      journalEntries: isPlus ? Infinity : FREE_JOURNAL_ENTRIES,
       timelineMoments: isPlus ? Infinity : FREE_TIMELINE_MOMENTS,
       albumStorageBytes: isPlus ? Infinity : FREE_ALBUM_STORAGE_BYTES,
       wrapped: true,

@@ -1,5 +1,12 @@
 import { ReactNode } from 'react';
-import { ScrollView, StyleSheet, View, type ScrollViewProps, type StyleProp, type ViewStyle } from 'react-native';
+import {
+  ScrollView,
+  StyleSheet,
+  View,
+  type ScrollViewProps,
+  type StyleProp,
+  type ViewStyle,
+} from 'react-native';
 
 import { useTabBarInset } from '@/hooks/useTabBarInset';
 
@@ -16,9 +23,12 @@ export function TabScreenScroll({ children, contentContainerStyle, style, ...scr
     <ScrollView
       {...scrollProps}
       style={[styles.flex, style]}
-      contentContainerStyle={[contentContainerStyle, styles.content]}>
+      contentContainerStyle={[contentContainerStyle, styles.content]}
+      nestedScrollEnabled
+      keyboardShouldPersistTaps="handled"
+      scrollEventThrottle={16}>
       {children}
-      <View style={{ height: tabBarInset }} />
+      <View style={{ height: tabBarInset }} collapsable={false} />
     </ScrollView>
   );
 }

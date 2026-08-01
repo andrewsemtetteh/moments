@@ -115,13 +115,9 @@ export default function ProfileScreen() {
   const { isPlus, isOwner } = useSubscription();
   const plusExpiryLabel = formatSubscriptionExpiry(user?.subscription_expires_at);
 
-  const handleLogout = async () => {
-    try {
-      await signOutUser();
-      router.replace('/(auth)/login');
-    } catch (e) {
-      Alert.alert('Sign out failed', e instanceof Error ? e.message : 'Please try again.');
-    }
+  const handleLogout = () => {
+    void signOutUser();
+    router.replace('/(auth)/login');
   };
 
   const handleDeleteAccount = () => {
@@ -132,7 +128,7 @@ export default function ProfileScreen() {
         style: 'destructive',
         onPress: async () => {
           try {
-            await signOutUser();
+            void signOutUser();
             router.replace('/(auth)/login');
           } catch (e) {
             Alert.alert('Sign out failed', e instanceof Error ? e.message : 'Please try again.');
@@ -170,7 +166,7 @@ export default function ProfileScreen() {
           try {
             await api.leaveRelationship(user.id, relationship.id);
             await markRelationshipOnboardingDone(user.id);
-            await signOutUser();
+            void signOutUser();
             router.replace('/(auth)/login');
           } catch (e) {
             Alert.alert('Could not leave', e instanceof Error ? e.message : 'Please try again.');
@@ -366,7 +362,7 @@ export default function ProfileScreen() {
         {/* Overview */}
         <LinearGradient colors={colors.gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.overview}>
           <View style={styles.avatarsRow}>
-            <Avatar name={user?.name} imageUrl={user?.avatar_url} size={56} colorsOverride={['#fff', '#fff']} />
+            <Avatar name={user?.name} imageUrl={user?.avatar_url} size={76} colorsOverride={['#fff', '#fff']} />
             <View style={styles.heartBetween}>
               <Icon name="heart" size={20} color="#fff" filled />
             </View>
@@ -375,7 +371,7 @@ export default function ProfileScreen() {
               disabled={!partner}
               accessibilityRole="button"
               accessibilityLabel={partner ? `View ${partner.name ?? 'partner'} profile` : 'Partner profile'}>
-              <Avatar name={partner?.name} imageUrl={partner?.avatar_url} size={56} colorsOverride={['#fff', '#fff']} />
+              <Avatar name={partner?.name} imageUrl={partner?.avatar_url} size={76} colorsOverride={['#fff', '#fff']} />
             </Pressable>
           </View>
           <Text style={styles.relName}>{relationship?.relationship_name ?? 'Moments'}</Text>
@@ -486,7 +482,7 @@ export default function ProfileScreen() {
             <SectionTitle>Account</SectionTitle>
             <Card style={styles.accountCard}>
               <Pressable onPress={changeProfilePhoto} style={styles.accountPhotoRow} disabled={avatarSaving}>
-                <Avatar name={user?.name} imageUrl={user?.avatar_url} size={56} />
+                <Avatar name={user?.name} imageUrl={user?.avatar_url} size={76} />
                 <View style={styles.accountPhotoCopy}>
                   <Text style={[styles.settingTitle, { color: colors.text }]}>
                     {avatarSaving ? 'Updating photo…' : 'Profile photo'}
@@ -512,7 +508,7 @@ export default function ProfileScreen() {
                 onPress={openGenderModal}
               />
               <SettingEditItem
-                icon="journal"
+                icon="chat"
                 label="Email"
                 value={user?.email ?? ''}
                 colors={colors}

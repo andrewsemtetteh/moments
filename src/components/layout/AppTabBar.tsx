@@ -1,20 +1,25 @@
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useState } from 'react';
+import { LayoutChangeEvent, Pressable, StyleSheet, Text, View } from 'react-native';
+import Svg, { Path } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { getTabBarBottomPadding, TAB_BAR_FAB_OVERFLOW } from '@/components/layout/tab-bar-layout';
+import { getTabBarBottomPadding, TAB_BAR_FAB_OVERFLOW, TAB_BAR_HEIGHT } from '@/components/layout/tab-bar-layout';
 import { Icon, type IconName } from '@/components/ui/Icon';
 import { Avatar } from '@/components/ui/primitives';
-import { Radius } from '@/constants/design-system';
 import { useTheme } from '@/hooks/useTheme';
 import { useAuthStore, useUIStore } from '@/stores';
 
 const TAB_ICON_SIZE = 28;
+const FAB_SIZE = 56;
+/** Transparent ring between the FAB and the tab bar cutout. */
+const FAB_GAP = 8;
+const CUTOUT_RADIUS = FAB_SIZE / 2 + FAB_GAP;
 
 const LEFT_TABS: { name: string; icon: IconName; label: string }[] = [
   { name: 'home', icon: 'home', label: 'Home' },
-  { name: 'activities', icon: 'gamepad', label: 'Play' },
+  { name: 'activities', icon: 'people', label: 'Play' },
 ];
 
 const RIGHT_TABS: { name: string; icon: IconName; label: string }[] = [
@@ -27,12 +32,38 @@ interface TabBarLikeProps {
   navigation: { navigate: (name: string) => void };
 }
 
+/** Pill outline with a circular notch so the FAB sits in transparent space. */
+function tabBarNotchPath(width: number, height: number, cutoutRadius: number) {
+  const r = height / 2;
+  const cx = width / 2;
+  const cr = cutoutRadius;
+
+  return [
+    // Top edge → left side of notch
+    `M ${r} 0`,
+    `H ${cx - cr}`,
+    // Notch dips into the bar (transparent gap around the FAB)
+    `A ${cr} ${cr} 0 0 0 ${cx + cr} 0`,
+    // Top edge continues → right end
+    `H ${width - r}`,
+    `A ${r} ${r} 0 0 1 ${width} ${r}`,
+    `V ${height - r}`,
+    `A ${r} ${r} 0 0 1 ${width - r} ${height}`,
+    `H ${r}`,
+    `A ${r} ${r} 0 0 1 0 ${height - r}`,
+    `V ${r}`,
+    `A ${r} ${r} 0 0 1 ${r} 0`,
+    'Z',
+  ].join(' ');
+}
+
 export function AppTabBar({ state, navigation }: TabBarLikeProps) {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const setShowMomentCreator = useUIStore((s) => s.setShowMomentCreator);
   const setTabBarOverlayHeight = useUIStore((s) => s.setTabBarOverlayHeight);
   const user = useAuthStore((s) => s.user);
+  const [barWidth, setBarWidth] = useState(0);
 
   const activeName = state.routes[state.index]?.name;
 
@@ -41,6 +72,11 @@ export function AppTabBar({ state, navigation }: TabBarLikeProps) {
   }
 
   const bottomPad = getTabBarBottomPadding(insets.bottom);
+  const fill = colors.glass ? colors.surfaceGlass : colors.surfaceElevated;
+
+  const onBarLayout = (e: LayoutChangeEvent) => {
+    setBarWidth(e.nativeEvent.layout.width);
+  };
 
   const go = (name: string) => {
     Haptics.selectionAsync();
@@ -76,24 +112,34 @@ export function AppTabBar({ state, navigation }: TabBarLikeProps) {
       pointerEvents="box-none"
       onLayout={(e) => setTabBarOverlayHeight(Math.ceil(e.nativeEvent.layout.height))}>
       <View
-        style={[
-          styles.bar,
-          {
-            backgroundColor: colors.glass ? colors.surfaceGlass : colors.surfaceElevated,
-            borderColor: colors.border,
-            shadowColor: colors.shadow,
-          },
-        ]}>
+        style={[styles.bar, { shadowColor: colors.shadow }]}
+        onLayout={onBarLayout}
+        pointerEvents="box-none">
+        {barWidth > 0 && (
+          <Svg
+            width={barWidth}
+            height={TAB_BAR_HEIGHT}
+            style={StyleSheet.absoluteFill}
+            pointerEvents="none">
+            <Path
+              d={tabBarNotchPath(barWidth, TAB_BAR_HEIGHT, CUTOUT_RADIUS)}
+              fill={fill}
+              stroke={colors.border}
+              strokeWidth={StyleSheet.hairlineWidth}
+            />
+          </Svg>
+        )}
+
         {LEFT_TABS.map(renderTab)}
 
-        <View style={styles.center}>
+        <View style={styles.center} pointerEvents="box-none">
           <Pressable
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
               setShowMomentCreator(true);
             }}
             accessibilityLabel="Create a Moment"
-            style={({ pressed }) => pressed && { transform: [{ scale: 0.92 }] }}>
+            style={({ pressed }) => [styles.fabPressable, pressed && { transform: [{ scale: 0.92 }] }]}>
             <LinearGradient
               colors={colors.gradient}
               start={{ x: 0, y: 0 }}
@@ -125,9 +171,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     width: '100%',
     maxWidth: 460,
-    height: 64,
-    borderRadius: Radius.pill,
-    borderWidth: StyleSheet.hairlineWidth,
+    height: TAB_BAR_HEIGHT,
     paddingHorizontal: 14,
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.25,
@@ -151,17 +195,21 @@ const styles = StyleSheet.create({
     borderWidth: 0,
   },
   center: {
-    width: 64,
+    width: CUTOUT_RADIUS * 2,
+    height: TAB_BAR_HEIGHT,
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'flex-start',
+  },
+  fabPressable: {
+    // Center the FAB on the cutout (cutout sits on the bar’s top edge)
+    marginTop: -FAB_SIZE / 2,
   },
   fab: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: FAB_SIZE,
+    height: FAB_SIZE,
+    borderRadius: FAB_SIZE / 2,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: -28,
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.5,
     shadowRadius: 12,

@@ -176,7 +176,17 @@ export function Avatar({
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={{ ...avatarStyle, alignItems: 'center', justifyContent: 'center' }}>
-          <Text style={{ color: textColor, fontSize: size * 0.4, fontWeight: '700' }}>{initial}</Text>
+          <Text
+            style={{
+              color: textColor,
+              fontSize: Math.round(size * 0.58),
+              lineHeight: Math.round(size * 0.62),
+              fontWeight: '700',
+              textAlign: 'center',
+              includeFontPadding: false,
+            }}>
+            {initial}
+          </Text>
         </LinearGradient>
       );
     })()

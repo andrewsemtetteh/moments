@@ -1,21 +1,24 @@
 import { useQueryClient, type InfiniteData } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Platform, Pressable, RefreshControl, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Platform, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 
 import { AnimatedStreakFire } from '@/components/home/AnimatedStreakFire';
+import { ContinueChatCard } from '@/components/home/ContinueChatCard';
 import { MoodSnapshot } from '@/components/home/MoodSnapshot';
+import { PromptHistoryModal } from '@/components/home/PromptHistoryModal';
 import { StreakDayTracker } from '@/components/home/StreakDayTracker';
 import { StreakEndCard } from '@/components/home/StreakEndCard';
+import { StreakRestoreBanner } from '@/components/home/StreakRestoreBanner';
+import { TodaysPromptCard } from '@/components/home/TodaysPromptCard';
 import { AppHeader } from '@/components/layout/AppHeader';
 import { ScreenContainer } from '@/components/layout/ScreenContainer';
 import { TabScreenScroll } from '@/components/layout/TabScreenScroll';
 import { MomentsStrip } from '@/components/moments/MomentsStrip';
 import { PartnerMomentHome } from '@/components/moments/PartnerMomentHome';
 import { Icon, type IconName } from '@/components/ui/Icon';
-import { Avatar, Card, PrimaryButton, SectionTitle } from '@/components/ui/primitives';
+import { Avatar, Card, SectionTitle } from '@/components/ui/primitives';
 import {
     useCalendarEvents,
     useDailyChallenge,
@@ -32,15 +35,17 @@ import { getFirstName } from '@/lib/avatar-initial';
 import { enrichMomentsWithAuthors, filterMediaMoments, filterMomentsForHome } from '@/lib/moment-display';
 import { shouldShowEntryPaywall } from '@/lib/paywall-storage';
 import { openActivities, openCalendar, openChat } from '@/lib/router';
-import { emptyStreakStatus } from '@/lib/streak';
-import * as api from '@/services/api';
+import {
+    emptyStreakStatus,
+    getStreakEndVariant,
+    isStreakRestoreAvailable,
+} from '@/lib/streak';
 import { useAuthStore, useRelationshipStore, useUIStore } from '@/stores';
 import type { Moment } from '@/types/database';
 
 const HOME_REFRESH_TIMEOUT_MS = 8_000;
 
 export default function HomeScreen() {
-  const router = useRouter();
   const { colors } = useTheme();
   const relationship = useRelationshipStore((s) => s.relationship);
   const partner = useRelationshipStore((s) => s.partner);
@@ -52,19 +57,21 @@ export default function HomeScreen() {
   const paywallShownThisSession = useUIStore((s) => s.paywallShownThisSession);
   const markPaywallShownThisSession = useUIStore((s) => s.markPaywallShownThisSession);
   const [refreshing, setRefreshing] = useState(false);
-  const [dailyResponse, setDailyResponse] = useState('');
+  const [showPromptHistory, setShowPromptHistory] = useState(false);
   const queryClient = useQueryClient();
   const refreshInFlightRef = useRef(false);
 
   const { data: moods } = useMoods();
-  const { data: streak, refetch: refetchStreak } = useStreak();
-  const { data: challenge, refetch: refetchChallenge } = useDailyChallenge();
+  const { data: streak } = useStreak();
+  const { data: challenge } = useDailyChallenge();
   const { data: events } = useCalendarEvents();
   const { data: momentsData } = useMoments();
   const updateMood = useUpdateMood();
 
   useRealtimeSubscription('moments');
   useRealtimeSubscription('mood_logs');
+  useRealtimeSubscription('daily_challenges');
+  useRealtimeSubscription('messages');
 
   const { isPlus } = useSubscription();
 
@@ -115,6 +122,18 @@ export default function HomeScreen() {
     [streak, relationshipId],
   );
 
+  const restoreStatus = useMemo(() => {
+    if (streak && isStreakRestoreAvailable(streak)) return streak;
+    return null;
+  }, [streak]);
+
+  const endCardStatus = useMemo(() => {
+    if (!streak) return null;
+    // Restore uses the dedicated banner; EndCard covers at-risk / ended.
+    if (getStreakEndVariant(streak) === 'restore') return null;
+    return streak;
+  }, [streak]);
+
   const onRefresh = useCallback(() => {
     if (!relationshipId || refreshInFlightRef.current) return;
 
@@ -154,6 +173,14 @@ export default function HomeScreen() {
             queryKey: ['moodFrequency', relationshipId, user?.id],
             type: 'active',
           }),
+          queryClient.refetchQueries({
+            queryKey: ['latestMessage', relationshipId, user?.id],
+            type: 'active',
+          }),
+          queryClient.refetchQueries({
+            queryKey: ['unreadMessages', relationshipId, user?.id],
+            type: 'active',
+          }),
         ]);
       } finally {
         clearTimeout(timeoutId);
@@ -175,21 +202,10 @@ export default function HomeScreen() {
     [colors.accent, onRefresh, refreshing],
   );
 
-  const submitDailyResponse = async () => {
-    if (!challenge || !relationship || !user || !dailyResponse.trim()) return;
-    await api.respondToDailyChallenge(challenge.id, user.id, relationship, dailyResponse.trim());
-    setDailyResponse('');
-    await Promise.all([refetchChallenge(), refetchStreak()]);
-  };
-
   const smartSuggestion = getSmartSuggestion(moods ?? {}, upcomingEvents.length, partner?.name);
-  const myResponded =
-    challenge && user && relationship
-      ? (relationship.user_1_id === user.id ? challenge.user_1_response : challenge.user_2_response)
-      : null;
 
   return (
-    <ScreenContainer padded={false}>
+    <ScreenContainer padded={false} tabSwipe>
       <AppHeader />
       <TabScreenScroll
         showsVerticalScrollIndicator={false}
@@ -224,9 +240,7 @@ export default function HomeScreen() {
                 <AnimatedStreakFire
                   color="#fff"
                   size={18}
-                  animate={streakStatus.current_streak > 0 || streakStatus.at_risk}
-                  pulse={streakStatus.at_risk}
-                  periodic={streakStatus.at_risk ? 3_500 : 5_500}
+                  animate={false}
                 />
                 <Text style={styles.heroStreakText}>
                   {streakStatus.current_streak > 0
@@ -241,7 +255,8 @@ export default function HomeScreen() {
         {session ? (
           <View style={styles.streakTracker}>
             <StreakDayTracker status={streakStatus} joinedAt={relationship?.created_at} />
-            {streak ? <StreakEndCard status={streak} /> : null}
+            {restoreStatus ? <StreakRestoreBanner status={restoreStatus} /> : null}
+            {endCardStatus ? <StreakEndCard status={endCardStatus} /> : null}
           </View>
         ) : null}
 
@@ -264,31 +279,13 @@ export default function HomeScreen() {
         </View>
 
         {challenge && (
-          <View>
-            <SectionTitle>Daily Question</SectionTitle>
-            <Card>
-              <Text style={[styles.prompt, { color: colors.text }]}>{challenge.prompt}</Text>
-              {myResponded ? (
-                <View style={[styles.answered, { borderColor: colors.border }]}>
-                  <Icon name="check" size={16} color={colors.success} />
-                  <Text style={{ color: colors.textSecondary, flex: 1 }}>You answered: {myResponded}</Text>
-                </View>
-              ) : (
-                <>
-                  <TextInput
-                    style={[styles.responseInput, { color: colors.text, backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}
-                    placeholder="Share your answer..."
-                    placeholderTextColor={colors.textTertiary}
-                    value={dailyResponse}
-                    onChangeText={setDailyResponse}
-                    multiline
-                  />
-                  <PrimaryButton label="Share Response" onPress={submitDailyResponse} disabled={!dailyResponse.trim()} />
-                </>
-              )}
-            </Card>
-          </View>
+          <TodaysPromptCard
+            challenge={challenge}
+            onOpenHistory={() => setShowPromptHistory(true)}
+          />
         )}
+
+        {session && partner ? <ContinueChatCard /> : null}
 
         {upcomingEvents.length > 0 && (
           <View>
@@ -326,6 +323,7 @@ export default function HomeScreen() {
           </Pressable>
         </View>
       </TabScreenScroll>
+      <PromptHistoryModal visible={showPromptHistory} onClose={() => setShowPromptHistory(false)} />
     </ScreenContainer>
   );
 }
@@ -388,11 +386,8 @@ const styles = StyleSheet.create({
   heroStreak: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(255,255,255,0.2)', paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999 },
   heroStreakAtRisk: { backgroundColor: 'rgba(255,180,80,0.35)' },
   heroStreakText: { color: '#fff', fontWeight: '700', fontSize: 13 },
-  streakTracker: { gap: 10 },
+  streakTracker: { gap: 18 },
   partnerMomentBlock: { marginTop: 14 },
-  prompt: { fontSize: 18, lineHeight: 26, marginBottom: 14, fontWeight: '600' },
-  responseInput: { borderWidth: 1, borderRadius: 12, padding: 12, minHeight: 64, fontSize: 15, marginBottom: 12, textAlignVertical: 'top' },
-  answered: { flexDirection: 'row', alignItems: 'center', gap: 8, borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 12 },
   eventRow: { flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 10 },
   eventDateBox: { width: 48, height: 48, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   eventDay: { fontSize: 18, fontWeight: '800', lineHeight: 20 },

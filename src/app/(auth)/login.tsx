@@ -1,18 +1,18 @@
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
-  Alert,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
+    Alert,
+    KeyboardAvoidingView,
+    Platform,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text,
+    View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { LogoMark } from '@/components/ui/Logo';
+import { authLinkColors, authLinkStyles } from '@/components/auth/auth-link-styles';
 import { AuthCheckbox } from '@/components/auth/AuthCheckbox';
 import { AuthFooter } from '@/components/auth/AuthFooter';
 import { AuthLegalLinks } from '@/components/auth/AuthLegalLinks';
@@ -21,13 +21,14 @@ import { AuthPrimaryButton } from '@/components/auth/AuthPrimaryButton';
 import { AuthTextField } from '@/components/auth/AuthTextField';
 import { PasswordInput } from '@/components/auth/PasswordInput';
 import { SocialAuthButtons } from '@/components/auth/SocialAuthButtons';
+import { LogoMark } from '@/components/ui/Logo';
 import { useTheme } from '@/hooks/useTheme';
 import { hydrateAuthSession } from '@/lib/auth-session';
 import {
-  getRememberedEmail,
-  getRememberMe,
-  setRememberedEmail,
-  setRememberMe,
+    getRememberedEmail,
+    getRememberMe,
+    setRememberedEmail,
+    setRememberMe,
 } from '@/lib/remember-me-storage';
 import { sanitizeEmailInput, sanitizePasswordInput } from '@/lib/sanitize-input';
 import { supabase } from '@/lib/supabase';
@@ -35,6 +36,7 @@ import { supabase } from '@/lib/supabase';
 export default function LoginScreen() {
   const router = useRouter();
   const { colors } = useTheme();
+  const linkColors = authLinkColors(colors);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [rememberMe, setRememberMeChecked] = useState(true);
@@ -139,7 +141,9 @@ export default function LoginScreen() {
                     })
                   }
                   hitSlop={8}>
-                  <Text style={[styles.forgotLink, { color: colors.accent }]}>Forgot password?</Text>
+                  <Text style={[authLinkStyles.inlineLink, styles.forgotLink, { color: linkColors.emphasis }]}>
+                    Forgot password?
+                  </Text>
                 </Pressable>
               </View>
 
@@ -178,7 +182,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginTop: 2,
   },
-  forgotLink: { fontSize: 14, fontWeight: '600' },
+  forgotLink: { fontSize: 14 },
   legalNotice: {
     marginTop: 20,
     paddingHorizontal: 8,

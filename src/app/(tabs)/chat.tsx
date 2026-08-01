@@ -14,8 +14,8 @@ import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
+  Dimensions,
   Keyboard,
-  KeyboardAvoidingView,
   PanResponder,
   Platform,
   Pressable,
@@ -66,9 +66,6 @@ import * as api from '@/services/api';
 import { useAuthStore, useOfflineStore, useRelationshipStore, useUIStore } from '@/stores';
 import type { Message } from '@/types/database';
 
-/** Distance from top of screen to top of KAV (safe area + header row height). */
-const HEADER_CONTENT_HEIGHT = 54;
-
 export default function ChatScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -110,6 +107,8 @@ export default function ChatScreen() {
   const [isSendingMedia, setIsSendingMedia] = useState(false);
   const [flushingOffline, setFlushingOffline] = useState(false);
   const [pendingScrollMessageId, setPendingScrollMessageId] = useState<string | null>(null);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
 
   const listRef = useRef<FlatList>(null);
   const typingChannel = useRef<ReturnType<typeof supabase.channel> | null>(null);
@@ -174,13 +173,45 @@ export default function ChatScreen() {
     [scrollToLatest],
   );
 
-  // Keep messages visible when the keyboard opens
+  // Lift composer above the keyboard + autocorrect suggestion bar.
+  // screenY is the top of that whole chrome, so the suggestion strip is included.
   useEffect(() => {
+    const applyKeyboardFrame = (e: { endCoordinates: { height: number; screenY: number } }) => {
+      const { height, screenY } = e.endCoordinates;
+      if (height <= 0) {
+        setKeyboardVisible(false);
+        setKeyboardHeight(0);
+        return;
+      }
+
+      const lift = Math.max(0, Dimensions.get('window').height - screenY);
+      setKeyboardVisible(true);
+      setKeyboardHeight(lift);
+      scrollToLatest(true);
+    };
+
+    const onHide = () => {
+      setKeyboardVisible(false);
+      setKeyboardHeight(0);
+    };
+
     const showSub = Keyboard.addListener(
       Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
-      () => scrollToLatest(true),
+      applyKeyboardFrame,
     );
-    return () => showSub.remove();
+    const hideSub = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+      onHide,
+    );
+    const changeSub = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillChangeFrame' : 'keyboardDidChangeFrame',
+      applyKeyboardFrame,
+    );
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+      changeSub.remove();
+    };
   }, [scrollToLatest]);
 
   useEffect(() => {
@@ -825,9 +856,10 @@ export default function ChatScreen() {
   const messagesErrorText = isOffline
     ? 'You appear to be offline. Messages will load when you reconnect.'
     : "Couldn't load messages.";
-  const kbOffset = Platform.OS === 'ios' ? insets.top + HEADER_CONTENT_HEIGHT : 0;
   const listPad = 8;
   const inputBarPad = 6;
+  const keyboardLift = keyboardHeight;
+  const composerBottomPad = keyboardVisible ? inputBarPad : Math.max(insets.bottom, inputBarPad);
 
   const startReply = useCallback((message: Message) => {
     setSelected(null);
@@ -961,11 +993,8 @@ export default function ChatScreen() {
         </View>
       )}
 
-      {/* ── KAV wraps messages + input ── */}
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={kbOffset}>
+      {/* ── Messages + input (lifted above keyboard) ── */}
+      <View style={[styles.flex, { paddingBottom: keyboardLift }]}>
         {/* ── Message area (recorder replaces list while recording) ── */}
         <View style={styles.messageArea}>
           {isRecording ? (
@@ -1077,7 +1106,11 @@ export default function ChatScreen() {
         <View
           style={[
             styles.composer,
-            { paddingBottom: insets.bottom, borderTopColor: colors.border, backgroundColor: colors.background },
+            {
+              paddingBottom: composerBottomPad,
+              borderTopColor: colors.border,
+              backgroundColor: colors.background,
+            },
           ]}>
           {showAttachment && !isRecording && (
             <ChatAttachmentSheet
@@ -1187,7 +1220,7 @@ export default function ChatScreen() {
 
           {showEmoji && <ChatEmojiPicker onSelect={handleEmojiSelect} />}
         </View>
-      </KeyboardAvoidingView>
+      </View>
       </SwipeDismissView>
 
       <ChatMessageActionSheet

@@ -2,6 +2,7 @@ import { Redirect, Tabs } from 'expo-router';
 import { Platform } from 'react-native';
 
 import { StreakMilestoneSync } from '@/components/home/StreakMilestoneSync';
+import { StreakSparkSync } from '@/components/home/StreakSparkSync';
 import { AppTabBar } from '@/components/layout/AppTabBar';
 import { ChatMessageSync } from '@/components/layout/ChatMessageSync';
 import { HomeSync } from '@/components/layout/HomeSync';
@@ -34,6 +35,7 @@ export default function TabsLayout() {
       <NotificationSync />
       <ChatMessageSync />
       <StreakMilestoneSync />
+      <StreakSparkSync />
       <Tabs
         tabBar={(props) => <AppTabBar {...props} />}
         screenOptions={{ headerShown: false }}>

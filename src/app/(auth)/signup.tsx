@@ -119,7 +119,7 @@ export default function SignupScreen() {
                     hitSlop={8}
                   />
                 </View>
-                <AuthLegalLinks prefix="I agree to the" style={styles.agreementText} />
+                <AuthLegalLinks prefix="I agree to the" centered={false} style={styles.agreementText} />
               </View>
 
               <AuthPrimaryButton label={loading ? 'Creating…' : 'Create Account'} onPress={handleSignup} loading={loading} disabled={!canSubmit} />

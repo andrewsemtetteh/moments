@@ -1,5 +1,5 @@
-import { Redirect, useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { Redirect, useRouter } from 'expo-router';
+import { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -63,12 +63,9 @@ function NotificationsScreenNative() {
   } = useNotificationFeed();
 
   const markRead = useMarkNotificationsRead();
-  const markReadRef = useRef(markRead.mutate);
-  markReadRef.current = markRead.mutate;
   const deleteNotification = useDeleteNotification();
   const clearAll = useClearNotifications();
   const [pullRefreshing, setPullRefreshing] = useState(false);
-  const markedOnFocusRef = useRef(false);
 
   const items = useMemo(
     () => filterInboxNotifications(data?.pages.flat() ?? []),
@@ -76,18 +73,6 @@ function NotificationsScreenNative() {
   );
   const sections = useMemo(() => groupNotificationsBySection(items), [items]);
   const hasItems = items.length > 0;
-
-  useFocusEffect(
-    useCallback(() => {
-      markedOnFocusRef.current = false;
-      const timer = setTimeout(() => {
-        if (markedOnFocusRef.current) return;
-        markedOnFocusRef.current = true;
-        markReadRef.current(undefined);
-      }, 350);
-      return () => clearTimeout(timer);
-    }, []),
-  );
 
   const onPullRefresh = useCallback(async () => {
     setPullRefreshing(true);
@@ -99,6 +84,9 @@ function NotificationsScreenNative() {
   }, [refetch]);
 
   const handleOpen = (item: Notification) => {
+    if (!item.read) {
+      markRead.mutate([item.id]);
+    }
     openFromNotificationType(item.type, router);
   };
 

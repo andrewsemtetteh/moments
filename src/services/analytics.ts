@@ -54,7 +54,6 @@ export const AnalyticsEvents = {
   ACTIVITY_STARTED: 'activity_started',
   ACTIVITY_COMPLETED: 'activity_completed',
   CALENDAR_EVENT_CREATED: 'calendar_event_created',
-  JOURNAL_ENTRY_CREATED: 'journal_entry_created',
   STREAK_UPDATED: 'streak_updated',
   MOOD_SELECTED: 'mood_selected',
   MOOD_VIEWED: 'mood_viewed',

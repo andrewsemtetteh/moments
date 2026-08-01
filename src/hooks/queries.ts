@@ -220,6 +220,17 @@ export function useUnreadMessageCount() {
   });
 }
 
+export function useLatestMessage() {
+  const relationship = useRelationshipStore((s) => s.relationship);
+  const user = useAuthStore((s) => s.user);
+  return useQuery({
+    queryKey: ['latestMessage', relationship?.id, user?.id],
+    queryFn: () => api.fetchLatestMessage(relationship!.id, user!.id),
+    enabled: !!relationship?.id && !!user?.id,
+    staleTime: 20_000,
+  });
+}
+
 export function useSendMessage() {
   const queryClient = useQueryClient();
   const relationship = useRelationshipStore((s) => s.relationship);
@@ -247,6 +258,7 @@ export function useSendMessage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['messages', relationship?.id] });
       queryClient.invalidateQueries({ queryKey: ['unreadMessages', relationship?.id, user?.id] });
+      queryClient.invalidateQueries({ queryKey: ['latestMessage', relationship?.id, user?.id] });
       queryClient.invalidateQueries({ queryKey: ['streak', relationship?.id] });
     },
   });
@@ -276,33 +288,6 @@ export function useUpcomingCalendarEvents() {
     queryKey: ['calendarUpcoming', relationship?.id],
     queryFn: () => api.fetchUpcomingCalendarEvents(relationship!.id),
     enabled: !!relationship?.id,
-  });
-}
-
-export function useJournalEntries() {
-  const relationship = useRelationshipStore((s) => s.relationship);
-  return useQuery({
-    queryKey: ['journal', relationship?.id],
-    queryFn: () => api.fetchJournalEntries(relationship!.id),
-    enabled: !!relationship?.id,
-  });
-}
-
-export function useCreateJournalEntry() {
-  const queryClient = useQueryClient();
-  const relationship = useRelationshipStore((s) => s.relationship);
-  const user = useAuthStore((s) => s.user);
-
-  return useMutation({
-    mutationFn: (entry: { content: string; type: string; is_private?: boolean }) =>
-      api.createJournalEntry(relationship!.id, user!.id, entry),
-    onSuccess: async () => {
-      queryClient.invalidateQueries({ queryKey: ['journal', relationship?.id] });
-      queryClient.invalidateQueries({ queryKey: ['streak', relationship?.id] });
-      if (relationship && user) {
-        await api.trackEvent(relationship.id, user.id, 'journal_entry_created');
-      }
-    },
   });
 }
 
@@ -420,8 +405,61 @@ export function useDailyChallenge() {
   const relationship = useRelationshipStore((s) => s.relationship);
   return useQuery({
     queryKey: ['daily-challenge', relationship?.id],
-    queryFn: () => api.fetchDailyChallenge(relationship!.id),
+    queryFn: () => api.ensureDailyChallenge(relationship!.id),
     enabled: !!relationship?.id,
+    staleTime: 60_000,
+  });
+}
+
+export function useDailyChallengeHistory() {
+  const relationship = useRelationshipStore((s) => s.relationship);
+  return useQuery({
+    queryKey: ['daily-challenge-history', relationship?.id],
+    queryFn: () => api.fetchDailyChallengeHistory(relationship!.id),
+    enabled: !!relationship?.id,
+    staleTime: 60_000,
+  });
+}
+
+export function useRespondToDailyChallenge() {
+  const queryClient = useQueryClient();
+  const relationship = useRelationshipStore((s) => s.relationship);
+  const user = useAuthStore((s) => s.user);
+
+  return useMutation({
+    mutationFn: ({ challengeId, response }: { challengeId: string; response: string }) => {
+      if (!user?.id || !relationship) {
+        throw new Error('You need to be signed in with an active relationship.');
+      }
+      return api.respondToDailyChallenge(
+        challengeId,
+        user.id,
+        relationship,
+        response,
+        user.name,
+      );
+    },
+    onSuccess: (data) => {
+      queryClient.setQueryData(['daily-challenge', relationship?.id], data);
+      queryClient.setQueryData(
+        ['daily-challenge-history', relationship?.id],
+        (prev: unknown) => {
+          if (!Array.isArray(prev)) return prev;
+          const list = prev as { id: string }[];
+          const idx = list.findIndex((row) => row.id === data.id);
+          if (idx === -1) return [data, ...list];
+          const next = list.slice();
+          next[idx] = data;
+          return next;
+        },
+      );
+      // Don't await — refetch must not keep the submit button spinning.
+      void queryClient.invalidateQueries({ queryKey: ['daily-challenge', relationship?.id] });
+      void queryClient.invalidateQueries({ queryKey: ['daily-challenge-history', relationship?.id] });
+      void queryClient.invalidateQueries({ queryKey: ['streak', relationship?.id] });
+      void queryClient.invalidateQueries({ queryKey: ['notifications'] });
+      void queryClient.invalidateQueries({ queryKey: ['notificationUnreadCount'] });
+    },
   });
 }
 
@@ -542,6 +580,7 @@ function debouncedInvalidateMessageQueries(
     queryClient.invalidateQueries({ queryKey: ['messages', relationshipId] });
     if (userId) {
       queryClient.invalidateQueries({ queryKey: ['unreadMessages', relationshipId, userId] });
+      queryClient.invalidateQueries({ queryKey: ['latestMessage', relationshipId, userId] });
     }
   }, 400);
 }
@@ -637,7 +676,8 @@ export function useRealtimeSubscription(
     | 'watch_watchlist'
     | 'watch_messages'
     | 'quiz_live_sessions'
-    | 'streaks',
+    | 'streaks'
+    | 'daily_challenges',
 ) {
   const queryClient = useQueryClient();
   const queryClientRef = useRef(queryClient);
@@ -693,6 +733,11 @@ export function useRealtimeSubscription(
             qc.invalidateQueries({ queryKey: ['calendarUpcoming', relationship.id] });
           }
           if (table === 'streaks') {
+            qc.invalidateQueries({ queryKey: ['streak', relationship.id] });
+          }
+          if (table === 'daily_challenges') {
+            qc.invalidateQueries({ queryKey: ['daily-challenge', relationship.id] });
+            qc.invalidateQueries({ queryKey: ['daily-challenge-history', relationship.id] });
             qc.invalidateQueries({ queryKey: ['streak', relationship.id] });
           }
           if (table === 'notifications') {
