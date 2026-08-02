@@ -9,27 +9,30 @@ import type { UserProfile } from '@/types/database';
 const YOU_COLOR = '#e85d75';
 const PARTNER_COLOR = '#5b8def';
 
+/**
+ * Reciprocal location: partner pin only appears when BOTH of you share.
+ * Your own pin appears whenever you share.
+ */
 export function buildSharedLocationMarkers(
   user?: UserProfile | null,
   partner?: UserProfile | null,
 ): MapMarker[] {
   const pins: MapMarker[] = [];
+  const iShare = Boolean(user?.location_sharing_enabled);
 
-  if (
-    user?.location_sharing_enabled &&
-    hasValidCoords(user.location_latitude, user.location_longitude)
-  ) {
+  if (iShare && hasValidCoords(user?.location_latitude, user?.location_longitude)) {
     pins.push({
-      latitude: user.location_latitude!,
-      longitude: user.location_longitude!,
+      latitude: user!.location_latitude!,
+      longitude: user!.location_longitude!,
       label: 'Me',
-      name: user.name,
+      name: user!.name,
       color: YOU_COLOR,
-      avatarUrl: user.avatar_url,
+      avatarUrl: user!.avatar_url,
     });
   }
 
   if (
+    iShare &&
     partner?.location_sharing_enabled &&
     hasValidCoords(partner.location_latitude, partner.location_longitude)
   ) {
@@ -49,6 +52,7 @@ export function buildSharedLocationMarkers(
 export function useSharedLocationMap() {
   const user = useAuthStore((s) => s.user);
   const partner = useRelationshipStore((s) => s.partner);
+  const iShare = Boolean(user?.location_sharing_enabled);
 
   const markers = useMemo(
     () => buildSharedLocationMarkers(user, partner),
@@ -56,23 +60,24 @@ export function useSharedLocationMap() {
   );
 
   const myPlace =
-    user?.location_sharing_enabled &&
-    hasValidCoords(user.location_latitude, user.location_longitude)
+    iShare && hasValidCoords(user?.location_latitude, user?.location_longitude)
       ? {
-          latitude: user.location_latitude!,
-          longitude: user.location_longitude!,
-          label: user.location_label ?? '',
+          latitude: user!.location_latitude!,
+          longitude: user!.location_longitude!,
+          label: user!.location_label ?? '',
         }
       : null;
 
   const partnerSharing = partner?.location_sharing_enabled ?? false;
+  /** Partner is visible to you only when both share. */
   const partnerOnMap = Boolean(
-    partner &&
+    iShare &&
+      partner &&
       partner.location_sharing_enabled &&
       hasValidCoords(partner.location_latitude, partner.location_longitude),
   );
 
-  return { markers, myPlace, partnerSharing, partnerOnMap, partner };
+  return { markers, myPlace, partnerSharing, partnerOnMap, partner, iShare };
 }
 
 export function usePartnerLocationRealtime() {

@@ -85,7 +85,7 @@ export function PartnerProfileModal() {
   );
   const hasPartnerMoment = recentPartnerMoments.length > 0;
   const startCall = useStartCall();
-  const { isOnline, lastSeenAt } = usePartnerPresence(
+  const { isOnline, lastSeenAt, statusHidden } = usePartnerPresence(
     relationship?.id,
     user?.id,
     profile?.id ?? partnerId ?? undefined,
@@ -96,7 +96,7 @@ export function PartnerProfileModal() {
 
   const partnerTyping = profile?.id ? typingUsers.includes(profile.id) : false;
   const partnerMood = profile?.id ? moods?.[profile.id]?.mood ?? null : null;
-  const status = formatPartnerStatus(partnerTyping, isOnline, lastSeenAt);
+  const status = formatPartnerStatus(partnerTyping, isOnline, lastSeenAt, statusHidden);
 
   const sinceLabel = useMemo(() => {
     if (!relationship?.created_at) return null;
@@ -179,15 +179,19 @@ export function PartnerProfileModal() {
     viewProfilePhoto();
   };
 
+  const iShareLocation = Boolean(user?.location_sharing_enabled);
   const partnerName = profile?.name ?? 'Partner';
   const spaceName = relationship?.relationship_name?.trim() || undefined;
   const locationLabel =
-    profile?.location_sharing_enabled ? profile.location_label?.trim() : null;
+    iShareLocation && profile?.location_sharing_enabled
+      ? profile.location_label?.trim()
+      : null;
   const streakCount = streak?.current_streak;
 
   const locationMarkers = useMemo((): MapMarker[] => {
     const subject = partner ?? profile;
     if (
+      !iShareLocation ||
       !subject?.location_sharing_enabled ||
       !hasValidCoords(subject.location_latitude, subject.location_longitude)
     ) {
@@ -203,10 +207,12 @@ export function PartnerProfileModal() {
         avatarUrl: subject.avatar_url,
       },
     ];
-  }, [partner, profile]);
+  }, [iShareLocation, partner, profile]);
 
   const showLocation =
-    profile?.location_sharing_enabled && (locationMarkers.length > 0 || !!locationLabel);
+    iShareLocation &&
+    profile?.location_sharing_enabled &&
+    (locationMarkers.length > 0 || !!locationLabel);
 
   const mapTitle = locationLabel ?? partnerName;
 
@@ -358,6 +364,7 @@ export function PartnerProfileModal() {
                   isTyping={partnerTyping}
                   isOnline={isOnline}
                   lastSeenAt={lastSeenAt}
+                  statusHidden={statusHidden}
                   textStyle={styles.heroStatusText}
                 />
               </View>

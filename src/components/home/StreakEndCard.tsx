@@ -47,7 +47,7 @@ export function StreakEndCard({ status }: StreakEndCardProps) {
   const pending = restoreStreak.isPending;
   const fireColor =
     variant === 'at-risk'
-      ? STREAK_COLORS.atRisk
+      ? STREAK_COLORS.atRiskBright
       : variant === 'restore'
         ? STREAK_COLORS.flame
         : colors.textTertiary;
@@ -73,7 +73,13 @@ export function StreakEndCard({ status }: StreakEndCardProps) {
         styles.card,
         {
           backgroundColor: colors.surface,
-          borderColor: variant === 'at-risk' ? STREAK_COLORS.atRisk : colors.border,
+          borderColor: variant === 'at-risk' ? STREAK_COLORS.atRiskBright : colors.border,
+          backgroundColor:
+            variant === 'at-risk'
+              ? colors.isDark
+                ? STREAK_COLORS.atRiskSoftDark
+                : STREAK_COLORS.atRiskSoftLight
+              : colors.surface,
         },
       ]}>
       <Pressable

@@ -117,15 +117,27 @@ export function configureNotificationPresentation(): void {
 }
 
 export function subscribeToNotificationResponses(
-  onResponse: (type: string | undefined) => void,
+  onResponse: (target: {
+    type?: string;
+    relatedId?: string | null;
+    mediaUrl?: string | null;
+  }) => void,
 ): (() => void) | null {
   try {
     const Notifications = loadNotifications();
     if (!Notifications) return null;
 
     const sub = Notifications.addNotificationResponseReceivedListener((response) => {
-      const data = response.notification.request.content.data as { type?: string };
-      onResponse(data?.type);
+      const data = response.notification.request.content.data as {
+        type?: string;
+        related_id?: string | null;
+        media_url?: string | null;
+      };
+      onResponse({
+        type: data?.type,
+        relatedId: data?.related_id,
+        mediaUrl: data?.media_url,
+      });
     });
 
     return () => sub.remove();
@@ -148,6 +160,8 @@ export async function presentLocalNotification(notification: Notification): Prom
           notification_id: notification.id,
           type: notification.type,
           relationship_id: notification.relationship_id,
+          related_id: notification.related_id ?? null,
+          media_url: notification.media_url ?? null,
         },
       },
       trigger: null,

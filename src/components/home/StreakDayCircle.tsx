@@ -1,4 +1,4 @@
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 
 import { AnimatedStreakFire } from '@/components/home/AnimatedStreakFire';
 import { Icon } from '@/components/ui/Icon';
@@ -12,9 +12,9 @@ export const STREAK_AT_RISK_DEEP = STREAK_COLORS.atRiskDeep;
 
 type CircleSize = 'md' | 'sm';
 
-const SIZES: Record<CircleSize, { outer: number; fire: number; icon: number; badge: number }> = {
-  md: { outer: 38, fire: 22, icon: 14, badge: 13 },
-  sm: { outer: 34, fire: 18, icon: 12, badge: 11 },
+const SIZES: Record<CircleSize, { outer: number; fire: number; icon: number; badge: number; day: number }> = {
+  md: { outer: 38, fire: 22, icon: 14, badge: 13, day: 13 },
+  sm: { outer: 34, fire: 18, icon: 12, badge: 11, day: 12 },
 };
 
 export function isStreakActiveState(state: StreakDayState): boolean {
@@ -30,6 +30,8 @@ interface StreakDayCircleProps {
   tone?: StreakDayTone;
   isToday?: boolean;
   size?: CircleSize;
+  /** Calendar day of month — shown on empty / missed cells. */
+  dayOfMonth?: number;
 }
 
 export function StreakDayCircle({
@@ -37,11 +39,13 @@ export function StreakDayCircle({
   tone: _tone = 'success',
   isToday: _isToday = false,
   size = 'md',
+  dayOfMonth,
 }: StreakDayCircleProps) {
   const { colors } = useTheme();
   const dark = colors.isDark;
   const dim = SIZES[size];
   const radius = dim.outer / 2;
+  const dayLabel = dayOfMonth != null ? String(dayOfMonth) : null;
 
   if (isStreakActiveState(state)) {
     const fill = dark ? STREAK_COLORS.activeFillDark : STREAK_COLORS.activeFillLight;
@@ -57,7 +61,12 @@ export function StreakDayCircle({
             borderColor: STREAK_COLORS.active,
           },
         ]}>
-        <AnimatedStreakFire color={STREAK_COLORS.active} size={dim.fire} animate={false} />
+        <AnimatedStreakFire
+          color={STREAK_COLORS.active}
+          size={dim.fire}
+          layered
+          animate={false}
+        />
         <View
           style={[
             styles.checkBadge,
@@ -90,7 +99,26 @@ export function StreakDayCircle({
             borderWidth: 1.5,
           },
         ]}>
-        <Icon name="close" size={dim.icon} color={STREAK_COLORS.lostDeep} />
+        {dayLabel ? (
+          <Text style={[styles.dayText, { fontSize: dim.day, color: STREAK_COLORS.lostDeep }]}>
+            {dayLabel}
+          </Text>
+        ) : (
+          <Icon name="close" size={dim.icon} color={STREAK_COLORS.lostDeep} />
+        )}
+        <View
+          style={[
+            styles.checkBadge,
+            {
+              width: dim.badge,
+              height: dim.badge,
+              borderRadius: dim.badge / 2,
+              backgroundColor: STREAK_COLORS.lost,
+              borderColor: colors.surface,
+            },
+          ]}>
+          <Icon name="close" size={dim.badge - 4} color={STREAK_COLORS.onLost} />
+        </View>
       </View>
     );
   }
@@ -110,7 +138,13 @@ export function StreakDayCircle({
             borderWidth: 2,
           },
         ]}>
-        <AnimatedStreakFire color={STREAK_COLORS.atRisk} size={dim.fire - 2} animate={false} />
+        <AnimatedStreakFire
+          color={STREAK_COLORS.atRiskBright}
+          size={dim.fire - 2}
+          layered
+          animate
+          pulse
+        />
       </View>
     );
   }
@@ -131,7 +165,12 @@ export function StreakDayCircle({
             borderStyle: 'dashed',
           },
         ]}>
-        <AnimatedStreakFire color={STREAK_COLORS.pendingBright} size={dim.fire - 4} animate={false} />
+        <AnimatedStreakFire
+          color={STREAK_COLORS.pendingBright}
+          size={dim.fire - 4}
+          layered
+          animate={false}
+        />
       </View>
     );
   }
@@ -148,8 +187,13 @@ export function StreakDayCircle({
           borderColor: colors.border,
           opacity: state === 'inactive' ? 0.35 : state === 'future' ? 0.55 : 1,
         },
-      ]}
-    />
+      ]}>
+      {dayLabel ? (
+        <Text style={[styles.dayText, { fontSize: dim.day, color: colors.textTertiary }]}>
+          {dayLabel}
+        </Text>
+      ) : null}
+    </View>
   );
 }
 
@@ -158,12 +202,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: StyleSheet.hairlineWidth,
+    position: 'relative',
   },
   streakActiveCircle: {
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1.5,
     position: 'relative',
+  },
+  dayText: {
+    fontWeight: '700',
+    letterSpacing: -0.2,
   },
   checkBadge: {
     position: 'absolute',

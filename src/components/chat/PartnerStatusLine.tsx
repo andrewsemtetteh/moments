@@ -7,6 +7,8 @@ interface Props {
   isTyping: boolean;
   isOnline: boolean;
   lastSeenAt: string | null;
+  /** Online status hidden (you and/or partner turned sharing off). */
+  statusHidden?: boolean;
   style?: ViewStyle;
   textStyle?: TextStyle;
   showDot?: boolean;
@@ -16,12 +18,13 @@ export function PartnerStatusLine({
   isTyping,
   isOnline,
   lastSeenAt,
+  statusHidden = false,
   style,
   textStyle,
   showDot = true,
 }: Props) {
   const { colors } = useTheme();
-  const status = formatPartnerStatus(isTyping, isOnline, lastSeenAt);
+  const status = formatPartnerStatus(isTyping, isOnline, lastSeenAt, statusHidden);
   const color = partnerStatusColor(status.variant, colors);
 
   return (

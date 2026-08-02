@@ -45,11 +45,11 @@ import { SwipeDismissView } from '@/components/layout/SwipeDismissView';
 import { Icon } from '@/components/ui/Icon';
 import { Avatar } from '@/components/ui/primitives';
 import {
-    applyMessagesReadInCache,
     useInfiniteMessages,
     useMessageActions,
     useSendMessage,
 } from '@/hooks/queries';
+import { useChatUnreadBanner } from '@/hooks/useChatUnreadBanner';
 import { useOpenPartnerProfile } from '@/hooks/useOpenPartnerProfile';
 import { usePartnerPresence } from '@/hooks/usePartnerPresence';
 import { useStartCall } from '@/hooks/useStartCall';
@@ -94,7 +94,6 @@ export default function ChatScreen() {
   const [showEmoji, setShowEmoji] = useState(false);
   const [showAttachment, setShowAttachment] = useState(false);
   const [showCamera, setShowCamera] = useState(false);
-  const [initialUnreadIds, setInitialUnreadIds] = useState<Set<string> | null>(null);
   // Recording
   const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const [isRecording, setIsRecording] = useState(false);
@@ -129,11 +128,15 @@ export default function ChatScreen() {
     isFetchingNextPage,
     refetch,
   } = useInfiniteMessages();
-  const { isOnline: partnerOnline, lastSeenAt: partnerLastSeenAt } = usePartnerPresence(
-    relationship?.id,
-    user?.id,
-    partner?.id,
-  );
+  const {
+    unreadBannerIds,
+    unreadBannerCount,
+    onComposerActivity,
+    onViewableItemsChanged,
+    viewabilityConfig,
+  } = useChatUnreadBanner(messages);
+  const { isOnline: partnerOnline, lastSeenAt: partnerLastSeenAt, statusHidden: partnerStatusHidden } =
+    usePartnerPresence(relationship?.id, user?.id, partner?.id);
   const sendMessage = useSendMessage();
   const { react, pin, deleteForMe, deleteForAll } = useMessageActions();
 
@@ -207,30 +210,6 @@ export default function ChatScreen() {
     void hydrateOfflineQueue(relationship.id);
   }, [relationship?.id, hydrateOfflineQueue]);
 
-  // Snapshot unread IDs on first load for the "UNREAD" divider
-  useEffect(() => {
-    if (!messages || !user || initialUnreadIds !== null) return;
-    const unread = new Set(
-      messages.filter((m) => m.sender_id !== user.id && !m.read_at).map((m) => m.id),
-    );
-    setInitialUnreadIds(unread);
-  }, [messages, user, initialUnreadIds]);
-
-  // Mark messages read after a short delay so unread styling / divider are visible first.
-  useEffect(() => {
-    if (!relationship || !user || messages.length === 0) return;
-    const hasPartnerUnread = messages.some((m) => m.sender_id !== user.id && !m.read_at);
-    if (!hasPartnerUnread) return;
-
-    const timer = setTimeout(() => {
-      void api.markMessagesRead(relationship.id, user.id).then(() => {
-        applyMessagesReadInCache(queryClient, relationship.id, user.id);
-        queryClient.invalidateQueries({ queryKey: ['unreadMessages', relationship.id, user.id] });
-      });
-    }, 1500);
-    return () => clearTimeout(timer);
-  }, [relationship, user, messages, queryClient]);
-
   // Typing broadcast
   useEffect(() => {
     if (!relationship?.id || !user?.id) return;
@@ -298,12 +277,15 @@ export default function ChatScreen() {
   const latestPinned = pinned[pinned.length - 1] ?? null;
   const listItems = useMemo(() => {
     if (!user) return [];
-    return buildChatListItems(allMessages, user.id, initialUnreadIds ?? undefined);
-  }, [allMessages, user, initialUnreadIds]);
+    const bannerIds =
+      unreadBannerIds && unreadBannerIds.size > 0 ? unreadBannerIds : new Set<string>();
+    return buildChatListItems(allMessages, user.id, bannerIds);
+  }, [allMessages, user, unreadBannerIds]);
 
   // ─── Text send ───────────────────────────────────────────────────────────
   const onChangeText = (t: string) => {
     setText(t);
+    if (t.length > 0) onComposerActivity();
     if (!user?.id || !typingChannelReady.current) return;
 
     const now = Date.now();
@@ -858,6 +840,7 @@ export default function ChatScreen() {
           isTyping={partnerTyping}
           isOnline={partnerOnline}
           lastSeenAt={partnerLastSeenAt}
+          statusHidden={partnerStatusHidden}
           onOpenProfile={openPartnerProfileView}
           onOpenAvatar={openPartnerProfileView}
         />
@@ -869,13 +852,16 @@ export default function ChatScreen() {
       partnerTyping,
       partnerOnline,
       partnerLastSeenAt,
+      partnerStatusHidden,
       openPartnerProfileView,
     ],
   );
 
   const renderItem = ({ item }: { item: ChatListItem }) => {
     if (item.type === 'date') return <ChatDateSeparator label={item.label} />;
-    if (item.type === 'unread') return <ChatUnreadDivider count={item.count} />;
+    if (item.type === 'unread') {
+      return <ChatUnreadDivider count={unreadBannerCount > 0 ? unreadBannerCount : item.count} />;
+    }
     const replyToMessage = item.message.reply_to_id
       ? messageById.get(item.message.reply_to_id) ?? null
       : null;
@@ -884,11 +870,6 @@ export default function ChatScreen() {
         message={item.message}
         replyToMessage={replyToMessage}
         partner={partner}
-        isUnread={
-          !!user &&
-          item.message.sender_id !== user.id &&
-          (initialUnreadIds?.has(item.message.id) ?? !item.message.read_at)
-        }
         onLongPress={setSelected}
         onSwipeReply={startReply}
       />
@@ -922,6 +903,7 @@ export default function ChatScreen() {
                 isTyping={partnerTyping}
                 isOnline={partnerOnline}
                 lastSeenAt={partnerLastSeenAt}
+                statusHidden={partnerStatusHidden}
               />
             </View>
           </Pressable>
@@ -962,7 +944,7 @@ export default function ChatScreen() {
       {isOffline && (
         <View style={[styles.offlineBar, { backgroundColor: colors.warning }]}>
           <Text style={styles.offlineText}>
-            Offline — {offlineQueue.length} message{offlineQueue.length === 1 ? '' : 's'} will send when reconnected
+            Offline. {offlineQueue.length} message{offlineQueue.length === 1 ? '' : 's'} will send when reconnected
           </Text>
         </View>
       )}
@@ -1022,6 +1004,8 @@ export default function ChatScreen() {
                   maintainVisibleContentPosition={{ minIndexForVisible: 1, autoscrollToTopThreshold: 24 }}
                   onScroll={onListScroll}
                   scrollEventThrottle={16}
+                  onViewableItemsChanged={onViewableItemsChanged}
+                  viewabilityConfig={viewabilityConfig}
                   onScrollToIndexFailed={(info) => {
                     listRef.current?.scrollToOffset({ offset: info.averageItemLength * info.index, animated: true });
                   }}

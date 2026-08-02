@@ -316,9 +316,13 @@ export default function HomeScreen() {
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={[styles.suggestion, { borderColor: colors.border }]}>
-              <Icon name={smartSuggestion.icon} size={22} color={colors.accent} />
+              <View style={styles.suggestionIcon}>
+                <Icon name={smartSuggestion.icon} size={22} color={colors.accent} />
+              </View>
               <Text style={[styles.suggestionText, { color: colors.text }]}>{smartSuggestion.text}</Text>
-              <Icon name="chevronRight" size={20} color={colors.textSecondary} />
+              <View style={styles.suggestionIcon}>
+                <Icon name="chevronRight" size={20} color={colors.textSecondary} />
+              </View>
             </LinearGradient>
           </Pressable>
         </View>
@@ -384,7 +388,7 @@ const styles = StyleSheet.create({
   avatars: { flexDirection: 'row', alignItems: 'center' },
   avatarOverlap: { marginLeft: -14 },
   heroStreak: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(255,255,255,0.2)', paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999 },
-  heroStreakAtRisk: { backgroundColor: 'rgba(255,180,80,0.35)' },
+  heroStreakAtRisk: { backgroundColor: 'rgba(224,65,79,0.55)' },
   heroStreakText: { color: '#fff', fontWeight: '700', fontSize: 13 },
   streakTracker: { gap: 18 },
   partnerMomentBlock: { marginTop: 14 },
@@ -394,6 +398,19 @@ const styles = StyleSheet.create({
   eventMonth: { fontSize: 10, fontWeight: '700', textTransform: 'uppercase' },
   eventTitle: { fontSize: 15, fontWeight: '700' },
   eventTime: { fontSize: 13, marginTop: 2 },
-  suggestion: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16, borderRadius: 18, borderWidth: StyleSheet.hairlineWidth },
+  suggestion: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+    padding: 16,
+    borderRadius: 18,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  suggestionIcon: {
+    height: 21,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 0,
+  },
   suggestionText: { flex: 1, fontSize: 15, lineHeight: 21, fontWeight: '600' },
 });

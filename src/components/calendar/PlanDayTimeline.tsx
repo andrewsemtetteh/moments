@@ -2,9 +2,7 @@ import { format } from 'date-fns';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { EVENT_TYPE_META, getEventTypeColors } from '@/constants/calendar-events';
-import { useLiveCountdown } from '@/hooks/useLiveCountdown';
 import { useTheme } from '@/hooks/useTheme';
-import { formatLiveCountdownBadge } from '@/lib/event-countdown';
 import type { CalendarEvent } from '@/types/database';
 
 export function PlanDayTimeline({ events }: { events: CalendarEvent[] }) {
@@ -23,8 +21,6 @@ function TimelineRow({ event, isLast }: { event: CalendarEvent; isLast: boolean 
   const meta = EVENT_TYPE_META[event.type];
   const tc = getEventTypeColors(event.type, colors);
   const at = new Date(event.date_time);
-  const cd = useLiveCountdown(at);
-  const badge = cd ? formatLiveCountdownBadge(cd, at) : null;
 
   return (
     <View style={styles.row}>
@@ -43,11 +39,6 @@ function TimelineRow({ event, isLast }: { event: CalendarEvent; isLast: boolean 
             </Text>
             <Text style={{ color: colors.textSecondary, fontSize: 12 }}>{meta.label}</Text>
           </View>
-          {badge && (
-            <View style={[styles.badge, { backgroundColor: tc.soft }]}>
-              <Text style={{ color: tc.main, fontSize: 10, fontWeight: '800' }}>{badge}</Text>
-            </View>
-          )}
         </View>
       </View>
     </View>
@@ -72,5 +63,4 @@ const styles = StyleSheet.create({
   cardHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
   emoji: { fontSize: 20 },
   title: { fontSize: 15, fontWeight: '800' },
-  badge: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999, maxWidth: 110 },
 });

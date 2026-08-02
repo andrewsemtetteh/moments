@@ -1,15 +1,15 @@
 import { useEffect, useRef } from 'react';
 import { StyleSheet, View } from 'react-native';
 import Animated, {
-    cancelAnimation,
-    Easing,
-    useAnimatedStyle,
-    useSharedValue,
-    withDelay,
-    withRepeat,
-    withSequence,
-    withSpring,
-    withTiming,
+  cancelAnimation,
+  Easing,
+  useAnimatedStyle,
+  useSharedValue,
+  withDelay,
+  withRepeat,
+  withSequence,
+  withSpring,
+  withTiming,
 } from 'react-native-reanimated';
 
 import { Icon } from '@/components/ui/Icon';
@@ -21,11 +21,20 @@ type Props = {
   pulse?: boolean;
   /** When set, plays a bouncy burst every N ms instead of looping continuously. */
   periodic?: number;
+  /** Layered outer / mid / core flame (card hero). */
+  layered?: boolean;
 };
 
 const SPRING_POP = { damping: 7, stiffness: 220, mass: 0.72 };
 const SPRING_SETTLE = { damping: 14, stiffness: 250 };
 const SPRING_IDLE = { damping: 17, stiffness: 130 };
+/** Ionicons flame is tall — stretch slightly for the card hero. */
+const LAYERED_WIDTH = 1.28;
+const LAYERED_WIDTH_COMPACT = 1.12;
+/** Real fire streak palette (not theme / status tinted). */
+const FIRE_OUTER = '#FF6B00';
+const FIRE_MID = '#FF9500';
+const FIRE_INNER = '#FFD600';
 
 export function AnimatedStreakFire({
   color,
@@ -33,6 +42,7 @@ export function AnimatedStreakFire({
   animate = true,
   pulse = false,
   periodic,
+  layered = false,
 }: Props) {
   const translateY = useSharedValue(0);
   const rotate = useSharedValue(0);
@@ -148,19 +158,37 @@ export function AnimatedStreakFire({
     return reset;
   }, [animate, periodic, pulse, translateY, rotate, scaleX, scaleY]);
 
+  const widthScale = layered ? (size >= 40 ? LAYERED_WIDTH : LAYERED_WIDTH_COMPACT) : 1;
+
   const iconStyle = useAnimatedStyle(() => ({
     transform: [
       { translateY: translateY.value },
       { rotate: `${rotate.value}deg` },
-      { scaleX: scaleX.value },
+      { scaleX: scaleX.value * widthScale },
       { scaleY: scaleY.value },
     ],
   }));
 
+  const mid = Math.round(size * 0.76);
+  const inner = Math.round(size * 0.48);
+  const rootW = Math.round(size * widthScale);
+
   return (
-    <View style={[styles.root, { width: size, height: size }]}>
-      <Animated.View style={iconStyle}>
-        <Icon name="fire" size={size} color={color} filled strokeWidth={1.6} />
+    <View style={[styles.root, { width: rootW, height: size }]}>
+      <Animated.View style={[layered ? [styles.layered, { width: rootW, height: size }] : null, iconStyle]}>
+        {layered ? (
+          <>
+            <Icon name="fire" size={size} color={FIRE_OUTER} filled strokeWidth={1.2} />
+            <View style={[styles.layer, { bottom: Math.round(size * 0.07) }]}>
+              <Icon name="fire" size={mid} color={FIRE_MID} filled strokeWidth={1.1} />
+            </View>
+            <View style={[styles.layer, { bottom: Math.round(size * 0.12) }]}>
+              <Icon name="fire" size={inner} color={FIRE_INNER} filled strokeWidth={1} />
+            </View>
+          </>
+        ) : (
+          <Icon name="fire" size={size} color={color} filled strokeWidth={1.6} />
+        )}
       </Animated.View>
     </View>
   );
@@ -170,5 +198,15 @@ const styles = StyleSheet.create({
   root: {
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  layered: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  layer: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    alignItems: 'center',
   },
 });

@@ -88,10 +88,19 @@ function AuthSync({ children }: { children: ReactNode }) {
           if (!bootstrappedRef.current && event === 'SIGNED_IN') return;
 
           try {
-            queryClient.clear();
             if (session?.user) {
-              await hydrateAuthSession(session);
+              const existingUser = useAuthStore.getState().user;
+              // Login/signup already hydrated this user — share/skip, don't wipe caches.
+              if (event === 'SIGNED_IN' && existingUser?.id === session.user.id) {
+                setLoading(false);
+                return;
+              }
+              // Do not clear the query cache on SIGNED_IN — that races login hydrate.
+              await hydrateAuthSession(session, false, {
+                trustSession: event === 'SIGNED_IN',
+              });
             } else {
+              queryClient.clear();
               await clearAuthSession();
             }
           } catch {

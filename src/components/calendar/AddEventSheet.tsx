@@ -19,9 +19,7 @@ import { PrimaryButton } from '@/components/ui/primitives';
 import { TimePickerDropdown } from '@/components/ui/TimePickerDropdown';
 import { EVENT_TYPE_META, EVENT_TYPES, getEventTypeColors } from '@/constants/calendar-events';
 import type { ThemeColors } from '@/constants/design-system';
-import { useLiveCountdown } from '@/hooks/useLiveCountdown';
 import { useTheme } from '@/hooks/useTheme';
-import { formatLiveCountdownBadge } from '@/lib/event-countdown';
 import type { EventType } from '@/types/database';
 
 function defaultEventTime(base: Date): Date {
@@ -125,8 +123,6 @@ export function AddEventSheet({
   const hour12 = h24 % 12 || 12;
   const minute = eventTime.getMinutes();
   const ampm: 'AM' | 'PM' = h24 < 12 ? 'AM' : 'PM';
-  const cd = useLiveCountdown(resolvedDateTime);
-  const countdownPreview = cd ? formatLiveCountdownBadge(cd, resolvedDateTime) : null;
 
   const toggleDate = () => {
     Haptics.selectionAsync();
@@ -184,11 +180,6 @@ export function AddEventSheet({
                   {format(resolvedDateTime, 'EEE, MMM d · h:mm a')}
                 </Text>
               </View>
-              {countdownPreview && (
-                <View style={[styles.countdownPill, { backgroundColor: colors.backgroundElevated }]}>
-                  <Text style={{ color: typeColors.main, fontSize: 11, fontWeight: '900' }}>{countdownPreview}</Text>
-                </View>
-              )}
             </View>
 
             <Text style={[styles.sectionTitle, { color: colors.text }]}>Details</Text>
@@ -340,7 +331,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  countdownPill: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999 },
   sectionTitle: { fontSize: 16, fontWeight: '900', marginBottom: 10 },
   sectionCard: { borderRadius: 20, borderWidth: StyleSheet.hairlineWidth, padding: 4, marginBottom: 18, overflow: 'hidden' },
   fieldLabel: { fontSize: 11, fontWeight: '800', letterSpacing: 0.6, marginHorizontal: 14, marginTop: 12, marginBottom: 8 },

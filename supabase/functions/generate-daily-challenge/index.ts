@@ -2,13 +2,18 @@ import { getAuthUser, verifyRelationship } from '../_shared/auth.ts';
 import { handleOptions, jsonResponse } from '../_shared/cors.ts';
 import { enforceRateLimit, RATE_LIMITS, RateLimitError } from '../_shared/rate-limit.ts';
 
+function isCalendarDate(value: unknown): value is string {
+  return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value);
+}
+
 Deno.serve(async (req) => {
   const options = handleOptions(req);
   if (options) return options;
 
   try {
     const { user, supabase } = await getAuthUser(req);
-    const { relationship_id } = await req.json();
+    const body = await req.json();
+    const { relationship_id, challenge_date } = body;
 
     if (!relationship_id) throw new Error('relationship_id is required');
 
@@ -19,7 +24,10 @@ Deno.serve(async (req) => {
       RATE_LIMITS.generateDailyChallenge.windowSeconds,
     );
 
-    const today = new Date().toISOString().split('T')[0];
+    // Prefer the caller's local calendar date so midnight matches their phone.
+    const today = isCalendarDate(challenge_date)
+      ? challenge_date
+      : new Date().toISOString().split('T')[0];
 
     const { data: existing } = await supabase
       .from('daily_challenges')

@@ -33,7 +33,7 @@ describe('formatNotificationTime', () => {
     const yesterday = new Date(now);
     yesterday.setDate(yesterday.getDate() - 1);
     yesterday.setHours(18, 30, 0, 0);
-    expect(formatNotificationTime(yesterday.toISOString(), now.getTime())).toMatch(/· Yesterday$/);
+    expect(formatNotificationTime(yesterday.toISOString(), now.getTime())).toMatch(/, yesterday$/i);
   });
 });
 

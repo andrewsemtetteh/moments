@@ -7,20 +7,27 @@ export interface PartnerStatus {
   variant: PartnerStatusVariant;
 }
 
+/**
+ * - Away: you or your partner turned off online status (reciprocal)
+ * - Online / last seen: both share status and presence / last_seen_at is known
+ * - Typing always wins (in-chat activity, not presence history)
+ */
 export function formatPartnerStatus(
   isTyping: boolean,
   isOnline: boolean,
   lastSeenAt: string | null,
+  statusHidden = false,
 ): PartnerStatus {
   if (isTyping) return { label: 'typing…', variant: 'typing' };
+  if (statusHidden) return { label: 'away', variant: 'away' };
   if (isOnline) return { label: 'online', variant: 'online' };
   if (lastSeenAt) {
     return {
-      label: `last seen ${formatDistanceToNow(new Date(lastSeenAt), { addSuffix: true })}`,
+      label: `active ${formatDistanceToNow(new Date(lastSeenAt), { addSuffix: true })}`,
       variant: 'lastSeen',
     };
   }
-  return { label: 'away', variant: 'away' };
+  return { label: 'offline', variant: 'lastSeen' };
 }
 
 export function partnerStatusColor(

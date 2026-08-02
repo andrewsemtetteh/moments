@@ -6,6 +6,7 @@ import {
 } from 'date-fns';
 
 import type { IconName } from '@/components/ui/Icon';
+import { parseDbTimestampMs } from '@/lib/db-time';
 import type { Notification } from '@/types/database';
 
 /** Chat belongs in the message tab — not the notifications page inbox. */
@@ -62,9 +63,13 @@ export type NotificationSectionTitle = (typeof NOTIFICATION_SECTION_ORDER)[numbe
 
 /** Relative timestamp shown on each row. */
 export function formatNotificationTime(iso: string, now = Date.now()): string {
-  const date = new Date(iso);
+  const then = parseDbTimestampMs(iso);
+  if (Number.isNaN(then)) return '';
+
   const ref = new Date(now);
-  const diffMs = Math.max(0, now - date.getTime());
+  const date = new Date(then);
+  // Clamp future skew so bad/offset-less timestamps don't stay on "Just now".
+  const diffMs = Math.max(0, now - then);
 
   if (diffMs < 45_000) return 'Just now';
 
@@ -79,18 +84,44 @@ export function formatNotificationTime(iso: string, now = Date.now()): string {
 
   if (daysAgo === 0) return hours === 1 ? '1 hr ago' : `${hours} hr ago`;
 
-  if (daysAgo === 1) return `${format(date, 'h:mm a')} · Yesterday`;
+  if (daysAgo === 1) return `${format(date, 'h:mm a')}, yesterday`;
 
-  if (daysAgo <= 7) return `${format(date, 'h:mm a')} · ${format(date, 'EEE')}`;
-  if (daysAgo <= 30) return `${format(date, 'h:mm a')} · ${format(date, 'MMM d')}`;
+  if (daysAgo <= 7) return `${format(date, 'h:mm a')}, ${format(date, 'EEE')}`;
+  if (daysAgo <= 30) return `${format(date, 'h:mm a')}, ${format(date, 'MMM d')}`;
 
-  if (date.getFullYear() === ref.getFullYear()) return `${format(date, 'h:mm a')} · ${format(date, 'MMM d')}`;
+  if (date.getFullYear() === ref.getFullYear()) return `${format(date, 'h:mm a')}, ${format(date, 'MMM d')}`;
 
-  return `${format(date, 'h:mm a')} · ${format(date, 'MMM d, yyyy')}`;
+  return `${format(date, 'h:mm a')}, ${format(date, 'MMM d, yyyy')}`;
+}
+
+/**
+ * Clean notification body copy: drop em/en dashes and awkward hyphens, use full sentences.
+ */
+export function formatNotificationContent(content: string): string {
+  let text = (content ?? '').trim();
+  if (!text) return '';
+
+  text = text.replace(/(\d+)-day\b/gi, '$1 day');
+  text = text.replace(/\s*[—–]\s*/g, '. ');
+  text = text.replace(/\s+-\s+/g, '. ');
+  text = text.replace(/\.\s*\./g, '.');
+  text = text.replace(/\s{2,}/g, ' ').trim();
+  text = text.replace(/(^|[.!?]\s+)([a-z])/g, (_m, prefix: string, letter: string) => {
+    return `${prefix}${letter.toUpperCase()}`;
+  });
+
+  if (!/[.!?]$/.test(text)) {
+    text = `${text}.`;
+  }
+
+  return text;
 }
 
 export function notificationSectionTitle(iso: string, now = Date.now()): NotificationSectionTitle {
-  const date = new Date(iso);
+  const then = parseDbTimestampMs(iso);
+  if (Number.isNaN(then)) return 'Today';
+
+  const date = new Date(then);
   const ref = new Date(now);
   const daysAgo = Math.max(0, differenceInCalendarDays(ref, date));
 
@@ -122,11 +153,14 @@ export interface NotificationSection {
   data: Notification[];
 }
 
-export function groupNotificationsBySection(items: Notification[]): NotificationSection[] {
+export function groupNotificationsBySection(
+  items: Notification[],
+  now = Date.now(),
+): NotificationSection[] {
   const map = new Map<string, Notification[]>();
 
   for (const item of items) {
-    const title = notificationSectionTitle(item.created_at);
+    const title = notificationSectionTitle(item.created_at, now);
     const bucket = map.get(title) ?? [];
     bucket.push(item);
     map.set(title, bucket);

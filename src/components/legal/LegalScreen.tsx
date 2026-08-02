@@ -5,6 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { SwipeDismissView } from '@/components/layout/SwipeDismissView';
 import { Icon } from '@/components/ui/Icon';
 import { useTheme } from '@/hooks/useTheme';
+import { goBackOrReplace } from '@/lib/router';
 
 const HEADER_SIDE_WIDTH = 72;
 
@@ -16,7 +17,7 @@ interface LegalScreenProps {
 export function LegalScreen({ title, children }: LegalScreenProps) {
   const router = useRouter();
   const { colors } = useTheme();
-  const goBack = () => router.back();
+  const goBack = () => goBackOrReplace(router, '/(tabs)/home');
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>

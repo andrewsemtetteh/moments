@@ -7,6 +7,7 @@ import { AppTabBar } from '@/components/layout/AppTabBar';
 import { ChatMessageSync } from '@/components/layout/ChatMessageSync';
 import { HomeSync } from '@/components/layout/HomeSync';
 import { NotificationSync } from '@/components/layout/NotificationSync';
+import { PartnerPresenceSync } from '@/components/profile/PartnerPresenceSync';
 import { PartnerProfileModal } from '@/components/profile/PartnerProfileModal';
 import { useRealtimeSubscription } from '@/hooks/queries';
 import { useAuthStore } from '@/stores';
@@ -34,9 +35,11 @@ export default function TabsLayout() {
       <HomeSync />
       <NotificationSync />
       <ChatMessageSync />
+      <PartnerPresenceSync />
       <StreakMilestoneSync />
       <StreakSparkSync />
       <Tabs
+        backBehavior="history"
         tabBar={(props) => <AppTabBar {...props} />}
         screenOptions={{ headerShown: false }}>
         <Tabs.Screen name="home" />

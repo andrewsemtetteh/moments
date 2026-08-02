@@ -1,5 +1,8 @@
 import { FREE_ALBUM_STORAGE_BYTES } from '@/constants/design-system';
+import { isValidAnniversaryIso } from '@/lib/anniversary';
 import { extractChatStoragePath } from '@/lib/chat-media';
+import { challengeResponseField } from '@/lib/daily-prompt';
+import { localCalendarDate } from '@/lib/db-time';
 import { extractMomentsStoragePath, hydrateMomentsMedia } from '@/lib/moment-media';
 import {
     buildOverviewFromLogs,
@@ -9,7 +12,6 @@ import {
     type MoodHistoryFilter,
     type RpcMoodHistoryOverview,
 } from '@/lib/mood-history';
-import { isValidAnniversaryIso } from '@/lib/anniversary';
 import { getErrorMessage, isMissingColumnError, isMissingTableError, isNoRowsUpdatedError, isRpcNotFoundError, toUserFacingNetworkError } from '@/lib/network-error';
 import {
     clientFallbackQuestions,
@@ -20,7 +22,6 @@ import {
 import { SharedAlbumStorageLimitError } from '@/lib/shared-album';
 import { hydrateSharedAlbumItems } from '@/lib/shared-album-media';
 import { createStorageSignedUrl } from '@/lib/storage-cdn';
-import { challengeResponseField } from '@/lib/daily-prompt';
 import { legacyStreakToStatus, parseStreakStatus, withEffectiveStreakRestore } from '@/lib/streak';
 import { hasActiveUserSubscription } from '@/lib/subscription';
 import { supabase } from '@/lib/supabase';
@@ -145,6 +146,19 @@ export async function updateLocationSharing(
         location_updated_at: null,
       };
   return updateProfile(userId, updates);
+}
+
+export async function updateOnlineStatusVisibility(userId: string, enabled: boolean) {
+  const updates: Partial<UserProfile> = {
+    show_online_status: enabled,
+    ...(enabled ? {} : { last_seen_at: new Date().toISOString() }),
+  };
+  return updateProfile(userId, updates);
+}
+
+/** Throttled by callers — keeps partner "last seen" accurate when online. */
+export async function touchLastSeen(userId: string) {
+  return updateProfile(userId, { last_seen_at: new Date().toISOString() });
 }
 
 export async function fetchRelationship(userId: string): Promise<{
@@ -383,7 +397,14 @@ export async function createMoment(
   const partnerId = options?.partnerUserId;
   if (partnerId && partnerId !== userId) {
     const label = options?.senderName?.split(' ')[0] ?? 'Your partner';
-    await sendPartnerNotification(relationshipId, partnerId, 'moment', `${label} sent you a moment`);
+    const created = data as Moment;
+    await sendPartnerNotification(
+      relationshipId,
+      partnerId,
+      'moment',
+      `${label} sent you a new moment`,
+      { mediaUrl: created.media_url ?? moment.media_url, relatedId: created.id },
+    );
   }
 
   return data as Moment;
@@ -629,7 +650,8 @@ export async function fetchUnreadMessageCount(relationshipId: string, userId: st
     .select('*', { count: 'exact', head: true })
     .eq('relationship_id', relationshipId)
     .neq('sender_id', userId)
-    .is('read_at', null);
+    .is('read_at', null)
+    .not('deleted_for_all', 'eq', true);
 
   if (error) throw error;
   return count ?? 0;
@@ -689,7 +711,7 @@ export async function fetchCalendarEvents(relationshipId: string, month?: Date) 
   return data as CalendarEvent[];
 }
 
-/** Future plans across the next N days — used for live countdown hero. */
+/** Future plans across the next N days — used for month insights / plans ahead. */
 export async function fetchUpcomingCalendarEvents(relationshipId: string, daysAhead = 120) {
   const start = new Date();
   const end = new Date();
@@ -912,20 +934,25 @@ export async function fetchStreakStatus(relationshipId: string): Promise<StreakS
     p_relationship_id: relationshipId,
   });
 
-  const activityDays = await fetchRelationshipActivityDays(relationshipId);
-
   if (!error && data) {
     const status = parseStreakStatus(data);
     if (!status) return null;
 
-    const activeDays = await fetchStreakActiveDays(relationshipId);
+    // Only fall back to client table scans when the RPC omitted day lists.
+    const needsActive = status.active_days === undefined;
+    const needsActivity = status.activity_days === undefined;
+    const [activeDays, activityDays] = await Promise.all([
+      needsActive ? fetchStreakActiveDays(relationshipId) : Promise.resolve([] as string[]),
+      needsActivity ? fetchRelationshipActivityDays(relationshipId) : Promise.resolve([] as string[]),
+    ]);
+
     const mergedActive = mergeDayLists(status.active_days, activeDays);
     const mergedActivity = mergeDayLists(status.activity_days, activityDays);
 
     return withEffectiveStreakRestore({
       ...status,
       active_days: mergedActive.length > 0 ? mergedActive : undefined,
-      activity_days: mergedActivity.length > 0 ? mergedActivity : activityDays,
+      activity_days: mergedActivity.length > 0 ? mergedActivity : undefined,
     });
   }
 
@@ -940,7 +967,10 @@ export async function fetchStreakStatus(relationshipId: string): Promise<StreakS
     status.current_streak === 0 &&
     typeof row.restorable_streak === 'number' &&
     row.restorable_streak > 0;
-  const activeDays = await fetchStreakActiveDays(relationshipId);
+  const [activeDays, activityDays] = await Promise.all([
+    fetchStreakActiveDays(relationshipId),
+    fetchRelationshipActivityDays(relationshipId),
+  ]);
   return withEffectiveStreakRestore({
     ...status,
     can_restore_streak: canRestore,
@@ -1042,8 +1072,8 @@ export async function fetchStreak(relationshipId: string) {
   return data as Streak;
 }
 
-export async function fetchDailyChallenge(relationshipId: string) {
-  const today = new Date().toISOString().split('T')[0];
+export async function fetchDailyChallenge(relationshipId: string, challengeDate?: string) {
+  const today = challengeDate ?? localCalendarDate();
   const { data, error } = await supabase
     .from('daily_challenges')
     .select('*')
@@ -1057,7 +1087,8 @@ export async function fetchDailyChallenge(relationshipId: string) {
 
 /** Ensure today's prompt exists (edge function, then client fallback). */
 export async function ensureDailyChallenge(relationshipId: string): Promise<DailyChallenge> {
-  const existing = await fetchDailyChallenge(relationshipId);
+  const today = localCalendarDate();
+  const existing = await fetchDailyChallenge(relationshipId, today);
   if (existing && existing.type !== 'skipped') return existing;
   if (existing?.type === 'skipped') {
     // Skipped row still occupies today — treat as needing a fresh prompt on that row
@@ -1066,6 +1097,7 @@ export async function ensureDailyChallenge(relationshipId: string): Promise<Dail
   try {
     const generated = await invokeEdgeFunction<DailyChallenge>('generate-daily-challenge', {
       relationship_id: relationshipId,
+      challenge_date: today,
     });
     if (generated?.id) return generated;
   } catch {
@@ -1073,7 +1105,6 @@ export async function ensureDailyChallenge(relationshipId: string): Promise<Dail
   }
 
   const { getDailyQuestion } = await import('@/constants/activity-content');
-  const today = new Date().toISOString().split('T')[0];
   const prompt = getDailyQuestion();
 
   if (existing?.type === 'skipped') {
@@ -1105,7 +1136,7 @@ export async function ensureDailyChallenge(relationshipId: string): Promise<Dail
     .single();
 
   if (error) {
-    const raced = await fetchDailyChallenge(relationshipId);
+    const raced = await fetchDailyChallenge(relationshipId, today);
     if (raced) return raced;
     throw error;
   }
@@ -1197,7 +1228,7 @@ async function notifyPartnerPromptAnswered({
         partnerId,
         'challenge',
         bothIn
-          ? `${name} answered today's question — you can both see the answers now`
+          ? `${name} answered today's question. You can both see the answers now.`
           : `${name} answered today's question. Your turn!`,
       );
     } else {
@@ -1296,7 +1327,24 @@ export async function fetchNotificationsPage(
 
   const { data, error } = await query;
   if (error) throw error;
-  return (data ?? []) as Notification[];
+  const rows = (data ?? []) as Notification[];
+  return hydrateNotificationMedia(rows);
+}
+
+async function hydrateNotificationMedia(items: Notification[]): Promise<Notification[]> {
+  if (items.length === 0) return items;
+  const { signMomentsMediaUrl } = await import('@/lib/moment-media');
+  return Promise.all(
+    items.map(async (item) => {
+      if (!item.media_url) return item;
+      try {
+        const signed = await signMomentsMediaUrl(item.media_url, 'thumb');
+        return signed ? { ...item, media_url: signed } : item;
+      } catch {
+        return item;
+      }
+    }),
+  );
 }
 
 export async function fetchUnreadNotificationCount(userId: string) {
@@ -1747,14 +1795,29 @@ export async function sendPartnerNotification(
   partnerUserId: string,
   type: string,
   content: string,
+  extras?: { mediaUrl?: string | null; relatedId?: string | null },
 ) {
   const { error } = await supabase.rpc('create_partner_notification', {
     p_relationship_id: relationshipId,
     p_recipient_id: partnerUserId,
     p_type: type,
     p_content: content,
+    p_media_url: extras?.mediaUrl ?? null,
+    p_related_id: extras?.relatedId ?? null,
   });
-  if (error && !isMissingTableError(error)) throw error;
+  if (error && !isMissingTableError(error)) {
+    if (extras?.mediaUrl || extras?.relatedId) {
+      const fallback = await supabase.rpc('create_partner_notification', {
+        p_relationship_id: relationshipId,
+        p_recipient_id: partnerUserId,
+        p_type: type,
+        p_content: content,
+      });
+      if (fallback.error && !isMissingTableError(fallback.error)) throw fallback.error;
+    } else {
+      throw error;
+    }
+  }
   void dispatchPendingPushNotifications();
 }
 

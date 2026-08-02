@@ -5,12 +5,13 @@ import { router, useRouter } from 'expo-router';
 
 export type AppTab = 'home' | 'activities' | 'calendar' | 'profile' | 'chat' | 'notifications';
 
+/**
+ * Leave the current screen for `fallback`.
+ * Prefer `navigate` over `back()` — Expo Router tab screens (chat, notifications)
+ * often report canGoBack() while GO_BACK still has no handler (dev warning).
+ */
 export function goBackOrReplace(routerInstance: ReturnType<typeof useRouter>, fallback: Href) {
-  if (routerInstance.canGoBack()) {
-    routerInstance.back();
-    return;
-  }
-  routerInstance.replace(fallback);
+  routerInstance.navigate(fallback);
 }
 
 export function openActivities(modal?: ExploreModalKey) {

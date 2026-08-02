@@ -71,10 +71,21 @@ export function LocationSharingSettings() {
   if (!loaded) return null;
 
   return (
-    <View style={styles.wrap}>
+    <View>
       <View style={styles.row}>
-        <Icon name="location" size={20} color={colors.textSecondary} />
-        <Text style={[styles.title, { color: colors.text }]}>Location sharing</Text>
+        <View style={styles.left}>
+          <View style={styles.iconWrap}>
+            <Icon name="location" size={20} color={colors.textSecondary} />
+          </View>
+          <View style={styles.copy}>
+            <Text style={[styles.title, { color: colors.text }]}>Location sharing</Text>
+            <Text style={[styles.sub, { color: colors.textSecondary }]} numberOfLines={2}>
+              {enabled
+                ? "You can see each other's location"
+                : "Hidden for both. You won't see theirs either"}
+            </Text>
+          </View>
+        </View>
         <Switch
           value={enabled}
           onValueChange={(value) => void onToggle(value)}
@@ -84,16 +95,14 @@ export function LocationSharingSettings() {
         />
       </View>
 
-      <Text style={[styles.hint, { color: colors.textTertiary }]}>
-        When on, you and your partner can see each other on a private map in Settings.
-      </Text>
-
       {enabled && (
         <View style={styles.previewBlock}>
           {locating && markers.length === 0 ? (
             <View style={[styles.loadingBox, { backgroundColor: colors.surfaceElevated }]}>
               <ActivityIndicator color={colors.accent} />
-              <Text style={{ color: colors.textSecondary, marginTop: 8, fontWeight: '600' }}>Getting location…</Text>
+              <Text style={{ color: colors.textSecondary, marginTop: 8, fontWeight: '600' }}>
+                Getting location…
+              </Text>
             </View>
           ) : markers.length > 0 ? (
             <>
@@ -101,7 +110,8 @@ export function LocationSharingSettings() {
               <View style={styles.legend}>
                 {myPlace && (
                   <Text style={[styles.legendItem, { color: colors.textSecondary }]}>
-                    <Text style={{ color: '#e85d75' }}>●</Text> Me{myPlace.label ? ` · ${myPlace.label}` : ''}
+                    <Text style={{ color: '#e85d75' }}>●</Text> Me
+                    {myPlace.label ? ` · ${myPlace.label}` : ''}
                   </Text>
                 )}
                 {partnerOnMap && (
@@ -118,16 +128,26 @@ export function LocationSharingSettings() {
               </View>
               <Pressable
                 onPress={() => void refreshMyLocation()}
-                style={[styles.secondaryBtn, { borderColor: colors.border, backgroundColor: colors.surfaceElevated }]}>
-                <Text style={{ color: colors.text, fontWeight: '700', fontSize: 13 }}>Refresh location</Text>
+                style={[
+                  styles.secondaryBtn,
+                  { borderColor: colors.border, backgroundColor: colors.surfaceElevated },
+                ]}>
+                <Text style={{ color: colors.text, fontWeight: '700', fontSize: 13 }}>
+                  Refresh location
+                </Text>
               </Pressable>
             </>
           ) : (
             <Pressable
               onPress={() => void refreshMyLocation()}
-              style={[styles.loadingBox, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
+              style={[
+                styles.loadingBox,
+                { backgroundColor: colors.surfaceElevated, borderColor: colors.border },
+              ]}>
               <Icon name="location" size={28} color={colors.accent} />
-              <Text style={{ color: colors.text, marginTop: 8, fontWeight: '700' }}>Tap to detect location</Text>
+              <Text style={{ color: colors.text, marginTop: 8, fontWeight: '700' }}>
+                Tap to detect location
+              </Text>
             </Pressable>
           )}
         </View>
@@ -137,16 +157,30 @@ export function LocationSharingSettings() {
 }
 
 const styles = StyleSheet.create({
-  wrap: { paddingHorizontal: 16, paddingBottom: 8 },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 16,
     gap: 12,
-    paddingVertical: 14,
   },
-  title: { flex: 1, fontSize: 15, fontWeight: '700' },
-  hint: { fontSize: 12, lineHeight: 17, paddingBottom: 8, paddingHorizontal: 2 },
-  previewBlock: { gap: 10, paddingBottom: 4 },
+  left: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 14,
+    flex: 1,
+    minWidth: 0,
+  },
+  iconWrap: {
+    height: 20,
+    marginTop: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  copy: { flex: 1, minWidth: 0 },
+  title: { fontSize: 15, fontWeight: '600', lineHeight: 20 },
+  sub: { fontSize: 12, marginTop: 2, lineHeight: 16 },
+  previewBlock: { gap: 10, paddingHorizontal: 16, paddingBottom: 16 },
   loadingBox: {
     height: 140,
     borderRadius: 14,

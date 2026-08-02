@@ -67,7 +67,8 @@ export function AppTabBar({ state, navigation }: TabBarLikeProps) {
 
   const activeName = state.routes[state.index]?.name;
 
-  if (activeName === 'chat') {
+  // Full-screen flows — no floating tab bar over the content.
+  if (activeName === 'chat' || activeName === 'notifications') {
     return null;
   }
 

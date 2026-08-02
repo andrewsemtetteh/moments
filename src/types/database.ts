@@ -41,11 +41,16 @@ export interface UserProfile {
   subscription_expires_at?: string | null;
   revenuecat_customer_id?: string | null;
   revenuecat_subscription_id?: string | null;
+  /** Reciprocal: when false, you also cannot see your partner's shared location. */
   location_sharing_enabled?: boolean;
   location_latitude?: number | null;
   location_longitude?: number | null;
   location_label?: string | null;
   location_updated_at?: string | null;
+  /** When false, neither partner sees online / last-active for this user. Default true. */
+  show_online_status?: boolean;
+  /** Last time this user was actively online. */
+  last_seen_at?: string | null;
   created_at: string;
 }
 
@@ -182,6 +187,10 @@ export interface Notification {
   content: string;
   read: boolean;
   push_dispatched?: boolean;
+  /** Optional preview image (moment alerts). */
+  media_url?: string | null;
+  /** Optional linked entity id (e.g. moment id). */
+  related_id?: string | null;
   created_at: string;
 }
 

@@ -65,7 +65,8 @@ export type IconName =
   | 'moreVertical'
   | 'edit'
   | 'warning'
-  | 'key';
+  | 'key'
+  | 'mail';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
 
@@ -134,6 +135,7 @@ const ICON_MAP: Record<IconName, { outline: IoniconName; filled: IoniconName }> 
   edit: { outline: 'create-outline', filled: 'create' },
   warning: { outline: 'warning-outline', filled: 'warning' },
   key: { outline: 'key-outline', filled: 'key' },
+  mail: { outline: 'mail-outline', filled: 'mail' },
 };
 
 interface IconProps {

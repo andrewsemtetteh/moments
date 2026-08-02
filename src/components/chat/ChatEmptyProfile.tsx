@@ -8,15 +8,16 @@ import { useTheme } from '@/hooks/useTheme';
 import { formatPartnerStatus } from '@/lib/partner-status';
 import type { Relationship, UserProfile } from '@/types/database';
 
-interface Props {
+export type ChatEmptyProfileProps = {
   partner: UserProfile | null;
   relationship: Relationship | null;
   isTyping: boolean;
   isOnline: boolean;
   lastSeenAt: string | null;
+  statusHidden?: boolean;
   onOpenProfile: () => void;
   onOpenAvatar?: () => void;
-}
+};
 
 export function ChatEmptyProfile({
   partner,
@@ -24,12 +25,13 @@ export function ChatEmptyProfile({
   isTyping,
   isOnline,
   lastSeenAt,
+  statusHidden = false,
   onOpenProfile,
   onOpenAvatar,
-}: Props) {
+}: ChatEmptyProfileProps) {
   const { colors } = useTheme();
   const [showPhoto, setShowPhoto] = useState(false);
-  const status = formatPartnerStatus(isTyping, isOnline, lastSeenAt);
+  const status = formatPartnerStatus(isTyping, isOnline, lastSeenAt, statusHidden);
 
   const since = relationship?.created_at
     ? new Date(relationship.created_at).toLocaleDateString(undefined, {
@@ -63,6 +65,7 @@ export function ChatEmptyProfile({
         isTyping={isTyping}
         isOnline={isOnline}
         lastSeenAt={lastSeenAt}
+        statusHidden={statusHidden}
         style={styles.status}
         textStyle={{ fontSize: 14, fontWeight: '600' }}
       />

@@ -1,13 +1,20 @@
+import { parseDbTimestampMs } from '@/lib/db-time';
 import type { Message } from '@/types/database';
 
 /** Show the home Continue Chat card for this long after the last message. */
 export const CONTINUE_CHAT_VISIBLE_DAYS = 14;
 
-/** Compact relative time for the Continue Chat card. */
+export function messageTimestampMs(iso: string): number {
+  return parseDbTimestampMs(iso);
+}
+
+/** Compact relative time for the Continue Chat card — always based on send time. */
 export function shortMessageAgo(iso: string, now = new Date()): string {
-  const then = new Date(iso).getTime();
+  const then = messageTimestampMs(iso);
   if (Number.isNaN(then)) return '';
-  const seconds = Math.max(0, Math.floor((now.getTime() - then) / 1000));
+  const nowMs = now instanceof Date ? now.getTime() : now;
+  // Ignore clock skew that would otherwise pin the label on "just now".
+  const seconds = Math.max(0, Math.floor((nowMs - then) / 1000));
   if (seconds < 45) return 'just now';
   const minutes = Math.floor(seconds / 60);
   if (minutes < 60) return `${minutes}m ago`;
@@ -44,6 +51,8 @@ type ContinueChatTitleInput = {
 
 /**
  * Soft, relationship-forward titles — not productivity copy.
+ * Uses "sent" / "messaged" (not "replied") — the latest message may be a new thread, not a reply.
+ * Time-ago lives on the right of the card, so titles stay free of "Xm ago".
  */
 export function continueChatTitle({
   partnerFirst,
@@ -52,8 +61,6 @@ export function continueChatTitle({
   minutesAgo,
 }: ContinueChatTitleInput): string {
   if (unread && fromPartner) {
-    if (minutesAgo <= 5) return `${partnerFirst} replied just now`;
-    if (minutesAgo <= 60) return `${partnerFirst} replied ${minutesAgo}m ago`;
     return `${partnerFirst} sent you a message`;
   }
 
@@ -82,7 +89,7 @@ export function shouldShowContinueChat(input: {
   const unreadFromPartner = unreadCount > 0 && fromPartner;
   if (unreadFromPartner) return true;
 
-  const ageMs = now.getTime() - new Date(latest.created_at).getTime();
+  const ageMs = now.getTime() - messageTimestampMs(latest.created_at);
   if (Number.isNaN(ageMs) || ageMs < 0) return false;
 
   return ageMs <= CONTINUE_CHAT_VISIBLE_DAYS * 24 * 60 * 60 * 1000;

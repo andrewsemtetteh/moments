@@ -1,6 +1,6 @@
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClient, type InfiniteData, type QueryClient } from '@tanstack/react-query';
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert } from 'react-native';
 
 import type { MoodHistoryFilter } from '@/lib/mood-history';
@@ -9,6 +9,11 @@ import { getErrorMessage, isMissingTableError, toUserFacingNetworkError } from '
 import { filterInboxNotifications } from '@/lib/notification-display';
 import { emptyStreakStatus } from '@/lib/streak';
 import { getCachedStreakStatus, setCachedStreakStatus } from '@/lib/streak-cache';
+import {
+  getCachedDailyChallenge,
+  setCachedDailyChallenge,
+} from '@/lib/daily-challenge-cache';
+import { localCalendarDate } from '@/lib/db-time';
 import { getEffectiveTier } from '@/lib/subscription';
 import { supabase } from '@/lib/supabase';
 import { scheduleWatchReminder } from '@/lib/watch-reminders';
@@ -121,6 +126,37 @@ export function moodsQueryKey(relationshipId?: string) {
   return ['moods', relationshipId] as const;
 }
 
+export function dailyChallengeQueryKey(relationshipId?: string, challengeDate?: string) {
+  return ['daily-challenge', relationshipId, challengeDate ?? localCalendarDate()] as const;
+}
+
+export async function resolveDailyChallenge(relationshipId: string) {
+  const challenge = await api.ensureDailyChallenge(relationshipId);
+  await setCachedDailyChallenge(challenge);
+  return challenge;
+}
+
+export async function warmDailyChallengeCache(
+  queryClient: QueryClient,
+  relationshipId: string,
+) {
+  const cached = await getCachedDailyChallenge(relationshipId);
+  if (cached) {
+    queryClient.setQueryData(dailyChallengeQueryKey(relationshipId), cached);
+    void queryClient.prefetchQuery({
+      queryKey: dailyChallengeQueryKey(relationshipId),
+      queryFn: () => resolveDailyChallenge(relationshipId),
+      staleTime: HOME_STALE_MS,
+    });
+    return;
+  }
+  await queryClient.prefetchQuery({
+    queryKey: dailyChallengeQueryKey(relationshipId),
+    queryFn: () => resolveDailyChallenge(relationshipId),
+    staleTime: HOME_STALE_MS,
+  });
+}
+
 export async function resolveStreakStatus(relationshipId: string) {
   const status = await api.fetchStreakStatus(relationshipId);
   const resolved = status ?? emptyStreakStatus(relationshipId);
@@ -135,6 +171,13 @@ export async function warmStreakCache(
   const cached = await getCachedStreakStatus(relationshipId);
   if (cached) {
     queryClient.setQueryData(streakQueryKey(relationshipId), cached);
+    // Refresh in the background; cached data is enough to paint home.
+    void queryClient.prefetchQuery({
+      queryKey: streakQueryKey(relationshipId),
+      queryFn: () => resolveStreakStatus(relationshipId),
+      staleTime: HOME_STALE_MS,
+    });
+    return;
   }
   await queryClient.prefetchQuery({
     queryKey: streakQueryKey(relationshipId),
@@ -151,8 +194,8 @@ export function applyMessagesReadInCache(
   queryClient: QueryClient,
   relationshipId: string,
   userId: string,
+  readAt = new Date().toISOString(),
 ) {
-  const readAt = new Date().toISOString();
   queryClient.setQueryData<InfiniteData<Message[]>>(
     messagesQueryKey(relationshipId, userId),
     (old) => {
@@ -167,6 +210,49 @@ export function applyMessagesReadInCache(
           ),
         ),
       };
+    },
+  );
+
+  // Patch read receipt only — never refetch latestMessage (avoids resetting Continue Chat time).
+  queryClient.setQueryData<Message | null>(
+    ['latestMessage', relationshipId, userId],
+    (old) => {
+      if (!old || old.sender_id === userId || old.read_at) return old;
+      return { ...old, read_at: readAt };
+    },
+  );
+
+  queryClient.setQueryData(['unreadMessages', relationshipId, userId], 0);
+}
+
+/** Apply a single read receipt without touching created_at / Continue Chat preview time. */
+function patchMessageReadReceipt(
+  queryClient: QueryClient,
+  relationshipId: string,
+  userId: string,
+  messageId: string,
+  readAt: string,
+) {
+  queryClient.setQueryData<InfiniteData<Message[]>>(
+    messagesQueryKey(relationshipId, userId),
+    (old) => {
+      if (!old) return old;
+      return {
+        ...old,
+        pages: old.pages.map((page) =>
+          page.map((message) =>
+            message.id === messageId ? { ...message, read_at: readAt } : message,
+          ),
+        ),
+      };
+    },
+  );
+
+  queryClient.setQueryData<Message | null>(
+    ['latestMessage', relationshipId, userId],
+    (old) => {
+      if (!old || old.id !== messageId) return old;
+      return { ...old, read_at: readAt };
     },
   );
 }
@@ -403,11 +489,36 @@ export function useStreak() {
 
 export function useDailyChallenge() {
   const relationship = useRelationshipStore((s) => s.relationship);
+  const queryClient = useQueryClient();
+  const [today, setToday] = useState(localCalendarDate);
+
+  // Roll to a new query when the device local date changes (midnight).
+  useEffect(() => {
+    const id = setInterval(() => {
+      const next = localCalendarDate();
+      setToday((prev) => (prev === next ? prev : next));
+    }, 30_000);
+    return () => clearInterval(id);
+  }, []);
+
+  useEffect(() => {
+    const id = relationship?.id;
+    if (!id || queryClient.getQueryData(dailyChallengeQueryKey(id, today))) return;
+    void getCachedDailyChallenge(id, today).then((cached) => {
+      if (cached) {
+        queryClient.setQueryData(dailyChallengeQueryKey(id, today), cached);
+      }
+    });
+  }, [relationship?.id, queryClient, today]);
+
   return useQuery({
-    queryKey: ['daily-challenge', relationship?.id],
-    queryFn: () => api.ensureDailyChallenge(relationship!.id),
+    queryKey: dailyChallengeQueryKey(relationship?.id, today),
+    queryFn: () => resolveDailyChallenge(relationship!.id),
     enabled: !!relationship?.id,
-    staleTime: 60_000,
+    staleTime: HOME_STALE_MS,
+    gcTime: HOME_GC_MS,
+    placeholderData: keepPreviousData,
+    refetchInterval: 60_000,
   });
 }
 
@@ -440,7 +551,11 @@ export function useRespondToDailyChallenge() {
       );
     },
     onSuccess: (data) => {
-      queryClient.setQueryData(['daily-challenge', relationship?.id], data);
+      void setCachedDailyChallenge(data);
+      queryClient.setQueryData(
+        dailyChallengeQueryKey(relationship?.id, data.challenge_date),
+        data,
+      );
       queryClient.setQueryData(
         ['daily-challenge-history', relationship?.id],
         (prev: unknown) => {
@@ -573,15 +688,21 @@ function debouncedInvalidateMessageQueries(
   queryClient: ReturnType<typeof useQueryClient>,
   relationshipId: string,
   userId?: string,
+  eventType?: string,
 ) {
   if (messageInvalidateTimer) clearTimeout(messageInvalidateTimer);
   messageInvalidateTimer = setTimeout(() => {
     messageInvalidateTimer = null;
     queryClient.invalidateQueries({ queryKey: ['messages', relationshipId] });
-    if (userId) {
-      queryClient.invalidateQueries({ queryKey: ['unreadMessages', relationshipId, userId] });
-      queryClient.invalidateQueries({ queryKey: ['latestMessage', relationshipId, userId] });
+    if (!userId) return;
+
+    if (eventType === 'READ_RECEIPT') {
+      // Badge + Continue Chat time already patched — skip refetch races.
+      return;
     }
+
+    queryClient.invalidateQueries({ queryKey: ['unreadMessages', relationshipId, userId] });
+    queryClient.invalidateQueries({ queryKey: ['latestMessage', relationshipId, userId] });
   }, 400);
 }
 
@@ -700,12 +821,34 @@ export function useRealtimeSubscription(
           table,
           filter: `relationship_id=eq.${relationship.id}`,
         },
-        () => {
+        (payload) => {
           const qc = queryClientRef.current;
           qc.invalidateQueries({ queryKey: [table === 'mood_logs' ? 'moods' : table.replace('_logs', ''), relationship.id] });
           if (table === 'messages') {
             const userId = useAuthStore.getState().user?.id;
-            debouncedInvalidateMessageQueries(qc, relationship.id, userId);
+            const eventType =
+              payload && typeof payload === 'object' && 'eventType' in payload
+                ? String((payload as { eventType?: string }).eventType)
+                : undefined;
+            const row =
+              payload && typeof payload === 'object' && 'new' in payload
+                ? ((payload as { new?: Partial<Message> }).new ?? undefined)
+                : undefined;
+
+            // Read receipts: patch read_at in place — do not refetch latestMessage (keeps send time).
+            const isReadReceipt =
+              eventType === 'UPDATE' && !!row?.id && !!row.read_at && !row.deleted_for_all;
+
+            if (isReadReceipt && userId && row.id && row.read_at) {
+              patchMessageReadReceipt(qc, relationship.id, userId, row.id, row.read_at);
+            }
+
+            debouncedInvalidateMessageQueries(
+              qc,
+              relationship.id,
+              userId,
+              isReadReceipt ? 'READ_RECEIPT' : eventType,
+            );
           }
           if (table === 'watch_sessions') {
             qc.invalidateQueries({ queryKey: ['watchSession', relationship.id] });

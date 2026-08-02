@@ -1,8 +1,10 @@
 import type { ThemeColors } from '@/constants/design-system';
 
 /**
- * Premium streak palette — warm flame for active, urgent amber for at-risk,
- * muted rose for lost. Soft fills stay readable on light and dark themes.
+ * Streak palette:
+ * - Active = warm flame (healthy momentum)
+ * - At risk = danger red (must act today)
+ * - Lost = muted rose
  */
 export const STREAK_COLORS = {
   /** Active / secured day */
@@ -14,11 +16,14 @@ export const STREAK_COLORS = {
   activeFillDark: 'rgba(255, 122, 26, 0.28)',
   onActive: '#FFFFFF',
 
-  /** At risk — urgent, not neon */
-  atRisk: '#E85D04',
-  atRiskDeep: '#C2410C',
-  atRiskSoftLight: 'rgba(232, 93, 4, 0.12)',
-  atRiskSoftDark: 'rgba(232, 93, 4, 0.22)',
+  /** At risk — clear danger, not warm amber */
+  atRisk: '#E0414F',
+  atRiskDeep: '#B91C1C',
+  atRiskBright: '#FF5C6C',
+  atRiskSoftLight: 'rgba(224, 65, 79, 0.12)',
+  atRiskSoftDark: 'rgba(255, 92, 108, 0.22)',
+  atRiskBorderLight: 'rgba(224, 65, 79, 0.45)',
+  atRiskBorderDark: 'rgba(255, 92, 108, 0.55)',
   onAtRisk: '#FFFFFF',
 
   /** Lost / missed */
@@ -41,7 +46,7 @@ export const STREAK_COLORS = {
   successSoft: 'rgba(255, 122, 26, 0.18)',
   successFill: 'rgba(255, 122, 26, 0.22)',
   pendingSoft: 'rgba(232, 163, 23, 0.18)',
-  atRiskSoft: 'rgba(232, 93, 4, 0.16)',
+  atRiskSoft: 'rgba(224, 65, 79, 0.16)',
   onLight: '#FFFFFF',
   streak: '#E8A317',
   streakBright: '#D4920F',
@@ -73,10 +78,12 @@ export function streakWellColors(tone: StreakVisualTone, colors: ThemeColors) {
     case 'risk':
       return {
         well: dark ? STREAK_COLORS.atRiskSoftDark : STREAK_COLORS.atRiskSoftLight,
-        fire: STREAK_COLORS.atRisk,
+        fire: STREAK_COLORS.atRiskBright,
         label: STREAK_COLORS.atRisk,
         bannerBg: dark ? STREAK_COLORS.atRiskSoftDark : STREAK_COLORS.atRiskSoftLight,
-        bannerText: dark ? STREAK_COLORS.activeBright : STREAK_COLORS.atRiskDeep,
+        bannerText: dark ? STREAK_COLORS.atRiskBright : STREAK_COLORS.atRiskDeep,
+        cardBorder: dark ? STREAK_COLORS.atRiskBorderDark : STREAK_COLORS.atRiskBorderLight,
+        cardBg: dark ? 'rgba(255, 92, 108, 0.08)' : 'rgba(224, 65, 79, 0.06)',
       };
     case 'secured':
     case 'active':
@@ -86,6 +93,8 @@ export function streakWellColors(tone: StreakVisualTone, colors: ThemeColors) {
         label: STREAK_COLORS.active,
         bannerBg: 'transparent',
         bannerText: colors.textSecondary,
+        cardBorder: colors.border,
+        cardBg: colors.surface,
       };
     case 'lost':
       return {
@@ -94,6 +103,8 @@ export function streakWellColors(tone: StreakVisualTone, colors: ThemeColors) {
         label: STREAK_COLORS.lostDeep,
         bannerBg: dark ? STREAK_COLORS.lostSoftDark : STREAK_COLORS.lostSoftLight,
         bannerText: STREAK_COLORS.lostDeep,
+        cardBorder: colors.border,
+        cardBg: colors.surface,
       };
     default:
       return {
@@ -102,6 +113,8 @@ export function streakWellColors(tone: StreakVisualTone, colors: ThemeColors) {
         label: colors.textSecondary,
         bannerBg: 'transparent',
         bannerText: colors.textSecondary,
+        cardBorder: colors.border,
+        cardBg: colors.surface,
       };
   }
 }
@@ -112,7 +125,7 @@ export function streakFireColor(
   inactive = '#8E8E93',
   successful = false,
 ): string {
-  if (atRisk) return STREAK_COLORS.atRisk;
+  if (atRisk) return STREAK_COLORS.atRiskBright;
   if (successful) return STREAK_COLORS.activeBright;
   if (active) return STREAK_COLORS.active;
   return inactive;

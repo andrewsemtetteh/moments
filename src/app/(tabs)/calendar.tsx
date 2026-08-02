@@ -14,7 +14,6 @@ import { useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { AddEventSheet } from '@/components/calendar/AddEventSheet';
-import { PlanCountdownHero } from '@/components/calendar/PlanCountdownHero';
 import { PlanDayTimeline } from '@/components/calendar/PlanDayTimeline';
 import { PlanMonthInsights } from '@/components/calendar/PlanMonthInsights';
 import { AppHeader } from '@/components/layout/AppHeader';
@@ -64,12 +63,6 @@ export default function CalendarScreen() {
     );
   }, [selectedDate, events]);
 
-  const nextUpcoming = useMemo(() => {
-    return (upcoming ?? [])
-      .filter((e) => isFuture(new Date(e.date_time)))
-      .sort((a, b) => new Date(a.date_time).getTime() - new Date(b.date_time).getTime())[0];
-  }, [upcoming]);
-
   const plansAhead = useMemo(() => {
     return (upcoming ?? []).filter(
       (e) => isFuture(new Date(e.date_time)) && !isSameMonth(new Date(e.date_time), currentMonth),
@@ -111,8 +104,6 @@ export default function CalendarScreen() {
     <ScreenContainer padded={false} tabSwipe>
       <AppHeader />
       <TabScreenScroll showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
-        {nextUpcoming ? <PlanCountdownHero event={nextUpcoming} /> : null}
-
         <Card style={[styles.calendarCard, { backgroundColor: colors.surface }]}>
           <View style={styles.monthHeader}>
             <Pressable

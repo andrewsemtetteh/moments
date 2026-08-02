@@ -64,7 +64,7 @@ export default function LoginScreen() {
   const finishAuth = async () => {
     await setRememberMe(true);
     const { data: { session } } = await supabase.auth.getSession();
-    if (session) await hydrateAuthSession(session);
+    if (session) await hydrateAuthSession(session, false, { trustSession: true });
     router.replace('/');
   };
 
@@ -74,18 +74,20 @@ export default function LoginScreen() {
     if (!cleanEmail || !cleanPassword) return;
     setLoading(true);
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({ email: cleanEmail, password: cleanPassword });
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: cleanEmail,
+        password: cleanPassword,
+      });
       if (error) throw error;
       if (!data.session) {
         throw new Error('Sign in succeeded but no session was returned. Please try again.');
       }
 
-      await setRememberMe(rememberMe);
-      if (rememberMe) {
-        await setRememberedEmail(cleanEmail);
-      }
-
-      await hydrateAuthSession(data.session);
+      await Promise.all([
+        setRememberMe(rememberMe),
+        rememberMe ? setRememberedEmail(cleanEmail) : Promise.resolve(),
+        hydrateAuthSession(data.session, false, { trustSession: true }),
+      ]);
       router.replace('/');
     } catch (e: unknown) {
       Alert.alert('Sign in failed', e instanceof Error ? e.message : 'Please try again');

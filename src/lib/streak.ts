@@ -96,8 +96,8 @@ export function streakSubtitle(status: StreakStatus): string {
   }
   if (status.at_risk) {
     return status.user_active_today
-      ? 'Waiting on your partner today'
-      : 'Act today to keep your streak';
+      ? 'At risk — waiting on your partner'
+      : 'At risk — check in before midnight';
   }
   if (status.both_active_today) {
     return 'You both showed up today';
@@ -133,8 +133,8 @@ export function streakCheerMessage(status: StreakStatus): string {
   if (status.current_streak <= 0) return 'Check in together to begin';
   if (status.at_risk) {
     return status.user_active_today
-      ? 'Waiting on your partner today'
-      : "Don't lose it. Check in today!";
+      ? 'At risk — waiting on your partner'
+      : "At risk — don't lose it. Check in today!";
   }
   if (status.both_active_today) return "You're on fire! 🔥";
   if (status.current_streak >= 7) return "You're on fire! 🔥";

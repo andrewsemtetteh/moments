@@ -30,7 +30,6 @@ interface ChatBubbleProps {
   message: Message;
   replyToMessage?: Message | null;
   partner?: UserProfile | null;
-  isUnread?: boolean;
   onLongPress?: (message: Message) => void;
   onSwipeReply?: (message: Message) => void;
 }
@@ -39,7 +38,6 @@ export function ChatBubble({
   message,
   replyToMessage,
   partner,
-  isUnread = false,
   onLongPress,
   onSwipeReply,
 }: ChatBubbleProps) {
@@ -58,8 +56,7 @@ export function ChatBubble({
   const replyAuthor =
     replyToMessage?.sender_id === user?.id ? 'You' : partner?.name ?? 'Partner';
 
-  const partnerBorderColor = isUnread ? colors.accent : colors.glass ? colors.borderStrong : colors.border;
-  const partnerBorderWidth = isUnread ? 1.5 : StyleSheet.hairlineWidth;
+  const partnerBorderColor = colors.glass ? colors.borderStrong : colors.border;
 
   const triggerReply = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -96,10 +93,6 @@ export function ChatBubble({
 
   return (
     <View style={[styles.row, isSelf ? styles.rowSelf : styles.rowPartner]}>
-      {!isSelf && isUnread && (
-        <View style={[styles.unreadDot, { backgroundColor: colors.accent }]} />
-      )}
-
       <Animated.View
         style={[styles.replyHint, isSelf ? styles.replyHintSelf : styles.replyHintPartner, replyHintStyle]}>
         <Icon name="reply" size={20} color={colors.accent} />
@@ -116,7 +109,7 @@ export function ChatBubble({
               {
                 backgroundColor: isSelf ? colors.chatBubbleSelf : colors.chatBubblePartner,
                 borderColor: isSelf ? (colors.glass ? colors.borderStrong : 'transparent') : partnerBorderColor,
-                borderWidth: isSelf ? (colors.glass ? StyleSheet.hairlineWidth : 0) : partnerBorderWidth,
+                borderWidth: isSelf ? (colors.glass ? StyleSheet.hairlineWidth : 0) : StyleSheet.hairlineWidth,
               },
             ]}>
             {message.is_pinned && !isDeleted && (
@@ -171,12 +164,7 @@ export function ChatBubble({
                 {attachment && <ChatAttachmentCard attachment={attachment} isSelf={isSelf} />}
 
                 {message.content && message.media_type !== 'voice' && message.media_type !== 'video' && message.media_type !== 'image' && !attachment && (
-                  <Text
-                    style={[
-                      styles.text,
-                      { color: textColor },
-                      !isSelf && isUnread && styles.unreadText,
-                    ]}>
+                  <Text style={[styles.text, { color: textColor }]}>
                     {message.content}
                   </Text>
                 )}
@@ -223,15 +211,6 @@ const styles = StyleSheet.create({
   row: { marginBottom: 4, paddingHorizontal: 6, position: 'relative' },
   rowSelf: { alignItems: 'flex-end' },
   rowPartner: { alignItems: 'flex-start' },
-  unreadDot: {
-    position: 'absolute',
-    left: 0,
-    bottom: 14,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    zIndex: 2,
-  },
   replyHint: {
     position: 'absolute',
     top: '50%',
@@ -263,7 +242,6 @@ const styles = StyleSheet.create({
   deletedText: { fontSize: 15, fontStyle: 'italic' },
   media: { width: 220, height: 220, borderRadius: 10, marginBottom: 6 },
   text: { fontSize: 16, lineHeight: 21 },
-  unreadText: { fontWeight: '600' },
   meta: { flexDirection: 'row', gap: 4, marginTop: 2, alignItems: 'center', alignSelf: 'flex-end' },
   time: { fontSize: 11 },
   reactions: {

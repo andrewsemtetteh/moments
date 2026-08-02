@@ -70,22 +70,32 @@ export function StreakDayTracker({ status, joinedAt }: StreakDayTrackerProps) {
       style={[
         styles.card,
         {
-          backgroundColor: colors.surface,
-          borderColor: colors.border,
+          backgroundColor: atRisk ? well.cardBg : colors.surface,
+          borderColor: well.cardBorder,
+          borderWidth: atRisk ? 1.5 : StyleSheet.hairlineWidth,
         },
       ]}>
       <View style={styles.header}>
         <View style={styles.heroRow}>
-          <View style={[styles.flameWell, { backgroundColor: well.well }]}>
-            <AnimatedStreakFire color={well.fire} size={28} animate={false} />
-          </View>
+          <AnimatedStreakFire
+            color={well.fire}
+            size={56}
+            layered
+            animate={atRisk || active}
+            pulse={atRisk}
+          />
 
           <View style={styles.heroCopy}>
             <View style={styles.countRow}>
               <Text style={[styles.count, { color: colors.text }]}>{count}</Text>
               <Text style={[styles.countUnit, { color: well.label }]}>day streak</Text>
             </View>
-            <Text style={[styles.statusLine, { color: colors.textSecondary }]} numberOfLines={2}>
+            <Text
+              style={[
+                styles.statusLine,
+                { color: atRisk ? well.bannerText : colors.textSecondary },
+              ]}
+              numberOfLines={2}>
               {statusLine}
             </Text>
           </View>
@@ -149,12 +159,22 @@ export function StreakDayTracker({ status, joinedAt }: StreakDayTrackerProps) {
       </View>
 
       {atRisk ? (
-        <View style={[styles.riskBanner, { backgroundColor: well.bannerBg }]}>
-          <Icon name="warning" size={16} color={well.bannerText} filled />
+        <View
+          style={[
+            styles.riskBanner,
+            {
+              backgroundColor: well.bannerBg,
+              borderColor: well.cardBorder,
+            },
+          ]}>
+          <View style={[styles.riskBadge, { backgroundColor: STREAK_COLORS.atRisk }]}>
+            <Icon name="warning" size={12} color={STREAK_COLORS.onAtRisk} filled />
+            <Text style={styles.riskBadgeText}>At risk</Text>
+          </View>
           <Text style={[styles.riskText, { color: well.bannerText }]}>
             {status.user_active_today
-              ? `Waiting on ${partnerFirst} before midnight`
-              : 'Check in today to keep the flame alive'}
+              ? `${partnerFirst} still needs to check in before midnight`
+              : 'Check in today or this streak ends at midnight'}
           </Text>
         </View>
       ) : null}
@@ -292,7 +312,13 @@ function WeekStreakRow({
         <View style={styles.weekRow}>
           {days.map((day) => (
             <View key={day.date.toISOString()} style={styles.weekDay}>
-              <StreakDayCircle state={day.state} tone={day.tone} isToday={day.isToday} size="md" />
+              <StreakDayCircle
+                state={day.state}
+                tone={day.tone}
+                isToday={day.isToday}
+                dayOfMonth={day.dayOfMonth}
+                size="md"
+              />
             </View>
           ))}
         </View>
@@ -367,7 +393,13 @@ function StreakMonthCalendar({
         ))}
         {days.map((day) => (
           <View key={day.date.toISOString()} style={monthStyles.dayCell}>
-            <StreakDayCircle state={day.state} tone={day.tone} isToday={day.isToday} size="sm" />
+            <StreakDayCircle
+              state={day.state}
+              tone={day.tone}
+              isToday={day.isToday}
+              dayOfMonth={day.dayOfMonth}
+              size="sm"
+            />
           </View>
         ))}
       </View>
@@ -416,14 +448,7 @@ const styles = StyleSheet.create({
   heroRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 14,
-  },
-  flameWell: {
-    width: 56,
-    height: 56,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
+    gap: 12,
   },
   heroCopy: {
     flex: 1,
@@ -513,10 +538,26 @@ const styles = StyleSheet.create({
   riskBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 10,
     paddingHorizontal: 12,
-    paddingVertical: 10,
+    paddingVertical: 11,
     borderRadius: 12,
+    borderWidth: 1,
+  },
+  riskBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 8,
+  },
+  riskBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.2,
+    textTransform: 'uppercase',
   },
   riskText: {
     flex: 1,

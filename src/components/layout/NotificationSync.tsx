@@ -4,13 +4,14 @@ import { Platform } from 'react-native';
 
 import { useNotifications, useRealtimeSubscription } from '@/hooks/queries';
 import { isInboxNotification } from '@/lib/notification-display';
+import { openFromNotification } from '@/lib/notification-navigation';
 import {
-    configureNotificationPresentation,
-    dispatchPendingPushNotifications,
-    presentLocalNotification,
-    registerForPushNotifications,
-    subscribeToAppStatePushDispatch,
-    subscribeToNotificationResponses,
+  configureNotificationPresentation,
+  dispatchPendingPushNotifications,
+  presentLocalNotification,
+  registerForPushNotifications,
+  subscribeToAppStatePushDispatch,
+  subscribeToNotificationResponses,
 } from '@/lib/push-notifications';
 import { useAuthStore, useRelationshipStore } from '@/stores';
 import type { Notification } from '@/types/database';
@@ -74,8 +75,8 @@ export function NotificationSync() {
   useEffect(() => {
     if (Platform.OS === 'web') return;
 
-    const unsubscribe = subscribeToNotificationResponses((type) => {
-      openFromNotificationType(type, router);
+    const unsubscribe = subscribeToNotificationResponses((target) => {
+      void openFromNotification(target, router);
     });
 
     return () => {
@@ -86,26 +87,10 @@ export function NotificationSync() {
   return null;
 }
 
+/** @deprecated Prefer openFromNotification — kept for type-only call sites. */
 export function openFromNotificationType(
   type: string | undefined,
   router: { push: (href: Href) => void },
 ) {
-  switch (type) {
-    case 'message':
-      router.push('/(tabs)/chat');
-      break;
-    case 'mood':
-    case 'mood_update':
-    case 'streak':
-    case 'moment':
-    case 'challenge':
-    case 'watch_party':
-    case 'watch_party_nudge':
-    case 'watch_party_scheduled':
-      router.push('/(tabs)/home');
-      break;
-    default:
-      router.push('/(tabs)/notifications');
-      break;
-  }
+  void openFromNotification({ type }, router);
 }

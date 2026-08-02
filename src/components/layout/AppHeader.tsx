@@ -30,6 +30,12 @@ export function AppHeader({ showChat = true }: AppHeaderProps) {
     useUnreadNotificationCount();
   const { data: notifications } = useNotifications();
   const { data: unreadMessages = 0 } = useUnreadMessageCount();
+  const onChatScreen = pathname.includes('/chat');
+  // Never show a chat badge while already in chat, or when count isn't a positive integer.
+  const chatBadge =
+    onChatScreen || !Number.isFinite(unreadMessages) || unreadMessages < 1
+      ? 0
+      : Math.floor(unreadMessages);
 
   const unreadNotifications = useMemo(() => {
     const fromFeed = filterInboxNotifications(notifications ?? []).filter(
@@ -51,9 +57,9 @@ export function AppHeader({ showChat = true }: AppHeaderProps) {
           <HeaderIconButton
             icon="messages"
             label="Open chat"
-            active={pathname.includes('/chat')}
+            active={onChatScreen}
             onPress={() => router.push('/(tabs)/chat')}
-            badge={unreadMessages}
+            badge={chatBadge}
           />
         ) : (
           <View style={styles.iconSlot} />
@@ -116,7 +122,8 @@ function HeaderIconButton({
   badgePlacement?: 'default' | 'trailing';
 }) {
   const { colors } = useTheme();
-  const showBadge = badge > 0;
+  const count = Number.isFinite(badge) && badge >= 1 ? Math.floor(badge) : 0;
+  const showBadge = count >= 1;
   const isHighlighted = active && filledWhenActive;
   const badgePositionStyle =
     badgePlacement === 'trailing' ? styles.badgeTrailing : styles.badgeDefault;
@@ -145,7 +152,7 @@ function HeaderIconButton({
               { backgroundColor: colors.error, borderColor: colors.background },
             ]}>
             <Text style={[styles.badgeText, { color: '#FFFFFF' }]} numberOfLines={1}>
-              {formatBadgeCount(badge)}
+              {formatBadgeCount(count)}
             </Text>
           </View>
         ) : null}

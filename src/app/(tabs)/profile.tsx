@@ -15,6 +15,7 @@ import { EditFieldModal } from '@/components/profile/EditFieldModal';
 import { EditGenderModal } from '@/components/profile/EditGenderModal';
 import { EditRelationshipTypeModal } from '@/components/profile/EditRelationshipTypeModal';
 import { LocationSharingSettings } from '@/components/profile/LocationSharingSettings';
+import { OnlineStatusSettings } from '@/components/profile/OnlineStatusSettings';
 import { ProfileAnniversarySection } from '@/components/profile/ProfileAnniversarySection';
 import { Icon, type IconName } from '@/components/ui/Icon';
 import { LogoMark } from '@/components/ui/Logo';
@@ -116,8 +117,10 @@ export default function ProfileScreen() {
   const plusExpiryLabel = formatSubscriptionExpiry(user?.subscription_expires_at);
 
   const handleLogout = () => {
-    void signOutUser();
-    router.replace('/(auth)/login');
+    void (async () => {
+      await signOutUser();
+      router.replace('/(auth)/login');
+    })();
   };
 
   const handleDeleteAccount = () => {
@@ -128,7 +131,7 @@ export default function ProfileScreen() {
         style: 'destructive',
         onPress: async () => {
           try {
-            void signOutUser();
+            await signOutUser();
             router.replace('/(auth)/login');
           } catch (e) {
             Alert.alert('Sign out failed', e instanceof Error ? e.message : 'Please try again.');
@@ -166,7 +169,7 @@ export default function ProfileScreen() {
           try {
             await api.leaveRelationship(user.id, relationship.id);
             await markRelationshipOnboardingDone(user.id);
-            void signOutUser();
+            await signOutUser();
             router.replace('/(auth)/login');
           } catch (e) {
             Alert.alert('Could not leave', e instanceof Error ? e.message : 'Please try again.');
@@ -508,7 +511,7 @@ export default function ProfileScreen() {
                 onPress={openGenderModal}
               />
               <SettingEditItem
-                icon="chat"
+                icon="mail"
                 label="Email"
                 value={user?.email ?? ''}
                 colors={colors}
@@ -600,12 +603,15 @@ export default function ProfileScreen() {
               <SectionTitle>Privacy & Data</SectionTitle>
             </View>
             <Card padded={false} style={{ marginBottom: 12 }}>
+              <OnlineStatusSettings />
+            </Card>
+            <Card padded={false} style={{ marginBottom: 12 }}>
               <LocationSharingSettings />
             </Card>
             <Card padded={false}>
               <SettingItem icon="lock" label="Privacy Policy" colors={colors} onPress={() => router.push('/legal/privacy')} />
               <SettingItem icon="list" label="Terms of Service" colors={colors} onPress={() => router.push('/legal/terms')} />
-              <SettingItem icon="image" label="Export my data" colors={colors} onPress={() => Alert.alert('Data Export', 'Your data export will be emailed within 24 hours.')} />
+              {/* <SettingItem icon="image" label="Export my data" colors={colors} onPress={() => Alert.alert('Data Export', 'Your data export will be emailed within 24 hours.')} /> */}
             </Card>
 
             <Card padded={false} style={{ marginTop: 12 }}>

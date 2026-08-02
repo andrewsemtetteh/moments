@@ -16,14 +16,18 @@ export function ChatDateSeparator({ label }: { label: string }) {
 
 export function ChatUnreadDivider({ count }: { count: number }) {
   const { colors } = useTheme();
+  const label =
+    count <= 0
+      ? 'UNREAD'
+      : count === 1
+        ? '1 UNREAD MESSAGE'
+        : `${count} UNREAD MESSAGES`;
 
   return (
     <View style={styles.unreadWrap}>
       <View style={[styles.unreadLine, { backgroundColor: colors.accent }]} />
       <View style={[styles.unreadPill, { backgroundColor: colors.accentSoft }]}>
-        <Text style={[styles.unreadText, { color: colors.accent }]}>
-          {count} UNREAD MESSAGE{count === 1 ? '' : 'S'}
-        </Text>
+        <Text style={[styles.unreadText, { color: colors.accent }]}>{label}</Text>
       </View>
       <View style={[styles.unreadLine, { backgroundColor: colors.accent }]} />
     </View>

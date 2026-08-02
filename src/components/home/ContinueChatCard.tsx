@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Avatar } from '@/components/ui/primitives';
@@ -9,6 +9,7 @@ import { getFirstName } from '@/lib/avatar-initial';
 import {
   continueChatPreview,
   continueChatTitle,
+  messageTimestampMs,
   shortMessageAgo,
   shouldShowContinueChat,
 } from '@/lib/continue-chat';
@@ -22,22 +23,32 @@ export function ContinueChatCard() {
   const partner = useRelationshipStore((s) => s.partner);
   const { data: latest } = useLatestMessage();
   const { data: unreadCount = 0 } = useUnreadMessageCount();
+  const [now, setNow] = useState(() => Date.now());
+
+  // Keep relative time fresh while the home tab is open.
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 15_000);
+    return () => clearInterval(id);
+  }, []);
 
   const visible = shouldShowContinueChat({
     hasPartner: !!partner,
     latest,
     unreadCount,
     currentUserId: user?.id,
+    now: new Date(now),
   });
 
   const copy = useMemo(() => {
     if (!user?.id || !latest || !visible) return null;
 
     const fromPartner = latest.sender_id !== user.id;
-    const minutesAgo = Math.max(
-      0,
-      Math.floor((Date.now() - new Date(latest.created_at).getTime()) / 60_000),
-    );
+    const ref = new Date(now);
+    // Always use send time (created_at) — never read_at.
+    const sentAt = messageTimestampMs(latest.created_at);
+    const minutesAgo = Number.isNaN(sentAt)
+      ? 0
+      : Math.max(0, Math.floor((ref.getTime() - sentAt) / 60_000));
     const partnerFirst = getFirstName(partner?.name) ?? 'Your partner';
     const unread = unreadCount > 0 && fromPartner;
 
@@ -49,10 +60,9 @@ export function ContinueChatCard() {
         minutesAgo,
       }),
       preview: continueChatPreview(latest, user.id),
-      ago: shortMessageAgo(latest.created_at),
-      unread,
+      ago: shortMessageAgo(latest.created_at, ref),
     };
-  }, [latest, partner?.name, unreadCount, user?.id, visible]);
+  }, [latest, partner?.name, unreadCount, user?.id, visible, now]);
 
   if (!partner || !copy) return null;
 
@@ -82,12 +92,9 @@ export function ContinueChatCard() {
 
       <View style={styles.bottomRow}>
         <Avatar name={partner.name} imageUrl={partner.avatar_url} size={36} />
-        <Text style={[styles.preview, { color: colors.textSecondary }]} numberOfLines={1}>
+        <Text style={[styles.preview, { color: colors.textSecondary }]} numberOfLines={2}>
           {copy.preview}
         </Text>
-        {copy.unread ? (
-          <View style={[styles.unreadDot, { backgroundColor: colors.accent }]} />
-        ) : null}
       </View>
     </Pressable>
   );
@@ -132,11 +139,5 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
     lineHeight: 19,
-  },
-  unreadDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    flexShrink: 0,
   },
 });

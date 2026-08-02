@@ -62,8 +62,8 @@ export function HomeLocationSnapshot() {
 
   usePartnerLocationRealtime();
 
-  const locationActive =
-    Boolean(user?.location_sharing_enabled) || Boolean(partner?.location_sharing_enabled);
+  // Reciprocal: home map only when you are sharing (partner pin requires both).
+  const locationActive = Boolean(user?.location_sharing_enabled);
 
   const partnerName = getFirstName(partner?.name) ?? 'Partner';
 

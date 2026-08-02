@@ -48,7 +48,7 @@ export default function SignupScreen() {
       if (result.error) throw result.error;
 
       if (result.session) {
-        await hydrateAuthSession(result.session);
+        await hydrateAuthSession(result.session, false, { trustSession: true });
         router.replace('/(onboarding)/profile-name');
         return;
       }
@@ -71,7 +71,7 @@ export default function SignupScreen() {
   const finishOAuthSignup = async () => {
     const { data: { session } } = await supabase.auth.getSession();
     if (session) {
-      await hydrateAuthSession(session);
+      await hydrateAuthSession(session, false, { trustSession: true });
       router.replace('/(onboarding)/profile-name');
     }
   };

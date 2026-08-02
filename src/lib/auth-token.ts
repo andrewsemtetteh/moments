@@ -2,6 +2,7 @@ import type { Session } from '@supabase/supabase-js';
 
 import { isJwtExpiredError } from '@/lib/network-error';
 import { getSupabase } from '@/lib/supabase';
+import { useAuthStore, useRelationshipStore } from '@/stores';
 
 const EXPIRY_BUFFER_SEC = 60;
 
@@ -40,8 +41,10 @@ export async function ensureValidSession(
 export async function invalidateLocalSession(): Promise<void> {
   const supabase = getSupabase();
   await supabase.auth.signOut({ scope: 'local' });
-  const { clearAuthSession } = await import('@/lib/auth-session');
-  await clearAuthSession();
+  // Inline store reset to avoid a dynamic import of auth-session (Windows +
+  // Metro lazy bundles can emit broken `src\...` URLs over Expo tunnel).
+  useAuthStore.getState().reset();
+  useRelationshipStore.getState().reset();
 }
 
 export function isJwtExpiredLike(error: unknown): boolean {

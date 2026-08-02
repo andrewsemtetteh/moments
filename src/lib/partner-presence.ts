@@ -12,20 +12,28 @@ export interface PartnerPresence {
   lastSeenAt: string | null;
 }
 
+export type SubscribePresenceOptions = {
+  /** When false, this device does not broadcast online presence. */
+  shareOnlineStatus?: boolean;
+};
+
 type Listener = (state: PartnerPresence) => void;
 
 type ManagedPresence = {
   channel: RealtimeChannel;
   partnerId: string;
   userId: string;
+  shareOnlineStatus: boolean;
   refs: number;
   listeners: Set<Listener>;
   heartbeat: ReturnType<typeof setInterval> | null;
   isOnline: boolean;
   lastSeenAt: string | null;
+  lastTouchAt: number;
 };
 
 const managedByRelationship = new Map<string, ManagedPresence>();
+const TOUCH_MIN_MS = 60_000;
 
 function isPartnerPresent(state: Record<string, PresencePayload[]>, partnerId: string): boolean {
   return Object.values(state).some((presences) =>
@@ -54,6 +62,28 @@ function syncPresence(relationshipId: string) {
   emit(relationshipId);
 }
 
+async function touchLastSeenDb(userId: string, entry: ManagedPresence) {
+  const now = Date.now();
+  if (now - entry.lastTouchAt < TOUCH_MIN_MS) return;
+  entry.lastTouchAt = now;
+  try {
+    const { touchLastSeen } = await import('@/services/api');
+    await touchLastSeen(userId);
+  } catch {
+    // Non-blocking — presence UI still works from the channel.
+  }
+}
+
+async function trackSelf(entry: ManagedPresence) {
+  if (!entry.shareOnlineStatus) {
+    await entry.channel.untrack();
+    return;
+  }
+  const onlineAt = new Date().toISOString();
+  await entry.channel.track({ user_id: entry.userId, online_at: onlineAt });
+  void touchLastSeenDb(entry.userId, entry);
+}
+
 function teardown(relationshipId: string) {
   const entry = managedByRelationship.get(relationshipId);
   if (!entry) return;
@@ -64,12 +94,22 @@ function teardown(relationshipId: string) {
   managedByRelationship.delete(relationshipId);
 }
 
-function ensureManagedChannel(relationshipId: string, userId: string, partnerId: string) {
+function ensureManagedChannel(
+  relationshipId: string,
+  userId: string,
+  partnerId: string,
+  shareOnlineStatus: boolean,
+) {
   const existing = managedByRelationship.get(relationshipId);
   if (existing) {
     existing.refs += 1;
     existing.partnerId = partnerId;
-    syncPresence(relationshipId);
+    if (existing.shareOnlineStatus !== shareOnlineStatus) {
+      existing.shareOnlineStatus = shareOnlineStatus;
+      void trackSelf(existing).then(() => syncPresence(relationshipId));
+    } else {
+      syncPresence(relationshipId);
+    }
     return existing;
   }
 
@@ -81,11 +121,13 @@ function ensureManagedChannel(relationshipId: string, userId: string, partnerId:
     channel,
     partnerId,
     userId,
+    shareOnlineStatus,
     refs: 1,
     listeners: new Set(),
     heartbeat: null,
     isOnline: false,
     lastSeenAt: null,
+    lastTouchAt: 0,
   };
 
   managedByRelationship.set(relationshipId, entry);
@@ -103,13 +145,13 @@ function ensureManagedChannel(relationshipId: string, userId: string, partnerId:
     })
     .subscribe(async (status) => {
       if (status === 'SUBSCRIBED') {
-        await channel.track({ user_id: userId, online_at: new Date().toISOString() });
+        await trackSelf(entry);
         syncPresence(relationshipId);
       }
     });
 
   entry.heartbeat = setInterval(() => {
-    void channel.track({ user_id: userId, online_at: new Date().toISOString() });
+    void trackSelf(entry);
   }, 30_000);
 
   return entry;
@@ -120,8 +162,10 @@ export function subscribePartnerPresence(
   userId: string,
   partnerId: string,
   listener: Listener,
+  options: SubscribePresenceOptions = {},
 ): () => void {
-  const entry = ensureManagedChannel(relationshipId, userId, partnerId);
+  const shareOnlineStatus = options.shareOnlineStatus !== false;
+  const entry = ensureManagedChannel(relationshipId, userId, partnerId, shareOnlineStatus);
   entry.listeners.add(listener);
   listener({ isOnline: entry.isOnline, lastSeenAt: entry.lastSeenAt });
 
@@ -132,4 +176,12 @@ export function subscribePartnerPresence(
       teardown(relationshipId);
     }
   };
+}
+
+/** Update whether this device broadcasts presence (e.g. after toggling in Settings). */
+export function setLocalOnlineStatusSharing(relationshipId: string, shareOnlineStatus: boolean) {
+  const entry = managedByRelationship.get(relationshipId);
+  if (!entry || entry.shareOnlineStatus === shareOnlineStatus) return;
+  entry.shareOnlineStatus = shareOnlineStatus;
+  void trackSelf(entry).then(() => syncPresence(relationshipId));
 }

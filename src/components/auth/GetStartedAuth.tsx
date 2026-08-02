@@ -44,7 +44,7 @@ export function GetStartedAuth({ showBack = true }: Props) {
       data: { session },
     } = await supabase.auth.getSession();
     if (session) {
-      await hydrateAuthSession(session);
+      await hydrateAuthSession(session, false, { trustSession: true });
       router.replace('/');
     }
   };

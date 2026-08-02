@@ -8,6 +8,7 @@ import { MomentStoryViewer } from '@/components/moments/MomentStoryViewer';
 import { PaywallModal } from '@/components/subscription/PaywallModal';
 import { StreakMilestoneModal } from '@/components/home/StreakMilestoneModal';
 import { StreakSparkModal } from '@/components/home/StreakSparkModal';
+import { WatchTogetherModal } from '@/components/watch/WatchTogetherModal';
 import { WrappedModal } from '@/components/wrapped/WrappedModal';
 
 /** Global overlays mounted once at the app root (native only). */
@@ -25,6 +26,7 @@ export function AppModals() {
       <PaywallModal />
       <StreakMilestoneModal />
       <StreakSparkModal />
+      <WatchTogetherModal />
     </>
   );
 }
