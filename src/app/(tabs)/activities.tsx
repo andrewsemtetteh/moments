@@ -7,6 +7,7 @@ import { ExploreSection, type ExploreModalKey } from '@/components/activities/Ex
 import { ExploreActivityModal } from '@/components/activities/explore/ExploreActivityModal';
 // Experiences marketplace paused — re-enable when backend is ready.
 // import { ExperiencesSection } from '@/components/activities/ExperiencesSection';
+import { PromptHistoryModal } from '@/components/home/PromptHistoryModal';
 import { AppHeader } from '@/components/layout/AppHeader';
 import { ScreenContainer } from '@/components/layout/ScreenContainer';
 import { TabScreenScroll } from '@/components/layout/TabScreenScroll';
@@ -15,7 +16,7 @@ import { useDailyChallenge, useRealtimeSubscription } from '@/hooks/queries';
 import * as api from '@/services/api';
 import { useRelationshipStore } from '@/stores';
 
-const EXPLORE_MODAL_KEYS = new Set<ExploreModalKey>([
+const EXPLORE_MODAL_KEYS = new Set<string>([
   'cards',
   'games',
   'quiz',
@@ -30,7 +31,24 @@ const EXPLORE_MODAL_KEYS = new Set<ExploreModalKey>([
   'truth',
   'memory',
   'playlist',
-  'watch',
+  'thisOrThat',
+  'wouldYouRather',
+  'whosLikely',
+  'loveQuiz',
+  'neverHaveI',
+  'finishSentence',
+  'emojiStory',
+  'appreciation',
+  'thirtySix',
+  'weekChallenge',
+  'dateNight',
+  'fortuneWheel',
+  'dateGenerator',
+  'drawTogether',
+  'compatibility',
+  'personality',
+  'attachment',
+  'guessAnswer',
 ]);
 
 export default function ActivitiesScreen() {
@@ -39,11 +57,13 @@ export default function ActivitiesScreen() {
   const partner = useRelationshipStore((s) => s.partner);
   const { data: challenge } = useDailyChallenge();
   const [activeModal, setActiveModal] = useState<ExploreModalKey | null>(null);
+  const [showPromptHistory, setShowPromptHistory] = useState(false);
 
   useRealtimeSubscription('activities');
+  useRealtimeSubscription('daily_challenges');
 
   useEffect(() => {
-    if (!open || !EXPLORE_MODAL_KEYS.has(open as ExploreModalKey)) return;
+    if (!open || !EXPLORE_MODAL_KEYS.has(open)) return;
     setActiveModal(open as ExploreModalKey);
   }, [open]);
 
@@ -64,9 +84,9 @@ export default function ActivitiesScreen() {
       <AppHeader />
       <TabScreenScroll showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
         <ActivitiesIntroSection
-          challengePrompt={challenge?.prompt}
+          challenge={challenge}
           partnerName={partner?.name}
-          onQuickOpen={setActiveModal}
+          onOpenHistory={() => setShowPromptHistory(true)}
         />
 
         <ExploreSection onOpen={setActiveModal} />
@@ -81,6 +101,8 @@ export default function ActivitiesScreen() {
         onClose={() => setActiveModal(null)}
         onAddToCalendar={addToCalendar}
       />
+
+      <PromptHistoryModal visible={showPromptHistory} onClose={() => setShowPromptHistory(false)} />
     </ScreenContainer>
   );
 }

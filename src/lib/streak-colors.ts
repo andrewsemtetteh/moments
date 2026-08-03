@@ -1,4 +1,5 @@
 import type { ThemeColors } from '@/constants/design-system';
+import { isStreakVisuallyAtRisk } from '@/lib/streak-reminder-timing';
 
 /**
  * Streak palette:
@@ -60,16 +61,20 @@ export const STREAK_COLORS = {
 
 export type StreakVisualTone = 'idle' | 'active' | 'secured' | 'risk' | 'lost';
 
-export function streakToneFromStatus(status: {
-  current_streak: number;
-  at_risk: boolean;
-  both_active_today: boolean;
-}): StreakVisualTone {
+export function streakToneFromStatus(
+  status: {
+    current_streak: number;
+    at_risk: boolean;
+    both_active_today: boolean;
+  },
+  now = new Date(),
+): StreakVisualTone {
   if (status.current_streak <= 0) return 'idle';
-  if (status.at_risk) return 'risk';
+  if (isStreakVisuallyAtRisk(status, now)) return 'risk';
   if (status.both_active_today) return 'secured';
   return 'active';
 }
+
 
 /** Theme-aware fills for the large flame well and accents. */
 export function streakWellColors(tone: StreakVisualTone, colors: ThemeColors) {

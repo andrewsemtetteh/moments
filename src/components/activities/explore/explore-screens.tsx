@@ -1,18 +1,18 @@
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 
 import { Icon } from '@/components/ui/Icon';
 import { PrimaryButton } from '@/components/ui/primitives';
 import {
-  CARD_CATEGORIES,
-  CARD_PROMPTS,
-  COUPLES_TRIVIA,
-  DAILY_QUESTIONS,
-  GAMES,
-  LOVE_LANGUAGE_QUIZ,
-  getDailyQuestion,
+    CARD_CATEGORIES,
+    CARD_PROMPTS,
+    COUPLES_TRIVIA,
+    DAILY_QUESTIONS,
+    GAMES,
+    LOVE_LANGUAGE_QUIZ,
+    getDailyQuestion,
 } from '@/constants/activity-content';
 import { useBucketList, useBucketMutations, useGoalMutations, useSharedGoals } from '@/hooks/queries';
 import { useTheme } from '@/hooks/useTheme';

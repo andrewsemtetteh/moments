@@ -138,13 +138,7 @@ export function StreakDayCircle({
             borderWidth: 2,
           },
         ]}>
-        <AnimatedStreakFire
-          color={STREAK_COLORS.atRiskBright}
-          size={dim.fire - 2}
-          layered
-          animate
-          pulse
-        />
+        <Icon name="warning" size={dim.icon + 2} color={STREAK_COLORS.atRiskBright} filled />
       </View>
     );
   }

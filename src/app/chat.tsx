@@ -43,6 +43,7 @@ import { PartnerStatusLine } from '@/components/chat/PartnerStatusLine';
 import { LoadingState } from '@/components/home/MoodSnapshot';
 import { SwipeDismissView } from '@/components/layout/SwipeDismissView';
 import { Icon } from '@/components/ui/Icon';
+import { FullScreenImageModal } from '@/components/ui/FullScreenImageModal';
 import { Avatar } from '@/components/ui/primitives';
 import {
     useInfiniteMessages,
@@ -94,6 +95,7 @@ export default function ChatScreen() {
   const [showEmoji, setShowEmoji] = useState(false);
   const [showAttachment, setShowAttachment] = useState(false);
   const [showCamera, setShowCamera] = useState(false);
+  const [showPartnerPhoto, setShowPartnerPhoto] = useState(false);
   // Recording
   const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const [isRecording, setIsRecording] = useState(false);
@@ -842,7 +844,6 @@ export default function ChatScreen() {
           lastSeenAt={partnerLastSeenAt}
           statusHidden={partnerStatusHidden}
           onOpenProfile={openPartnerProfileView}
-          onOpenAvatar={openPartnerProfileView}
         />
       ) : null,
     [
@@ -889,13 +890,18 @@ export default function ChatScreen() {
               borderBottomColor: colors.border,
             },
           ]}>
-          <Pressable
-            style={styles.headerProfile}
-            onPress={openPartnerProfileView}
-            accessibilityRole="button"
-            accessibilityLabel="View partner info">
-            <Avatar name={partner?.name} imageUrl={partner?.avatar_url} size={40} />
-            <View style={styles.headerText}>
+          <View style={styles.headerProfile}>
+            <Pressable
+              onPress={() => setShowPartnerPhoto(true)}
+              accessibilityRole="button"
+              accessibilityLabel="View profile photo">
+              <Avatar name={partner?.name} imageUrl={partner?.avatar_url} size={40} />
+            </Pressable>
+            <Pressable
+              style={styles.headerText}
+              onPress={openPartnerProfileView}
+              accessibilityRole="button"
+              accessibilityLabel="View partner info">
               <Text style={[styles.headerName, { color: colors.text }]} numberOfLines={1}>
                 {partner?.name ?? 'Partner'}
               </Text>
@@ -905,8 +911,8 @@ export default function ChatScreen() {
                 lastSeenAt={partnerLastSeenAt}
                 statusHidden={partnerStatusHidden}
               />
-            </View>
-          </Pressable>
+            </Pressable>
+          </View>
 
           <View style={styles.headerActions}>
             <Pressable onPress={() => startCall('video')} hitSlop={8} style={styles.headerIconSlot}>
@@ -1201,6 +1207,14 @@ export default function ChatScreen() {
         visible={showCamera}
         onClose={() => setShowCamera(false)}
         onCapture={handleCameraCapture}
+      />
+
+      <FullScreenImageModal
+        visible={showPartnerPhoto}
+        imageUrl={partner?.avatar_url}
+        title={partner?.name ?? 'Partner'}
+        fallbackName={partner?.name}
+        onClose={() => setShowPartnerPhoto(false)}
       />
     </View>
   );

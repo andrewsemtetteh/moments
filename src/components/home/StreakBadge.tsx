@@ -4,6 +4,7 @@ import { AnimatedStreakFire } from '@/components/home/AnimatedStreakFire';
 import { useTheme } from '@/hooks/useTheme';
 import { streakCountLabel, streakSubtitle } from '@/lib/streak';
 import { streakFireColor } from '@/lib/streak-colors';
+import { isStreakVisuallyAtRisk } from '@/lib/streak-reminder-timing';
 import type { StreakStatus } from '@/types/database';
 
 interface StreakBadgeProps {
@@ -12,7 +13,7 @@ interface StreakBadgeProps {
 
 export function StreakBadge({ status }: StreakBadgeProps) {
   const { colors } = useTheme();
-  const atRisk = status.at_risk;
+  const atRisk = isStreakVisuallyAtRisk(status);
   const active = status.current_streak > 0;
   const fireColor = streakFireColor(active || atRisk, atRisk, colors.textTertiary);
 

@@ -729,6 +729,25 @@ export async function fetchUpcomingCalendarEvents(relationshipId: string, daysAh
   return data as CalendarEvent[];
 }
 
+/** Recent past plans — surface as memories on Plan. */
+export async function fetchPastCalendarEvents(relationshipId: string, daysBack = 45) {
+  const end = new Date();
+  const start = new Date();
+  start.setDate(start.getDate() - daysBack);
+
+  const { data, error } = await supabase
+    .from('calendar_events')
+    .select('*')
+    .eq('relationship_id', relationshipId)
+    .gte('date_time', start.toISOString())
+    .lt('date_time', end.toISOString())
+    .order('date_time', { ascending: false })
+    .limit(20);
+
+  if (error) throw error;
+  return data as CalendarEvent[];
+}
+
 export async function createCalendarEvent(
   relationshipId: string,
   event: Omit<CalendarEvent, 'id' | 'relationship_id' | 'created_at'>,
@@ -740,6 +759,25 @@ export async function createCalendarEvent(
     .single();
   if (error) throw error;
   return data as CalendarEvent;
+}
+
+export async function updateCalendarEvent(
+  eventId: string,
+  patch: Partial<Pick<CalendarEvent, 'title' | 'date_time' | 'type' | 'description'>>,
+) {
+  const { data, error } = await supabase
+    .from('calendar_events')
+    .update(patch)
+    .eq('id', eventId)
+    .select()
+    .single();
+  if (error) throw error;
+  return data as CalendarEvent;
+}
+
+export async function deleteCalendarEvent(eventId: string) {
+  const { error } = await supabase.from('calendar_events').delete().eq('id', eventId);
+  if (error) throw error;
 }
 
 export async function fetchLatestMoods(relationshipId: string, memberIds?: string[]) {
@@ -1160,6 +1198,7 @@ export async function respondToDailyChallenge(
     .select()
     .single();
   if (error) throw error;
+  if (!data) throw new Error('Could not save your answer. Please try again.');
 
   const updated = data as DailyChallenge;
   const bothIn = Boolean(updated.user_1_response && updated.user_2_response);

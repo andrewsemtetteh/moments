@@ -1,12 +1,12 @@
 import {
-  addMonths,
-  format,
-  isAfter,
-  isBefore,
-  startOfMonth,
+    addMonths,
+    format,
+    isAfter,
+    isBefore,
+    startOfMonth,
 } from 'date-fns';
 import * as Haptics from 'expo-haptics';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { AnimatedStreakFire } from '@/components/home/AnimatedStreakFire';
@@ -17,18 +17,19 @@ import { useTheme } from '@/hooks/useTheme';
 import { getFirstName } from '@/lib/avatar-initial';
 import { streakSubtitle } from '@/lib/streak';
 import {
-  STREAK_COLORS,
-  streakToneFromStatus,
-  streakWellColors,
+    STREAK_COLORS,
+    streakToneFromStatus,
+    streakWellColors,
 } from '@/lib/streak-colors';
 import {
-  buildStreakMonth,
-  buildStreakWeek,
-  streakMonthNavBounds,
-  streakWeekLineSpan,
-  type StreakDayCell,
-  type StreakView,
+    buildStreakMonth,
+    buildStreakWeek,
+    streakMonthNavBounds,
+    streakWeekLineSpan,
+    type StreakDayCell,
+    type StreakView,
 } from '@/lib/streak-days';
+import { isStreakVisuallyAtRisk } from '@/lib/streak-reminder-timing';
 import { useRelationshipStore } from '@/stores';
 import type { StreakStatus } from '@/types/database';
 
@@ -46,18 +47,27 @@ export function StreakDayTracker({ status, joinedAt }: StreakDayTrackerProps) {
   const [view, setView] = useState<StreakView>('week');
   const bounds = useMemo(() => streakMonthNavBounds(joinedAt), [joinedAt]);
   const [month, setMonth] = useState(() => bounds.maxMonth);
-  const week = useMemo(() => buildStreakWeek(status, joinedAt), [status, joinedAt]);
+  const [nowTick, setNowTick] = useState(() => Date.now());
+  const now = useMemo(() => new Date(nowTick), [nowTick]);
+
+  useEffect(() => {
+    if (!status.at_risk || status.current_streak <= 0) return;
+    const id = setInterval(() => setNowTick(Date.now()), 30_000);
+    return () => clearInterval(id);
+  }, [status.at_risk, status.current_streak]);
+
+  const week = useMemo(() => buildStreakWeek(status, joinedAt, now), [status, joinedAt, now]);
   const monthGrid = useMemo(
-    () => buildStreakMonth(status, month, joinedAt),
-    [status, month, joinedAt],
+    () => buildStreakMonth(status, month, joinedAt, now),
+    [status, month, joinedAt, now],
   );
 
   const count = status.current_streak;
   const active = count > 0;
-  const atRisk = status.at_risk && active;
-  const tone = streakToneFromStatus(status);
+  const atRisk = isStreakVisuallyAtRisk(status, now);
+  const tone = streakToneFromStatus(status, now);
   const well = streakWellColors(tone, colors);
-  const statusLine = streakSubtitle(status);
+  const statusLine = streakSubtitle(status, now);
 
   const setTab = (next: StreakView) => {
     if (next === view) return;
@@ -70,9 +80,9 @@ export function StreakDayTracker({ status, joinedAt }: StreakDayTrackerProps) {
       style={[
         styles.card,
         {
-          backgroundColor: atRisk ? well.cardBg : colors.surface,
-          borderColor: well.cardBorder,
-          borderWidth: atRisk ? 1.5 : StyleSheet.hairlineWidth,
+          backgroundColor: colors.surface,
+          borderColor: colors.border,
+          borderWidth: StyleSheet.hairlineWidth,
         },
       ]}>
       <View style={styles.header}>
@@ -81,8 +91,8 @@ export function StreakDayTracker({ status, joinedAt }: StreakDayTrackerProps) {
             color={well.fire}
             size={56}
             layered
-            animate={atRisk || active}
-            pulse={atRisk}
+            animate={false}
+            pulse={false}
           />
 
           <View style={styles.heroCopy}>
@@ -93,7 +103,7 @@ export function StreakDayTracker({ status, joinedAt }: StreakDayTrackerProps) {
             <Text
               style={[
                 styles.statusLine,
-                { color: atRisk ? well.bannerText : colors.textSecondary },
+                { color: colors.textSecondary },
               ]}
               numberOfLines={2}>
               {statusLine}
@@ -157,27 +167,6 @@ export function StreakDayTracker({ status, joinedAt }: StreakDayTrackerProps) {
           </View>
         ) : null}
       </View>
-
-      {atRisk ? (
-        <View
-          style={[
-            styles.riskBanner,
-            {
-              backgroundColor: well.bannerBg,
-              borderColor: well.cardBorder,
-            },
-          ]}>
-          <View style={[styles.riskBadge, { backgroundColor: STREAK_COLORS.atRisk }]}>
-            <Icon name="warning" size={12} color={STREAK_COLORS.onAtRisk} filled />
-            <Text style={styles.riskBadgeText}>At risk</Text>
-          </View>
-          <Text style={[styles.riskText, { color: well.bannerText }]}>
-            {status.user_active_today
-              ? `${partnerFirst} still needs to check in before midnight`
-              : 'Check in today or this streak ends at midnight'}
-          </Text>
-        </View>
-      ) : null}
 
       {view === 'week' ? (
         <WeekStreakRow days={week} labelColor={colors.textTertiary} todayColor={colors.text} />
@@ -534,36 +523,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '800',
     letterSpacing: -0.2,
-  },
-  riskBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 11,
-    borderRadius: 12,
-    borderWidth: 1,
-  },
-  riskBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 5,
-    borderRadius: 8,
-  },
-  riskBadgeText: {
-    color: '#FFFFFF',
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 0.2,
-    textTransform: 'uppercase',
-  },
-  riskText: {
-    flex: 1,
-    fontSize: 13,
-    fontWeight: '700',
-    lineHeight: 18,
   },
   weekWrap: {
     gap: 10,

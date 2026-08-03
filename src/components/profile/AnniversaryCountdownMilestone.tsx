@@ -1,5 +1,4 @@
 import { format } from 'date-fns';
-import { LinearGradient } from 'expo-linear-gradient';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Icon } from '@/components/ui/Icon';
@@ -18,48 +17,57 @@ export function AnniversaryCountdownMilestone({ anniversaryIso, onEdit }: Annive
   const yearProgress = Math.min(1, Math.max(0, 1 - daysUntil / 365));
 
   return (
-    <LinearGradient
-      colors={colors.gradient}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
-      style={styles.countdownCard}>
+    <View
+      style={[
+        styles.countdownCard,
+        {
+          backgroundColor: colors.surfaceElevated,
+          borderColor: colors.border,
+        },
+      ]}>
       <View style={styles.countdownTop}>
-        <Text style={styles.countdownEyebrow}>{isToday ? 'Happy anniversary' : 'Next anniversary in'}</Text>
+        <Text style={[styles.countdownEyebrow, { color: colors.textSecondary }]}>
+          {isToday ? 'Happy anniversary' : 'Next anniversary in'}
+        </Text>
         {onEdit ? (
           <Pressable
             onPress={onEdit}
             hitSlop={10}
-            style={styles.editChip}
+            style={[styles.editChip, { backgroundColor: colors.accentSoft }]}
             accessibilityRole="button"
             accessibilityLabel="Edit anniversary date">
-            <Icon name="edit" size={14} color="#fff" />
+            <Icon name="edit" size={14} color={colors.accent} />
           </Pressable>
         ) : null}
       </View>
 
-      <Text style={styles.countdownNumber}>{isToday ? '🎉' : daysUntil}</Text>
-      {!isToday ? <Text style={styles.countdownUnit}>days</Text> : null}
-      <Text style={styles.countdownDate}>{format(anniversaryDate, 'EEEE · MMMM d, yyyy')}</Text>
+      <Text style={[styles.countdownNumber, { color: colors.text }]}>{isToday ? '🎉' : daysUntil}</Text>
+      {!isToday ? (
+        <Text style={[styles.countdownUnit, { color: colors.textSecondary }]}>days</Text>
+      ) : null}
+      <Text style={[styles.countdownDate, { color: colors.text }]}>
+        {format(anniversaryDate, 'EEEE · MMMM d, yyyy')}
+      </Text>
 
-      <View style={styles.progressTrack}>
-        <View style={[styles.progressFill, { width: `${yearProgress * 100}%` }]} />
+      <View style={[styles.progressTrack, { backgroundColor: colors.border }]}>
+        <View style={[styles.progressFill, { width: `${yearProgress * 100}%`, backgroundColor: colors.accent }]} />
       </View>
-      <Text style={styles.progressHint}>
+      <Text style={[styles.progressHint, { color: colors.textTertiary }]}>
         {isToday ? 'Celebrate today together' : `${Math.round(yearProgress * 100)}% through your year together`}
       </Text>
-    </LinearGradient>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   countdownCard: {
-    borderRadius: 22,
-    paddingHorizontal: 22,
-    paddingTop: 20,
-    paddingBottom: 18,
+    borderRadius: 18,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 18,
+    paddingTop: 18,
+    paddingBottom: 16,
     alignItems: 'center',
     gap: 2,
-    minHeight: 168,
   },
   countdownTop: {
     width: '100%',
@@ -69,7 +77,6 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   countdownEyebrow: {
-    color: 'rgba(255,255,255,0.82)',
     fontSize: 11,
     fontWeight: '800',
     letterSpacing: 1.1,
@@ -81,12 +88,10 @@ const styles = StyleSheet.create({
     width: 30,
     height: 30,
     borderRadius: 15,
-    backgroundColor: 'rgba(255,255,255,0.18)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   countdownNumber: {
-    color: '#fff',
     fontSize: 56,
     fontWeight: '800',
     lineHeight: 60,
@@ -94,14 +99,12 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   countdownUnit: {
-    color: 'rgba(255,255,255,0.9)',
     fontSize: 16,
     fontWeight: '700',
     marginTop: -2,
     marginBottom: 4,
   },
   countdownDate: {
-    color: 'rgba(255,255,255,0.92)',
     fontSize: 14,
     lineHeight: 20,
     textAlign: 'center',
@@ -112,17 +115,14 @@ const styles = StyleSheet.create({
     width: '100%',
     height: 5,
     borderRadius: 3,
-    backgroundColor: 'rgba(255,255,255,0.22)',
     marginTop: 16,
     overflow: 'hidden',
   },
   progressFill: {
     height: 5,
     borderRadius: 3,
-    backgroundColor: 'rgba(255,255,255,0.92)',
   },
   progressHint: {
-    color: 'rgba(255,255,255,0.75)',
     fontSize: 11,
     fontWeight: '600',
     marginTop: 6,

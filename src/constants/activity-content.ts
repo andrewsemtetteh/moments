@@ -62,6 +62,8 @@ export const GAMES: Game[] = [
       { prompt: 'Would you rather…', options: ['Relive our first date', 'Fast-forward to our 50th anniversary'] },
       { prompt: 'Would you rather…', options: ['Never argue again', 'Always win every argument'] },
       { prompt: 'Would you rather…', options: ['A cozy night in', 'A wild night out'] },
+      { prompt: 'Would you rather…', options: ['Beach vacation', 'Mountain adventure'] },
+      { prompt: 'Would you rather…', options: ['Cook together every Sunday', 'Explore a new restaurant weekly'] },
     ],
   },
   {
@@ -71,9 +73,11 @@ export const GAMES: Game[] = [
     rounds: [
       { prompt: 'This or that?', options: ['Beach', 'Mountains'] },
       { prompt: 'This or that?', options: ['Coffee', 'Tea'] },
-      { prompt: 'This or that?', options: ['Movie night', 'Game night'] },
-      { prompt: 'This or that?', options: ['Sunrise', 'Sunset'] },
+      { prompt: 'This or that?', options: ['Netflix', 'Cinema'] },
+      { prompt: 'This or that?', options: ['Pizza', 'Sushi'] },
+      { prompt: 'This or that?', options: ['Morning', 'Night'] },
       { prompt: 'This or that?', options: ['Texting', 'Calling'] },
+      { prompt: 'This or that?', options: ['Sunrise', 'Sunset'] },
     ],
   },
   {
@@ -113,6 +117,216 @@ export const GAMES: Game[] = [
     ],
   },
 ];
+
+export const WHOS_MORE_LIKELY = [
+  'Forget their phone at home?',
+  'Cry during a movie?',
+  'Plan a surprise?',
+  'Sleep in on a day off?',
+  'Spend a little too much?',
+  'Start dancing in the kitchen?',
+  'Get lost even with GPS?',
+  'Send a paragraph-long text?',
+];
+
+export const FINISH_THE_SENTENCE = [
+  'I knew I loved you when…',
+  'Our funniest memory is…',
+  'I wish we could…',
+  'I feel closest to you when…',
+  'One thing I never want us to stop doing is…',
+  'A dream I have for us is…',
+];
+
+export const EMOJI_STORIES = [
+  { prompt: '🌧️🍕🎬❤️', answer: 'Rainy pizza movie night' },
+  { prompt: '☕🛋️📖🐶', answer: 'Cozy coffee, books, and the dog' },
+  { prompt: '✈️🗺️🍜📸', answer: 'Travel day with food and photos' },
+  { prompt: '🌅🥾💧👫', answer: 'Sunrise hike together' },
+  { prompt: '🕯️🍝🎶🥂', answer: 'Candlelit dinner at home' },
+];
+
+export const LOVE_QUIZ = [
+  { question: 'My favorite food?', hint: 'One partner answers — the other guesses' },
+  { question: 'My dream vacation?', hint: 'Be specific if you can' },
+  { question: 'Coffee or tea?', hint: 'Or neither!' },
+  { question: "What's my biggest fear?", hint: 'Go gentle' },
+  { question: "What's my love language?", hint: 'Words, time, gifts, acts, or touch' },
+  { question: 'My go-to comfort show?', hint: 'Bonus if you know the episode' },
+  { question: 'What always makes me laugh?', hint: 'Inside jokes count' },
+  { question: 'My ideal Sunday?', hint: 'Morning to night' },
+];
+
+export const APPRECIATION_PROMPTS = [
+  'Tell your partner one thing you’re grateful for today.',
+  'Name one small thing they did recently that you noticed.',
+  'Share one way they make ordinary days better.',
+  'Thank them for something they always do without being asked.',
+];
+
+export const THIRTY_SIX_QUESTIONS = [
+  'Given the choice of anyone in the world, whom would you want as a dinner guest?',
+  'Would you like to be famous? In what way?',
+  'Before making a telephone call, do you ever rehearse what you are going to say?',
+  'What would constitute a “perfect” day for you?',
+  'When did you last sing to yourself? To someone else?',
+  'If you were able to live to the age of 90 and retain either the mind or body of a 30-year-old for the last 60 years of your life, which would you want?',
+  'Do you have a secret hunch about how you will die?',
+  'Name three things you and your partner appear to have in common.',
+  'For what in your life do you feel most grateful?',
+  'If you could change anything about the way you were raised, what would it be?',
+  'Take four minutes and tell your partner your life story in as much detail as possible.',
+  'If you could wake up tomorrow having gained any one quality or ability, what would it be?',
+];
+
+export const WEEK_CHALLENGE = [
+  { day: 1, title: 'Hug every day', detail: 'At least one real hug — no phones.' },
+  { day: 2, title: 'Take one photo', detail: 'Capture a small moment together.' },
+  { day: 3, title: 'Share your mood', detail: 'Send how you actually feel today.' },
+  { day: 4, title: 'Send one compliment', detail: 'Specific beats generic.' },
+  { day: 5, title: 'Ask one curious question', detail: 'Something you don’t already know.' },
+  { day: 6, title: 'Plan something tiny', detail: 'Coffee, a walk, or a snack date.' },
+  { day: 7, title: 'Look back together', detail: 'Talk about your favorite moment this week.' },
+];
+
+export const DATE_NIGHT_CHALLENGE = [
+  { title: 'Cook together', detail: 'One meal, no takeout.' },
+  { title: 'Watch a sunset', detail: 'Phones down for ten minutes.' },
+  { title: 'No phones tonight', detail: 'Put them in another room.' },
+  { title: 'Try something new', detail: 'A place, dish, or activity neither has done.' },
+];
+
+export const FORTUNE_WHEEL = [
+  'Kiss',
+  'Compliment',
+  'Hug',
+  'Plan a date',
+  'Tell a joke',
+  'Share a favorite memory',
+  'Send a voice note',
+  'Dance for 30 seconds',
+];
+
+export const COMPATIBILITY_QUESTIONS = [
+  {
+    question: 'On a free Saturday you usually want to…',
+    options: [
+      { label: 'Stay in and recharge', value: 'home' },
+      { label: 'Go out and explore', value: 'adventure' },
+      { label: 'A mix — short outing then couch', value: 'balance' },
+    ],
+  },
+  {
+    question: 'When money is tight, you prefer to…',
+    options: [
+      { label: 'Save first, spend later', value: 'save' },
+      { label: 'Spend on experiences', value: 'experience' },
+      { label: 'Talk it through every time', value: 'talk' },
+    ],
+  },
+  {
+    question: 'During conflict you tend to…',
+    options: [
+      { label: 'Need space first', value: 'space' },
+      { label: 'Want to talk it out now', value: 'talk' },
+      { label: 'Joke to lighten the mood', value: 'humor' },
+    ],
+  },
+];
+
+export const PERSONALITY_QUESTIONS = [
+  {
+    question: 'At a party you usually…',
+    options: [
+      { label: 'Find one deep conversation', value: 'depth' },
+      { label: 'Float between groups', value: 'social' },
+      { label: 'Stick with your person', value: 'pair' },
+      { label: 'Leave early for quiet', value: 'recharge' },
+    ],
+  },
+  {
+    question: 'Your ideal weekend plans are…',
+    options: [
+      { label: 'Fully scheduled', value: 'planner' },
+      { label: 'A loose idea, then vibe', value: 'flexible' },
+      { label: 'Zero plans until the day', value: 'spontaneous' },
+    ],
+  },
+  {
+    question: 'When making a big decision you…',
+    options: [
+      { label: 'List pros and cons', value: 'logic' },
+      { label: 'Go with your gut', value: 'feel' },
+      { label: 'Ask people you trust', value: 'advise' },
+    ],
+  },
+  {
+    question: 'Under stress you show it by…',
+    options: [
+      { label: 'Getting quiet', value: 'quiet' },
+      { label: 'Talking it out', value: 'talk' },
+      { label: 'Getting busy / productive', value: 'busy' },
+      { label: 'Needing comfort first', value: 'comfort' },
+    ],
+  },
+  {
+    question: 'Your love language in one word feels closest to…',
+    options: [
+      { label: 'Words', value: 'words' },
+      { label: 'Time', value: 'time' },
+      { label: 'Touch', value: 'touch' },
+      { label: 'Acts', value: 'acts' },
+      { label: 'Gifts', value: 'gifts' },
+    ],
+  },
+];
+
+export const ATTACHMENT_QUESTIONS = [
+  {
+    question: 'When your partner needs alone time you usually…',
+    options: [
+      { label: 'Feel fine — I get it', value: 'secure' },
+      { label: 'Worry they’re pulling away', value: 'anxious' },
+      { label: 'Feel relieved — I like space too', value: 'avoidant' },
+    ],
+  },
+  {
+    question: 'You feel closest when…',
+    options: [
+      { label: 'We check in and stay connected', value: 'secure' },
+      { label: 'I get lots of reassurance', value: 'anxious' },
+      { label: 'We’re close without needing constant talk', value: 'avoidant' },
+    ],
+  },
+  {
+    question: 'After a disagreement you tend to…',
+    options: [
+      { label: 'Repair and move forward', value: 'secure' },
+      { label: 'Replay it and need closure soon', value: 'anxious' },
+      { label: 'Shut down until it cools off', value: 'avoidant' },
+    ],
+  },
+  {
+    question: 'Texts going unanswered for a few hours…',
+    options: [
+      { label: 'Usually no big deal', value: 'secure' },
+      { label: 'Makes me spiral a bit', value: 'anxious' },
+      { label: 'I barely notice', value: 'avoidant' },
+    ],
+  },
+  {
+    question: 'In a relationship you most need…',
+    options: [
+      { label: 'Trust and steady warmth', value: 'secure' },
+      { label: 'Frequent closeness and clarity', value: 'anxious' },
+      { label: 'Independence and breathing room', value: 'avoidant' },
+    ],
+  },
+];
+
+export function pickFortune() {
+  return FORTUNE_WHEEL[Math.floor(Math.random() * FORTUNE_WHEEL.length)];
+}
 
 export interface DateIdea {
   title: string;

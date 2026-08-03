@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 
 import { GlassSurface } from '@/components/ui/GlassSurface';
-import { Radius, type ThemeColors } from '@/constants/design-system';
+import { Radius, Spacing, type ThemeColors } from '@/constants/design-system';
 import { useTheme } from '@/hooks/useTheme';
 import { getAvatarInitial } from '@/lib/avatar-initial';
 
@@ -115,14 +115,16 @@ export function SectionTitle({
   children,
   action,
   onAction,
+  style,
 }: {
   children: ReactNode;
   action?: string;
   onAction?: () => void;
+  style?: StyleProp<ViewStyle>;
 }) {
   const { colors } = useTheme();
   return (
-    <View style={styles.sectionRow}>
+    <View style={[styles.sectionRow, style]}>
       <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>{children}</Text>
       {action && (
         <Pressable onPress={onAction} hitSlop={8}>
@@ -298,7 +300,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 12,
+    marginBottom: Spacing.md,
   },
   sectionTitle: {
     fontSize: 13,

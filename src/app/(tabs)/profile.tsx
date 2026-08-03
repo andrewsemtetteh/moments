@@ -3,7 +3,7 @@ import * as Clipboard from 'expo-clipboard';
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter, type Href } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Alert, Pressable, Share, StyleSheet, Text, View } from 'react-native';
 
@@ -19,21 +19,29 @@ import { OnlineStatusSettings } from '@/components/profile/OnlineStatusSettings'
 import { ProfileAnniversarySection } from '@/components/profile/ProfileAnniversarySection';
 import { Icon, type IconName } from '@/components/ui/Icon';
 import { LogoMark } from '@/components/ui/Logo';
+import { FullScreenImageModal } from '@/components/ui/FullScreenImageModal';
 import { Avatar, Card, PrimaryButton, SectionTitle } from '@/components/ui/primitives';
 import { THEME_META } from '@/constants/design-system';
-import { useOpenPartnerProfile } from '@/hooks/useOpenPartnerProfile';
 import { useSubscription } from '@/hooks/useSubscription';
 import { useTheme } from '@/hooks/useTheme';
 import { getRelationshipAnniversaryDate } from '@/lib/anniversary';
+import { getFirstName } from '@/lib/avatar-initial';
 import { signOutUser } from '@/lib/auth-session';
 import { markRelationshipOnboardingDone } from '@/lib/onboarding-storage';
 import { profileGenderLabel } from '@/lib/profile-gender';
 import { relationshipTypeLabel } from '@/lib/relationship-type';
+import { requestStoreReviewFromSettings } from '@/lib/store-review';
 import { formatSubscriptionExpiry } from '@/lib/subscription';
 import { supabase } from '@/lib/supabase';
 import * as api from '@/services/api';
 import { useAuthStore, useRelationshipStore, useUIStore } from '@/stores';
 import type { ProfileGender, RelationshipType } from '@/types/database';
+
+type AvatarPreview = {
+  imageUrl: string | null | undefined;
+  title: string;
+  fallbackName: string | null | undefined;
+};
 
 export default function ProfileScreen() {
   const router = useRouter();
@@ -45,13 +53,13 @@ export default function ProfileScreen() {
   const setUser = useAuthStore((s) => s.setUser);
   const setShowWrapped = useUIStore((s) => s.setShowWrapped);
   const setShowMomentCreator = useUIStore((s) => s.setShowMomentCreator);
-  const openPartnerProfile = useOpenPartnerProfile();
 
   const [inviteCode, setInviteCode] = useState<string | null>(relationship?.invite_code ?? null);
   const [editField, setEditField] = useState<'name' | 'space' | 'email' | null>(null);
   const [editDraft, setEditDraft] = useState('');
   const [savingEdit, setSavingEdit] = useState(false);
   const [avatarSaving, setAvatarSaving] = useState(false);
+  const [avatarPreview, setAvatarPreview] = useState<AvatarPreview | null>(null);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [showGenderModal, setShowGenderModal] = useState(false);
   const [genderDraft, setGenderDraft] = useState<ProfileGender | null>(user?.gender ?? null);
@@ -365,23 +373,44 @@ export default function ProfileScreen() {
         {/* Overview */}
         <LinearGradient colors={colors.gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.overview}>
           <View style={styles.avatarsRow}>
-            <Avatar name={user?.name} imageUrl={user?.avatar_url} size={76} colorsOverride={['#fff', '#fff']} />
+            <Pressable
+              onPress={() =>
+                setAvatarPreview({
+                  imageUrl: user?.avatar_url,
+                  title: user?.name?.trim() || 'You',
+                  fallbackName: user?.name,
+                })
+              }
+              accessibilityRole="button"
+              accessibilityLabel="View your profile photo">
+              <Avatar name={user?.name} imageUrl={user?.avatar_url} size={96} colorsOverride={['#fff', '#fff']} />
+            </Pressable>
             <View style={styles.heartBetween}>
-              <Icon name="heart" size={20} color="#fff" filled />
+              <Icon name="heart" size={22} color="#fff" filled />
             </View>
             <Pressable
-              onPress={() => partner && openPartnerProfile()}
+              onPress={() =>
+                partner &&
+                setAvatarPreview({
+                  imageUrl: partner.avatar_url,
+                  title: partner.name?.trim() || 'Partner',
+                  fallbackName: partner.name,
+                })
+              }
               disabled={!partner}
               accessibilityRole="button"
-              accessibilityLabel={partner ? `View ${partner.name ?? 'partner'} profile` : 'Partner profile'}>
-              <Avatar name={partner?.name} imageUrl={partner?.avatar_url} size={76} colorsOverride={['#fff', '#fff']} />
+              accessibilityLabel={partner ? `View ${partner.name ?? 'partner'} photo` : 'Partner photo'}>
+              <Avatar name={partner?.name} imageUrl={partner?.avatar_url} size={96} colorsOverride={['#fff', '#fff']} />
             </Pressable>
           </View>
-          <Text style={styles.relName}>{relationship?.relationship_name ?? 'Moments'}</Text>
+          <Text style={styles.relName}>
+            {getFirstName(user?.name) ?? 'You'}
+            {partner ? ` & ${getFirstName(partner.name) ?? 'Partner'}` : ''}
+          </Text>
           {partner ? (
-            <Text style={styles.partner}>with {partner.name} · together {relationshipDuration}</Text>
+            <Text style={styles.together}>Together {relationshipDuration}</Text>
           ) : (
-            <Text style={styles.partner}>Waiting for your partner to join</Text>
+            <Text style={styles.together}>Waiting for your partner to join</Text>
           )}
         </LinearGradient>
 
@@ -608,6 +637,17 @@ export default function ProfileScreen() {
             <Card padded={false} style={{ marginBottom: 12 }}>
               <LocationSharingSettings />
             </Card>
+            <Card padded={false} style={{ marginBottom: 12 }}>
+              <SettingItem
+                icon="star"
+                label="Rate Moments"
+                colors={colors}
+                onPress={() => {
+                  void requestStoreReviewFromSettings();
+                }}
+                last
+              />
+            </Card>
             <Card padded={false}>
               <SettingItem icon="lock" label="Privacy Policy" colors={colors} onPress={() => router.push('/legal/privacy')} />
               <SettingItem icon="list" label="Terms of Service" colors={colors} onPress={() => router.push('/legal/terms')} />
@@ -625,6 +665,14 @@ export default function ProfileScreen() {
             </View>
         </View>
       </TabScreenScroll>
+
+      <FullScreenImageModal
+        visible={avatarPreview !== null}
+        imageUrl={avatarPreview?.imageUrl}
+        title={avatarPreview?.title}
+        fallbackName={avatarPreview?.fallbackName}
+        onClose={() => setAvatarPreview(null)}
+      />
 
       <EditFieldModal
         visible={editField !== null}
@@ -744,10 +792,10 @@ function SettingItem({
 const styles = StyleSheet.create({
   scroll: { padding: 16 },
   overview: { borderRadius: 24, padding: 22, alignItems: 'center' },
-  avatarsRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  heartBetween: { paddingHorizontal: 10 },
-  relName: { fontSize: 24, fontWeight: '800', color: '#fff', marginTop: 14 },
-  partner: { fontSize: 14, color: 'rgba(255,255,255,0.9)', marginTop: 4 },
+  avatarsRow: { flexDirection: 'row', alignItems: 'center', gap: 2 },
+  heartBetween: { paddingHorizontal: 8 },
+  relName: { fontSize: 24, fontWeight: '800', color: '#fff', marginTop: 16, textAlign: 'center' },
+  together: { fontSize: 14, color: 'rgba(255,255,255,0.9)', marginTop: 4 },
   subBanner: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16, borderRadius: 18, marginTop: 16 },
   subTitle: { color: '#fff', fontWeight: '800', fontSize: 15 },
   subDesc: { color: 'rgba(255,255,255,0.9)', fontSize: 13, marginTop: 1 },

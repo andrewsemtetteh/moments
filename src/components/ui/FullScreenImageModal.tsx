@@ -1,9 +1,9 @@
 import { Image } from 'expo-image';
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Modal, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Icon } from '@/components/ui/Icon';
-import { Avatar } from '@/components/ui/primitives';
+import { getAvatarInitial } from '@/lib/avatar-initial';
 
 interface Props {
   visible: boolean;
@@ -13,18 +13,23 @@ interface Props {
   onClose: () => void;
 }
 
+/** Full-screen rectangular photo preview (not circular). */
 export function FullScreenImageModal({ visible, imageUrl, title, fallbackName, onClose }: Props) {
   const insets = useSafeAreaInsets();
+  const { width: windowW, height: windowH } = useWindowDimensions();
   const uri = imageUrl?.trim() || null;
   const showFallback = visible && !uri && !!fallbackName?.trim();
 
   if (!visible || (!uri && !showFallback)) return null;
 
+  const topBarH = insets.top + 56;
+  const bottomPad = insets.bottom + 12;
+  const stageH = Math.max(0, windowH - topBarH - bottomPad);
+  const side = Math.min(windowW - 32, stageH);
+
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={styles.root}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="Close image" />
-
         <View style={[styles.topBar, { paddingTop: insets.top + 8 }]}>
           {title ? (
             <Text style={styles.title} numberOfLines={1}>
@@ -37,16 +42,25 @@ export function FullScreenImageModal({ visible, imageUrl, title, fallbackName, o
             onPress={onClose}
             hitSlop={12}
             style={styles.closeBtn}
+            accessibilityRole="button"
             accessibilityLabel="Close">
             <Icon name="close" size={24} color="#fff" />
           </Pressable>
         </View>
 
-        <View style={[styles.imageWrap, { paddingBottom: insets.bottom + 8 }]}>
+        <View style={[styles.stage, { paddingBottom: bottomPad }]}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="Close image" />
+
           {uri ? (
-            <Image source={{ uri }} style={styles.image} contentFit="contain" transition={200} />
+            <Pressable onPress={() => {}} style={{ width: side, height: side }}>
+              <Image source={{ uri }} style={styles.image} contentFit="contain" transition={200} />
+            </Pressable>
           ) : (
-            <Avatar name={fallbackName} size={160} colorsOverride={['#ffffff', '#ffffff']} />
+            <Pressable onPress={() => {}}>
+              <View style={[styles.fallback, { width: Math.min(side, 280) }]}>
+                <Text style={styles.fallbackInitial}>{getAvatarInitial(fallbackName)}</Text>
+              </View>
+            </Pressable>
           )}
         </View>
       </View>
@@ -64,7 +78,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingBottom: 8,
-    zIndex: 1,
+    zIndex: 2,
   },
   title: {
     flex: 1,
@@ -80,14 +94,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  imageWrap: {
+  stage: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 12,
   },
   image: {
     width: '100%',
     height: '100%',
+  },
+  fallback: {
+    aspectRatio: 1,
+    borderRadius: 16,
+    backgroundColor: '#2a2a2a',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  fallbackInitial: {
+    color: '#fff',
+    fontSize: 96,
+    fontWeight: '700',
   },
 });

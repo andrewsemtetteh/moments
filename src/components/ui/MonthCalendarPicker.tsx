@@ -11,7 +11,7 @@ import {
   startOfMonth,
 } from 'date-fns';
 import * as Haptics from 'expo-haptics';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Icon } from '@/components/ui/Icon';
@@ -30,42 +30,36 @@ function dateKey(day: Date) {
 
 export function MonthCalendarPicker({
   value,
-  selectedDateTime,
   onChange,
   minDate = startOfDay(new Date()),
   maxDate,
   markers = [],
 }: {
   value: Date;
+  /** @deprecated unused — kept for call-site compat */
   selectedDateTime?: Date;
   onChange: (day: Date) => void;
-  minDate?: Date;
+  minDate?: Date | null;
   maxDate?: Date;
   markers?: CalendarDayMarker[];
 }) {
   const { colors } = useTheme();
   const [currentMonth, setCurrentMonth] = useState(() => startOfMonth(value));
 
-  const markerByDay = new Map(markers.map((m) => [m.dateKey, m]));
-  const selection = selectedDateTime ?? value;
-  const selectedTimeLabel = format(selection, 'h:mm a');
-  const selectionVisible = isSameMonth(selection, currentMonth);
+  useEffect(() => {
+    setCurrentMonth(startOfMonth(value));
+  }, [value]);
 
+  const markerByDay = new Map(markers.map((m) => [m.dateKey, m]));
   const monthStart = startOfMonth(currentMonth);
-  const monthEnd = endOfMonth(currentMonth);
-  const days = eachDayOfInterval({ start: monthStart, end: monthEnd });
-  const min = startOfDay(minDate);
+  const days = eachDayOfInterval({ start: monthStart, end: endOfMonth(currentMonth) });
+  const min = minDate ? startOfDay(minDate) : null;
   const max = maxDate ? startOfDay(maxDate) : null;
 
-  const canGoPrev = !isBefore(startOfMonth(addMonths(currentMonth, -1)), startOfMonth(min));
   const canGoNext = !max || !isAfter(startOfMonth(addMonths(currentMonth, 1)), startOfMonth(max));
 
-  const isDisabled = (day: Date) => isBefore(day, min) || (max ? isAfter(day, max) : false);
-
-  const jumpToSelection = () => {
-    Haptics.selectionAsync();
-    setCurrentMonth(startOfMonth(selection));
-  };
+  const isDisabled = (day: Date) =>
+    (min ? isBefore(day, min) : false) || (max ? isAfter(day, max) : false);
 
   const selectDay = (day: Date) => {
     if (isDisabled(day)) return;
@@ -75,11 +69,9 @@ export function MonthCalendarPicker({
   };
 
   const shiftMonth = (delta: number) => {
-    const next = addMonths(currentMonth, delta);
-    if (delta < 0 && !canGoPrev) return;
     if (delta > 0 && !canGoNext) return;
     Haptics.selectionAsync();
-    setCurrentMonth(next);
+    setCurrentMonth(addMonths(currentMonth, delta));
   };
 
   return (
@@ -87,31 +79,27 @@ export function MonthCalendarPicker({
       <View style={styles.monthHeader}>
         <Pressable
           onPress={() => shiftMonth(-1)}
-          disabled={!canGoPrev}
-          style={[styles.navBtn, { backgroundColor: colors.surfaceElevated, opacity: canGoPrev ? 1 : 0.3 }]}>
-          <Icon name="chevronLeft" size={18} color={colors.text} />
+          accessibilityLabel="Previous month"
+          hitSlop={8}
+          style={[styles.navBtn, { backgroundColor: colors.surfaceElevated }]}>
+          <Icon name="chevronLeft" size={20} color={colors.text} />
         </Pressable>
-        <View style={{ alignItems: 'center' }}>
-          <Text style={[styles.monthTitle, { color: colors.text }]}>{format(currentMonth, 'MMMM yyyy')}</Text>
-          {!selectionVisible && (
-            <Pressable onPress={jumpToSelection}>
-              <Text style={{ color: colors.accent, fontSize: 11, fontWeight: '700', marginTop: 2 }}>
-                Jump to {format(selection, 'MMM d')} ↓
-              </Text>
-            </Pressable>
-          )}
-        </View>
+        <Text style={[styles.monthTitle, { color: colors.text }]}>{format(currentMonth, 'MMMM yyyy')}</Text>
         <Pressable
           onPress={() => shiftMonth(1)}
           disabled={!canGoNext}
-          style={[styles.navBtn, { backgroundColor: colors.surfaceElevated, opacity: canGoNext ? 1 : 0.3 }]}>
-          <Icon name="chevronRight" size={18} color={colors.text} />
+          accessibilityLabel="Next month"
+          hitSlop={8}
+          style={[styles.navBtn, { backgroundColor: colors.surfaceElevated, opacity: canGoNext ? 1 : 0.35 }]}>
+          <Icon name="chevronRight" size={20} color={colors.text} />
         </Pressable>
       </View>
 
       <View style={styles.weekDays}>
         {WEEK_DAYS.map((d, i) => (
-          <Text key={i} style={[styles.weekDay, { color: colors.textTertiary }]}>{d}</Text>
+          <Text key={i} style={[styles.weekDay, { color: colors.textTertiary }]}>
+            {d}
+          </Text>
         ))}
       </View>
 
@@ -124,7 +112,7 @@ export function MonthCalendarPicker({
           const isSelected = isSameDay(day, value);
           const isToday = isSameDay(day, new Date());
           const marker = markerByDay.get(dateKey(day));
-          const allocatedTimes = marker?.times ?? [];
+          const hasMarker = (marker?.times.length ?? 0) > 0;
 
           return (
             <Pressable
@@ -139,30 +127,25 @@ export function MonthCalendarPicker({
                   !isSelected && isToday && { borderColor: colors.accent, borderWidth: 1.5 },
                   disabled && { opacity: 0.3 },
                 ]}>
-                <Text style={[
-                  styles.dayNum,
-                  {
-                    color: isSelected
-                      ? colors.onAccent
-                      : isSameMonth(day, currentMonth)
-                        ? colors.text
-                        : colors.textTertiary,
-                  },
-                ]}>
+                <Text
+                  style={[
+                    styles.dayNum,
+                    {
+                      color: isSelected
+                        ? colors.onAccent
+                        : isSameMonth(day, currentMonth)
+                          ? colors.text
+                          : colors.textTertiary,
+                      fontWeight: isSelected || isToday ? '700' : '500',
+                    },
+                  ]}>
                   {format(day, 'd')}
                 </Text>
-                {isSelected && (
-                  <Text style={[styles.dayTime, { color: colors.onAccent }]} numberOfLines={1}>
-                    {selectedTimeLabel}
-                  </Text>
-                )}
               </View>
-              {allocatedTimes.length > 0 && !isSelected && (
-                <View style={styles.dotsRow}>
-                  {allocatedTimes.slice(0, 3).map((t, i) => (
-                    <View key={`${t}-${i}`} style={[styles.dot, { backgroundColor: colors.accent }]} />
-                  ))}
-                </View>
+              {hasMarker && !isSelected ? (
+                <View style={[styles.dot, { backgroundColor: colors.accent }]} />
+              ) : (
+                <View style={styles.dotSpace} />
               )}
             </Pressable>
           );
@@ -173,16 +156,33 @@ export function MonthCalendarPicker({
 }
 
 const styles = StyleSheet.create({
-  monthHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
-  navBtn: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
-  monthTitle: { fontSize: 16, fontWeight: '800' },
-  weekDays: { flexDirection: 'row', marginBottom: 4 },
-  weekDay: { flex: 1, textAlign: 'center', fontSize: 11, fontWeight: '700', letterSpacing: 0.3 },
+  monthHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  navBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  monthTitle: { fontSize: 16, fontWeight: '700' },
+  weekDays: { flexDirection: 'row', marginBottom: 6 },
+  weekDay: { flex: 1, textAlign: 'center', fontSize: 12, fontWeight: '600' },
   grid: { flexDirection: 'row', flexWrap: 'wrap' },
-  dayCell: { width: `${100 / 7}%`, minHeight: 52, alignItems: 'center', paddingTop: 2 },
-  dayInner: { width: 40, minHeight: 40, borderRadius: 10, alignItems: 'center', justifyContent: 'center', paddingVertical: 3 },
-  dayNum: { fontSize: 14, fontWeight: '600', lineHeight: 17 },
-  dayTime: { fontSize: 8, fontWeight: '800', lineHeight: 10, marginTop: 1 },
-  dotsRow: { flexDirection: 'row', gap: 2, marginTop: 2 },
-  dot: { width: 4, height: 4, borderRadius: 2 },
+  dayCell: { width: '14.2857%', alignItems: 'center', paddingVertical: 2 },
+  dayInner: {
+    width: 36,
+    height: 36,
+    borderRadius: 999,
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dayNum: { fontSize: 15 },
+  dot: { width: 4, height: 4, borderRadius: 2, marginTop: 3 },
+  dotSpace: { height: 7 },
 });

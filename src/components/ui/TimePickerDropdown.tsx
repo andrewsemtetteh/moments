@@ -1,11 +1,12 @@
 import { format, setHours, setMinutes } from 'date-fns';
 import * as Haptics from 'expo-haptics';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { useTheme } from '@/hooks/useTheme';
 
 const HOURS = Array.from({ length: 12 }, (_, i) => i + 1);
-const MINUTES = Array.from({ length: 60 }, (_, i) => i);
+/** 5-minute steps — cleaner than scrolling 60 cells inside a sheet. */
+const MINUTES = Array.from({ length: 12 }, (_, i) => i * 5);
 const PERIODS = ['AM', 'PM'] as const;
 
 function formatPreview(h: number, m: number, p: 'AM' | 'PM') {
@@ -22,6 +23,10 @@ function isSlotPast(h12: number, m: number, p: 'AM' | 'PM', disabledBefore?: Dat
   return slot.getTime() <= disabledBefore.getTime();
 }
 
+function snapMinute(m: number) {
+  return Math.round(m / 5) * 5 % 60;
+}
+
 export function TimePickerDropdown({
   hour12,
   minute,
@@ -36,12 +41,13 @@ export function TimePickerDropdown({
   disabledBefore?: Date;
 }) {
   const { colors } = useTheme();
-  const preview = formatPreview(hour12, minute, period);
+  const minuteSnapped = snapMinute(minute);
+  const preview = formatPreview(hour12, minuteSnapped, period);
 
   const selectHour = (h: number) => {
-    if (isSlotPast(h, minute, period, disabledBefore)) return;
+    if (isSlotPast(h, minuteSnapped, period, disabledBefore)) return;
     Haptics.selectionAsync();
-    onChange(h, minute, period);
+    onChange(h, minuteSnapped, period);
   };
 
   const selectMinute = (m: number) => {
@@ -51,68 +57,66 @@ export function TimePickerDropdown({
   };
 
   const selectPeriod = (p: 'AM' | 'PM') => {
-    if (isSlotPast(hour12, minute, p, disabledBefore)) return;
+    if (isSlotPast(hour12, minuteSnapped, p, disabledBefore)) return;
     Haptics.selectionAsync();
-    onChange(hour12, minute, p);
+    onChange(hour12, minuteSnapped, p);
   };
 
   return (
-    <View>
-      <View style={[styles.previewCard, { backgroundColor: colors.accentSoft, borderColor: colors.accent }]}>
-        <Text style={[styles.previewTime, { color: colors.text }]}>{preview}</Text>
-        <Text style={{ color: colors.accent, fontSize: 11, fontWeight: '700' }}>Selected time</Text>
-      </View>
+    <View style={styles.wrap}>
+      <Text style={[styles.preview, { color: colors.text }]}>{preview}</Text>
 
-      <Text style={[styles.sectionLabel, { color: colors.textTertiary }]}>HOUR</Text>
-      <View style={styles.grid}>
+      <Text style={[styles.label, { color: colors.textTertiary }]}>Hour</Text>
+      <View style={styles.rowWrap}>
         {HOURS.map((h) => {
           const selected = h === hour12;
-          const disabled = isSlotPast(h, minute, period, disabledBefore);
+          const disabled = isSlotPast(h, minuteSnapped, period, disabledBefore);
           return (
-            <Pressable key={h} onPress={() => selectHour(h)} disabled={disabled} style={styles.cell}>
-              <View
-                style={[
-                  styles.cellInner,
-                  selected && { backgroundColor: colors.accent },
-                  !selected && { backgroundColor: colors.surfaceElevated },
-                  disabled && { opacity: 0.3 },
-                ]}>
-                <Text style={[styles.cellText, { color: selected ? colors.onAccent : colors.text }]}>{h}</Text>
-              </View>
+            <Pressable
+              key={h}
+              onPress={() => selectHour(h)}
+              disabled={disabled}
+              style={[
+                styles.chip,
+                {
+                  backgroundColor: selected ? colors.accent : colors.surfaceElevated,
+                  opacity: disabled ? 0.35 : 1,
+                },
+              ]}>
+              <Text style={[styles.chipText, { color: selected ? colors.onAccent : colors.text }]}>{h}</Text>
             </Pressable>
           );
         })}
       </View>
 
-      <Text style={[styles.sectionLabel, { color: colors.textTertiary }]}>MINUTE</Text>
-      <ScrollView style={styles.minuteScroll} nestedScrollEnabled showsVerticalScrollIndicator={false}>
-        <View style={styles.minuteGrid}>
-          {MINUTES.map((m) => {
-            const selected = m === minute;
-            const disabled = isSlotPast(hour12, m, period, disabledBefore);
-            const label = m < 10 ? `0${m}` : String(m);
-            return (
-              <Pressable key={m} onPress={() => selectMinute(m)} disabled={disabled} style={styles.minuteCell}>
-                <View
-                  style={[
-                    styles.minuteInner,
-                    selected && { backgroundColor: colors.accent },
-                    !selected && { backgroundColor: colors.surfaceElevated },
-                    disabled && { opacity: 0.3 },
-                  ]}>
-                  <Text style={[styles.minuteText, { color: selected ? colors.onAccent : colors.text }]}>{label}</Text>
-                </View>
-              </Pressable>
-            );
-          })}
-        </View>
-      </ScrollView>
+      <Text style={[styles.label, { color: colors.textTertiary }]}>Minute</Text>
+      <View style={styles.rowWrap}>
+        {MINUTES.map((m) => {
+          const selected = m === minuteSnapped;
+          const disabled = isSlotPast(hour12, m, period, disabledBefore);
+          const label = m < 10 ? `0${m}` : String(m);
+          return (
+            <Pressable
+              key={m}
+              onPress={() => selectMinute(m)}
+              disabled={disabled}
+              style={[
+                styles.chip,
+                {
+                  backgroundColor: selected ? colors.accent : colors.surfaceElevated,
+                  opacity: disabled ? 0.35 : 1,
+                },
+              ]}>
+              <Text style={[styles.chipText, { color: selected ? colors.onAccent : colors.text }]}>{label}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
 
-      <Text style={[styles.sectionLabel, { color: colors.textTertiary }]}>AM / PM</Text>
       <View style={styles.periodRow}>
         {PERIODS.map((p) => {
           const selected = p === period;
-          const disabled = isSlotPast(hour12, minute, p, disabledBefore);
+          const disabled = isSlotPast(hour12, minuteSnapped, p, disabledBefore);
           return (
             <Pressable
               key={p}
@@ -122,11 +126,12 @@ export function TimePickerDropdown({
                 styles.periodBtn,
                 {
                   backgroundColor: selected ? colors.accent : colors.surfaceElevated,
-                  borderColor: selected ? colors.accent : colors.border,
-                  opacity: disabled ? 0.3 : 1,
+                  opacity: disabled ? 0.35 : 1,
                 },
               ]}>
-              <Text style={{ color: selected ? colors.onAccent : colors.text, fontWeight: '800', fontSize: 16 }}>{p}</Text>
+              <Text style={{ color: selected ? colors.onAccent : colors.text, fontWeight: '700', fontSize: 15 }}>
+                {p}
+              </Text>
             </Pressable>
           );
         })}
@@ -136,43 +141,39 @@ export function TimePickerDropdown({
 }
 
 const styles = StyleSheet.create({
-  previewCard: {
-    alignItems: 'center',
-    gap: 4,
-    marginBottom: 16,
-    paddingVertical: 14,
-    borderRadius: 18,
-    borderWidth: 1,
+  wrap: { gap: 10 },
+  preview: {
+    fontSize: 28,
+    fontWeight: '800',
+    textAlign: 'center',
+    fontVariant: ['tabular-nums'],
+    marginBottom: 4,
   },
-  previewTime: { fontSize: 32, fontWeight: '900', fontVariant: ['tabular-nums'] },
-  sectionLabel: { fontSize: 10, fontWeight: '800', letterSpacing: 0.8, marginBottom: 10, marginTop: 6 },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, justifyContent: 'center' },
-  cell: { width: `${100 / 4}%`, alignItems: 'center', paddingVertical: 4 },
-  cellInner: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
+  label: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
+    marginTop: 4,
   },
-  cellText: { fontSize: 16, fontWeight: '800' },
-  minuteScroll: { maxHeight: 140 },
-  minuteGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 4, justifyContent: 'center' },
-  minuteCell: { width: `${100 / 6}%`, alignItems: 'center', paddingVertical: 3 },
-  minuteInner: {
-    width: 42,
-    height: 36,
-    borderRadius: 18,
+  rowWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  chip: {
+    width: 44,
+    height: 40,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  minuteText: { fontSize: 13, fontWeight: '700' },
+  chipText: { fontSize: 15, fontWeight: '700', fontVariant: ['tabular-nums'] },
   periodRow: { flexDirection: 'row', gap: 10, marginTop: 4 },
   periodBtn: {
     flex: 1,
     alignItems: 'center',
-    paddingVertical: 14,
-    borderRadius: 999,
-    borderWidth: StyleSheet.hairlineWidth,
+    paddingVertical: 12,
+    borderRadius: 14,
   },
 });

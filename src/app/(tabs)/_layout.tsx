@@ -2,11 +2,13 @@ import { Redirect, Tabs } from 'expo-router';
 import { Platform } from 'react-native';
 
 import { StreakMilestoneSync } from '@/components/home/StreakMilestoneSync';
+import { StreakReminderSync } from '@/components/home/StreakReminderSync';
 import { StreakSparkSync } from '@/components/home/StreakSparkSync';
 import { AppTabBar } from '@/components/layout/AppTabBar';
 import { ChatMessageSync } from '@/components/layout/ChatMessageSync';
 import { HomeSync } from '@/components/layout/HomeSync';
 import { NotificationSync } from '@/components/layout/NotificationSync';
+import { StoreReviewSync } from '@/components/layout/StoreReviewSync';
 import { PartnerPresenceSync } from '@/components/profile/PartnerPresenceSync';
 import { PartnerProfileModal } from '@/components/profile/PartnerProfileModal';
 import { useRealtimeSubscription } from '@/hooks/queries';
@@ -38,6 +40,8 @@ export default function TabsLayout() {
       <PartnerPresenceSync />
       <StreakMilestoneSync />
       <StreakSparkSync />
+      <StreakReminderSync />
+      <StoreReviewSync />
       <Tabs
         backBehavior="history"
         tabBar={(props) => <AppTabBar {...props} />}

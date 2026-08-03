@@ -377,6 +377,15 @@ export function useUpcomingCalendarEvents() {
   });
 }
 
+export function usePastCalendarEvents() {
+  const relationship = useRelationshipStore((s) => s.relationship);
+  return useQuery({
+    queryKey: ['calendarPast', relationship?.id],
+    queryFn: () => api.fetchPastCalendarEvents(relationship!.id),
+    enabled: !!relationship?.id,
+  });
+}
+
 export function useMoods() {
   const relationship = useRelationshipStore((s) => s.relationship);
   const user = useAuthStore((s) => s.user);
@@ -556,6 +565,7 @@ export function useRespondToDailyChallenge() {
         dailyChallengeQueryKey(relationship?.id, data.challenge_date),
         data,
       );
+      queryClient.setQueryData(dailyChallengeQueryKey(relationship?.id), data);
       queryClient.setQueryData(
         ['daily-challenge-history', relationship?.id],
         (prev: unknown) => {
@@ -568,8 +578,6 @@ export function useRespondToDailyChallenge() {
           return next;
         },
       );
-      // Don't await — refetch must not keep the submit button spinning.
-      void queryClient.invalidateQueries({ queryKey: ['daily-challenge', relationship?.id] });
       void queryClient.invalidateQueries({ queryKey: ['daily-challenge-history', relationship?.id] });
       void queryClient.invalidateQueries({ queryKey: ['streak', relationship?.id] });
       void queryClient.invalidateQueries({ queryKey: ['notifications'] });
@@ -874,6 +882,7 @@ export function useRealtimeSubscription(
           if (table === 'calendar_events') {
             qc.invalidateQueries({ queryKey: ['calendar', relationship.id] });
             qc.invalidateQueries({ queryKey: ['calendarUpcoming', relationship.id] });
+            qc.invalidateQueries({ queryKey: ['calendarPast', relationship.id] });
           }
           if (table === 'streaks') {
             qc.invalidateQueries({ queryKey: ['streak', relationship.id] });

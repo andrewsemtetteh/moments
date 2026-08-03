@@ -1,5 +1,6 @@
 import { addDays, differenceInCalendarDays, format } from 'date-fns';
 
+import { isStreakVisuallyAtRisk } from '@/lib/streak-reminder-timing';
 import type { StreakStatus } from '@/types/database';
 
 export const STREAK_RESTORE_WINDOW_MS = 24 * 60 * 60 * 1000;
@@ -87,17 +88,22 @@ function parseActiveDays(raw: unknown): string[] {
   return raw.filter((d): d is string => typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d));
 }
 
-export function streakSubtitle(status: StreakStatus): string {
+export function streakSubtitle(status: StreakStatus, now = new Date()): string {
   if (isStreakRestoreAvailable(status)) {
     return `Restore your ${status.restorable_streak}-day streak before starting over`;
   }
   if (status.current_streak <= 0) {
     return 'Send a moment, message, or mood to start';
   }
+  if (isStreakVisuallyAtRisk(status, now)) {
+    return status.user_active_today
+      ? 'Waiting on your partner before midnight'
+      : 'Check in before midnight';
+  }
   if (status.at_risk) {
     return status.user_active_today
-      ? 'At risk — waiting on your partner'
-      : 'At risk — check in before midnight';
+      ? 'Waiting on your partner today'
+      : 'Check in today to keep it going';
   }
   if (status.both_active_today) {
     return 'You both showed up today';
@@ -126,15 +132,15 @@ export function streakMotivationHeadline(count: number): string {
   return `You have a ${count} day streak going`;
 }
 
-export function streakCheerMessage(status: StreakStatus): string {
+export function streakCheerMessage(status: StreakStatus, now = new Date()): string {
   if (isStreakRestoreAvailable(status)) {
     return 'Your streak is on pause. Restore it with Plus or start a new one together.';
   }
   if (status.current_streak <= 0) return 'Check in together to begin';
-  if (status.at_risk) {
+  if (isStreakVisuallyAtRisk(status, now)) {
     return status.user_active_today
-      ? 'At risk — waiting on your partner'
-      : "At risk — don't lose it. Check in today!";
+      ? 'Waiting on your partner before midnight'
+      : 'Check in before midnight';
   }
   if (status.both_active_today) return "You're on fire! 🔥";
   if (status.current_streak >= 7) return "You're on fire! 🔥";

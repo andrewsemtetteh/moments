@@ -168,14 +168,14 @@ export function PartnerProfileModal() {
   };
 
   const onAvatarPress = () => {
-    if (hasPartnerMoment) {
-      viewPartnerMoment();
-      return;
-    }
     viewProfilePhoto();
   };
 
   const onAvatarLongPress = () => {
+    if (hasPartnerMoment) {
+      viewPartnerMoment();
+      return;
+    }
     viewProfilePhoto();
   };
 
@@ -291,14 +291,10 @@ export function PartnerProfileModal() {
                 style={styles.avatarPress}
                 accessibilityRole="button"
                 accessibilityHint={
-                  hasPartnerMoment ? 'Long press for profile photo' : 'View profile photo'
+                  hasPartnerMoment ? 'Long press to view moment' : 'View profile photo'
                 }
                 accessibilityLabel={
-                  hasPartnerMoment
-                    ? 'View partner moment'
-                    : profile.avatar_url
-                      ? 'View profile photo'
-                      : 'Profile photo'
+                  profile.avatar_url ? 'View profile photo' : 'Profile photo'
                 }>
                 {hasPartnerMoment ? (
                   <LinearGradient

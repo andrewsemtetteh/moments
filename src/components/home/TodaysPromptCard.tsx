@@ -1,27 +1,31 @@
 import * as Haptics from 'expo-haptics';
+import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 import {
-    Alert,
-    Animated,
-    Pressable,
-    StyleSheet,
-    Text,
-    TextInput,
-    View,
+  Alert,
+  Animated,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
 } from 'react-native';
 
 import { Icon } from '@/components/ui/Icon';
 import { Avatar, Card, PrimaryButton } from '@/components/ui/primitives';
-import { useRespondToDailyChallenge } from '@/hooks/queries';
+import { dailyChallengeQueryKey } from '@/hooks/queries';
 import { useTheme } from '@/hooks/useTheme';
 import { getFirstName } from '@/lib/avatar-initial';
+import { setCachedDailyChallenge } from '@/lib/daily-challenge-cache';
 import {
-    isPromptExpired,
-    myPromptResponse,
-    partnerPromptResponse,
-    promptAuthorLabel,
-    promptPhase,
+  isPromptExpired,
+  myPromptResponse,
+  partnerPromptResponse,
+  promptAuthorLabel,
+  promptPhase,
 } from '@/lib/daily-prompt';
+import { getErrorMessage } from '@/lib/network-error';
+import * as api from '@/services/api';
 import { useAuthStore, useRelationshipStore } from '@/stores';
 import type { DailyChallenge } from '@/types/database';
 
@@ -32,11 +36,12 @@ type Props = {
 
 export function TodaysPromptCard({ challenge, onOpenHistory }: Props) {
   const { colors } = useTheme();
+  const queryClient = useQueryClient();
   const user = useAuthStore((s) => s.user);
   const relationship = useRelationshipStore((s) => s.relationship);
   const partner = useRelationshipStore((s) => s.partner);
-  const respond = useRespondToDailyChallenge();
   const [draft, setDraft] = useState('');
+  const [sending, setSending] = useState(false);
   const revealAnim = useRef(new Animated.Value(0)).current;
 
   const phase = promptPhase(challenge, user?.id, relationship);
@@ -44,7 +49,7 @@ export function TodaysPromptCard({ challenge, onOpenHistory }: Props) {
   const mine = myPromptResponse(challenge, user?.id, relationship);
   const theirs = partnerPromptResponse(challenge, user?.id, relationship);
   const partnerFirst = getFirstName(partner?.name) ?? 'Your partner';
-  const busy = respond.isPending;
+  const busy = sending;
 
   useEffect(() => {
     if (phase !== 'reveal') {
@@ -63,12 +68,38 @@ export function TodaysPromptCard({ challenge, onOpenHistory }: Props) {
   const submit = async () => {
     const text = draft.trim();
     if (!text || busy) return;
+    if (!user?.id || !relationship) {
+      Alert.alert('Could not send', 'You need to be signed in with an active relationship.');
+      return;
+    }
+
+    setSending(true);
     try {
-      await respond.mutateAsync({ challengeId: challenge.id, response: text });
+      const updated = await api.respondToDailyChallenge(
+        challenge.id,
+        user.id,
+        relationship,
+        text,
+        user.name,
+      );
+
+      queryClient.setQueryData(
+        dailyChallengeQueryKey(relationship.id, updated.challenge_date),
+        updated,
+      );
+      queryClient.setQueryData(dailyChallengeQueryKey(relationship.id), updated);
+      void setCachedDailyChallenge(updated);
+      void queryClient.invalidateQueries({ queryKey: ['daily-challenge-history', relationship.id] });
+      void queryClient.invalidateQueries({ queryKey: ['streak', relationship.id] });
+      void queryClient.invalidateQueries({ queryKey: ['notifications'] });
+      void queryClient.invalidateQueries({ queryKey: ['notificationUnreadCount'] });
+
       setDraft('');
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (e) {
-      Alert.alert('Could not send', e instanceof Error ? e.message : 'Please try again.');
+      Alert.alert('Could not send', getErrorMessage(e) || 'Please try again.');
+    } finally {
+      setSending(false);
     }
   };
 
@@ -103,16 +134,8 @@ export function TodaysPromptCard({ challenge, onOpenHistory }: Props) {
             Waiting for {partnerFirst}&apos;s answer — you&apos;ll both see them together.
           </Text>
           <View style={styles.statusRow}>
-            <StatusChip
-              done
-              label="You"
-              colors={colors}
-            />
-            <StatusChip
-              done={false}
-              label={partnerFirst}
-              colors={colors}
-            />
+            <StatusChip done label="You" colors={colors} />
+            <StatusChip done={false} label={partnerFirst} colors={colors} />
           </View>
         </View>
       </Card>
@@ -163,7 +186,6 @@ export function TodaysPromptCard({ challenge, onOpenHistory }: Props) {
     );
   }
 
-  // Compose (answer) state
   return (
     <Card style={styles.card}>
       {header}
@@ -192,9 +214,11 @@ export function TodaysPromptCard({ challenge, onOpenHistory }: Props) {
       />
       <PrimaryButton
         label={busy ? 'Sending…' : 'Submit answer'}
-        onPress={submit}
+        onPress={() => {
+          void submit();
+        }}
         disabled={!draft.trim() || busy}
-        loading={respond.isPending}
+        loading={busy}
         style={styles.submitBtn}
       />
     </Card>
@@ -260,7 +284,7 @@ function AnswerBubble({
 }
 
 const styles = StyleSheet.create({
-  card: { gap: 14, paddingVertical: 18 },
+  card: { gap: 14 },
   topRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   kicker: { fontSize: 13, fontWeight: '600' },
   historyLink: { fontSize: 13, fontWeight: '700' },

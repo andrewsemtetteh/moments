@@ -59,7 +59,7 @@ export function ContinueChatCard() {
         unread,
         minutesAgo,
       }),
-      preview: continueChatPreview(latest, user.id),
+      preview: continueChatPreview(latest, user.id, partnerFirst),
       ago: shortMessageAgo(latest.created_at, ref),
     };
   }, [latest, partner?.name, unreadCount, user?.id, visible, now]);
@@ -74,9 +74,8 @@ export function ContinueChatCard() {
       style={({ pressed }) => [
         styles.card,
         {
-          backgroundColor: colors.surfaceElevated,
+          backgroundColor: colors.surface,
           borderColor: colors.border,
-          shadowColor: colors.shadow,
           opacity: pressed ? 0.92 : 1,
           transform: [{ scale: pressed ? 0.99 : 1 }],
         },
@@ -104,14 +103,8 @@ const styles = StyleSheet.create({
   card: {
     borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
-    paddingHorizontal: 16,
-    paddingTop: 14,
-    paddingBottom: 14,
+    padding: 16,
     gap: 12,
-    shadowOpacity: 0.08,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 2,
   },
   topRow: {
     flexDirection: 'row',

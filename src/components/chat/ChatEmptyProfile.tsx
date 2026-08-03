@@ -16,7 +16,6 @@ export type ChatEmptyProfileProps = {
   lastSeenAt: string | null;
   statusHidden?: boolean;
   onOpenProfile: () => void;
-  onOpenAvatar?: () => void;
 };
 
 export function ChatEmptyProfile({
@@ -27,7 +26,6 @@ export function ChatEmptyProfile({
   lastSeenAt,
   statusHidden = false,
   onOpenProfile,
-  onOpenAvatar,
 }: ChatEmptyProfileProps) {
   const { colors } = useTheme();
   const [showPhoto, setShowPhoto] = useState(false);
@@ -44,11 +42,9 @@ export function ChatEmptyProfile({
   return (
     <View style={styles.container}>
       <Pressable
-        onPress={onOpenAvatar ?? onOpenProfile}
-        onLongPress={() => setShowPhoto(true)}
-        delayLongPress={400}
+        onPress={() => setShowPhoto(true)}
         accessibilityRole="button"
-        accessibilityLabel="View partner profile">
+        accessibilityLabel="View profile photo">
         <View style={styles.avatarWrap}>
           <Avatar name={partner?.name} imageUrl={partner?.avatar_url} size={108} />
           {status.variant === 'online' && (

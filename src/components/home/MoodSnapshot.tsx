@@ -3,7 +3,7 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-nati
 
 import { MoodPickerModal } from '@/components/home/MoodPickerModal';
 import { Icon } from '@/components/ui/Icon';
-import { MOOD_COLORS, MOOD_EMOJI, MOOD_LABELS, type ThemeColors } from '@/constants/design-system';
+import { MOOD_COLORS, MOOD_EMOJI, MOOD_LABELS, Radius, type ThemeColors } from '@/constants/design-system';
 import { useMoodFrequency } from '@/hooks/queries';
 import { useEnsurePartner } from '@/hooks/useEnsurePartner';
 import { useTheme } from '@/hooks/useTheme';
@@ -156,7 +156,11 @@ export function LoadingState() {
 }
 
 const styles = StyleSheet.create({
-  container: { borderRadius: 20, padding: 18, borderWidth: StyleSheet.hairlineWidth },
+  container: {
+    borderRadius: Radius.lg,
+    padding: 16,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
   headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 },
   label: { fontSize: 13, fontWeight: '600' },
   historyLink: { fontSize: 13, fontWeight: '700' },
@@ -179,7 +183,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 8,
     paddingHorizontal: 4,
-    borderRadius: 14,
+    borderRadius: Radius.md,
     borderWidth: 1.5,
   },
   moodEmoji: { fontSize: 20 },
@@ -191,7 +195,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: 8,
     paddingHorizontal: 4,
-    borderRadius: 14,
+    borderRadius: Radius.md,
     borderWidth: 1.5,
   },
   moreText: { fontSize: 9, marginTop: 2, fontWeight: '600', textAlign: 'center' },

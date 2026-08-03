@@ -96,8 +96,7 @@ const styles = StyleSheet.create({
   card: {
     borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
-    paddingVertical: 12,
-    paddingHorizontal: 12,
+    padding: 16,
   },
   row: {
     flexDirection: 'row',

@@ -24,7 +24,7 @@ const NOTIFICATION_BENEFITS: { icon: IconName; title: string; body: string }[] =
   {
     icon: 'fire',
     title: 'Streak alerts',
-    body: 'Get a nudge before your streak is at risk',
+    body: 'Get a nudge 3 hours before, then a last-chance alert 1 hour before midnight',
   },
 ];
 

@@ -5,12 +5,12 @@ import {
 } from '@/constants/design-system';
 
 /** Source of truth — see src/docs/MONETIZATION.md §4 */
-export const MONTHLY_PRICE_USD = 6.99;
-export const WEEKLY_PRICE_USD = 2.99;
-export const YEARLY_DISCOUNT_PERCENT = 25;
+export const MONTHLY_PRICE_USD = 9.99;
+export const WEEKLY_PRICE_USD = 4.99;
+export const YEARLY_DISCOUNT_PERCENT = 33;
 
 export const YEARLY_COMPARE_AT_USD = roundUsd(MONTHLY_PRICE_USD * 12);
-export const YEARLY_PRICE_USD = 62.99;
+export const YEARLY_PRICE_USD = 79.99;
 export const WEEKLY_COMPARE_AT_USD = roundUsd(MONTHLY_PRICE_USD / 4);
 
 export const TRIAL_DAYS = 3;

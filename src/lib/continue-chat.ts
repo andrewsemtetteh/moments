@@ -28,9 +28,11 @@ export function shortMessageAgo(iso: string, now = new Date()): string {
 export function continueChatPreview(
   message: Message,
   currentUserId: string,
+  partnerFirst?: string | null,
 ): string {
   const fromYou = message.sender_id === currentUserId;
-  const prefix = fromYou ? 'You: ' : '';
+  const who = fromYou ? 'You' : (partnerFirst?.trim() || 'Them');
+  const prefix = `${who}: `;
 
   if (message.media_type === 'image') return `${prefix}Sent a photo`;
   if (message.media_type === 'video') return `${prefix}Sent a video`;
@@ -38,7 +40,7 @@ export function continueChatPreview(
   if (message.moment_id) return `${prefix}Shared a moment`;
 
   const text = (message.content ?? '').trim().replace(/\s+/g, ' ');
-  if (!text) return fromYou ? 'You sent a message' : 'Sent you a message';
+  if (!text) return fromYou ? 'You sent a message' : `${who} sent you a message`;
   return `${prefix}${text}`;
 }
 

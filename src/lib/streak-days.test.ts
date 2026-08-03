@@ -97,7 +97,7 @@ describe('buildStreakWeek', () => {
     expect(days.find((d) => d.weekdayLabel === 'Wed')?.state).toBe('completed');
   });
 
-  it('shows at-risk UI when streak is active but incomplete today', () => {
+  it('keeps pending UI until the last 3 hours before midnight', () => {
     const days = buildStreakWeek(
       baseStatus({
         current_streak: 5,
@@ -107,6 +107,22 @@ describe('buildStreakWeek', () => {
       }),
       joinedAt,
       now,
+    );
+    const today = days.find((d) => d.isToday);
+    expect(today?.state).toBe('today-pending');
+  });
+
+  it('shows at-risk UI in the last 3 hours before midnight', () => {
+    const late = new Date('2026-06-25T22:00:00');
+    const days = buildStreakWeek(
+      baseStatus({
+        current_streak: 5,
+        last_active_date: '2026-06-24',
+        at_risk: true,
+        both_active_today: false,
+      }),
+      joinedAt,
+      late,
     );
     const today = days.find((d) => d.isToday);
     expect(today?.state).toBe('today-at-risk');
@@ -130,6 +146,7 @@ describe('buildStreakWeek', () => {
   });
 
   it('shows awaiting-streak UI for today before both partners check in', () => {
+    const late = new Date('2026-06-25T22:00:00');
     const days = buildStreakWeek(
       baseStatus({
         current_streak: 3,
@@ -139,7 +156,7 @@ describe('buildStreakWeek', () => {
         partner_active_today: false,
       }),
       joinedAt,
-      now,
+      late,
     );
     const today = days.find((d) => d.isToday);
     expect(today?.state).toBe('today-at-risk');

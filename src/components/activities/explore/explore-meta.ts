@@ -1,5 +1,5 @@
+import type { ExploreModalKey } from '@/components/activities/explore/explore-catalog';
 import type { IconName } from '@/components/ui/Icon';
-import type { ExploreModalKey } from '@/components/activities/ExploreSection';
 
 export interface ExploreMeta {
   eyebrow: string;
@@ -11,7 +11,7 @@ export interface ExploreMeta {
 
 export const EXPLORE_META: Record<ExploreModalKey, ExploreMeta> = {
   cards: {
-    eyebrow: 'CONNECT',
+    eyebrow: 'PROMPTS',
     title: 'Conversation Cards',
     subtitle: 'Take turns answering — no wrong answers',
     icon: 'cards',
@@ -25,16 +25,16 @@ export const EXPLORE_META: Record<ExploreModalKey, ExploreMeta> = {
     emoji: '🎲',
   },
   quiz: {
-    eyebrow: 'DISCOVER',
+    eyebrow: 'QUIZ',
     title: 'Love Language',
     subtitle: 'Learn how you each feel most loved',
     icon: 'heart',
     emoji: '💞',
   },
   quizLive: {
-    eyebrow: 'PLAY LIVE',
+    eyebrow: 'LIVE',
     title: 'Quiz Live',
-    subtitle: 'Pick a topic and compete together from your phones',
+    subtitle: 'Pick a topic and compete from your phones',
     icon: 'globe',
     emoji: '🌐',
   },
@@ -107,5 +107,131 @@ export const EXPLORE_META: Record<ExploreModalKey, ExploreMeta> = {
     subtitle: 'Pick a song that fits the prompt',
     icon: 'volumeHigh',
     emoji: '🎵',
+  },
+  thisOrThat: {
+    eyebrow: 'QUICK',
+    title: 'This or That',
+    subtitle: 'Pick one. Compare. Laugh.',
+    icon: 'sparkles',
+    emoji: '⚡',
+  },
+  wouldYouRather: {
+    eyebrow: 'QUICK',
+    title: 'Would You Rather',
+    subtitle: 'Hard choices, soft reveals',
+    icon: 'question',
+    emoji: '🤔',
+  },
+  whosLikely: {
+    eyebrow: 'QUICK',
+    title: "Who's More Likely?",
+    subtitle: 'Point fingers, then reveal together',
+    icon: 'eye',
+    emoji: '👀',
+  },
+  loveQuiz: {
+    eyebrow: 'QUIZ',
+    title: 'How well do you know me?',
+    subtitle: 'One answers — the other guesses',
+    icon: 'heart',
+    emoji: '💕',
+  },
+  neverHaveI: {
+    eyebrow: 'PLAY',
+    title: 'Never Have I Ever',
+    subtitle: 'Couples-safe confessions',
+    icon: 'fire',
+    emoji: '🙈',
+  },
+  finishSentence: {
+    eyebrow: 'PROMPTS',
+    title: 'Finish the Sentence',
+    subtitle: 'Complete the line out loud',
+    icon: 'journal',
+    emoji: '✍️',
+  },
+  emojiStory: {
+    eyebrow: 'PLAY',
+    title: 'Emoji Story',
+    subtitle: 'Guess the night from emojis',
+    icon: 'sparkles',
+    emoji: '🧩',
+  },
+  appreciation: {
+    eyebrow: 'PROMPTS',
+    title: 'Appreciation Cards',
+    subtitle: 'One grateful note, right now',
+    icon: 'heart',
+    emoji: '💌',
+  },
+  thirtySix: {
+    eyebrow: 'DEEP',
+    title: '36 Questions',
+    subtitle: 'Unlock one at a time',
+    icon: 'list',
+    emoji: '📖',
+  },
+  weekChallenge: {
+    eyebrow: 'CHALLENGE',
+    title: '7-Day Connection',
+    subtitle: 'Tiny daily habits, big payoff',
+    icon: 'target',
+    emoji: '🔥',
+  },
+  dateNight: {
+    eyebrow: 'CHALLENGE',
+    title: 'Date Night Challenge',
+    subtitle: 'Complete together this week',
+    icon: 'calendar',
+    emoji: '🌙',
+  },
+  fortuneWheel: {
+    eyebrow: 'PLAY',
+    title: 'Love Fortune Wheel',
+    subtitle: 'Spin for a tiny dare',
+    icon: 'spark',
+    emoji: '🎡',
+  },
+  dateGenerator: {
+    eyebrow: 'REAL LIFE',
+    title: 'Random Date Generator',
+    subtitle: 'Shake up your next night out',
+    icon: 'compass',
+    emoji: '📍',
+  },
+  drawTogether: {
+    eyebrow: 'CREATIVE',
+    title: 'Draw Together',
+    subtitle: 'Same prompt. Reveal together.',
+    icon: 'image',
+    emoji: '✏️',
+  },
+  compatibility: {
+    eyebrow: 'QUIZ',
+    title: 'Compatibility',
+    subtitle: 'See where you align',
+    icon: 'sparkles',
+    emoji: '🧭',
+  },
+  personality: {
+    eyebrow: 'QUIZ',
+    title: 'Personality',
+    subtitle: 'Your vibe, side by side',
+    icon: 'user',
+    emoji: '🪞',
+  },
+  attachment: {
+    eyebrow: 'QUIZ',
+    title: 'Attachment Style',
+    subtitle: 'How you need to feel close',
+    icon: 'people',
+    emoji: '🫶',
+  },
+  guessAnswer: {
+    eyebrow: 'QUICK',
+    title: 'Guess My Answer',
+    subtitle: 'They type. You guess.',
+    icon: 'chat',
+    emoji: '🎯',
   },
 };

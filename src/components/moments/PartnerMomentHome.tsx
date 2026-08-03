@@ -18,6 +18,7 @@ import { SwipeableMomentMediaStack } from '@/components/moments/SwipeableMomentM
 import { Icon } from '@/components/ui/Icon';
 import { GlassSurface } from '@/components/ui/GlassSurface';
 import { Avatar } from '@/components/ui/primitives';
+import { Radius } from '@/constants/design-system';
 import { useMomentReaction, useSendMessage } from '@/hooks/queries';
 import { useTheme } from '@/hooks/useTheme';
 import { getUserReactionEmoji, toggleMomentReactionForUser } from '@/lib/moment-display';
@@ -131,7 +132,7 @@ export function PartnerMomentHome({ partnerMoments }: PartnerMomentHomeProps) {
 
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <GlassSurface style={styles.card} borderRadius={28}>
+      <GlassSurface style={styles.card} borderRadius={Radius.lg}>
         <View style={styles.topBar}>
           <View style={styles.authorBlock}>
             <Avatar name={authorName} imageUrl={authorAvatar} size={32} />

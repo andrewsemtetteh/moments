@@ -1,43 +1,52 @@
 import * as Haptics from 'expo-haptics';
+import { useFocusEffect } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { useCallback, useState } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import type { ExploreModalKey } from '@/components/activities/ExploreSection';
-import { Icon, type IconName } from '@/components/ui/Icon';
-import { Spacing } from '@/constants/design-system';
+import { TodaysPromptCard } from '@/components/home/TodaysPromptCard';
+import { Icon } from '@/components/ui/Icon';
 import { useTheme } from '@/hooks/useTheme';
 import { getFirstName } from '@/lib/avatar-initial';
-
-const QUICK_PICKS: { key: ExploreModalKey; label: string; icon: IconName }[] = [
-  { key: 'cards', label: 'Cards', icon: 'cards' },
-  { key: 'games', label: 'Games', icon: 'gamepad' },
-  { key: 'quizLive', label: 'Quiz Live', icon: 'globe' },
-];
-
-const QUICK_GAP = Spacing.sm;
-const SCREEN_PAD = Spacing.lg;
+import { promptPhase } from '@/lib/daily-prompt';
+import { useAuthStore, useRelationshipStore } from '@/stores';
+import type { DailyChallenge } from '@/types/database';
 
 interface ActivitiesIntroSectionProps {
-  challengePrompt?: string | null;
+  challenge?: DailyChallenge | null;
   partnerName?: string | null;
-  onQuickOpen: (key: ExploreModalKey) => void;
+  onOpenHistory: () => void;
 }
 
+/**
+ * Play hero + compact today's-question teaser.
+ * Answer expands to the same TodaysPromptCard used on Home (no modal).
+ */
 export function ActivitiesIntroSection({
-  challengePrompt,
+  challenge,
   partnerName,
-  onQuickOpen,
+  onOpenHistory,
 }: ActivitiesIntroSectionProps) {
   const { colors } = useTheme();
-  const { width: windowWidth } = useWindowDimensions();
-  const contentWidth = windowWidth - SCREEN_PAD * 2;
-  const panelInnerWidth = contentWidth - 32;
-  const quickTileWidth = (panelInnerWidth - QUICK_GAP * 2) / 3;
+  const user = useAuthStore((s) => s.user);
+  const relationship = useRelationshipStore((s) => s.relationship);
+  const [answering, setAnswering] = useState(false);
   const partnerFirst = getFirstName(partnerName) ?? 'your partner';
 
-  const open = (key: ExploreModalKey) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    onQuickOpen(key);
+  const phase = challenge ? promptPhase(challenge, user?.id, relationship) : null;
+  // Full card when answering, or when there's nothing left to "Answer" (waiting / reveal).
+  const showFullCard = !!challenge && (answering || phase === 'waiting' || phase === 'reveal');
+
+  // Tabs stay mounted — collapse unanswered form whenever Play loses focus.
+  useFocusEffect(
+    useCallback(() => {
+      return () => setAnswering(false);
+    }, []),
+  );
+
+  const openAnswer = () => {
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setAnswering(true);
   };
 
   return (
@@ -46,7 +55,7 @@ export function ActivitiesIntroSection({
         colors={colors.gradient}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
-        style={styles.hero}>
+        style={[styles.hero, !challenge && styles.heroSolo]}>
         <View style={styles.heroGlow} pointerEvents="none" />
         <View style={styles.heroRow}>
           <View style={styles.heroIcon}>
@@ -60,55 +69,50 @@ export function ActivitiesIntroSection({
             </Text>
           </View>
         </View>
-
-        {challengePrompt ? (
-          <Pressable onPress={() => open('daily')} style={styles.challengeCard}>
-            <View style={styles.challengeHeader}>
-              <Icon name="sparkles" size={14} color="rgba(255,255,255,0.9)" />
-              <Text style={styles.challengeLabel}>Today&apos;s challenge</Text>
-            </View>
-            <Text style={styles.challengeText}>{challengePrompt}</Text>
-          </Pressable>
-        ) : null}
       </LinearGradient>
 
-      <View
-        style={[
-          styles.quickPanel,
-          { backgroundColor: colors.surfaceElevated, borderColor: colors.border },
-        ]}>
-        <Text style={[styles.quickLabel, { color: colors.textSecondary }]}>Jump in</Text>
-        <View style={styles.quickGrid}>
-          {QUICK_PICKS.map((pick) => (
-            <Pressable
-              key={pick.key}
-              onPress={() => open(pick.key)}
-              style={[
-                styles.quickTile,
-                { width: quickTileWidth, backgroundColor: colors.surface, borderColor: colors.border },
-              ]}>
-              <View style={[styles.quickIcon, { backgroundColor: colors.accentSoft }]}>
-                <Icon name={pick.icon} size={20} color={colors.accent} filled />
-              </View>
-              <Text style={[styles.quickTitle, { color: colors.text }]} numberOfLines={1}>
-                {pick.label}
-              </Text>
-            </Pressable>
-          ))}
+      {challenge && !showFullCard ? (
+        <View
+          style={[
+            styles.challengePanel,
+            { backgroundColor: colors.surfaceElevated, borderColor: colors.border },
+          ]}>
+          <View style={styles.challengeHeader}>
+            <Icon name="question" size={14} color={colors.accent} />
+            <Text style={[styles.challengeLabel, { color: colors.textSecondary }]}>
+              Today&apos;s question
+            </Text>
+          </View>
+          <Text style={[styles.challengeText, { color: colors.text }]}>{challenge.prompt}</Text>
+          <Pressable
+            onPress={openAnswer}
+            style={[styles.answerBtn, { backgroundColor: colors.accent }]}
+            accessibilityRole="button"
+            accessibilityLabel="Answer today's question">
+            <Text style={[styles.answerBtnText, { color: colors.onAccent }]}>Answer</Text>
+            <Icon name="chevronRight" size={16} color={colors.onAccent} />
+          </Pressable>
         </View>
-      </View>
+      ) : null}
+
+      {challenge && showFullCard ? (
+        <View style={styles.challengeWrap}>
+          <TodaysPromptCard challenge={challenge} onOpenHistory={onOpenHistory} />
+        </View>
+      ) : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  section: { marginBottom: 6 },
+  section: { marginBottom: 0 },
   hero: {
     borderRadius: 24,
     padding: 20,
     paddingBottom: 28,
     overflow: 'hidden',
   },
+  heroSolo: { paddingBottom: 20 },
   heroGlow: {
     position: 'absolute',
     width: 180,
@@ -147,62 +151,40 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     marginTop: 2,
   },
-  challengeCard: {
-    marginTop: 18,
-    padding: 14,
-    borderRadius: 16,
-    backgroundColor: 'rgba(0,0,0,0.14)',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255,255,255,0.16)',
-    gap: 8,
-  },
-  challengeHeader: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  challengeLabel: {
-    color: 'rgba(255,255,255,0.8)',
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 0.6,
-    textTransform: 'uppercase',
-  },
-  challengeText: {
-    color: '#fff',
-    fontSize: 16,
-    lineHeight: 23,
-    fontWeight: '600',
-  },
-  quickPanel: {
+  challengePanel: {
     marginTop: -18,
     borderRadius: 22,
     borderWidth: StyleSheet.hairlineWidth,
     padding: 16,
-    gap: 12,
+    gap: 10,
   },
-  quickLabel: {
+  challengeHeader: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  challengeLabel: {
     fontSize: 12,
     fontWeight: '700',
     letterSpacing: 0.6,
     textTransform: 'uppercase',
   },
-  quickGrid: {
+  challengeText: {
+    fontSize: 16,
+    lineHeight: 23,
+    fontWeight: '600',
+  },
+  answerBtn: {
+    alignSelf: 'flex-end',
     flexDirection: 'row',
-    gap: QUICK_GAP,
-    justifyContent: 'space-between',
-  },
-  quickTile: {
     alignItems: 'center',
-    paddingVertical: 14,
-    paddingHorizontal: 8,
-    borderRadius: 16,
-    borderWidth: StyleSheet.hairlineWidth,
-    gap: 8,
-    minHeight: 88,
+    gap: 4,
+    marginTop: 2,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 999,
   },
-  quickIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
+  answerBtnText: {
+    fontSize: 14,
+    fontWeight: '800',
   },
-  quickTitle: { fontSize: 13, fontWeight: '800', textAlign: 'center' },
+  challengeWrap: {
+    marginTop: -18,
+  },
 });

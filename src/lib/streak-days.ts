@@ -14,6 +14,7 @@ import {
 } from 'date-fns';
 
 import type { StreakStatus } from '@/types/database';
+import { isStreakVisuallyAtRisk } from '@/lib/streak-reminder-timing';
 
 export type StreakView = 'week' | 'month';
 
@@ -97,6 +98,7 @@ function resolveDayState(
   activeDays: Set<string>,
   status: StreakStatus,
   joinedDay: Date | null,
+  now: Date,
 ): Pick<StreakDayCell, 'state' | 'tone'> {
   if (joinedDay && isBefore(date, joinedDay)) return { state: 'inactive' };
 
@@ -109,7 +111,7 @@ function resolveDayState(
     if (status.both_active_today) {
       return { state: 'today-done', tone: 'success' };
     }
-    if (status.current_streak > 0 && status.at_risk) {
+    if (status.current_streak > 0 && isStreakVisuallyAtRisk(status, now)) {
       return { state: 'today-at-risk' };
     }
     return { state: 'today-pending' };
@@ -128,8 +130,9 @@ function toDayCell(
   activeDays: Set<string>,
   status: StreakStatus,
   joinedDay: Date | null,
+  now: Date,
 ): StreakDayCell {
-  const { state, tone } = resolveDayState(date, today, activeDays, status, joinedDay);
+  const { state, tone } = resolveDayState(date, today, activeDays, status, joinedDay, now);
   return {
     date,
     weekdayLabel: format(date, 'EEE'),
@@ -155,7 +158,7 @@ export function buildStreakWeek(
   const cells: StreakDayCell[] = [];
   let cursor = weekStart;
   while (!isAfter(cursor, weekEnd)) {
-    cells.push(toDayCell(cursor, today, activeDays, status, joinedDay));
+    cells.push(toDayCell(cursor, today, activeDays, status, joinedDay, now));
     cursor = addDays(cursor, 1);
   }
 
@@ -203,7 +206,7 @@ export function buildMilestoneWeek(
           weekdayLabel: format(cursor, 'EEE'),
           dayOfMonth: cursor.getDate(),
           isToday: true,
-          state: status.at_risk ? 'today-at-risk' : 'today-pending',
+          state: isStreakVisuallyAtRisk(status, now) ? 'today-at-risk' : 'today-pending',
         });
       } else {
         cells.push({
@@ -266,7 +269,7 @@ export function buildStreakMonth(
   const joinedDay = parseJoinedDay(joinedAt);
 
   const days = eachDayOfInterval({ start: monthStart, end: monthEnd }).map((date) =>
-    toDayCell(date, today, activeDays, status, joinedDay),
+    toDayCell(date, today, activeDays, status, joinedDay, now),
   );
 
   return {

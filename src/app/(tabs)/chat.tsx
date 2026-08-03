@@ -865,7 +865,6 @@ export default function ChatScreen() {
           lastSeenAt={partnerLastSeenAt}
           statusHidden={partnerStatusHidden}
           onOpenProfile={openPartnerProfileView}
-          onOpenAvatar={openPartnerProfileView}
         />
       ) : null,
     [
@@ -911,15 +910,18 @@ export default function ChatScreen() {
               borderBottomColor: colors.border,
             },
           ]}>
-          <Pressable
-            style={styles.headerProfile}
-            onPress={openPartnerProfileView}
-            onLongPress={() => setShowPartnerPhoto(true)}
-            delayLongPress={400}
-            accessibilityRole="button"
-            accessibilityLabel="View partner info">
-            <Avatar name={partner?.name} imageUrl={partner?.avatar_url} size={40} />
-            <View style={styles.headerText}>
+          <View style={styles.headerProfile}>
+            <Pressable
+              onPress={() => setShowPartnerPhoto(true)}
+              accessibilityRole="button"
+              accessibilityLabel="View profile photo">
+              <Avatar name={partner?.name} imageUrl={partner?.avatar_url} size={40} />
+            </Pressable>
+            <Pressable
+              style={styles.headerText}
+              onPress={openPartnerProfileView}
+              accessibilityRole="button"
+              accessibilityLabel="View partner info">
               <Text style={[styles.headerName, { color: colors.text }]} numberOfLines={1}>
                 {partner?.name ?? 'Partner'}
               </Text>
@@ -929,8 +931,8 @@ export default function ChatScreen() {
                 lastSeenAt={partnerLastSeenAt}
                 statusHidden={partnerStatusHidden}
               />
-            </View>
-          </Pressable>
+            </Pressable>
+          </View>
 
           <View style={styles.headerActions}>
             <Pressable onPress={() => startCall('video')} hitSlop={8} style={styles.headerIconSlot}>

@@ -19,6 +19,7 @@ import { MomentsStrip } from '@/components/moments/MomentsStrip';
 import { PartnerMomentHome } from '@/components/moments/PartnerMomentHome';
 import { Icon, type IconName } from '@/components/ui/Icon';
 import { Avatar, Card, SectionTitle } from '@/components/ui/primitives';
+import { Radius, Spacing } from '@/constants/design-system';
 import {
     useCalendarEvents,
     useDailyChallenge,
@@ -40,6 +41,7 @@ import {
     getStreakEndVariant,
     isStreakRestoreAvailable,
 } from '@/lib/streak';
+import { isStreakVisuallyAtRisk } from '@/lib/streak-reminder-timing';
 import { useAuthStore, useRelationshipStore, useUIStore } from '@/stores';
 import type { Moment } from '@/types/database';
 
@@ -235,7 +237,7 @@ export default function HomeScreen() {
               <View
                 style={[
                   styles.heroStreak,
-                  streakStatus.at_risk && styles.heroStreakAtRisk,
+                  streakStatus && isStreakVisuallyAtRisk(streakStatus) && styles.heroStreakAtRisk,
                 ]}>
                 <AnimatedStreakFire
                   color="#fff"
@@ -253,7 +255,7 @@ export default function HomeScreen() {
         </LinearGradient>
 
         {session ? (
-          <View style={styles.streakTracker}>
+          <View style={styles.stack}>
             <StreakDayTracker status={streakStatus} joinedAt={relationship?.created_at} />
             {restoreStatus ? <StreakRestoreBanner status={restoreStatus} /> : null}
             {endCardStatus ? <StreakEndCard status={endCardStatus} /> : null}
@@ -261,47 +263,49 @@ export default function HomeScreen() {
         ) : null}
 
         {homePartnerMoments.length > 0 && (
-          <View>
-            <SectionTitle>Moments</SectionTitle>
+          <View style={styles.stack}>
+            <SectionTitle style={styles.sectionLabel}>Moments</SectionTitle>
             <MomentsStrip moments={stripMoments} partnerOnly />
-            <View style={styles.partnerMomentBlock}>
-              <PartnerMomentHome partnerMoments={homePartnerMoments} />
-            </View>
+            <PartnerMomentHome partnerMoments={homePartnerMoments} />
           </View>
         )}
 
-        <View>
-          <MoodSnapshot
-            moods={moods ?? {}}
-            onSelectMood={(m) => updateMood.mutate(m)}
-            onViewHistory={() => setShowMoodHistory(true)}
-          />
-        </View>
+        <MoodSnapshot
+          moods={moods ?? {}}
+          onSelectMood={(m) => updateMood.mutate(m)}
+          onViewHistory={() => setShowMoodHistory(true)}
+        />
 
-        {challenge && (
+        {challenge ? (
           <TodaysPromptCard
             challenge={challenge}
             onOpenHistory={() => setShowPromptHistory(true)}
           />
-        )}
+        ) : null}
 
         {session && partner ? <ContinueChatCard /> : null}
 
         {upcomingEvents.length > 0 && (
-          <View>
-            <SectionTitle action="Calendar" onAction={() => openCalendar()}>
+          <View style={styles.stack}>
+            <SectionTitle style={styles.sectionLabel} action="Calendar" onAction={() => openCalendar()}>
               Coming Up
             </SectionTitle>
             {upcomingEvents.map((e) => (
               <Pressable key={e.id} onPress={() => openCalendar({ dateISO: e.date_time })}>
                 <Card style={styles.eventRow}>
                   <View style={[styles.eventDateBox, { backgroundColor: colors.accentSoft }]}>
-                    <Text style={[styles.eventDay, { color: colors.accent }]}>{format(new Date(e.date_time), 'd')}</Text>
-                    <Text style={[styles.eventMonth, { color: colors.accent }]}>{format(new Date(e.date_time), 'MMM')}</Text>
+                    <Text style={[styles.eventDay, { color: colors.accent }]}>
+                      {format(new Date(e.date_time), 'd')}
+                    </Text>
+                    <Text style={[styles.eventMonth, { color: colors.accent }]}>
+                      {format(new Date(e.date_time), 'MMM')}
+                    </Text>
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={[styles.eventTitle, { color: colors.text }]}>{e.title}</Text>
-                    <Text style={[styles.eventTime, { color: colors.textSecondary }]}>{format(new Date(e.date_time), 'EEEE · h:mm a')}</Text>
+                    <Text style={[styles.eventTime, { color: colors.textSecondary }]}>
+                      {format(new Date(e.date_time), 'EEEE · h:mm a')}
+                    </Text>
                   </View>
                 </Card>
               </Pressable>
@@ -309,23 +313,24 @@ export default function HomeScreen() {
           </View>
         )}
 
-        <View>
-          <Pressable onPress={smartSuggestion.onPress}>
-            <LinearGradient
-              colors={[colors.accentSoft, colors.surface]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={[styles.suggestion, { borderColor: colors.border }]}>
-              <View style={styles.suggestionIcon}>
-                <Icon name={smartSuggestion.icon} size={22} color={colors.accent} />
-              </View>
-              <Text style={[styles.suggestionText, { color: colors.text }]}>{smartSuggestion.text}</Text>
-              <View style={styles.suggestionIcon}>
-                <Icon name="chevronRight" size={20} color={colors.textSecondary} />
-              </View>
-            </LinearGradient>
-          </Pressable>
-        </View>
+        <Pressable onPress={smartSuggestion.onPress}>
+          <View
+            style={[
+              styles.suggestion,
+              {
+                backgroundColor: colors.surface,
+                borderColor: colors.border,
+              },
+            ]}>
+            <View style={styles.suggestionIcon}>
+              <Icon name={smartSuggestion.icon} size={22} color={colors.accent} />
+            </View>
+            <Text style={[styles.suggestionText, { color: colors.text }]}>{smartSuggestion.text}</Text>
+            <View style={styles.suggestionIcon}>
+              <Icon name="chevronRight" size={20} color={colors.textSecondary} />
+            </View>
+          </View>
+        </Pressable>
       </TabScreenScroll>
       <PromptHistoryModal visible={showPromptHistory} onClose={() => setShowPromptHistory(false)} />
     </ScreenContainer>
@@ -380,20 +385,48 @@ function getSmartSuggestion(
 }
 
 const styles = StyleSheet.create({
-  scroll: { paddingHorizontal: 16, paddingTop: 4, gap: 18 },
-  hero: { borderRadius: 24, padding: 20 },
+  scroll: {
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.xs,
+    paddingBottom: Spacing.xl,
+    gap: Spacing.lg,
+  },
+  stack: {
+    gap: Spacing.lg,
+  },
+  sectionLabel: {
+    marginBottom: 0,
+  },
+  hero: { borderRadius: Radius.xl, padding: Spacing.xl - 4 },
   greeting: { color: 'rgba(255,255,255,0.85)', fontSize: 14, fontWeight: '600' },
   heroName: { color: '#fff', fontSize: 26, fontWeight: '800', marginTop: 2, letterSpacing: -0.5 },
-  heroFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 18 },
+  heroFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: Spacing.lg,
+  },
   avatars: { flexDirection: 'row', alignItems: 'center' },
   avatarOverlap: { marginLeft: -14 },
-  heroStreak: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(255,255,255,0.2)', paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999 },
+  heroStreak: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 999,
+  },
   heroStreakAtRisk: { backgroundColor: 'rgba(224,65,79,0.55)' },
   heroStreakText: { color: '#fff', fontWeight: '700', fontSize: 13 },
-  streakTracker: { gap: 18 },
-  partnerMomentBlock: { marginTop: 14 },
-  eventRow: { flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 10 },
-  eventDateBox: { width: 48, height: 48, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  eventRow: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  eventDateBox: {
+    width: 48,
+    height: 48,
+    borderRadius: Radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   eventDay: { fontSize: 18, fontWeight: '800', lineHeight: 20 },
   eventMonth: { fontSize: 10, fontWeight: '700', textTransform: 'uppercase' },
   eventTitle: { fontSize: 15, fontWeight: '700' },
@@ -401,9 +434,9 @@ const styles = StyleSheet.create({
   suggestion: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 12,
-    padding: 16,
-    borderRadius: 18,
+    gap: Spacing.md,
+    padding: Spacing.lg,
+    borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
   },
   suggestionIcon: {

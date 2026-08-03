@@ -7,6 +7,25 @@ import {
   TruthOrDareScreen,
   TwoTruthsScreen,
 } from './explore-extra-screens';
+import {
+  AppreciationScreen,
+  AttachmentScreen,
+  ChoiceRoundsScreen,
+  CompatibilityScreen,
+  DateGeneratorScreen,
+  DateNightChallengeScreen,
+  DrawTogetherScreen,
+  EmojiStoryScreen,
+  FinishSentenceScreen,
+  FortuneWheelScreen,
+  GuessAnswerScreen,
+  LoveQuizScreen,
+  NeverHaveIScreen,
+  PersonalityScreen,
+  ThirtySixScreen,
+  WeekChallengeScreen,
+  WhosLikelyScreen,
+} from './explore-play-screens';
 import { QuizLiveScreen } from './QuizLiveScreen';
 import { EXPLORE_META } from './explore-meta';
 import { ExploreModalShell } from './ExploreModalShell';
@@ -31,6 +50,7 @@ export function ExploreActivityModal({ activeModal, onClose }: ExploreActivityMo
   if (!activeModal) return null;
 
   const meta = EXPLORE_META[activeModal];
+  if (!meta) return null;
 
   return (
     <ExploreModalShell visible meta={meta} onClose={onClose}>
@@ -48,6 +68,24 @@ export function ExploreActivityModal({ activeModal, onClose }: ExploreActivityMo
       {activeModal === 'truth' && <TruthOrDareScreen />}
       {activeModal === 'memory' && <MemoryQuizScreen />}
       {activeModal === 'playlist' && <PlaylistForTwoScreen />}
+      {activeModal === 'thisOrThat' && <ChoiceRoundsScreen gameName="This or That" />}
+      {activeModal === 'wouldYouRather' && <ChoiceRoundsScreen gameName="Would You Rather" />}
+      {activeModal === 'whosLikely' && <WhosLikelyScreen />}
+      {activeModal === 'loveQuiz' && <LoveQuizScreen />}
+      {activeModal === 'neverHaveI' && <NeverHaveIScreen />}
+      {activeModal === 'finishSentence' && <FinishSentenceScreen />}
+      {activeModal === 'emojiStory' && <EmojiStoryScreen />}
+      {activeModal === 'appreciation' && <AppreciationScreen />}
+      {activeModal === 'thirtySix' && <ThirtySixScreen />}
+      {activeModal === 'weekChallenge' && <WeekChallengeScreen />}
+      {activeModal === 'dateNight' && <DateNightChallengeScreen />}
+      {activeModal === 'fortuneWheel' && <FortuneWheelScreen />}
+      {activeModal === 'dateGenerator' && <DateGeneratorScreen />}
+      {activeModal === 'drawTogether' && <DrawTogetherScreen />}
+      {activeModal === 'compatibility' && <CompatibilityScreen />}
+      {activeModal === 'personality' && <PersonalityScreen />}
+      {activeModal === 'attachment' && <AttachmentScreen />}
+      {activeModal === 'guessAnswer' && <GuessAnswerScreen />}
     </ExploreModalShell>
   );
 }

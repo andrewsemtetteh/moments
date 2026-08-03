@@ -5,6 +5,7 @@ import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { AnniversaryCountdownMilestone } from '@/components/profile/AnniversaryCountdownMilestone';
 import { EditAnniversaryModal } from '@/components/profile/EditAnniversaryModal';
 import { Icon } from '@/components/ui/Icon';
+import { useTheme } from '@/hooks/useTheme';
 import {
   formatAnniversaryDisplay,
   formatTogetherLabel,
@@ -14,7 +15,6 @@ import {
   isValidAnniversaryIso,
 } from '@/lib/anniversary';
 import { toUserFacingNetworkError } from '@/lib/network-error';
-import { useTheme } from '@/hooks/useTheme';
 import * as api from '@/services/api';
 import { useRelationshipStore } from '@/stores';
 
@@ -57,10 +57,8 @@ export function ProfileAnniversarySection() {
 
   return (
     <>
-      <View style={[styles.wrap, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-        <View style={[styles.body, { backgroundColor: colors.background }]}>
-          <AnniversaryCountdownMilestone anniversaryIso={anniversaryIso} onEdit={openEdit} />
-        </View>
+      <View style={styles.milestone}>
+        <AnniversaryCountdownMilestone anniversaryIso={anniversaryIso} onEdit={openEdit} />
       </View>
 
       <Pressable
@@ -76,11 +74,13 @@ export function ProfileAnniversarySection() {
         accessibilityRole="button"
         accessibilityLabel="Edit together since date">
         <View style={[styles.togetherIcon, { backgroundColor: colors.accentSoft }]}>
-          <Text style={styles.togetherEmoji}>💕</Text>
+          <Icon name="heart" size={18} color={colors.accent} filled />
         </View>
         <View style={styles.togetherCopy}>
           <Text style={[styles.togetherLabel, { color: colors.textSecondary }]}>Together since</Text>
-          <Text style={[styles.togetherDate, { color: colors.text }]}>{formatAnniversaryDisplay(togetherSince)}</Text>
+          <Text style={[styles.togetherDate, { color: colors.text }]}>
+            {formatAnniversaryDisplay(togetherSince)}
+          </Text>
           <Text style={[styles.togetherMeta, { color: colors.accent }]}>
             {formatTogetherLabel(togetherSince, togetherDays)}
           </Text>
@@ -90,7 +90,7 @@ export function ProfileAnniversarySection() {
 
       {usingDefault ? (
         <Text style={[styles.defaultHint, { color: colors.textTertiary }]}>
-          Using your join date. Tap to set your real anniversary
+          Using your join date. Tap to set your real anniversary.
         </Text>
       ) : null}
 
@@ -106,13 +106,7 @@ export function ProfileAnniversarySection() {
 }
 
 const styles = StyleSheet.create({
-  wrap: {
-    borderRadius: 24,
-    borderWidth: StyleSheet.hairlineWidth,
-    overflow: 'hidden',
-    marginTop: 18,
-  },
-  body: { padding: 16 },
+  milestone: { marginTop: 16 },
   togetherRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -129,7 +123,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  togetherEmoji: { fontSize: 22 },
   togetherCopy: { flex: 1, gap: 2 },
   togetherLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 0.5, textTransform: 'uppercase' },
   togetherDate: { fontSize: 16, fontWeight: '800' },
