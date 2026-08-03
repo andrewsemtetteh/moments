@@ -5,6 +5,7 @@ import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { AnniversaryCountdownMilestone } from '@/components/profile/AnniversaryCountdownMilestone';
 import { EditAnniversaryModal } from '@/components/profile/EditAnniversaryModal';
 import { Icon } from '@/components/ui/Icon';
+import { Radius, Spacing } from '@/constants/design-system';
 import { useTheme } from '@/hooks/useTheme';
 import {
   formatAnniversaryDisplay,
@@ -56,17 +57,15 @@ export function ProfileAnniversarySection() {
   };
 
   return (
-    <>
-      <View style={styles.milestone}>
-        <AnniversaryCountdownMilestone anniversaryIso={anniversaryIso} onEdit={openEdit} />
-      </View>
+    <View style={styles.stack}>
+      <AnniversaryCountdownMilestone anniversaryIso={anniversaryIso} onEdit={openEdit} />
 
       <Pressable
         onPress={openEdit}
         style={({ pressed }) => [
           styles.togetherRow,
           {
-            backgroundColor: colors.surfaceElevated,
+            backgroundColor: colors.surface,
             borderColor: colors.border,
             opacity: pressed ? 0.88 : 1,
           },
@@ -101,25 +100,26 @@ export function ProfileAnniversarySection() {
         onClose={() => setEditOpen(false)}
         onSave={saveAnniversary}
       />
-    </>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  milestone: { marginTop: 16 },
+  stack: {
+    gap: Spacing.sm,
+  },
   togetherRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    padding: 14,
-    borderRadius: 18,
+    padding: Spacing.lg,
+    borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
-    marginTop: 12,
   },
   togetherIcon: {
     width: 44,
     height: 44,
-    borderRadius: 14,
+    borderRadius: Radius.md,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -127,5 +127,5 @@ const styles = StyleSheet.create({
   togetherLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 0.5, textTransform: 'uppercase' },
   togetherDate: { fontSize: 16, fontWeight: '800' },
   togetherMeta: { fontSize: 13, fontWeight: '700', marginTop: 2 },
-  defaultHint: { fontSize: 12, lineHeight: 17, textAlign: 'center', fontWeight: '500', marginTop: 8 },
+  defaultHint: { fontSize: 12, lineHeight: 17, textAlign: 'center', fontWeight: '500' },
 });

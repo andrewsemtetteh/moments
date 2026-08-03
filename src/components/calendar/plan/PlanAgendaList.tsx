@@ -147,7 +147,7 @@ function PlanCard({
   const tc = getEventTypeColors(event.type, colors);
   const at = new Date(event.date_time);
   const meta = parsePlanMeta(event.description);
-  const emoji = planKindEmoji(event) ?? EVENT_TYPE_META[event.type].emoji;
+  const emoji = planKindEmoji(event) ?? EVENT_TYPE_META[event.type]?.emoji ?? '📌';
 
   return (
     <Pressable

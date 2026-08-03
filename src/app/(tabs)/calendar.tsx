@@ -1,4 +1,15 @@
-import { addDays, addMonths, format, isToday, startOfDay, startOfMonth } from 'date-fns';
+import {
+  addDays,
+  addMonths,
+  format,
+  getDate,
+  getDaysInMonth,
+  isSameDay,
+  isToday,
+  setDate,
+  startOfDay,
+  startOfMonth,
+} from 'date-fns';
 import * as Haptics from 'expo-haptics';
 import { useQueryClient } from '@tanstack/react-query';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
@@ -7,7 +18,7 @@ import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { CreatePlanFlow, type CreatePlanPayload } from '@/components/calendar/plan/CreatePlanFlow';
 import { EventDetailsSheet } from '@/components/calendar/plan/EventDetailsSheet';
-import { buildDayEvents, PlanAgendaList } from '@/components/calendar/plan/PlanAgendaList';
+import { PlanAgendaList } from '@/components/calendar/plan/PlanAgendaList';
 import { PlanListSheet } from '@/components/calendar/plan/PlanListSheet';
 import { PlanMonthGrid, PlanWeekStrip } from '@/components/calendar/plan/PlanWeekStrip';
 import { PlanToolbar } from '@/components/calendar/plan/PlanToolbar';
@@ -15,7 +26,7 @@ import { AppHeader } from '@/components/layout/AppHeader';
 import { ScreenContainer } from '@/components/layout/ScreenContainer';
 import { TabScreenScroll } from '@/components/layout/TabScreenScroll';
 import { Icon } from '@/components/ui/Icon';
-import { useCalendarEvents, useRealtimeSubscription, useUpcomingCalendarEvents } from '@/hooks/queries';
+import { usePlanCalendarEvents, useRealtimeSubscription } from '@/hooks/queries';
 import { useTheme } from '@/hooks/useTheme';
 import {
   createListFromPlan,
@@ -25,9 +36,25 @@ import {
   type PlanList,
 } from '@/lib/plan-local';
 import { parsePlanMeta, serializePlanMeta, type PlanKindKey } from '@/lib/plan-meta';
+import { getErrorMessage } from '@/lib/network-error';
 import * as api from '@/services/api';
 import { useRelationshipStore } from '@/stores';
 import type { CalendarEvent } from '@/types/database';
+
+function monthKey(day: Date) {
+  return format(startOfMonth(day), 'yyyy-MM');
+}
+
+function upsertEvent(list: CalendarEvent[] | undefined, event: CalendarEvent): CalendarEvent[] {
+  const next = [...(list ?? []).filter((e) => e.id !== event.id), event];
+  return next.sort((a, b) => new Date(a.date_time).getTime() - new Date(b.date_time).getTime());
+}
+
+function eventsForDay(events: CalendarEvent[], day: Date) {
+  return events
+    .filter((e) => isSameDay(new Date(e.date_time), day))
+    .sort((a, b) => new Date(a.date_time).getTime() - new Date(b.date_time).getTime());
+}
 
 export default function CalendarScreen() {
   const { create } = useLocalSearchParams<{ create?: string }>();
@@ -51,12 +78,9 @@ export default function CalendarScreen() {
   useFocusEffect(
     useCallback(() => {
       return () => {
-        setMode('week');
-        const today = startOfDay(new Date());
-        setSelectedDate(today);
-        setCurrentMonth(startOfMonth(today));
         setCreateOpen(false);
         setDetailEvent(null);
+        setActiveListId(null);
       };
     }, []),
   );
@@ -74,19 +98,18 @@ export default function CalendarScreen() {
     fetchPlanLists(relationship.id).then(setLists);
   }, [relationship]);
 
-  const { data: monthEvents, refetch: refetchMonth } = useCalendarEvents(currentMonth);
-  const { data: upcoming, refetch: refetchUpcoming } = useUpcomingCalendarEvents();
+  const {
+    data: planEvents = [],
+    isError,
+    error,
+    refetch,
+    isLoading,
+  } = usePlanCalendarEvents(currentMonth);
   useRealtimeSubscription('calendar_events');
 
-  const allEvents = useMemo(() => {
-    const map = new Map<string, CalendarEvent>();
-    for (const e of [...(monthEvents ?? []), ...(upcoming ?? [])]) map.set(e.id, e);
-    return Array.from(map.values());
-  }, [monthEvents, upcoming]);
-
   const dayEvents = useMemo(
-    () => buildDayEvents(selectedDate, upcoming ?? [], monthEvents ?? []),
-    [selectedDate, upcoming, monthEvents],
+    () => eventsForDay(planEvents, selectedDate),
+    [planEvents, selectedDate],
   );
 
   const activeList = useMemo(
@@ -94,14 +117,36 @@ export default function CalendarScreen() {
     [lists, activeListId],
   );
 
+  const writeEventToCaches = useCallback(
+    (event: CalendarEvent) => {
+      if (!relationship) return;
+      const key = monthKey(new Date(event.date_time));
+      queryClient.setQueryData<CalendarEvent[]>(['calendarPlan', relationship.id, key], (old) =>
+        upsertEvent(old, event),
+      );
+      // Also seed neighboring month caches if the hook key differs slightly after navigation.
+      queryClient.setQueryData<CalendarEvent[]>(
+        ['calendarPlan', relationship.id, monthKey(currentMonth)],
+        (old) => upsertEvent(old, event),
+      );
+      queryClient.setQueryData<CalendarEvent[]>(['calendar', relationship.id, key], (old) =>
+        upsertEvent(old, event),
+      );
+      queryClient.setQueryData<CalendarEvent[]>(['calendarUpcoming', relationship.id], (old) =>
+        upsertEvent(old, event),
+      );
+    },
+    [currentMonth, queryClient, relationship],
+  );
+
   const invalidate = useCallback(async () => {
     await Promise.all([
-      refetchMonth(),
-      refetchUpcoming(),
+      queryClient.invalidateQueries({ queryKey: ['calendarPlan'] }),
       queryClient.invalidateQueries({ queryKey: ['calendar'] }),
       queryClient.invalidateQueries({ queryKey: ['calendarUpcoming'] }),
+      refetch(),
     ]);
-  }, [queryClient, refetchMonth, refetchUpcoming]);
+  }, [queryClient, refetch]);
 
   const persistLists = async (next: PlanList[]) => {
     setLists(next);
@@ -112,6 +157,15 @@ export default function CalendarScreen() {
     Haptics.selectionAsync();
     setSelectedDate(startOfDay(day));
     setCurrentMonth(startOfMonth(day));
+  };
+
+  const shiftMonth = (delta: number) => {
+    Haptics.selectionAsync();
+    const nextMonth = addMonths(currentMonth, delta);
+    const clamped = Math.min(getDate(selectedDate), getDaysInMonth(nextMonth));
+    const day = startOfDay(setDate(nextMonth, clamped));
+    setCurrentMonth(startOfMonth(nextMonth));
+    setSelectedDate(day);
   };
 
   const shiftDay = (delta: number) => {
@@ -129,11 +183,14 @@ export default function CalendarScreen() {
   };
 
   const createEvent = async (payload: CreatePlanPayload) => {
-    if (!relationship) return;
+    if (!relationship) {
+      Alert.alert('Connect first', 'Invite your partner or join a space to save plans.');
+      return;
+    }
     setSaving(true);
     try {
       let description = payload.description;
-      const created = await api.createCalendarEvent(relationship.id, {
+      let created = await api.createCalendarEvent(relationship.id, {
         title: payload.title,
         date_time: payload.dateTime.toISOString(),
         type: payload.type,
@@ -152,7 +209,7 @@ export default function CalendarScreen() {
         });
         const meta = parsePlanMeta(payload.description);
         description = serializePlanMeta({ ...meta, linkedListId: list.id, v: 1 });
-        await api.updateCalendarEvent(created.id, { description });
+        created = await api.updateCalendarEvent(created.id, { description });
         nextLists = [list, ...nextLists.filter((l) => l.id !== list.id)];
       }
 
@@ -166,11 +223,12 @@ export default function CalendarScreen() {
         await persistLists(nextLists);
       }
 
+      writeEventToCaches(created);
       setCreateOpen(false);
       selectDay(payload.dateTime);
-      await invalidate();
-    } catch {
-      Alert.alert('Could not save', 'Please try again.');
+      void invalidate();
+    } catch (e) {
+      Alert.alert('Could not save', getErrorMessage(e) ?? 'Please try again.');
     } finally {
       setSaving(false);
     }
@@ -190,6 +248,7 @@ export default function CalendarScreen() {
         description: patch.description,
       });
       setDetailEvent(updated);
+      writeEventToCaches(updated);
 
       const meta = parsePlanMeta(patch.description);
       const linked = lists.find(
@@ -201,9 +260,9 @@ export default function CalendarScreen() {
         );
       }
 
-      await invalidate();
-    } catch {
-      Alert.alert('Could not update', 'Please try again.');
+      void invalidate();
+    } catch (e) {
+      Alert.alert('Could not update', getErrorMessage(e) ?? 'Please try again.');
     } finally {
       setSaving(false);
     }
@@ -229,8 +288,8 @@ export default function CalendarScreen() {
       }
       setDetailEvent(null);
       await invalidate();
-    } catch {
-      Alert.alert('Could not delete', 'Please try again.');
+    } catch (e) {
+      Alert.alert('Could not delete', getErrorMessage(e) ?? 'Please try again.');
     }
   };
 
@@ -248,22 +307,22 @@ export default function CalendarScreen() {
           mode={mode}
           onToggleMode={() => setMode((m) => (m === 'week' ? 'month' : 'week'))}
           onAdd={() => openCreate(undefined, false)}
-          onPrevMonth={() => setCurrentMonth((m) => addMonths(m, -1))}
-          onNextMonth={() => setCurrentMonth((m) => addMonths(m, 1))}
+          onPrevMonth={() => shiftMonth(-1)}
+          onNextMonth={() => shiftMonth(1)}
         />
 
         <View style={styles.calendarPad}>
           {mode === 'week' ? (
             <PlanWeekStrip
               selectedDate={selectedDate}
-              events={allEvents}
+              events={planEvents}
               onSelectDate={(d) => selectDay(d)}
             />
           ) : (
             <PlanMonthGrid
               currentMonth={currentMonth}
               selectedDate={selectedDate}
-              events={allEvents}
+              events={planEvents}
               onSelectDate={(d) => selectDay(d)}
             />
           )}
@@ -290,13 +349,31 @@ export default function CalendarScreen() {
             </Pressable>
           </View>
 
-          <PlanAgendaList
-            events={dayEvents}
-            selectedDate={selectedDate}
-            hideGroupLabel
-            onPressEvent={(event) => setDetailEvent(event)}
-            emptyAction={() => openCreate(undefined, false)}
-          />
+          {isError ? (
+            <View style={styles.empty}>
+              <Text style={[styles.emptyTitle, { color: colors.text }]}>Couldn&apos;t load plans</Text>
+              <Text style={[styles.emptyBody, { color: colors.textSecondary }]}>
+                {error instanceof Error ? error.message : 'Check your connection and try again.'}
+              </Text>
+              <Pressable
+                onPress={() => void refetch()}
+                style={[styles.retryBtn, { backgroundColor: colors.accentSoft }]}>
+                <Text style={{ color: colors.accent, fontWeight: '700' }}>Retry</Text>
+              </Pressable>
+            </View>
+          ) : isLoading && planEvents.length === 0 ? (
+            <View style={styles.empty}>
+              <Text style={[styles.emptyBody, { color: colors.textSecondary }]}>Loading plans…</Text>
+            </View>
+          ) : (
+            <PlanAgendaList
+              events={dayEvents}
+              selectedDate={selectedDate}
+              hideGroupLabel
+              onPressEvent={(event) => setDetailEvent(event)}
+              emptyAction={() => openCreate(undefined, false)}
+            />
+          )}
         </View>
       </TabScreenScroll>
 
@@ -361,6 +438,7 @@ export default function CalendarScreen() {
             })
             .then((updated) => {
               setDetailEvent(updated);
+              writeEventToCaches(updated);
               void invalidate();
             });
           setDetailEvent(null);
@@ -374,7 +452,7 @@ export default function CalendarScreen() {
         visible={!!activeList}
         linkedPlanTitle={
           activeList?.eventId
-            ? allEvents.find((e) => e.id === activeList.eventId)?.title ?? null
+            ? planEvents.find((e) => e.id === activeList.eventId)?.title ?? null
             : null
         }
         onClose={() => setActiveListId(null)}
@@ -388,7 +466,7 @@ export default function CalendarScreen() {
 
 const styles = StyleSheet.create({
   scroll: { paddingBottom: 120, gap: 20 },
-  calendarPad: { paddingHorizontal: 12 },
+  calendarPad: { paddingHorizontal: 20 },
   agendaPad: { paddingHorizontal: 20, paddingTop: 4, gap: 14 },
   dateNav: {
     flexDirection: 'row',
@@ -399,6 +477,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
+    overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -408,5 +487,19 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     letterSpacing: -0.2,
+  },
+  empty: {
+    paddingVertical: 28,
+    paddingHorizontal: 12,
+    alignItems: 'center',
+    gap: 8,
+  },
+  emptyTitle: { fontSize: 17, fontWeight: '700' },
+  emptyBody: { fontSize: 14, textAlign: 'center', lineHeight: 20 },
+  retryBtn: {
+    marginTop: 8,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 999,
   },
 });

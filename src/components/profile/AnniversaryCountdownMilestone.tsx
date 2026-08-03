@@ -2,6 +2,7 @@ import { format } from 'date-fns';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Icon } from '@/components/ui/Icon';
+import { Radius, Spacing } from '@/constants/design-system';
 import { useTheme } from '@/hooks/useTheme';
 import { getAnniversaryCountdown } from '@/lib/anniversary';
 
@@ -21,7 +22,7 @@ export function AnniversaryCountdownMilestone({ anniversaryIso, onEdit }: Annive
       style={[
         styles.countdownCard,
         {
-          backgroundColor: colors.surfaceElevated,
+          backgroundColor: colors.surface,
           borderColor: colors.border,
         },
       ]}>
@@ -61,11 +62,11 @@ export function AnniversaryCountdownMilestone({ anniversaryIso, onEdit }: Annive
 
 const styles = StyleSheet.create({
   countdownCard: {
-    borderRadius: 18,
+    borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
-    paddingHorizontal: 18,
-    paddingTop: 18,
-    paddingBottom: 16,
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.lg,
+    paddingBottom: Spacing.lg,
     alignItems: 'center',
     gap: 2,
   },

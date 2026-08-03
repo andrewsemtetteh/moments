@@ -17,11 +17,12 @@ import { EditRelationshipTypeModal } from '@/components/profile/EditRelationship
 import { LocationSharingSettings } from '@/components/profile/LocationSharingSettings';
 import { OnlineStatusSettings } from '@/components/profile/OnlineStatusSettings';
 import { ProfileAnniversarySection } from '@/components/profile/ProfileAnniversarySection';
+import { ProfileCoupleLink } from '@/components/profile/ProfileCoupleLink';
 import { Icon, type IconName } from '@/components/ui/Icon';
 import { LogoMark } from '@/components/ui/Logo';
 import { FullScreenImageModal } from '@/components/ui/FullScreenImageModal';
 import { Avatar, Card, PrimaryButton, SectionTitle } from '@/components/ui/primitives';
-import { THEME_META } from '@/constants/design-system';
+import { THEME_META, Radius, Spacing } from '@/constants/design-system';
 import { useSubscription } from '@/hooks/useSubscription';
 import { useTheme } from '@/hooks/useTheme';
 import { getRelationshipAnniversaryDate } from '@/lib/anniversary';
@@ -385,9 +386,11 @@ export default function ProfileScreen() {
               accessibilityLabel="View your profile photo">
               <Avatar name={user?.name} imageUrl={user?.avatar_url} size={96} colorsOverride={['#fff', '#fff']} />
             </Pressable>
-            <View style={styles.heartBetween}>
-              <Icon name="heart" size={22} color="#fff" filled />
+
+            <View style={styles.avatarLink} accessibilityElementsHidden>
+              <ProfileCoupleLink accent={colors.accent} />
             </View>
+
             <Pressable
               onPress={() =>
                 partner &&
@@ -421,7 +424,7 @@ export default function ProfileScreen() {
           style={({ pressed }) => [
             styles.wrappedCard,
             {
-              backgroundColor: colors.surfaceElevated,
+              backgroundColor: colors.surface,
               borderColor: colors.border,
               opacity: pressed ? 0.92 : 1,
             },
@@ -464,7 +467,7 @@ export default function ProfileScreen() {
           </LinearGradient>
         </Pressable>
 
-        {waitingForPartner && (
+        {waitingForPartner ? (
           <Card style={styles.inviteCard}>
             {inviteCode ? (
               <>
@@ -508,11 +511,12 @@ export default function ProfileScreen() {
               <Icon name="chevronRight" size={18} color={colors.accent} strokeWidth={2.2} />
             </Pressable>
           </Card>
-        )}
+        ) : null}
 
-        <View style={styles.tabBody}>
-            <SectionTitle>Account</SectionTitle>
-            <Card style={styles.accountCard}>
+        <View style={styles.sectionBlock}>
+          <SectionTitle style={styles.sectionLabel}>Account</SectionTitle>
+          <View style={styles.stack}>
+            <Card>
               <Pressable onPress={changeProfilePhoto} style={styles.accountPhotoRow} disabled={avatarSaving}>
                 <Avatar name={user?.name} imageUrl={user?.avatar_url} size={76} />
                 <View style={styles.accountPhotoCopy}>
@@ -524,7 +528,7 @@ export default function ProfileScreen() {
                 <Icon name="camera" size={20} color={colors.textSecondary} />
               </Pressable>
             </Card>
-            <Card padded={false} style={{ marginBottom: 20 }}>
+            <Card padded={false}>
               <SettingEditItem
                 icon="user"
                 label="Display name"
@@ -555,48 +559,50 @@ export default function ProfileScreen() {
                 last
               />
             </Card>
+          </View>
+        </View>
 
-            <SectionTitle>Appearance</SectionTitle>
-            <View style={styles.themeGrid}>
-              {THEME_META.map((t) => {
-                const active = theme === t.key;
-                return (
-                  <View key={t.key} style={styles.themeCell}>
-                    <Pressable
-                      onPress={() => setTheme(t.key)}
-                      style={styles.themeItem}
-                      accessibilityRole="button"
-                      accessibilityLabel={`${t.label} theme`}
-                      accessibilityState={{ selected: active }}>
-                      <View
-                        style={[
-                          styles.swatch,
-                          {
-                            backgroundColor: t.swatch,
-                            borderColor: active ? colors.accent : colors.border,
-                            borderWidth: active ? 2.5 : 1,
-                          },
-                        ]}>
-                        {active ? <Icon name="check" size={20} color={colors.accent} /> : null}
-                      </View>
-                      <Text
-                        style={[
-                          styles.themeLabel,
-                          { color: active ? colors.text : colors.textSecondary },
-                        ]}
-                        numberOfLines={2}>
-                        {t.label}
-                      </Text>
-                    </Pressable>
-                  </View>
-                );
-              })}
-            </View>
+        <View style={styles.sectionBlock}>
+          <SectionTitle style={styles.sectionLabel}>Appearance</SectionTitle>
+          <View style={styles.themeGrid}>
+            {THEME_META.map((t) => {
+              const active = theme === t.key;
+              return (
+                <View key={t.key} style={styles.themeCell}>
+                  <Pressable
+                    onPress={() => setTheme(t.key)}
+                    style={styles.themeItem}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${t.label} theme`}
+                    accessibilityState={{ selected: active }}>
+                    <View
+                      style={[
+                        styles.swatch,
+                        {
+                          backgroundColor: t.swatch,
+                          borderColor: active ? colors.accent : colors.border,
+                          borderWidth: active ? 2.5 : 1,
+                        },
+                      ]}>
+                      {active ? <Icon name="check" size={20} color={colors.accent} /> : null}
+                    </View>
+                    <Text
+                      style={[styles.themeLabel, { color: active ? colors.text : colors.textSecondary }]}
+                      numberOfLines={2}>
+                      {t.label}
+                    </Text>
+                  </Pressable>
+                </View>
+              );
+            })}
+          </View>
+        </View>
 
-            <SectionTitle>Relationship</SectionTitle>
-
-            {relationship && relationship.status !== 'ended' && (
-              <Card padded={false} style={{ marginBottom: 12 }}>
+        {relationship && relationship.status !== 'ended' ? (
+          <View style={styles.sectionBlock}>
+            <SectionTitle style={styles.sectionLabel}>Relationship</SectionTitle>
+            <View style={styles.stack}>
+              <Card padded={false}>
                 <SettingEditItem
                   icon="heart"
                   label="Space name"
@@ -613,10 +619,7 @@ export default function ProfileScreen() {
                   last
                 />
               </Card>
-            )}
-
-            {relationship && relationship.status !== 'ended' && (
-              <Card padded={false} style={styles.leaveCard}>
+              <Card padded={false}>
                 <SettingItem
                   icon="close"
                   label="Leave relationship"
@@ -626,18 +629,20 @@ export default function ProfileScreen() {
                   last
                 />
               </Card>
-            )}
-
-            <View style={styles.privacySection}>
-              <SectionTitle>Privacy & Data</SectionTitle>
             </View>
-            <Card padded={false} style={{ marginBottom: 12 }}>
+          </View>
+        ) : null}
+
+        <View style={styles.sectionBlock}>
+          <SectionTitle style={styles.sectionLabel}>Privacy & Data</SectionTitle>
+          <View style={styles.stack}>
+            <Card padded={false}>
               <OnlineStatusSettings />
             </Card>
-            <Card padded={false} style={{ marginBottom: 12 }}>
+            <Card padded={false}>
               <LocationSharingSettings />
             </Card>
-            <Card padded={false} style={{ marginBottom: 12 }}>
+            <Card padded={false}>
               <SettingItem
                 icon="star"
                 label="Rate Moments"
@@ -649,20 +654,36 @@ export default function ProfileScreen() {
               />
             </Card>
             <Card padded={false}>
-              <SettingItem icon="lock" label="Privacy Policy" colors={colors} onPress={() => router.push('/legal/privacy')} />
-              <SettingItem icon="list" label="Terms of Service" colors={colors} onPress={() => router.push('/legal/terms')} />
-              {/* <SettingItem icon="image" label="Export my data" colors={colors} onPress={() => Alert.alert('Data Export', 'Your data export will be emailed within 24 hours.')} /> */}
+              <SettingItem
+                icon="lock"
+                label="Privacy Policy"
+                colors={colors}
+                onPress={() => router.push('/legal/privacy')}
+              />
+              <SettingItem
+                icon="list"
+                label="Terms of Service"
+                colors={colors}
+                onPress={() => router.push('/legal/terms')}
+              />
             </Card>
-
-            <Card padded={false} style={{ marginTop: 12 }}>
+            <Card padded={false}>
               <SettingItem icon="logout" label="Sign Out" colors={colors} tint={colors.accent} onPress={handleLogout} />
-              <SettingItem icon="trash" label="Delete Account" colors={colors} tint={colors.error} onPress={handleDeleteAccount} last />
+              <SettingItem
+                icon="trash"
+                label="Delete Account"
+                colors={colors}
+                tint={colors.error}
+                onPress={handleDeleteAccount}
+                last
+              />
             </Card>
+          </View>
+        </View>
 
-            <View style={styles.brandFooter}>
-              <LogoMark size={32} />
-              <Text style={{ color: colors.textTertiary, fontSize: 12, marginTop: 6 }}>Moments · Closer, every day</Text>
-            </View>
+        <View style={styles.brandFooter}>
+          <LogoMark size={32} />
+          <Text style={{ color: colors.textTertiary, fontSize: 12, marginTop: 6 }}>Moments · Closer, every day</Text>
         </View>
       </TabScreenScroll>
 
@@ -790,44 +811,63 @@ function SettingItem({
 }
 
 const styles = StyleSheet.create({
-  scroll: { padding: 16 },
-  overview: { borderRadius: 24, padding: 22, alignItems: 'center' },
-  avatarsRow: { flexDirection: 'row', alignItems: 'center', gap: 2 },
-  heartBetween: { paddingHorizontal: 8 },
+  scroll: {
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.xs,
+    paddingBottom: Spacing.xl,
+    gap: Spacing.sm,
+  },
+  sectionBlock: {
+    marginTop: Spacing.xl,
+    gap: Spacing.sm,
+  },
+  stack: {
+    gap: Spacing.sm,
+  },
+  sectionLabel: {
+    marginBottom: 0,
+  },
+  overview: { borderRadius: Radius.xl, padding: 22, alignItems: 'center' },
+  avatarsRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
+  avatarLink: {
+    marginHorizontal: -10,
+    zIndex: 2,
+  },
   relName: { fontSize: 24, fontWeight: '800', color: '#fff', marginTop: 16, textAlign: 'center' },
   together: { fontSize: 14, color: 'rgba(255,255,255,0.9)', marginTop: 4 },
-  subBanner: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16, borderRadius: 18, marginTop: 16 },
+  subBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: Spacing.lg,
+    borderRadius: Radius.lg,
+  },
   subTitle: { color: '#fff', fontWeight: '800', fontSize: 15 },
   subDesc: { color: 'rgba(255,255,255,0.9)', fontSize: 13, marginTop: 1 },
-  tabBody: { marginTop: 18 },
   wrappedCard: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 14,
-    marginTop: 16,
-    padding: 16,
-    borderRadius: 18,
+    padding: Spacing.lg,
+    borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
   },
   wrappedCopy: { flex: 1 },
   wrappedTitle: { fontSize: 16, fontWeight: '800' },
   wrappedSub: { fontSize: 13, marginTop: 2 },
-  themeGrid: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: 20 },
-  themeCell: { width: '20%', alignItems: 'center', marginBottom: 18, paddingHorizontal: 2 },
+  themeGrid: { flexDirection: 'row', flexWrap: 'wrap' },
+  themeCell: { width: '20%', alignItems: 'center', marginBottom: Spacing.md, paddingHorizontal: 2 },
   themeItem: { alignItems: 'center', gap: 8, width: '100%' },
   themeLabel: { fontSize: 12, fontWeight: '600', textAlign: 'center', lineHeight: 15, minHeight: 30, width: '100%' },
-  swatch: { width: 60, height: 60, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
-  settingRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16 },
+  swatch: { width: 60, height: 60, borderRadius: Radius.lg, alignItems: 'center', justifyContent: 'center' },
+  settingRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: Spacing.lg },
   settingLeft: { flexDirection: 'row', alignItems: 'center', gap: 14, flex: 1 },
   settingTitle: { fontSize: 15, fontWeight: '600' },
   settingSub: { fontSize: 12, marginTop: 2 },
-  accountCard: { marginBottom: 12 },
   accountPhotoRow: { flexDirection: 'row', alignItems: 'center', gap: 14 },
   accountPhotoCopy: { flex: 1 },
-  leaveCard: { marginBottom: 8 },
-  privacySection: { marginTop: 16 },
-  brandFooter: { alignItems: 'center', marginTop: 28 },
-  inviteCard: { marginTop: 16 },
+  brandFooter: { alignItems: 'center', marginTop: Spacing.lg, paddingTop: Spacing.xs },
+  inviteCard: { gap: 0 },
   inviteTitle: { fontSize: 17, fontWeight: '800', marginBottom: 4 },
   inviteSub: { fontSize: 14, lineHeight: 20, marginBottom: 14 },
   inviteDividerRow: { flexDirection: 'row', alignItems: 'center', gap: 14, marginTop: 20, marginBottom: 16 },
@@ -840,12 +880,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 14,
-    paddingHorizontal: 16,
+    borderRadius: Radius.md,
+    paddingHorizontal: Spacing.lg,
     paddingVertical: 14,
   },
   joinInsteadBtnText: { fontSize: 15, fontWeight: '600' },
-  codeBox: { borderRadius: 16, borderWidth: 1.5, paddingVertical: 18, paddingHorizontal: 16, alignItems: 'center', marginBottom: 14 },
+  codeBox: {
+    borderRadius: Radius.lg,
+    borderWidth: 1.5,
+    paddingVertical: 18,
+    paddingHorizontal: Spacing.lg,
+    alignItems: 'center',
+    marginBottom: 14,
+  },
   code: { fontSize: 32, fontWeight: '800', letterSpacing: 6 },
   tapCopy: { fontSize: 12, marginTop: 6 },
 });

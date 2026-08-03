@@ -73,7 +73,7 @@ export function PlanDateModal({
           />
           <Text style={[styles.preview, { color: colors.text }]}>{format(draft, 'EEEE, MMM d')}</Text>
           <View style={styles.pickerPad}>
-            <MonthCalendarPicker value={draft} onChange={setDraft} />
+            <MonthCalendarPicker value={draft} onChange={setDraft} minDate={null} />
           </View>
         </View>
       </View>

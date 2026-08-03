@@ -1,5 +1,6 @@
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClient, type InfiniteData, type QueryClient } from '@tanstack/react-query';
+import { addMonths, endOfMonth, format, startOfMonth } from 'date-fns';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert } from 'react-native';
 
@@ -361,9 +362,26 @@ export function useActivities() {
 
 export function useCalendarEvents(month?: Date) {
   const relationship = useRelationshipStore((s) => s.relationship);
+  const monthKey = format(month ?? new Date(), 'yyyy-MM');
   return useQuery({
-    queryKey: ['calendar', relationship?.id, month?.toISOString()],
-    queryFn: () => api.fetchCalendarEvents(relationship!.id, month),
+    queryKey: ['calendar', relationship?.id, monthKey],
+    queryFn: () => api.fetchCalendarEvents(relationship!.id, month ?? new Date()),
+    enabled: !!relationship?.id,
+  });
+}
+
+/** Prev + current + next month around the Plan calendar — one list for dots + day agenda. */
+export function usePlanCalendarEvents(anchorMonth: Date) {
+  const relationship = useRelationshipStore((s) => s.relationship);
+  const monthKey = format(anchorMonth, 'yyyy-MM');
+  return useQuery({
+    queryKey: ['calendarPlan', relationship?.id, monthKey],
+    queryFn: () => {
+      const from = startOfMonth(addMonths(anchorMonth, -1));
+      const to = endOfMonth(addMonths(anchorMonth, 1));
+      to.setHours(23, 59, 59, 999);
+      return api.fetchCalendarEventsInRange(relationship!.id, from, to);
+    },
     enabled: !!relationship?.id,
   });
 }
@@ -881,6 +899,7 @@ export function useRealtimeSubscription(
           }
           if (table === 'calendar_events') {
             qc.invalidateQueries({ queryKey: ['calendar', relationship.id] });
+            qc.invalidateQueries({ queryKey: ['calendarPlan', relationship.id] });
             qc.invalidateQueries({ queryKey: ['calendarUpcoming', relationship.id] });
             qc.invalidateQueries({ queryKey: ['calendarPast', relationship.id] });
           }

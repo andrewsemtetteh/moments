@@ -125,6 +125,7 @@ export function ExploreSection({ onOpen }: ExploreSectionProps) {
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
+        style={styles.hBleed}
         contentContainerStyle={styles.chipRow}>
         {HOME_FILTERS.map((chip) => {
           const active = filter === chip.id;
@@ -177,6 +178,7 @@ export function ExploreSection({ onOpen }: ExploreSectionProps) {
             snapToInterval={cardWidth + 12}
             snapToAlignment="start"
             disableIntervalMomentum
+            style={styles.hBleed}
             contentContainerStyle={styles.carousel}>
             {items.map((activity) => (
               <FeatureCard
@@ -293,7 +295,7 @@ const styles = StyleSheet.create({
   },
   chipRow: {
     gap: 8,
-    paddingRight: Spacing.lg,
+    paddingHorizontal: Spacing.lg,
   },
   chip: {
     paddingHorizontal: 16,
@@ -322,9 +324,13 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
   },
+  /** Bleed past screen padding so cards leave at the real screen edge (no inset “peel”). */
+  hBleed: {
+    marginHorizontal: -Spacing.lg,
+  },
   carousel: {
     gap: 12,
-    paddingRight: Spacing.lg,
+    paddingHorizontal: Spacing.lg,
   },
   card: {
     minHeight: 176,

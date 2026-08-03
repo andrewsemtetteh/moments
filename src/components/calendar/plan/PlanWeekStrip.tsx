@@ -12,9 +12,8 @@ import {
   subWeeks,
 } from 'date-fns';
 import * as Haptics from 'expo-haptics';
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Dimensions,
   NativeScrollEvent,
   NativeSyntheticEvent,
   Pressable,
@@ -22,15 +21,13 @@ import {
   StyleSheet,
   Text,
   View,
+  type LayoutChangeEvent,
 } from 'react-native';
 
 import { useTheme } from '@/hooks/useTheme';
 import type { CalendarEvent } from '@/types/database';
 
 const WEEK_STARTS_ON = 0 as const;
-const SCREEN_W = Dimensions.get('window').width;
-const H_PAD = 20;
-const PAGE_W = SCREEN_W - H_PAD * 2;
 /** Shared selected-day circle size for week + month. */
 const DAY_SIZE = 40;
 
@@ -55,15 +52,8 @@ function DayCircle({
   const today = isToday(day);
 
   return (
-    <View style={styles.dayInner}>
-      <Pressable
-        onPress={onPress}
-        hitSlop={6}
-        android_ripple={{
-          color: colors.accentSoft,
-          borderless: true,
-          radius: DAY_SIZE / 2 + 4,
-        }}
+    <Pressable onPress={onPress} hitSlop={6} style={styles.dayInner} accessibilityRole="button">
+      <View
         style={[
           styles.circle,
           selected && { backgroundColor: colors.accent },
@@ -83,14 +73,16 @@ function DayCircle({
           ]}>
           {format(day, 'd')}
         </Text>
-      </Pressable>
+      </View>
       <View
         style={[
-          styles.dot,
-          { backgroundColor: hasEvents ? colors.accent : 'transparent' },
+          styles.underMark,
+          selected
+            ? { backgroundColor: colors.accent, width: 6, height: 6, borderRadius: 3 }
+            : { backgroundColor: hasEvents ? colors.accent : 'transparent' },
         ]}
       />
-    </View>
+    </Pressable>
   );
 }
 
@@ -105,9 +97,25 @@ export function PlanWeekStrip({
 }) {
   const { colors } = useTheme();
   const scrollRef = useRef<ScrollView>(null);
+  const [pageW, setPageW] = useState(0);
   const [weekAnchor, setWeekAnchor] = useState(() =>
     startOfWeek(selectedDate, { weekStartsOn: WEEK_STARTS_ON }),
   );
+
+  // Keep the strip on the week that contains the selected day (chevrons, create, month jumps).
+  useEffect(() => {
+    const next = startOfWeek(selectedDate, { weekStartsOn: WEEK_STARTS_ON });
+    setWeekAnchor((prev) => (isSameDay(prev, next) ? prev : next));
+    if (pageW <= 0) return;
+    requestAnimationFrame(() => {
+      scrollRef.current?.scrollTo({ x: pageW, animated: false });
+    });
+  }, [pageW, selectedDate]);
+
+  const onLayout = (e: LayoutChangeEvent) => {
+    const w = Math.round(e.nativeEvent.layout.width);
+    if (w > 0 && w !== pageW) setPageW(w);
+  };
 
   const eventDays = useMemo(() => {
     const set = new Set<string>();
@@ -121,60 +129,67 @@ export function PlanWeekStrip({
   }, [weekAnchor]);
 
   const onMomentumEnd = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const page = Math.round(e.nativeEvent.contentOffset.x / PAGE_W);
+    if (pageW <= 0) return;
+    const page = Math.round(e.nativeEvent.contentOffset.x / pageW);
     if (page === 0) {
       setWeekAnchor((w) => subWeeks(w, 1));
-      requestAnimationFrame(() => scrollRef.current?.scrollTo({ x: PAGE_W, animated: false }));
+      requestAnimationFrame(() => scrollRef.current?.scrollTo({ x: pageW, animated: false }));
     } else if (page === 2) {
       setWeekAnchor((w) => addWeeks(w, 1));
-      requestAnimationFrame(() => scrollRef.current?.scrollTo({ x: PAGE_W, animated: false }));
+      requestAnimationFrame(() => scrollRef.current?.scrollTo({ x: pageW, animated: false }));
     }
   };
 
   return (
-    <ScrollView
-      ref={scrollRef}
-      horizontal
-      pagingEnabled
-      showsHorizontalScrollIndicator={false}
-      decelerationRate="fast"
-      snapToInterval={PAGE_W}
-      contentOffset={{ x: PAGE_W, y: 0 }}
-      onMomentumScrollEnd={onMomentumEnd}
-      style={{ width: PAGE_W, alignSelf: 'center' }}>
-      {weeks.map((weekStart) => {
-        const days = eachDayOfInterval({
-          start: weekStart,
-          end: endOfWeek(weekStart, { weekStartsOn: WEEK_STARTS_ON }),
-        });
-        return (
-          <View key={weekKey(weekStart)} style={{ width: PAGE_W }}>
-            <View style={styles.row}>
-              {days.map((day) => {
-                const selected = isSameDay(day, selectedDate);
-                const hasEvents = eventDays.has(format(day, 'yyyy-MM-dd'));
-                return (
-                  <View key={day.toISOString()} style={styles.day}>
-                    <Text style={[styles.dow, { color: colors.textTertiary }]}>
-                      {format(day, 'EEEEE')}
-                    </Text>
-                    <DayCircle
-                      day={day}
-                      selected={selected}
-                      hasEvents={hasEvents}
-                      onPress={() => {
-                        Haptics.selectionAsync();
-                        onSelectDate(day);
-                      }}
-                    />
-                  </View>
-                );
-              })}
-            </View>
-          </View>
-        );
-      })}
-    </ScrollView>
+    <View onLayout={onLayout} style={{ width: '100%' }}>
+      {pageW > 0 ? (
+        <ScrollView
+          ref={scrollRef}
+          horizontal
+          pagingEnabled
+          showsHorizontalScrollIndicator={false}
+          decelerationRate="fast"
+          snapToInterval={pageW}
+          contentOffset={{ x: pageW, y: 0 }}
+          onMomentumScrollEnd={onMomentumEnd}
+          style={{ width: pageW }}>
+          {weeks.map((weekStart) => {
+            const days = eachDayOfInterval({
+              start: weekStart,
+              end: endOfWeek(weekStart, { weekStartsOn: WEEK_STARTS_ON }),
+            });
+            return (
+              <View key={weekKey(weekStart)} style={{ width: pageW }}>
+                <View style={styles.row}>
+                  {days.map((day) => {
+                    const selected = format(day, 'yyyy-MM-dd') === format(selectedDate, 'yyyy-MM-dd');
+                    const hasEvents = eventDays.has(format(day, 'yyyy-MM-dd'));
+                    return (
+                      <View key={format(day, 'yyyy-MM-dd')} style={styles.day}>
+                        <Text style={[styles.dow, { color: colors.textTertiary }]}>
+                          {format(day, 'EEEEE')}
+                        </Text>
+                        <DayCircle
+                          day={day}
+                          selected={selected}
+                          hasEvents={hasEvents}
+                          onPress={() => {
+                            Haptics.selectionAsync();
+                            onSelectDate(day);
+                          }}
+                        />
+                      </View>
+                    );
+                  })}
+                </View>
+              </View>
+            );
+          })}
+        </ScrollView>
+      ) : (
+        <View style={{ height: DAY_SIZE + 28 }} />
+      )}
+    </View>
   );
 }
 
@@ -213,10 +228,10 @@ export function PlanMonthGrid({
           <View key={`e-${i}`} style={styles.cell} />
         ))}
         {days.map((day) => {
-          const selected = isSameDay(day, selectedDate);
+          const selected = format(day, 'yyyy-MM-dd') === format(selectedDate, 'yyyy-MM-dd');
           const hasEvents = eventDays.has(format(day, 'yyyy-MM-dd'));
           return (
-            <View key={day.toISOString()} style={styles.cell}>
+            <View key={format(day, 'yyyy-MM-dd')} style={styles.cell}>
               <DayCircle
                 day={day}
                 selected={selected}
@@ -237,19 +252,18 @@ export function PlanMonthGrid({
 
 const styles = StyleSheet.create({
   row: { flexDirection: 'row', justifyContent: 'space-between' },
-  day: { flex: 1, alignItems: 'center', gap: 8 },
-  dayInner: { alignItems: 'center', gap: 4, minHeight: DAY_SIZE + 9 },
+  day: { flex: 1, alignItems: 'center', gap: 6 },
+  dayInner: { alignItems: 'center', gap: 5, minHeight: DAY_SIZE + 12 },
   dow: { fontSize: 13, fontWeight: '600' },
   circle: {
     width: DAY_SIZE,
     height: DAY_SIZE,
-    borderRadius: 999,
-    overflow: 'hidden',
+    borderRadius: DAY_SIZE / 2,
     alignItems: 'center',
     justifyContent: 'center',
   },
   num: { fontSize: 17 },
-  dot: { width: 5, height: 5, borderRadius: 2.5 },
+  underMark: { width: 5, height: 5, borderRadius: 2.5 },
   weekRow: { flexDirection: 'row', marginBottom: 8 },
   dowLabel: { flex: 1, textAlign: 'center', fontSize: 13, fontWeight: '600' },
   grid: { flexDirection: 'row', flexWrap: 'wrap' },

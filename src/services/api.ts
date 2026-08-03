@@ -696,8 +696,9 @@ export async function fetchActivities(relationshipId: string) {
 }
 
 export async function fetchCalendarEvents(relationshipId: string, month?: Date) {
-  const start = month ? new Date(month.getFullYear(), month.getMonth(), 1) : new Date();
-  const end = new Date(start.getFullYear(), start.getMonth() + 1, 0, 23, 59, 59);
+  const base = month ?? new Date();
+  const start = new Date(base.getFullYear(), base.getMonth(), 1, 0, 0, 0, 0);
+  const end = new Date(base.getFullYear(), base.getMonth() + 1, 0, 23, 59, 59, 999);
 
   const { data, error } = await supabase
     .from('calendar_events')
@@ -711,11 +712,31 @@ export async function fetchCalendarEvents(relationshipId: string, month?: Date) 
   return data as CalendarEvent[];
 }
 
-/** Future plans across the next N days — used for month insights / plans ahead. */
+/** Inclusive range fetch — used by Plan so week/month dots + agenda share one source. */
+export async function fetchCalendarEventsInRange(
+  relationshipId: string,
+  from: Date,
+  to: Date,
+) {
+  const { data, error } = await supabase
+    .from('calendar_events')
+    .select('*')
+    .eq('relationship_id', relationshipId)
+    .gte('date_time', from.toISOString())
+    .lte('date_time', to.toISOString())
+    .order('date_time', { ascending: true });
+
+  if (error) throw error;
+  return data as CalendarEvent[];
+}
+
+/** Plans from start of today through the next N days — used for home / insights. */
 export async function fetchUpcomingCalendarEvents(relationshipId: string, daysAhead = 120) {
   const start = new Date();
-  const end = new Date();
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(start);
   end.setDate(end.getDate() + daysAhead);
+  end.setHours(23, 59, 59, 999);
 
   const { data, error } = await supabase
     .from('calendar_events')
