@@ -1,13 +1,16 @@
 import { type ReactNode } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Dimensions, StyleSheet, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
+  Easing,
   runOnJS,
   useAnimatedStyle,
   useSharedValue,
   withSpring,
+  withTiming,
 } from 'react-native-reanimated';
 
+const SCREEN_WIDTH = Dimensions.get('window').width;
 const DISMISS_THRESHOLD = 72;
 const DISMISS_VELOCITY = 850;
 const EDGE_WIDTH = 20;
@@ -38,7 +41,15 @@ export function SwipeBackSheet({ children, onDismiss }: Props) {
         event.translationX > DISMISS_THRESHOLD || event.velocityX > DISMISS_VELOCITY;
 
       if (shouldDismiss) {
-        runOnJS(onDismiss)();
+        const remaining = SCREEN_WIDTH - translateX.value;
+        const duration = Math.min(260, Math.max(120, remaining / Math.max(0.5, event.velocityX / 1000)));
+        translateX.value = withTiming(
+          SCREEN_WIDTH,
+          { duration, easing: Easing.out(Easing.cubic) },
+          (finished) => {
+            if (finished) runOnJS(onDismiss)();
+          },
+        );
         return;
       }
 

@@ -1,15 +1,8 @@
 import * as Haptics from 'expo-haptics';
 import { useEffect, useMemo, useState } from 'react';
-import {
-  Modal,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
+import { DraggableSheet } from '@/components/ui/DraggableSheet';
 import { Icon } from '@/components/ui/Icon';
 import { listProgress, type PlanList, type PlanListItem } from '@/lib/plan-local';
 import { useTheme } from '@/hooks/useTheme';
@@ -131,11 +124,7 @@ export function PlanListSheet({
   };
 
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <View style={styles.overlay}>
-        <Pressable style={styles.backdrop} onPress={onClose} />
-        <View style={[styles.sheet, { backgroundColor: colors.backgroundElevated }]}>
-          <View style={[styles.handle, { backgroundColor: colors.borderStrong }]} />
+    <DraggableSheet visible={visible} onClose={onClose} style={styles.sheet}>
           <View style={styles.header}>
             <View style={{ flex: 1 }}>
               <Text style={[styles.title, { color: colors.text }]}>
@@ -283,28 +272,16 @@ export function PlanListSheet({
               <Text style={{ color: colors.accent, fontWeight: '700' }}>Add section</Text>
             </Pressable>
           </ScrollView>
-        </View>
-      </View>
-    </Modal>
+    </DraggableSheet>
   );
 }
 
 const styles = StyleSheet.create({
-  overlay: { flex: 1, justifyContent: 'flex-end' },
-  backdrop: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(0,0,0,0.45)' },
   sheet: {
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     paddingHorizontal: 20,
     paddingBottom: 28,
-  },
-  handle: {
-    width: 36,
-    height: 4,
-    borderRadius: 2,
-    alignSelf: 'center',
-    marginTop: 10,
-    marginBottom: 14,
   },
   header: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 },
   title: { fontSize: 24, fontWeight: '800', letterSpacing: -0.4 },

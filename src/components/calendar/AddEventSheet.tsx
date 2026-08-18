@@ -1,19 +1,10 @@
 import { format, setHours, setMilliseconds, setMinutes, setSeconds, startOfDay } from 'date-fns';
 import * as Haptics from 'expo-haptics';
 import { useEffect, useMemo, useState } from 'react';
-import {
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { PlanDateModal, PlanTimeModal } from '@/components/calendar/plan/PlanPickerModals';
+import { DraggableSheet } from '@/components/ui/DraggableSheet';
 import { Icon, type IconName } from '@/components/ui/Icon';
 import { PrimaryButton } from '@/components/ui/primitives';
 import { getEventTypeColors } from '@/constants/calendar-events';
@@ -134,16 +125,9 @@ export function AddEventSheet({
     onSave({ title: title.trim(), type: kind.type, dateTime: resolvedDateTime });
   };
 
-  if (!visible) return null;
-
   return (
     <>
-      <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.overlay}>
-          <Pressable style={styles.backdrop} onPress={onClose} />
-          <View style={[styles.sheet, { backgroundColor: colors.backgroundElevated }]}>
-            <View style={[styles.handle, { backgroundColor: colors.borderStrong }]} />
-
+      <DraggableSheet visible={visible} onClose={onClose} avoidKeyboard style={styles.sheet}>
             <ScrollView
               showsVerticalScrollIndicator={false}
               keyboardShouldPersistTaps="handled"
@@ -239,9 +223,7 @@ export function AddEventSheet({
                 style={{ marginTop: 4 }}
               />
             </ScrollView>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
+      </DraggableSheet>
 
       <PlanDateModal
         visible={dateOpen}
@@ -270,8 +252,6 @@ export function AddEventSheet({
 }
 
 const styles = StyleSheet.create({
-  overlay: { flex: 1, justifyContent: 'flex-end' },
-  backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.45)' },
   sheet: {
     maxHeight: '92%',
     borderTopLeftRadius: 28,
@@ -279,7 +259,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingBottom: Platform.OS === 'ios' ? 28 : 20,
   },
-  handle: { width: 36, height: 4, borderRadius: 2, alignSelf: 'center', marginTop: 10, marginBottom: 16 },
   scroll: { paddingBottom: 12, gap: 16 },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   title: { fontSize: 24, fontWeight: '800', letterSpacing: -0.4 },

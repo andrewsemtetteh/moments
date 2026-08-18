@@ -1,9 +1,10 @@
 import { format } from 'date-fns';
 import * as Haptics from 'expo-haptics';
 import { useEffect, useState } from 'react';
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { PlanWheelColumn, useTimeWheelItems } from '@/components/calendar/plan/PlanWheelColumn';
+import { DraggableSheet } from '@/components/ui/DraggableSheet';
 import { Icon } from '@/components/ui/Icon';
 import { MonthCalendarPicker } from '@/components/ui/MonthCalendarPicker';
 import { useTheme } from '@/hooks/useTheme';
@@ -58,26 +59,20 @@ export function PlanDateModal({
   }, [visible, value]);
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <View style={styles.overlay}>
-        <Pressable style={styles.backdrop} onPress={onClose} />
-        <View style={[styles.sheet, { backgroundColor: colors.backgroundElevated }]}>
-          <View style={[styles.handle, { backgroundColor: colors.borderStrong }]} />
-          <ModalHeader
-            title="Date"
-            onClose={onClose}
-            onDone={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              onConfirm(draft);
-            }}
-          />
-          <Text style={[styles.preview, { color: colors.text }]}>{format(draft, 'EEEE, MMM d')}</Text>
-          <View style={styles.pickerPad}>
-            <MonthCalendarPicker value={draft} onChange={setDraft} minDate={null} />
-          </View>
-        </View>
+    <DraggableSheet visible={visible} onClose={onClose} style={styles.sheet}>
+      <ModalHeader
+        title="Date"
+        onClose={onClose}
+        onDone={() => {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          onConfirm(draft);
+        }}
+      />
+      <Text style={[styles.preview, { color: colors.text }]}>{format(draft, 'EEEE, MMM d')}</Text>
+      <View style={styles.pickerPad}>
+        <MonthCalendarPicker value={draft} onChange={setDraft} minDate={null} />
       </View>
-    </Modal>
+    </DraggableSheet>
   );
 }
 
@@ -114,54 +109,34 @@ export function PlanTimeModal({
   previewDate.setHours(h24, m, 0, 0);
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <View style={styles.overlay}>
-        <Pressable style={styles.backdrop} onPress={onClose} />
-        <View style={[styles.sheet, { backgroundColor: colors.backgroundElevated }]}>
-          <View style={[styles.handle, { backgroundColor: colors.borderStrong }]} />
-          <ModalHeader
-            title="Time"
-            onClose={onClose}
-            onDone={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              onConfirm(h, m, p);
-            }}
-          />
+    <DraggableSheet visible={visible} onClose={onClose} style={styles.sheet}>
+      <ModalHeader
+        title="Time"
+        onClose={onClose}
+        onDone={() => {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          onConfirm(h, m, p);
+        }}
+      />
 
-          <Text style={[styles.preview, { color: colors.text }]}>{format(previewDate, 'h:mm a')}</Text>
+      <Text style={[styles.preview, { color: colors.text }]}>{format(previewDate, 'h:mm a')}</Text>
 
-          <View style={styles.wheels}>
-            <PlanWheelColumn items={hours} value={h} onChange={(v) => setH(Number(v))} width={88} />
-            <Text style={[styles.colon, { color: colors.textTertiary }]}>:</Text>
-            <PlanWheelColumn items={minutes} value={m} onChange={(v) => setM(Number(v))} width={88} />
-            <PlanWheelColumn
-              items={periods}
-              value={p}
-              onChange={(v) => setP(v as 'AM' | 'PM')}
-              width={72}
-            />
-          </View>
-        </View>
+      <View style={styles.wheels}>
+        <PlanWheelColumn items={hours} value={h} onChange={(v) => setH(Number(v))} width={88} />
+        <Text style={[styles.colon, { color: colors.textTertiary }]}>:</Text>
+        <PlanWheelColumn items={minutes} value={m} onChange={(v) => setM(Number(v))} width={88} />
+        <PlanWheelColumn items={periods} value={p} onChange={(v) => setP(v as 'AM' | 'PM')} width={72} />
       </View>
-    </Modal>
+    </DraggableSheet>
   );
 }
 
 const styles = StyleSheet.create({
-  overlay: { flex: 1, justifyContent: 'flex-end' },
-  backdrop: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(0,0,0,0.45)' },
   sheet: {
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
+    paddingHorizontal: 0,
     paddingBottom: 28,
-  },
-  handle: {
-    width: 36,
-    height: 4,
-    borderRadius: 2,
-    alignSelf: 'center',
-    marginTop: 10,
-    marginBottom: 8,
   },
   header: {
     flexDirection: 'row',

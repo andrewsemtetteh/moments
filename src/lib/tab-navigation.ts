@@ -24,3 +24,21 @@ export function adjacentVisibleTab(
 export function visibleTabHref(tab: VisibleTab) {
   return `/(tabs)/${tab}` as const;
 }
+
+/**
+ * Set right before a swipe-triggered tab navigation, read once by the newly
+ * mounted screen's TabSwipeView so it can slide in from the swiped-from edge
+ * instead of just appearing. Plain module state is enough here — it only
+ * needs to be read synchronously on next mount, not observed reactively.
+ */
+let pendingSwipeDirection: 'next' | 'prev' | null = null;
+
+export function setPendingSwipeDirection(direction: 'next' | 'prev') {
+  pendingSwipeDirection = direction;
+}
+
+export function consumePendingSwipeDirection(): 'next' | 'prev' | null {
+  const direction = pendingSwipeDirection;
+  pendingSwipeDirection = null;
+  return direction;
+}

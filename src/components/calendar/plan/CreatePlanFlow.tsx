@@ -2,7 +2,6 @@ import { format, setHours, setMilliseconds, setMinutes, setSeconds, startOfDay }
 import * as Haptics from 'expo-haptics';
 import { useEffect, useMemo, useState } from 'react';
 import {
-  KeyboardAvoidingView,
   Modal,
   Platform,
   Pressable,
@@ -14,6 +13,7 @@ import {
 } from 'react-native';
 
 import { PlanDateModal, PlanTimeModal } from '@/components/calendar/plan/PlanPickerModals';
+import { DraggableSheet } from '@/components/ui/DraggableSheet';
 import { Icon } from '@/components/ui/Icon';
 import { PrimaryButton } from '@/components/ui/primitives';
 import { useTheme } from '@/hooks/useTheme';
@@ -197,18 +197,9 @@ export function CreatePlanFlow({
     });
   };
 
-  if (!visible) return null;
-
   return (
     <>
-      <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          style={styles.overlay}>
-          <Pressable style={styles.backdrop} onPress={onClose} />
-          <View style={[styles.sheet, { backgroundColor: colors.backgroundElevated }]}>
-            <View style={[styles.handle, { backgroundColor: colors.borderStrong }]} />
-
+      <DraggableSheet visible={visible} onClose={onClose} avoidKeyboard style={styles.sheet}>
             {step === 'type' ? (
               <View style={styles.typePad}>
                 <View style={styles.typeHeader}>
@@ -478,9 +469,7 @@ export function CreatePlanFlow({
                 />
               </ScrollView>
             )}
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
+      </DraggableSheet>
 
       <PlanDateModal
         visible={dateOpen}
@@ -582,21 +571,12 @@ function Divider({ colors }: { colors: { border: string } }) {
 }
 
 const styles = StyleSheet.create({
-  overlay: { flex: 1, justifyContent: 'flex-end' },
-  backdrop: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(0,0,0,0.45)' },
   sheet: {
     maxHeight: '94%',
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
+    paddingHorizontal: 0,
     paddingBottom: Platform.OS === 'ios' ? 28 : 20,
-  },
-  handle: {
-    width: 36,
-    height: 4,
-    borderRadius: 2,
-    alignSelf: 'center',
-    marginTop: 10,
-    marginBottom: 8,
   },
   typePad: { paddingHorizontal: 20, paddingBottom: 12 },
   typeHeader: { alignItems: 'flex-start', marginBottom: 8 },
