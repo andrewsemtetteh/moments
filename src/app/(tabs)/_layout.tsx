@@ -12,6 +12,7 @@ import { StoreReviewSync } from '@/components/layout/StoreReviewSync';
 import { PartnerPresenceSync } from '@/components/profile/PartnerPresenceSync';
 import { PartnerProfileModal } from '@/components/profile/PartnerProfileModal';
 import { useRealtimeSubscription } from '@/hooks/queries';
+import { useTheme } from '@/hooks/useTheme';
 import { useAuthStore } from '@/stores';
 
 function TabsRealtimeSync() {
@@ -22,6 +23,7 @@ function TabsRealtimeSync() {
 export default function TabsLayout() {
   const session = useAuthStore((s) => s.session);
   const isLoading = useAuthStore((s) => s.isLoading);
+  const { colors } = useTheme();
 
   if (Platform.OS === 'web') {
     return <Redirect href="/" />;
@@ -45,7 +47,10 @@ export default function TabsLayout() {
       <Tabs
         backBehavior="history"
         tabBar={(props) => <AppTabBar {...props} />}
-        screenOptions={{ headerShown: false }}>
+        screenOptions={{
+          headerShown: false,
+          sceneStyle: { backgroundColor: colors.background },
+        }}>
         <Tabs.Screen name="home" />
         <Tabs.Screen name="activities" />
         <Tabs.Screen name="calendar" />
