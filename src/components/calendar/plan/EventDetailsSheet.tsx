@@ -3,7 +3,6 @@ import * as Haptics from 'expo-haptics';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
-  KeyboardAvoidingView,
   Modal,
   Platform,
   Pressable,
@@ -15,6 +14,7 @@ import {
 } from 'react-native';
 
 import { PlanDateModal, PlanTimeModal } from '@/components/calendar/plan/PlanPickerModals';
+import { DraggableSheet } from '@/components/ui/DraggableSheet';
 import { Icon } from '@/components/ui/Icon';
 import { Avatar, PrimaryButton } from '@/components/ui/primitives';
 import { EVENT_TYPE_META } from '@/constants/calendar-events';
@@ -194,14 +194,7 @@ export function EventDetailsSheet({
 
   return (
     <>
-      <Modal visible={visible} animationType="slide" transparent onRequestClose={closeSheet}>
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          style={styles.overlay}>
-          <Pressable style={styles.backdrop} onPress={closeSheet} />
-          <View style={[styles.sheet, { backgroundColor: colors.backgroundElevated }]}>
-            <View style={[styles.handle, { backgroundColor: colors.borderStrong }]} />
-
+      <DraggableSheet visible={visible} onClose={closeSheet} avoidKeyboard style={styles.sheet}>
             <View style={styles.topBar}>
               <Pressable
                 onPress={closeSheet}
@@ -436,9 +429,7 @@ export function EventDetailsSheet({
                 />
               </View>
             </ScrollView>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
+      </DraggableSheet>
 
       <PlanDateModal
         visible={dateOpen}
@@ -490,21 +481,12 @@ export function EventDetailsSheet({
 }
 
 const styles = StyleSheet.create({
-  overlay: { flex: 1, justifyContent: 'flex-end' },
-  backdrop: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(0,0,0,0.45)' },
   sheet: {
     maxHeight: '94%',
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
+    paddingHorizontal: 0,
     paddingBottom: Platform.OS === 'ios' ? 28 : 20,
-  },
-  handle: {
-    width: 36,
-    height: 4,
-    borderRadius: 2,
-    alignSelf: 'center',
-    marginTop: 10,
-    marginBottom: 8,
   },
   topBar: {
     flexDirection: 'row',

@@ -1,16 +1,9 @@
 import { format, isSameDay, startOfDay } from 'date-fns';
 import * as Haptics from 'expo-haptics';
 import { useEffect, useMemo, useState } from 'react';
-import {
-  Modal,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
+import { DraggableSheet } from '@/components/ui/DraggableSheet';
 import { Icon } from '@/components/ui/Icon';
 import { EVENT_TYPE_META } from '@/constants/calendar-events';
 import { useTheme } from '@/hooks/useTheme';
@@ -68,28 +61,15 @@ export function PlanDaySheet({
     setNotesDirty(false);
   };
 
-  if (!visible) return null;
-
   return (
-    <Modal
+    <DraggableSheet
       visible={visible}
-      transparent
-      animationType="slide"
-      onRequestClose={() => {
+      onClose={() => {
         void persistNotes();
         onClose();
-      }}>
-      <View style={styles.overlay}>
-        <Pressable
-          style={styles.backdrop}
-          onPress={() => {
-            void persistNotes();
-            onClose();
-          }}
-        />
-        <View style={[styles.sheet, { backgroundColor: colors.backgroundElevated }]}>
-          <View style={[styles.handle, { backgroundColor: colors.borderStrong }]} />
-
+      }}
+      style={styles.sheet}>
+      <>
           <View style={styles.header}>
             <Text style={[styles.title, { color: colors.text }]}>{format(day, 'EEEE, MMMM d')}</Text>
             <Pressable
@@ -218,29 +198,18 @@ export function PlanDaySheet({
               ]}
             />
           </ScrollView>
-        </View>
-      </View>
-    </Modal>
+      </>
+    </DraggableSheet>
   );
 }
 
 const styles = StyleSheet.create({
-  overlay: { flex: 1, justifyContent: 'flex-end' },
-  backdrop: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(0,0,0,0.4)' },
   sheet: {
     maxHeight: '78%',
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     paddingHorizontal: 20,
     paddingBottom: 28,
-  },
-  handle: {
-    width: 36,
-    height: 4,
-    borderRadius: 2,
-    alignSelf: 'center',
-    marginTop: 10,
-    marginBottom: 14,
   },
   header: {
     flexDirection: 'row',

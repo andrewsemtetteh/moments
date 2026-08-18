@@ -1,6 +1,6 @@
 import * as Haptics from 'expo-haptics';
 import { usePathname, useRouter } from 'expo-router';
-import { type ReactNode, useCallback, useEffect, useMemo } from 'react';
+import { type ReactNode, useCallback, useEffect, useMemo, useRef } from 'react';
 import { Dimensions, StyleProp, ViewStyle } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
@@ -14,6 +14,8 @@ import Animated, {
 import { openChat } from '@/lib/router';
 import {
   adjacentVisibleTab,
+  consumePendingSwipeDirection,
+  setPendingSwipeDirection,
   visibleTabFromPath,
   visibleTabHref,
   type VisibleTab,
@@ -24,6 +26,8 @@ const MAX_DRAG = SCREEN_WIDTH * 0.28;
 const SWIPE_THRESHOLD = 56;
 const SWIPE_VELOCITY = 420;
 const RESET_MS = 140;
+const EXIT_MS = 200;
+const ENTER_MS = 240;
 
 function clampDrag(value: number) {
   'worklet';
@@ -39,14 +43,30 @@ function rubberBand(value: number, blocked: boolean) {
 function useTabSwipePan(enabled: boolean) {
   const router = useRouter();
   const pathname = usePathname();
-  const translateX = useSharedValue(0);
+
+  // Consumed exactly once per mount (before first paint) so the incoming
+  // screen starts already off-screen on the swiped-from edge — animating it
+  // in from there, instead of flashing at 0 first, is what makes the tab
+  // switch read as one continuous slide rather than a cut.
+  const enterDirectionRef = useRef<'next' | 'prev' | null | undefined>(undefined);
+  if (enterDirectionRef.current === undefined) {
+    enterDirectionRef.current = consumePendingSwipeDirection();
+  }
+  const initialTranslate =
+    enterDirectionRef.current === 'next'
+      ? SCREEN_WIDTH
+      : enterDirectionRef.current === 'prev'
+        ? -SCREEN_WIDTH
+        : 0;
+
+  const translateX = useSharedValue(initialTranslate);
   const canGoNext = useSharedValue(0);
   const canGoPrev = useSharedValue(0);
 
   const currentTab = visibleTabFromPath(pathname);
 
   useEffect(() => {
-    translateX.value = 0;
+    translateX.value = withTiming(0, { duration: ENTER_MS, easing: Easing.out(Easing.cubic) });
 
     if (!currentTab) {
       canGoNext.value = 0;
@@ -62,8 +82,9 @@ function useTabSwipePan(enabled: boolean) {
   }, [currentTab, canGoNext, canGoPrev, translateX]);
 
   const goToTab = useCallback(
-    (tab: VisibleTab) => {
+    (tab: VisibleTab, direction: 'next' | 'prev') => {
       void Haptics.selectionAsync();
+      setPendingSwipeDirection(direction);
       router.navigate(visibleTabHref(tab));
     },
     [router],
@@ -72,7 +93,7 @@ function useTabSwipePan(enabled: boolean) {
   const goNext = useCallback(() => {
     if (!currentTab) return;
     const next = adjacentVisibleTab(currentTab, 'next');
-    if (next) goToTab(next);
+    if (next) goToTab(next, 'next');
   }, [currentTab, goToTab]);
 
   const goPrev = useCallback(() => {
@@ -83,7 +104,7 @@ function useTabSwipePan(enabled: boolean) {
       return;
     }
     const prev = adjacentVisibleTab(currentTab, 'prev');
-    if (prev) goToTab(prev);
+    if (prev) goToTab(prev, 'prev');
   }, [currentTab, goToTab]);
 
   const pan = useMemo(
@@ -113,14 +134,24 @@ function useTabSwipePan(enabled: boolean) {
             (event.translationX > SWIPE_THRESHOLD || event.velocityX > SWIPE_VELOCITY);
 
           if (swipedNext) {
-            translateX.value = 0;
-            runOnJS(goNext)();
+            translateX.value = withTiming(
+              -SCREEN_WIDTH,
+              { duration: EXIT_MS, easing: Easing.out(Easing.cubic) },
+              (finished) => {
+                if (finished) runOnJS(goNext)();
+              },
+            );
             return;
           }
 
           if (swipedPrev) {
-            translateX.value = 0;
-            runOnJS(goPrev)();
+            translateX.value = withTiming(
+              SCREEN_WIDTH,
+              { duration: EXIT_MS, easing: Easing.out(Easing.cubic) },
+              (finished) => {
+                if (finished) runOnJS(goPrev)();
+              },
+            );
             return;
           }
 
