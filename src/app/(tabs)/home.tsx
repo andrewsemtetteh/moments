@@ -14,6 +14,7 @@ import { StreakRestoreBanner } from '@/components/home/StreakRestoreBanner';
 import { TodaysPromptCard } from '@/components/home/TodaysPromptCard';
 import { PlayPulseCard } from '@/components/games/PlayPulse';
 import { AppHeader } from '@/components/layout/AppHeader';
+import { EdgeSwipe } from '@/components/layout/EdgeSwipe';
 import { ScreenContainer } from '@/components/layout/ScreenContainer';
 import { TabScreenScroll } from '@/components/layout/TabScreenScroll';
 import { MomentsStrip } from '@/components/moments/MomentsStrip';
@@ -209,6 +210,9 @@ export default function HomeScreen() {
   const smartSuggestion = getSmartSuggestion(moods ?? {}, upcomingEvents.length, partner?.name);
 
   return (
+    // Swipe right anywhere → Together (its button is top-left, and it slides in
+    // from the left). The moments card still flips photos (see EdgeSwipe).
+    <EdgeSwipe edge="left" fullScreen onOpen={() => openCalendar()}>
     <ScreenContainer padded={false}>
       <AppHeader />
       <TabScreenScroll
@@ -340,6 +344,7 @@ export default function HomeScreen() {
       </TabScreenScroll>
       <PromptHistoryModal visible={showPromptHistory} onClose={() => setShowPromptHistory(false)} />
     </ScreenContainer>
+    </EdgeSwipe>
   );
 }
 
