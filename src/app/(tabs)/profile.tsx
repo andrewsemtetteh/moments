@@ -7,7 +7,7 @@ import { useEffect, useState } from 'react';
 import { Alert, Pressable, Share, StyleSheet, Text, View } from 'react-native';
 
 import { CoupleLevelCard } from '@/components/games/PlayPulse';
-import { EdgeSwipe } from '@/components/layout/EdgeSwipe';
+import { TabSwipe } from '@/components/layout/TabSwipe';
 import { ScreenContainer } from '@/components/layout/ScreenContainer';
 import { ScreenHeader } from '@/components/layout/ScreenHeader';
 import { HeaderIconButton } from '@/components/ui/HeaderIconButton';
@@ -103,9 +103,10 @@ export default function ProfileScreen() {
   const spaceName = relationship?.relationship_name?.trim();
 
   return (
-    // Swipe left anywhere → Settings (the gear is top-right, and Settings slides
-    // in from the right). Nothing on this page scrolls sideways, so no edge limit.
-    <EdgeSwipe edge="right" fullScreen onOpen={() => router.navigate('/settings')}>
+    // Play ← You → Settings (see TabSwipe).
+    <TabSwipe
+      onSwipeRight={() => router.navigate('/(tabs)/activities')}
+      onSwipeLeft={() => router.navigate('/settings')}>
     <ScreenContainer padded={false}>
       <ScreenHeader
         title={spaceName || 'You'}
@@ -293,7 +294,7 @@ export default function ProfileScreen() {
         onClose={() => setAvatarPreview(null)}
       />
     </ScreenContainer>
-    </EdgeSwipe>
+    </TabSwipe>
   );
 }
 

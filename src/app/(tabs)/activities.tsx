@@ -1,4 +1,4 @@
-import { useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Alert, StyleSheet } from 'react-native';
 
@@ -12,6 +12,7 @@ import { BadgesShelf, LiveRoomSection, QuestsCard, startLiveRoom } from '@/compo
 import { PlayModeSheet } from '@/components/games/PlayModeSheet';
 import { PromptHistoryModal } from '@/components/home/PromptHistoryModal';
 import { AppHeader } from '@/components/layout/AppHeader';
+import { TabSwipe } from '@/components/layout/TabSwipe';
 import { ScreenContainer } from '@/components/layout/ScreenContainer';
 import { TabScreenScroll } from '@/components/layout/TabScreenScroll';
 import { Spacing } from '@/constants/design-system';
@@ -98,6 +99,10 @@ export default function ActivitiesScreen() {
   };
 
   return (
+    // Home ← Play → You (see TabSwipe).
+    <TabSwipe
+      onSwipeRight={() => router.navigate('/(tabs)/home')}
+      onSwipeLeft={() => router.navigate('/(tabs)/profile')}>
     <ScreenContainer padded={false}>
       <AppHeader />
       <TabScreenScroll showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
@@ -137,6 +142,7 @@ export default function ActivitiesScreen() {
 
       <PromptHistoryModal visible={showPromptHistory} onClose={() => setShowPromptHistory(false)} />
     </ScreenContainer>
+    </TabSwipe>
   );
 }
 
