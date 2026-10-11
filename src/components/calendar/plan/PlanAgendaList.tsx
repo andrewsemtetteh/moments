@@ -7,7 +7,7 @@ import { PrimaryButton } from '@/components/ui/primitives';
 import { EVENT_TYPE_META, getEventTypeColors } from '@/constants/calendar-events';
 import { Radius } from '@/constants/design-system';
 import { useTheme } from '@/hooks/useTheme';
-import { isPlanCompleted, parsePlanMeta, planKindEmoji } from '@/lib/plan-meta';
+import { isPlanCompleted, parsePlanMeta, planIcon } from '@/lib/plan-meta';
 import type { CalendarEvent } from '@/types/database';
 
 function groupLabel(day: Date): string {
@@ -102,7 +102,7 @@ export function PlanAgendaList({
 /**
  * Time column on the left (the Structured / Apple Calendar day-view pattern —
  * when a plan happens is the first thing you scan for), then a card with a
- * type-colored accent bar, title, location and the plan's emoji.
+ * type-colored accent bar, title, location and the plan's icon.
  */
 function PlanCard({
   event,
@@ -117,7 +117,7 @@ function PlanCard({
   const tc = getEventTypeColors(event.type, colors);
   const at = new Date(event.date_time);
   const meta = parsePlanMeta(event.description);
-  const emoji = planKindEmoji(event) ?? EVENT_TYPE_META[event.type]?.emoji ?? '📌';
+  const icon = planIcon(event);
   const typeLabel = EVENT_TYPE_META[event.type]?.label ?? 'Plan';
 
   return (
@@ -172,7 +172,7 @@ function PlanCard({
           {done ? (
             <Icon name="check" size={18} color={colors.success} />
           ) : (
-            <Text style={styles.badgeEmoji}>{emoji}</Text>
+            <Icon name={icon} size={19} color={tc.main} />
           )}
         </View>
       </View>

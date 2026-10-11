@@ -48,7 +48,6 @@
     "expo-system-ui": "~57.0.4",
     "expo-video": "~57.0.5",
     "expo-web-browser": "~57.0.3",
-    "ffmpeg-expo": "^0.0.2",
     "framer-motion": "^12.41.0",
     "lottie-react-native": "~7.3.8",
     "react": "19.2.3",
@@ -87,8 +86,5 @@
     "test": "vitest run",
     "test:watch": "vitest"
   },
-  "private": true,
-  "allowScripts": {
-    "ffmpeg-expo@0.0.2": true
-  }
+  "private": true
 }

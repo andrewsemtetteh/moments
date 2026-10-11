@@ -364,6 +364,36 @@ export function useUpcomingCalendarEvents() {
   });
 }
 
+// Keys sit under ['calendar', relationshipId, …] so the calendar_events
+// realtime subscription and Plan's own invalidation refresh them too.
+export function useMemoryEntries() {
+  const relationship = useRelationshipStore((s) => s.relationship);
+  return useQuery({
+    queryKey: ['calendar', relationship?.id, 'memories'],
+    queryFn: () => api.fetchMemoryEntries(relationship!.id),
+    enabled: !!relationship?.id,
+  });
+}
+
+export function useDayNotes(day: Date) {
+  const relationship = useRelationshipStore((s) => s.relationship);
+  const dayKey = format(day, 'yyyy-MM-dd');
+  return useQuery({
+    queryKey: ['calendar', relationship?.id, 'dayNotes', dayKey],
+    queryFn: () => api.fetchDayNotes(relationship!.id, day),
+    enabled: !!relationship?.id,
+  });
+}
+
+export function useRecentFinishedPlans() {
+  const relationship = useRelationshipStore((s) => s.relationship);
+  return useQuery({
+    queryKey: ['calendar', relationship?.id, 'finished'],
+    queryFn: () => api.fetchRecentFinishedPlans(relationship!.id),
+    enabled: !!relationship?.id,
+  });
+}
+
 export function usePastCalendarEvents() {
   const relationship = useRelationshipStore((s) => s.relationship);
   return useQuery({
@@ -392,7 +422,7 @@ export function useMoods() {
     staleTime: HOME_STALE_MS,
     gcTime: HOME_GC_MS,
     placeholderData: keepPreviousData,
-    refetchInterval: 60_000,
+    refetchInterval: 5 * 60_000,
   });
 }
 
@@ -514,7 +544,7 @@ export function useDailyChallenge() {
     staleTime: HOME_STALE_MS,
     gcTime: HOME_GC_MS,
     placeholderData: keepPreviousData,
-    refetchInterval: 60_000,
+    refetchInterval: 5 * 60_000,
   });
 }
 
@@ -975,7 +1005,12 @@ export function useCreateMoment() {
   const user = useAuthStore((s) => s.user);
 
   return useMutation({
-    mutationFn: (moment: { type: 'photo' | 'video'; media_url: string }) => {
+    mutationFn: (moment: {
+      type: 'photo' | 'video';
+      media_url: string;
+      latitude?: number | null;
+      longitude?: number | null;
+    }) => {
       const partnerUserId =
         relationship!.user_1_id === user!.id ? relationship!.user_2_id : relationship!.user_1_id;
       return api.createMoment(relationship!.id, user!.id, moment, {
@@ -1092,7 +1127,8 @@ export function useActiveQuizLiveSession() {
     queryKey: ['quizLiveSession', relationship?.id],
     queryFn: () => (relationship ? api.fetchActiveQuizLiveSession(relationship.id) : null),
     enabled: !!relationship?.id && !isOffline,
-    refetchInterval: isOffline ? false : 4_000,
+    // Realtime pushes session changes; this is only a safety net for a dropped socket.
+    refetchInterval: isOffline ? false : 30_000,
     retry: (count, error) => !isMissingTableError(error) && count < 1,
   });
 }

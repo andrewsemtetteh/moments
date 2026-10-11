@@ -63,6 +63,13 @@ export type IconName =
   | 'restore'
   | 'rewind'
   | 'moreVertical'
+  | 'more'
+  | 'albums'
+  | 'map'
+  | 'flag'
+  | 'balloon'
+  | 'cafe'
+  | 'walk'
   | 'edit'
   | 'warning'
   | 'key'
@@ -138,6 +145,13 @@ const ICON_MAP: Record<IconName, { outline: IoniconName; filled: IoniconName }> 
   restore: { outline: 'refresh-outline', filled: 'refresh' },
   rewind: { outline: 'play-back-outline', filled: 'play-back' },
   moreVertical: { outline: 'ellipsis-vertical', filled: 'ellipsis-vertical' },
+  more: { outline: 'ellipsis-horizontal', filled: 'ellipsis-horizontal' },
+  albums: { outline: 'albums-outline', filled: 'albums' },
+  map: { outline: 'map-outline', filled: 'map' },
+  flag: { outline: 'flag-outline', filled: 'flag' },
+  balloon: { outline: 'balloon-outline', filled: 'balloon' },
+  cafe: { outline: 'cafe-outline', filled: 'cafe' },
+  walk: { outline: 'walk-outline', filled: 'walk' },
   edit: { outline: 'create-outline', filled: 'create' },
   warning: { outline: 'warning-outline', filled: 'warning' },
   key: { outline: 'key-outline', filled: 'key' },

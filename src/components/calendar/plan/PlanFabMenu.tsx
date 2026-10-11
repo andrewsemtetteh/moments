@@ -94,7 +94,7 @@ export function PlanRadialFab({
                         shadowColor: colors.shadow,
                       },
                     ]}>
-                    <Text style={styles.actionEmoji}>{action.emoji}</Text>
+                    <Icon name={action.icon} size={24} color={colors.text} />
                     <Text style={[styles.actionLabel, { color: colors.text }]}>{action.label}</Text>
                   </Pressable>
                 </Animated.View>

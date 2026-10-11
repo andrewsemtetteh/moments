@@ -36,6 +36,7 @@ import { useTheme } from '@/hooks/useTheme';
 import { getFirstName } from '@/lib/avatar-initial';
 import { enrichMomentsWithAuthors, filterMediaMoments, filterMomentsForHome } from '@/lib/moment-display';
 import { shouldShowEntryPaywall } from '@/lib/paywall-storage';
+import { displayTitle } from '@/lib/plan-day';
 import { openActivities, openCalendar, openChat } from '@/lib/router';
 import {
     emptyStreakStatus,
@@ -306,7 +307,7 @@ export default function HomeScreen() {
                     </Text>
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={[styles.eventTitle, { color: colors.text }]}>{e.title}</Text>
+                    <Text style={[styles.eventTitle, { color: colors.text }]}>{displayTitle(e, user?.id)}</Text>
                     <Text style={[styles.eventTime, { color: colors.textSecondary }]}>
                       {format(new Date(e.date_time), 'EEEE · h:mm a')}
                     </Text>

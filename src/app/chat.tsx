@@ -56,6 +56,7 @@ import { usePartnerPresence } from '@/hooks/usePartnerPresence';
 import { useStartCall } from '@/hooks/useStartCall';
 import { useTheme } from '@/hooks/useTheme';
 import { encodeAttachment } from '@/lib/chat-attachments';
+import { getCachedChatDraft, loadStoredChatDraft, saveChatDraft } from '@/lib/chat-draft';
 import { buildChatListItems, type ChatListItem } from '@/lib/chat-list';
 import { messagePreviewLabel } from '@/lib/chat-media';
 import { flushChatOfflineQueue } from '@/lib/chat-offline-flush';
@@ -86,12 +87,14 @@ export default function ChatScreen() {
   const removeFromQueue = useOfflineStore((s) => s.removeFromQueue);
   const hydrateOfflineQueue = useOfflineStore((s) => s.hydrateQueue);
 
-  // Text
-  const [text, setText] = useState('');
+  // Text — starts from any unsent draft left the last time Chat was open.
+  const [text, setText] = useState(() => getCachedChatDraft(relationship?.id)?.text ?? '');
   // UI
   const [optimisticMessages, setOptimisticMessages] = useState<Message[]>([]);
   const [selected, setSelected] = useState<Message | null>(null);
-  const [replyTo, setReplyTo] = useState<Message | null>(null);
+  const [replyTo, setReplyTo] = useState<Message | null>(
+    () => getCachedChatDraft(relationship?.id)?.replyTo ?? null,
+  );
   const [partnerTyping, setPartnerTyping] = useState(false);
   const [showEmoji, setShowEmoji] = useState(false);
   const [showAttachment, setShowAttachment] = useState(false);
@@ -262,6 +265,26 @@ export default function ChatScreen() {
       changeSub.remove();
     };
   }, [scrollToLatest]);
+
+  // After an app restart the memory copy is gone: bring the draft back from storage.
+  useEffect(() => {
+    const relationshipId = relationship?.id;
+    if (!relationshipId || getCachedChatDraft(relationshipId)) return;
+    let cancelled = false;
+    void loadStoredChatDraft(relationshipId).then((stored) => {
+      if (!cancelled && stored) setText((current) => current || stored);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [relationship?.id]);
+
+  // Keep the draft (and the message being replied to) as it's typed, so
+  // leaving Chat and coming back finds it where you left it. Sending clears it.
+  useEffect(() => {
+    if (!relationship?.id) return;
+    saveChatDraft(relationship.id, { text, replyTo });
+  }, [relationship?.id, text, replyTo]);
 
   useEffect(() => {
     if (!chatDraft && !chatMomentReply) return;

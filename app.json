@@ -93,7 +93,6 @@
         }
       ],
       "expo-notifications",
-      "ffmpeg-expo",
       "expo-video",
       "@react-native-community/datetimepicker"
     ],

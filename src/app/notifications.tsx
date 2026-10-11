@@ -208,8 +208,8 @@ function NotificationsScreenNative() {
               }
               ListEmptyComponent={
                 <View style={styles.empty}>
-                  <View style={[styles.emptyIcon, { backgroundColor: colors.surfaceElevated }]}>
-                    <Icon name="bell" size={28} color={colors.textTertiary} />
+                  <View style={[styles.emptyIcon, { backgroundColor: colors.accentSoft }]}>
+                    <Icon name={filter === 'unread' ? 'checkDone' : 'bell'} size={28} color={colors.accent} />
                   </View>
                   <Text style={[styles.emptyTitle, { color: colors.text }]}>
                     {filter === 'unread' ? 'No unread notifications' : 'No notifications yet'}
@@ -555,11 +555,12 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     marginTop: 6,
   },
+  // Same empty state as Memories on Together: tinted icon circle, title, one line.
   empty: {
     alignItems: 'center',
-    gap: 10,
-    paddingHorizontal: 32,
-    paddingVertical: 24,
+    gap: 8,
+    paddingHorizontal: 24,
+    paddingVertical: 40,
   },
   emptyIcon: {
     width: 64,
@@ -570,7 +571,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   emptyTitle: { fontSize: 17, fontWeight: '800' },
-  emptyText: { textAlign: 'center', fontSize: 15, lineHeight: 22 },
+  emptyText: { textAlign: 'center', fontSize: 14, lineHeight: 20 },
   centered: {
     flex: 1,
     alignItems: 'center',

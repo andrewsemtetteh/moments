@@ -32,6 +32,7 @@ export function AuthLegalLinks({
       {prefix}{' '}
       <Text
         accessibilityRole="link"
+        suppressHighlighting
         style={[authLinkStyles.legalLink, { color: linkColors.legalLink }]}
         onPress={() => router.push('/legal/terms')}>
         Terms of Service
@@ -39,6 +40,7 @@ export function AuthLegalLinks({
       {' '}and{' '}
       <Text
         accessibilityRole="link"
+        suppressHighlighting
         style={[authLinkStyles.legalLink, { color: linkColors.legalLink }]}
         onPress={() => router.push('/legal/privacy')}>
         Privacy Policy

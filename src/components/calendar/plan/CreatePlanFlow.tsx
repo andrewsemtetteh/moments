@@ -2,6 +2,7 @@ import { format, setHours, setMilliseconds, setMinutes, setSeconds, startOfDay }
 import * as Haptics from 'expo-haptics';
 import { useEffect, useMemo, useState } from 'react';
 import {
+  ActivityIndicator,
   Modal,
   Platform,
   Pressable,
@@ -11,9 +12,11 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { ScrollView as GHScrollView } from 'react-native-gesture-handler';
 
 import { PlanDateModal, PlanTimeModal } from '@/components/calendar/plan/PlanPickerModals';
-import { DraggableSheet } from '@/components/ui/DraggableSheet';
+import { FullScreenPage, PageFooter } from '@/components/layout/FullScreenPage';
+import { HeaderIconButton } from '@/components/ui/HeaderIconButton';
 import { Icon } from '@/components/ui/Icon';
 import { PrimaryButton } from '@/components/ui/primitives';
 import { useTheme } from '@/hooks/useTheme';
@@ -36,6 +39,7 @@ function resolveKind(key: PlanKindKey) {
       key,
       label: 'Plan',
       emoji: '📌',
+      icon: 'calendar' as const,
       eventType: 'custom' as EventType,
     }
   );
@@ -96,6 +100,8 @@ export function CreatePlanFlow({
   onClose,
   onSave,
   saving,
+  meId,
+  partnerName,
 }: {
   visible: boolean;
   selectedDate: Date;
@@ -105,9 +111,13 @@ export function CreatePlanFlow({
   onClose: () => void;
   onSave: (payload: CreatePlanPayload) => void;
   saving?: boolean;
+  /** Your user id — a "Just me" plan is saved as yours. */
+  meId?: string;
+  /** Shown in the private hint ("Alex sees Busy"). */
+  partnerName?: string;
 }) {
   const { colors } = useTheme();
-  const [step, setStep] = useState<'type' | 'form'>('type');
+  const [, setStep] = useState<'type' | 'form'>('form');
   const [kindKey, setKindKey] = useState<PlanKindKey>('date');
   const [title, setTitle] = useState('');
   const [location, setLocation] = useState('');
@@ -122,6 +132,9 @@ export function CreatePlanFlow({
   const [dateOpen, setDateOpen] = useState(false);
   const [timeOpen, setTimeOpen] = useState(false);
   const [reminderOpen, setReminderOpen] = useState(false);
+  // Whose plan: both of you, or just yours (shown in your lane on Upcoming).
+  const [forWhom, setForWhom] = useState<'together' | 'me'>('together');
+  const [isPrivate, setIsPrivate] = useState(false);
 
   const kind = resolveKind(kindKey);
   useEffect(() => {
@@ -139,15 +152,17 @@ export function CreatePlanFlow({
     setDateOpen(false);
     setTimeOpen(false);
     setReminderOpen(false);
+    setForWhom('together');
+    setIsPrivate(false);
     const nextKind = initialKind ?? 'date';
     setKindKey(nextKind);
     setCreateSharedList(
       nextKind === 'trip' || nextKind === 'celebration' || nextKind === 'checklist',
     );
     if (initialKind) {
-      setStep(skipTypePicker || initialKind ? 'form' : 'type');
+      setStep('form');
     } else {
-      setStep(skipTypePicker ? 'form' : 'type');
+      setStep('form');
     }
   }, [visible, selectedDate, initialKind, skipTypePicker]);
 
@@ -184,6 +199,9 @@ export function CreatePlanFlow({
       reminderMins,
       checklist: checklist.length ? checklist : undefined,
       completed: false,
+      owner: forWhom === 'me' && meId ? meId : undefined,
+      private: forWhom === 'me' && isPrivate ? true : undefined,
+      createdBy: meId,
     };
     onSave({
       title: title.trim(),
@@ -199,92 +217,118 @@ export function CreatePlanFlow({
 
   return (
     <>
-      <DraggableSheet visible={visible} onClose={onClose} avoidKeyboard style={styles.sheet}>
-            {step === 'type' ? (
-              <View style={styles.typePad}>
-                <View style={styles.typeHeader}>
-                  <Pressable
-                    onPress={onClose}
-                    hitSlop={8}
-                    style={[styles.iconBtn, { backgroundColor: colors.surfaceElevated }]}>
-                    <Icon name="close" size={18} color={colors.textSecondary} />
-                  </Pressable>
-                </View>
-                <Text style={[styles.typeTitle, { color: colors.accent }]}>What are you planning?</Text>
-                <View style={styles.grid}>
+      <FullScreenPage
+        visible={visible}
+        title="New plan"
+        onBack={onClose}
+        right={
+          saving ? (
+            <ActivityIndicator color={colors.accent} />
+          ) : (
+            <HeaderIconButton
+              icon="check"
+              onPress={handleSave}
+              disabled={!title.trim()}
+              accessibilityLabel="Save plan"
+            />
+          )
+        }>
+              <ScrollView
+                showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+                keyboardDismissMode="on-drag"
+                contentContainerStyle={[styles.formScroll, styles.formFill]}>
+                {/* No autoFocus: the keyboard waits until you tap the title. */}
+                <TextInput
+                  value={title}
+                  onChangeText={setTitle}
+                  placeholder={titlePlaceholder(kindKey)}
+                  placeholderTextColor={colors.textTertiary}
+                  style={[
+                    styles.titleInput,
+                    { color: colors.text, backgroundColor: colors.surface, borderColor: colors.border },
+                  ]}
+                />
+
+                {/* Type picked right here (was a separate first page) — one sideways row. */}
+                <GHScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  style={styles.typeChipsScroll}
+                  contentContainerStyle={styles.typeChips}>
                   {PLAN_KIND_OPTIONS.map((option) => {
-                    const active = kindKey === option.key;
+                    const on = kindKey === option.key;
                     return (
                       <Pressable
                         key={option.key}
                         onPress={() => {
                           Haptics.selectionAsync();
                           setKindKey(option.key);
-                          setCreateSharedList(
-                            option.key === 'trip' ||
-                              option.key === 'celebration' ||
-                              option.key === 'checklist',
-                          );
-                          setStep('form');
+                          setCreateSharedList(option.key === 'trip' || option.key === 'celebration');
                         }}
-                        style={[
-                          styles.typeCard,
-                          {
-                            backgroundColor: colors.surface,
-                            borderColor: active ? colors.accent : colors.border,
-                          },
-                        ]}>
-                        <Text style={styles.typeEmoji}>{option.emoji}</Text>
-                        <Text style={[styles.typeLabel, { color: colors.text }]}>{option.label}</Text>
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: on }}
+                        style={[styles.chip, { backgroundColor: on ? colors.text : colors.surface }]}>
+                        <Icon name={option.icon} size={18} color={on ? colors.background : colors.text} />
+                        <Text style={[styles.chipText, { color: on ? colors.background : colors.text }]}>
+                          {option.label}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </GHScrollView>
+
+                <View style={[styles.whoRow, { backgroundColor: colors.surface }]}>
+                  {(['together', 'me'] as const).map((who) => {
+                    const on = forWhom === who;
+                    return (
+                      <Pressable
+                        key={who}
+                        onPress={() => {
+                          Haptics.selectionAsync();
+                          setForWhom(who);
+                        }}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: on }}
+                        style={[styles.whoBtn, on && { backgroundColor: colors.text }]}>
+                        <Icon
+                          name={who === 'together' ? 'people' : 'user'}
+                          size={17}
+                          color={on ? colors.background : colors.textSecondary}
+                        />
+                        <Text style={[styles.whoText, { color: on ? colors.background : colors.textSecondary }]}>
+                          {who === 'together' ? 'Together' : 'Just me'}
+                        </Text>
                       </Pressable>
                     );
                   })}
                 </View>
-              </View>
-            ) : (
-              <ScrollView
-                showsVerticalScrollIndicator={false}
-                keyboardShouldPersistTaps="handled"
-                contentContainerStyle={styles.formScroll}>
-                <View style={styles.formHeader}>
+                {forWhom === 'me' ? (
                   <Pressable
                     onPress={() => {
-                      if (skipTypePicker && initialKind) onClose();
-                      else setStep('type');
+                      Haptics.selectionAsync();
+                      setIsPrivate((p) => !p);
                     }}
-                    hitSlop={8}
-                    style={[styles.iconBtn, { backgroundColor: colors.surfaceElevated }]}>
-                    <Icon name="chevronLeft" size={18} color={colors.textSecondary} />
+                    accessibilityRole="switch"
+                    accessibilityState={{ checked: isPrivate }}
+                    style={[styles.privateRow, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                    <Icon name="lock" size={16} color={isPrivate ? colors.accent : colors.textSecondary} />
+                    <Text style={[styles.privateText, { color: colors.text }]}>
+                      Private{' '}
+                      <Text style={{ color: colors.textTertiary }}>
+                        · {partnerName ?? 'Your partner'} sees “Busy”
+                      </Text>
+                    </Text>
+                    <View
+                      style={[
+                        styles.privateCheck,
+                        { borderColor: isPrivate ? colors.accent : colors.border },
+                        isPrivate && { backgroundColor: colors.accent },
+                      ]}>
+                      {isPrivate ? <Icon name="check" size={14} color={colors.onAccent} /> : null}
+                    </View>
                   </Pressable>
-                  <Text style={[styles.formTitle, { color: colors.text }]}>
-                    New {kind.label}
-                  </Text>
-                  <Pressable
-                    onPress={handleSave}
-                    disabled={!title.trim() || saving}
-                    hitSlop={8}
-                    style={[
-                      styles.iconBtn,
-                      {
-                        backgroundColor: title.trim() ? colors.accentSoft : colors.surfaceElevated,
-                        opacity: title.trim() ? 1 : 0.5,
-                      },
-                    ]}>
-                    <Icon name="check" size={18} color={title.trim() ? colors.accent : colors.textTertiary} />
-                  </Pressable>
-                </View>
-
-                <TextInput
-                  value={title}
-                  onChangeText={setTitle}
-                  placeholder={titlePlaceholder(kindKey)}
-                  placeholderTextColor={colors.textTertiary}
-                  autoFocus
-                  style={[
-                    styles.titleInput,
-                    { color: colors.text, backgroundColor: colors.surface, borderColor: colors.border },
-                  ]}
-                />
+                ) : null}
 
                 <View style={[styles.group, { backgroundColor: colors.surface, borderColor: colors.border }]}>
                   <FieldRow
@@ -450,9 +494,8 @@ export function CreatePlanFlow({
                               ]}>
                               {on ? <Icon name="check" size={12} color={colors.onAccent} /> : null}
                             </View>
-                            <Text style={[styles.checkTitle, { color: colors.text }]}>
-                              {list.emoji} {list.title}
-                            </Text>
+                            <Icon name="list" size={16} color={colors.textSecondary} />
+                            <Text style={[styles.checkTitle, { color: colors.text }]}>{list.title}</Text>
                           </Pressable>
                         );
                       })}
@@ -460,16 +503,13 @@ export function CreatePlanFlow({
                   ) : null}
                 </View>
 
-                <PrimaryButton
-                  label="Save plan"
-                  onPress={handleSave}
-                  disabled={!title.trim()}
-                  loading={saving}
-                  style={{ marginTop: 4 }}
-                />
               </ScrollView>
-            )}
-      </DraggableSheet>
+
+              {/* Pinned under the form like New memory's — always in reach. */}
+              <PageFooter>
+                <PrimaryButton label="Save plan" onPress={handleSave} disabled={!title.trim()} loading={saving} />
+              </PageFooter>
+      </FullScreenPage>
 
       <PlanDateModal
         visible={dateOpen}
@@ -517,7 +557,7 @@ export function CreatePlanFlow({
   );
 }
 
-function FieldRow({
+export function FieldRow({
   label,
   value,
   onPress,
@@ -539,7 +579,7 @@ function FieldRow({
   );
 }
 
-function InlineInput({
+export function InlineInput({
   label,
   value,
   onChangeText,
@@ -566,7 +606,7 @@ function InlineInput({
   );
 }
 
-function Divider({ colors }: { colors: { border: string } }) {
+export function Divider({ colors }: { colors: { border: string } }) {
   return <View style={[styles.divider, { backgroundColor: colors.border }]} />;
 }
 
@@ -579,6 +619,15 @@ const styles = StyleSheet.create({
     paddingBottom: Platform.OS === 'ios' ? 28 : 20,
   },
   typePad: { paddingHorizontal: 20, paddingBottom: 12 },
+  // Type chips — the same row on New plan and New memory.
+  // Bleeds to the screen edges so chips scroll off-screen cleanly; flexGrow 0
+  // keeps a horizontal ScrollView from stretching vertically.
+  typeChipsScroll: { flexGrow: 0, marginHorizontal: -20 },
+  typeChips: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 20 },
+  chip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, height: 38, borderRadius: 19 },
+  chipText: { fontSize: 14, fontWeight: '700' },
+  // Lets taps on the empty space under a short form reach the page (closes the keyboard).
+  formFill: { flexGrow: 1 },
   typeHeader: { alignItems: 'flex-start', marginBottom: 8 },
   typeTitle: {
     fontSize: 24,
@@ -601,7 +650,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
   },
-  typeEmoji: { fontSize: 32 },
+  typeIcon: { width: 52, height: 52, borderRadius: 26, alignItems: 'center', justifyContent: 'center' },
   typeLabel: { fontSize: 15, fontWeight: '700' },
   iconBtn: {
     width: 36,
@@ -617,6 +666,8 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   formTitle: { fontSize: 17, fontWeight: '700' },
+  formTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  formTitleIcon: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   titleInput: {
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: 14,
@@ -624,6 +675,35 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     fontSize: 18,
     fontWeight: '700',
+  },
+  whoRow: { flexDirection: 'row', padding: 4, borderRadius: 999 },
+  whoBtn: {
+    flex: 1,
+    height: 38,
+    borderRadius: 999,
+    flexDirection: 'row',
+    gap: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  whoText: { fontSize: 15, fontWeight: '800' },
+  privateRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 13,
+    borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  privateText: { flex: 1, fontSize: 15, fontWeight: '600' },
+  privateCheck: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   group: {
     borderRadius: 14,
@@ -681,3 +761,6 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
   },
 });
+
+/** Shared with the Add memory form so both create sheets line up. */
+export const createFormStyles = styles;

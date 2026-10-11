@@ -490,10 +490,25 @@ const RPC: Record<string, RpcHandler> = {
 
   async create_moment(env, userId, a) {
     await requireMember(env, userId, a.p_relationship_id);
+    // Optional pin for "Our map" — only kept when both are real coordinates.
+    const lat = Number(a.p_latitude);
+    const lng = Number(a.p_longitude);
+    const hasPin =
+      a.p_latitude != null && a.p_longitude != null &&
+      Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180;
     const row = await env.DB.prepare(
-      `INSERT INTO moments (id, relationship_id, user_id, type, content, media_url) VALUES (?1, ?2, ?3, ?4, ?5, ?6) RETURNING *`,
+      `INSERT INTO moments (id, relationship_id, user_id, type, content, media_url, latitude, longitude) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8) RETURNING *`,
     )
-      .bind(generateId(), a.p_relationship_id, userId, a.p_type, a.p_content ?? null, a.p_media_url ?? null)
+      .bind(
+        generateId(),
+        a.p_relationship_id,
+        userId,
+        a.p_type,
+        a.p_content ?? null,
+        a.p_media_url ?? null,
+        hasPin ? lat : null,
+        hasPin ? lng : null,
+      )
       .first<Record<string, unknown>>();
     if (!row) throw new ApiError('Could not create moment');
     await emitRow(env, 'moments', 'INSERT', row);

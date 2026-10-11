@@ -5,10 +5,9 @@ import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-
 
 import { DraggableSheet } from '@/components/ui/DraggableSheet';
 import { Icon } from '@/components/ui/Icon';
-import { EVENT_TYPE_META } from '@/constants/calendar-events';
 import { useTheme } from '@/hooks/useTheme';
 import { fetchDayNotes, saveDayNotes } from '@/lib/plan-local';
-import { isPlanCompleted, parsePlanMeta, planKindEmoji } from '@/lib/plan-meta';
+import { isPlanCompleted, parsePlanMeta, planIcon } from '@/lib/plan-meta';
 import type { CalendarEvent } from '@/types/database';
 
 export function PlanDaySheet({
@@ -159,9 +158,7 @@ export function PlanDaySheet({
                           ) : null}
                         </View>
                         <View style={[styles.thumb, { backgroundColor: colors.accentSoft }]}>
-                          <Text style={styles.emoji}>
-                            {planKindEmoji(event) ?? EVENT_TYPE_META[event.type].emoji}
-                          </Text>
+                          <Icon name={planIcon(event)} size={18} color={colors.accent} />
                         </View>
                       </Pressable>
                     </View>

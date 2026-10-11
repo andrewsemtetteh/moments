@@ -17,12 +17,11 @@ import { PlanDateModal, PlanTimeModal } from '@/components/calendar/plan/PlanPic
 import { DraggableSheet } from '@/components/ui/DraggableSheet';
 import { Icon } from '@/components/ui/Icon';
 import { Avatar, PrimaryButton } from '@/components/ui/primitives';
-import { EVENT_TYPE_META } from '@/constants/calendar-events';
 import { useTheme } from '@/hooks/useTheme';
 import {
   parsePlanMeta,
   planCountdownParts,
-  planKindEmoji,
+  planIcon,
   reminderLabel,
   serializePlanMeta,
   REMINDER_OPTIONS,
@@ -116,7 +115,7 @@ export function EventDetailsSheet({
 
   if (!visible || !event) return null;
 
-  const emoji = planKindEmoji(event) ?? EVENT_TYPE_META[event.type].emoji;
+  const icon = planIcon(event);
   const done = completed;
 
   const h24 = eventTime.getHours();
@@ -222,7 +221,9 @@ export function EventDetailsSheet({
               showsVerticalScrollIndicator={false}
               keyboardShouldPersistTaps="handled"
               contentContainerStyle={styles.scroll}>
-              <Text style={styles.heroEmoji}>{emoji}</Text>
+              <View style={[styles.heroIcon, { backgroundColor: colors.accentSoft }]}>
+                <Icon name={icon} size={26} color={colors.accent} />
+              </View>
               {editingTitle ? (
                 <TextInput
                   value={title}
@@ -504,7 +505,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   scroll: { paddingHorizontal: 20, paddingBottom: 16, gap: 14 },
-  heroEmoji: { fontSize: 36, marginBottom: -4 },
+  heroIcon: { width: 52, height: 52, borderRadius: 26, alignItems: 'center', justifyContent: 'center', marginBottom: 2 },
   heroTitle: { fontSize: 28, fontWeight: '800', letterSpacing: -0.5 },
   heroTitleInput: { fontSize: 28, fontWeight: '800', letterSpacing: -0.5, padding: 0 },
   heroMeta: { fontSize: 15, fontWeight: '500', marginTop: 4 },

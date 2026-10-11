@@ -12,7 +12,7 @@ interface HistoryActionDockProps {
   deleting: boolean;
   onDelete: () => void;
   onDownload: () => void;
-  onRecap: () => void;
+  onAddToAlbum: () => void;
 }
 
 export function HistoryActionDock({
@@ -23,7 +23,7 @@ export function HistoryActionDock({
   deleting,
   onDelete,
   onDownload,
-  onRecap,
+  onAddToAlbum,
 }: HistoryActionDockProps) {
   const { colors } = useTheme();
   const chrome = momentChrome(colors);
@@ -57,12 +57,12 @@ export function HistoryActionDock({
         />
         <View style={[styles.divider, { backgroundColor: chrome.border }]} />
         <DockAction
-          icon="film"
-          label="Recap"
+          icon="albums"
+          label="Add to album"
           tone="neutral"
           chrome={chrome}
           disabled={disabled}
-          onPress={onRecap}
+          onPress={onAddToAlbum}
         />
       </View>
     </View>

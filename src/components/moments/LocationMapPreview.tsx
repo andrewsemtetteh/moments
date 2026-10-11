@@ -24,6 +24,8 @@ interface LocationMapPreviewProps {
   style?: StyleProp<ViewStyle>;
   /** Index of a marker to zoom in close on, instead of the default fit-everyone view. */
   focusedIndex?: number | null;
+  /** Called with the marker's index when a pin is tapped (interactive maps). */
+  onMarkerPress?: (index: number) => void;
 }
 
 function buildMapHtml(
@@ -100,7 +102,7 @@ function buildMapHtml(
         return first ? first.charAt(0).toUpperCase() : '?';
       }
 
-      markers.forEach(function(m) {
+      markers.forEach(function(m, index) {
         var ring = m.color || '#5b8def';
         var label = escapeHtml(m.label || '');
         var initial = avatarInitial(m.name || m.label);
@@ -123,6 +125,11 @@ function buildMapHtml(
           iconAnchor: [pinW / 2, pinH],
         });
         var marker = L.marker([m.lat, m.lng], { icon: icon }).addTo(map);
+        marker.on('click', function() {
+          if (window.ReactNativeWebView) {
+            window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'marker', index: index }));
+          }
+        });
         if (label) {
           marker.bindTooltip('<span class="pin-label">' + label + '</span>', { direction: 'top', offset: [0, -pinH - 6] });
         }
@@ -149,6 +156,7 @@ export function LocationMapPreview({
   onPress,
   style,
   focusedIndex = null,
+  onMarkerPress,
 }: LocationMapPreviewProps) {
   const { colors } = useTheme();
   const html = useMemo(
@@ -172,6 +180,15 @@ export function LocationMapPreview({
         javaScriptEnabled
         domStorageEnabled
         pointerEvents={interactive ? 'auto' : 'none'}
+        onMessage={(event) => {
+          if (!onMarkerPress) return;
+          try {
+            const msg = JSON.parse(event.nativeEvent.data) as { type?: string; index?: number };
+            if (msg.type === 'marker' && typeof msg.index === 'number') onMarkerPress(msg.index);
+          } catch {
+            /* not ours */
+          }
+        }}
         {...(Platform.OS === 'android' ? { androidLayerType: 'hardware' as const } : {})}
       />
       {onPress && (

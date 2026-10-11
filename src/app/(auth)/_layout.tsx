@@ -29,7 +29,11 @@ export default function AuthLayout() {
         fullScreenGestureEnabled: false,
       }}>
       <Stack.Screen name="welcome" options={{ animation: 'fade' }} />
-      <Stack.Screen name="get-started" options={{ animation: 'slide_from_right' }} />
+      {/* The one auth screen you can swipe back from: right, to the welcome slides. */}
+      <Stack.Screen
+        name="get-started"
+        options={{ animation: 'slide_from_right', gestureEnabled: true, fullScreenGestureEnabled: true }}
+      />
       <Stack.Screen name="intro" options={{ animation: 'slide_from_right' }} />
       <Stack.Screen name="login" />
       <Stack.Screen name="signup" />

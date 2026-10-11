@@ -1,28 +1,35 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { CameraView, useCameraPermissions, useMicrophonePermissions } from 'expo-camera';
 import * as Haptics from 'expo-haptics';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
-import { useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import {
     ActivityIndicator,
     Alert,
     BackHandler,
+    Dimensions,
     Pressable,
     StyleSheet,
     Text,
     View,
 } from 'react-native';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { MomentVideoPlayer } from '@/components/moments/MomentVideoPlayer';
+import { HEADER_ICON_SIZE } from '@/components/ui/HeaderIconButton';
 import { Icon } from '@/components/ui/Icon';
 import { Avatar } from '@/components/ui/primitives';
 import { useCreateMoment } from '@/hooks/queries';
 import { usePlusGate } from '@/hooks/usePlusGate';
 import { useSubscription } from '@/hooks/useSubscription';
 import { useTheme } from '@/hooks/useTheme';
+import { getFirstName } from '@/lib/avatar-initial';
 import { saveLocalMomentMedia } from '@/lib/download-moment-media';
+import { getCurrentPlace, type PlaceSnapshot } from '@/lib/location';
+import { rememberPlaceSuggestion } from '@/lib/moment-places';
 import { momentChrome } from '@/lib/moment-theme';
 import { toUserFacingNetworkError } from '@/lib/network-error';
 import * as api from '@/services/api';
@@ -33,13 +40,22 @@ import { usePlayProgressStore } from '@/stores/play-progress-store';
 const VIEWFINDER_RADIUS = 28;
 const MAX_VIDEO_SEC = 30;
 const SHUTTER_HOLD_MS = 280;
+const SCREEN_H = Dimensions.get('window').height;
+const SETTLE_SPRING = { damping: 30, stiffness: 260, mass: 0.9 };
+/** Remembers the "Add location" choice between moments. Off until turned on. */
+const ADD_LOCATION_PREF = 'moments:add-location';
+
+/** "Osu, Accra, Ghana" → "Osu, Accra": short enough for the chip. */
+function shortPlace(label: string) {
+  return label.split(',').map((p) => p.trim()).filter(Boolean).slice(0, 2).join(', ');
+}
 
 export function MomentCreatorModal() {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const chrome = momentChrome(colors);
-  const router = useRouter();
   const visible = useUIStore((s) => s.showMomentCreator);
+  const historyOnTop = useUIStore((s) => s.showMomentHistory);
   const setVisible = useUIStore((s) => s.setShowMomentCreator);
   const setShowMomentHistory = useUIStore((s) => s.setShowMomentHistory);
   const setMomentHistoryReturnToCamera = useUIStore((s) => s.setMomentHistoryReturnToCamera);
@@ -70,8 +86,55 @@ export function MomentCreatorModal() {
   const [recording, setRecording] = useState(false);
   const [cameraReady, setCameraReady] = useState(false);
   const [saving, setSaving] = useState(false);
+  // "Add location" — pins this moment on Our map.
+  const [addLocation, setAddLocation] = useState(false);
+  const [pinnedPlace, setPinnedPlace] = useState<PlaceSnapshot | null>(null);
+  const [locating, setLocating] = useState(false);
 
-  const partnerName = partner?.name?.split(' ')[0] ?? 'your partner';
+  useEffect(() => {
+    void AsyncStorage.getItem(ADD_LOCATION_PREF)
+      .then((v) => setAddLocation(v === '1'))
+      .catch(() => undefined);
+  }, []);
+
+  const locate = async () => {
+    setLocating(true);
+    try {
+      const result = await getCurrentPlace();
+      if (result.ok) {
+        setPinnedPlace(result.place);
+        return true;
+      }
+      Alert.alert('Location unavailable', result.message);
+      return false;
+    } finally {
+      setLocating(false);
+    }
+  };
+
+  const toggleAddLocation = async () => {
+    void Haptics.selectionAsync();
+    if (addLocation) {
+      setAddLocation(false);
+      void AsyncStorage.setItem(ADD_LOCATION_PREF, '0');
+      return;
+    }
+    const ok = pinnedPlace ? true : await locate();
+    if (!ok) return;
+    setAddLocation(true);
+    void AsyncStorage.setItem(ADD_LOCATION_PREF, '1');
+  };
+
+  // With the preference on, find where this shot was taken as soon as it's previewed.
+  useEffect(() => {
+    if (!previewUri || !addLocation || pinnedPlace || locating) return;
+    void getCurrentPlace().then((result) => {
+      if (result.ok) setPinnedPlace(result.place);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [previewUri, addLocation]);
+
+  const partnerName = getFirstName(partner?.name) ?? 'your partner';
 
   useEffect(() => {
     if (!visible) return;
@@ -195,7 +258,14 @@ export function MomentCreatorModal() {
       const path = `${relationship.id}/${user.id}/${Date.now()}.${ext}`;
       const mediaUrl = await api.uploadMomentMedia(path, mediaUri, contentType);
 
-      await createMoment.mutateAsync({ type, media_url: mediaUrl });
+      const pin = addLocation && pinnedPlace ? pinnedPlace : null;
+      await createMoment.mutateAsync({
+        type,
+        media_url: mediaUrl,
+        latitude: pin?.latitude ?? null,
+        longitude: pin?.longitude ?? null,
+      });
+      if (pin) void rememberPlaceSuggestion(relationship.id, pin.latitude, pin.longitude, pin.label);
       await api.trackEvent(relationship.id, user.id, 'moment_created', { type });
       void usePlayProgressStore.getState().award(
         relationship.id,
@@ -274,35 +344,100 @@ export function MomentCreatorModal() {
   const inPreview = !!previewUri;
   const showCamera = !previewUri;
 
+  // The camera stays mounted underneath History (paused), so swiping History
+  // away reveals the camera itself — not Home — and it's back instantly.
+  const openHistory = () => {
+    setMomentHistoryReturnToCamera(true);
+    setShowMomentHistory(true);
+  };
+
+  // Swipe down anywhere to close the camera, like other camera apps. Off in
+  // preview (so a stray drag can't throw away a shot) and while recording.
+  const translateY = useSharedValue(0);
+  const swipeDown = Gesture.Pan()
+    .enabled(!inPreview && !recording)
+    .activeOffsetY(14)
+    .failOffsetY(-10)
+    .failOffsetX([-18, 18])
+    .onUpdate((e) => {
+      translateY.value = Math.max(0, e.translationY);
+    })
+    .onEnd((e) => {
+      if (e.translationY > 120 || e.velocityY > 800) {
+        translateY.value = withSpring(SCREEN_H, { ...SETTLE_SPRING, velocity: e.velocityY }, (done) => {
+          // Hide directly: swiping is off in preview and while recording, so
+          // there's no draft or recording for close() to clean up.
+          if (done) runOnJS(setVisible)(false);
+        });
+        return;
+      }
+      translateY.value = withSpring(0, { ...SETTLE_SPRING, velocity: e.velocityY });
+    });
+  const swipeStyle = useAnimatedStyle(() => ({ transform: [{ translateY: translateY.value }] }));
+
   return (
-      <View style={[styles.root, { paddingTop: insets.top, paddingBottom: insets.bottom, backgroundColor: chrome.background }]}>
+    <GestureDetector gesture={swipeDown}>
+      <Animated.View
+        style={[
+          styles.root,
+          { paddingTop: insets.top, paddingBottom: insets.bottom, backgroundColor: chrome.background },
+          swipeStyle,
+        ]}>
         {inPreview ? (
           <>
             <View style={styles.previewTopBar}>
-              <Pressable onPress={resetPreview} style={styles.topCircle} accessibilityLabel="Discard preview">
-                <Icon name="close" size={30} color={chrome.text} />
+              <Pressable onPress={resetPreview} style={styles.topCircle} hitSlop={6} accessibilityRole="button" accessibilityLabel="Discard preview">
+                <Icon name="close" size={HEADER_ICON_SIZE} color={chrome.text} />
               </Pressable>
               <Text style={[styles.previewTitle, { color: chrome.text }]}>{previewIsVideo ? 'Video preview' : 'Photo preview'}</Text>
               <Pressable
                 onPress={() => void handleDownload()}
                 disabled={saving}
                 style={styles.topCircle}
+                hitSlop={6}
+                accessibilityRole="button"
                 accessibilityLabel="Save to gallery">
                 {saving ? (
                   <ActivityIndicator color={chrome.text} size="small" />
                 ) : (
-                  <Icon name="download" size={30} color={chrome.text} />
+                  <Icon name="download" size={HEADER_ICON_SIZE} color={chrome.text} />
                 )}
               </Pressable>
             </View>
 
-            <View style={styles.previewMedia}>
+            <View style={[styles.previewMedia, { backgroundColor: chrome.mediaBackdrop }]}>
               {previewIsVideo ? (
                 <MomentVideoPlayer uri={previewUri} fill autoPlay contentFit="contain" style={styles.previewVideo} />
               ) : (
                 <Image source={{ uri: previewUri }} style={StyleSheet.absoluteFill} contentFit="contain" />
               )}
             </View>
+
+            <Pressable
+              onPress={() => void toggleAddLocation()}
+              disabled={locating}
+              accessibilityRole="switch"
+              accessibilityState={{ checked: addLocation }}
+              accessibilityLabel="Add location to Our map"
+              style={[
+                styles.locationChip,
+                { backgroundColor: addLocation ? chrome.accentSoft : chrome.surfaceSoft },
+              ]}>
+              {locating ? (
+                <ActivityIndicator size="small" color={chrome.accent} />
+              ) : (
+                <Icon name="location" size={16} color={addLocation ? chrome.accent : chrome.textSecondary} filled={addLocation} />
+              )}
+              <Text
+                style={[styles.locationChipText, { color: addLocation ? chrome.accent : chrome.textSecondary }]}
+                numberOfLines={1}>
+                {addLocation
+                  ? pinnedPlace?.label
+                    ? shortPlace(pinnedPlace.label)
+                    : 'Location on'
+                  : 'Add location'}
+              </Text>
+            </Pressable>
 
             <View style={styles.previewActions}>
               <Pressable onPress={resetPreview} style={[styles.previewSecondaryBtn, { backgroundColor: chrome.surfaceSoft }]}>
@@ -324,33 +459,34 @@ export function MomentCreatorModal() {
               </Pressable>
             </View>
 
-            <Text style={[styles.previewHint, { color: chrome.textTertiary }]}>Only {partnerName} will see this</Text>
+            <View style={styles.previewHintRow}>
+              <Icon name="lock" size={13} color={chrome.textTertiary} />
+              <Text style={[styles.previewHint, { color: chrome.textTertiary }]}>Only {partnerName} will see this</Text>
+            </View>
           </>
         ) : (
           <>
             <View style={styles.topBar}>
-              <Pressable onPress={close} style={styles.topCircle}>
-                <Icon name="close" size={28} color={chrome.text} />
+              <Pressable onPress={close} style={styles.topCircle} hitSlop={6} accessibilityRole="button" accessibilityLabel="Close camera">
+                <Icon name="close" size={HEADER_ICON_SIZE} color={chrome.text} />
               </Pressable>
 
               <View style={[styles.partnerPill, { backgroundColor: chrome.surface }]}>
                 <Avatar name={partner?.name} imageUrl={partner?.avatar_url} size={22} />
                 <Text style={[styles.partnerPillText, { color: chrome.text }]} numberOfLines={1}>
-                  {relationship?.relationship_name ?? 'Moments'}
+                  Sending to {partnerName}
                 </Text>
               </View>
 
               <Pressable
-                onPress={() => {
-                  close();
-                  router.push('/chat');
-                }}
-                style={styles.topCircle}>
-                <Icon name="messages" size={28} color={chrome.text} />
+                onPress={openHistory}
+                style={styles.topCircle}
+                hitSlop={6}
+                accessibilityRole="button"
+                accessibilityLabel="Open our moments">
+                <Icon name="albums" size={HEADER_ICON_SIZE} color={chrome.text} />
               </Pressable>
             </View>
-
-            <Text style={[styles.subtitle, { color: chrome.textSecondary }]}>Send a moment to {partnerName}</Text>
 
             <View style={[styles.viewfinder, { backgroundColor: chrome.surface }]}>
               {cameraPermission?.granted ? (
@@ -362,6 +498,7 @@ export function MomentCreatorModal() {
                   flash={facing === 'back' ? flash : 'off'}
                   mirror={facing === 'front'}
                   mode="video"
+                  active={!historyOnTop}
                   videoQuality="720p"
                   onCameraReady={() => setCameraReady(true)}
                 />
@@ -403,8 +540,13 @@ export function MomentCreatorModal() {
               )}
             </View>
 
+            <View style={styles.footer}>
             <View style={styles.controls}>
-              <Pressable onPress={() => void pickFromGallery()} style={styles.sideControl}>
+              <Pressable
+                onPress={() => void pickFromGallery()}
+                style={styles.sideControl}
+                accessibilityRole="button"
+                accessibilityLabel="Choose from your photos">
                 <Icon name="image" size={30} color={chrome.text} />
               </Pressable>
 
@@ -446,31 +588,21 @@ export function MomentCreatorModal() {
               {recording ? 'Release to finish video' : 'Tap for photo · hold for video'}
             </Text>
 
-            <Pressable
-              onPress={() => {
-                close();
-                setMomentHistoryReturnToCamera(true);
-                setShowMomentHistory(true);
-              }}
-              style={[styles.historyPill, { backgroundColor: chrome.surface }]}>
-              <Icon name="image" size={14} color={chrome.text} />
-              <Text style={[styles.historyText, { color: chrome.text }]}>Moment history</Text>
-              <Icon name="chevronDown" size={14} color={chrome.textSecondary} />
-            </Pressable>
-
             {Number.isFinite(limits.dailyMoments) && (
               <Text style={[styles.limitHint, { color: chrome.textTertiary }]}>{momentsRemaining} moments left today</Text>
             )}
+            </View>
           </>
         )}
-      </View>
+      </Animated.View>
+    </GestureDetector>
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  topBar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 8 },
-  topCircle: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+  topBar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingTop: 6, paddingBottom: 14 },
+  topCircle: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   partnerPill: {
     flex: 1,
     flexDirection: 'row',
@@ -483,15 +615,17 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   partnerPillText: { fontWeight: '700', fontSize: 14 },
-  subtitle: { textAlign: 'center', fontSize: 13, fontWeight: '600', marginBottom: 12 },
+  // Fills whatever height the top bar and footer leave, so there's no dead
+  // band at the bottom on tall phones.
   viewfinder: {
     flex: 1,
-    marginHorizontal: 20,
-    marginBottom: 16,
+    marginHorizontal: 16,
     borderRadius: VIEWFINDER_RADIUS,
     overflow: 'hidden',
-    maxHeight: 480,
   },
+  // Fixed-height footer so the viewfinder doesn't jump when the free-plan
+  // "moments left" line is shown or hidden.
+  footer: { paddingTop: 22, paddingBottom: 12, minHeight: 168, alignItems: 'center' },
   permissionBox: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
   permissionText: { textAlign: 'center', marginBottom: 16, lineHeight: 20 },
   permissionBtn: { paddingHorizontal: 20, paddingVertical: 12, borderRadius: 999 },
@@ -527,7 +661,7 @@ const styles = StyleSheet.create({
   },
   recDot: { width: 8, height: 8, borderRadius: 4 },
   recText: { fontSize: 11, fontWeight: '800' },
-  controls: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 36, paddingVertical: 8 },
+  controls: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 44 },
   sideControl: { width: 48, height: 48, alignItems: 'center', justifyContent: 'center' },
   sideControlDisabled: { opacity: 0.4 },
   shutterOuter: { alignItems: 'center', justifyContent: 'center' },
@@ -542,35 +676,44 @@ const styles = StyleSheet.create({
   shutterRingRec: {},
   shutterInner: { width: 62, height: 62, borderRadius: 31 },
   shutterInnerRec: {},
-  hint: { textAlign: 'center', fontSize: 12, fontWeight: '600', marginTop: 4 },
-  historyPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    alignSelf: 'center',
-    paddingHorizontal: 18,
-    paddingVertical: 10,
-    borderRadius: 999,
-    marginTop: 12,
-  },
-  historyText: { fontWeight: '700', fontSize: 14 },
-  limitHint: { textAlign: 'center', fontSize: 11, marginTop: 8 },
+  hint: { textAlign: 'center', fontSize: 13, fontWeight: '600', marginTop: 14 },
+  limitHint: { textAlign: 'center', fontSize: 12, fontWeight: '600', marginTop: 6 },
+  // Same spacing as the camera's top bar, so nothing jumps between the two.
   previewTopBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
+    paddingHorizontal: 10,
+    paddingTop: 6,
+    paddingBottom: 14,
   },
-  previewTitle: { fontSize: 16, fontWeight: '700' },
-  previewMedia: { flex: 1 },
+  previewTitle: { fontSize: 24, fontWeight: '800', letterSpacing: -0.5 },
+  // Framed like the live viewfinder, with clear space above the buttons.
+  previewMedia: {
+    flex: 1,
+    marginHorizontal: 16,
+    marginBottom: 16,
+    borderRadius: VIEWFINDER_RADIUS,
+    overflow: 'hidden',
+  },
   previewVideo: { backgroundColor: 'transparent' },
+  locationChip: {
+    alignSelf: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    maxWidth: '80%',
+    paddingHorizontal: 14,
+    height: 34,
+    borderRadius: 17,
+    marginBottom: 16,
+  },
+  locationChipText: { fontSize: 14, fontWeight: '700', flexShrink: 1 },
   previewActions: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
     paddingHorizontal: 20,
-    paddingBottom: 8,
   },
   previewSecondaryBtn: {
     paddingHorizontal: 18,
@@ -588,11 +731,14 @@ const styles = StyleSheet.create({
     borderRadius: 999,
   },
   previewSendText: { fontSize: 16, fontWeight: '800' },
-  previewHint: {
-    textAlign: 'center',
-    fontSize: 12,
-    fontWeight: '600',
-    marginTop: 4,
+  previewHintRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    marginTop: 12,
+    marginBottom: 12,
     paddingHorizontal: 20,
   },
+  previewHint: { fontSize: 13, fontWeight: '600' },
 });

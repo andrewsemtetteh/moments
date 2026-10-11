@@ -22,6 +22,7 @@ import { createStorageSignedUrl } from '@/lib/storage-cdn';
 import { legacyStreakToStatus, parseStreakStatus, withEffectiveStreakRestore } from '@/lib/streak';
 import { hasActiveUserSubscription } from '@/lib/subscription';
 import { backend } from '@/lib/backend';
+import { isDayNoteEvent, isMemoryEvent, isPlanEvent } from '@/lib/plan-meta';
 import type {
     Activity,
     BucketListItem,
@@ -375,6 +376,9 @@ export async function createMoment(
   moment: {
     type: 'photo' | 'video';
     media_url: string;
+    /** Where it was taken — only sent when the sender chose "Add location". */
+    latitude?: number | null;
+    longitude?: number | null;
   },
   options?: { senderName?: string | null; partnerUserId?: string | null },
 ) {
@@ -383,6 +387,8 @@ export async function createMoment(
     p_type: moment.type,
     p_media_url: moment.media_url,
     p_content: null,
+    p_latitude: moment.latitude ?? null,
+    p_longitude: moment.longitude ?? null,
   });
   if (error) throw error;
   if (!data) throw new Error('Could not create moment');
@@ -595,7 +601,7 @@ export async function fetchCalendarEvents(relationshipId: string, month?: Date) 
     .order('date_time', { ascending: true });
 
   if (error) throw error;
-  return data as CalendarEvent[];
+  return (data as CalendarEvent[]).filter(isPlanEvent);
 }
 
 /** Inclusive range fetch — used by Plan so week/month dots + agenda share one source. */
@@ -613,7 +619,7 @@ export async function fetchCalendarEventsInRange(
     .order('date_time', { ascending: true });
 
   if (error) throw error;
-  return data as CalendarEvent[];
+  return (data as CalendarEvent[]).filter(isPlanEvent);
 }
 
 /** Plans from start of today through the next N days — used for home / insights. */
@@ -633,7 +639,7 @@ export async function fetchUpcomingCalendarEvents(relationshipId: string, daysAh
     .order('date_time', { ascending: true });
 
   if (error) throw error;
-  return data as CalendarEvent[];
+  return (data as CalendarEvent[]).filter(isPlanEvent);
 }
 
 /** Recent past plans — surface as memories on Plan. */
@@ -652,7 +658,39 @@ export async function fetchPastCalendarEvents(relationshipId: string, daysBack =
     .limit(20);
 
   if (error) throw error;
-  return data as CalendarEvent[];
+  return (data as CalendarEvent[]).filter(isPlanEvent);
+}
+
+/** Everything on Memories (any date), newest first. */
+export async function fetchMemoryEntries(relationshipId: string) {
+  const { data, error } = await backend
+    .from('calendar_events')
+    .select('*')
+    .eq('relationship_id', relationshipId)
+    .order('date_time', { ascending: false });
+  if (error) throw error;
+  return (data as CalendarEvent[]).filter(isMemoryEvent);
+}
+
+/** Recent past plans (for "How was it?") — plans only. */
+export async function fetchRecentFinishedPlans(relationshipId: string, daysBack = 7) {
+  return fetchPastCalendarEvents(relationshipId, daysBack);
+}
+
+/** "My day" notes written on one day. */
+export async function fetchDayNotes(relationshipId: string, day: Date) {
+  const start = new Date(day);
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(start);
+  end.setHours(23, 59, 59, 999);
+  const { data, error } = await backend
+    .from('calendar_events')
+    .select('*')
+    .eq('relationship_id', relationshipId)
+    .gte('date_time', start.toISOString())
+    .lte('date_time', end.toISOString());
+  if (error) throw error;
+  return (data as CalendarEvent[]).filter(isDayNoteEvent);
 }
 
 export async function createCalendarEvent(

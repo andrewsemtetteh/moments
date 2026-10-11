@@ -121,11 +121,11 @@ export function PartnerMomentHome({ partnerMoments }: PartnerMomentHomeProps) {
         mediaType: previewType,
       });
       setReply('');
-      router.push('/chat');
+      router.navigate('/chat');
     } catch {
       setChatDraft(text);
       setChatMomentReply(momentToReplyContext(moment));
-      router.push('/chat');
+      router.navigate('/chat');
     } finally {
       setSendingReply(false);
     }
@@ -151,8 +151,9 @@ export function PartnerMomentHome({ partnerMoments }: PartnerMomentHomeProps) {
             }}
             hitSlop={8}
             style={styles.historyBtn}
-            accessibilityLabel="Moment history">
-            <Icon name="image" size={24} color={colors.text} />
+            accessibilityRole="button"
+            accessibilityLabel="Open our moments">
+            <Icon name="albums" size={24} color={colors.text} />
           </Pressable>
         </View>
 

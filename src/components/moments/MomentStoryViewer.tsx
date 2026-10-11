@@ -17,10 +17,13 @@ import {
     View,
     type LayoutChangeEvent,
 } from 'react-native';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { MomentVideoPlayer } from '@/components/moments/MomentVideoPlayer';
 import { MomentViewerDock } from '@/components/moments/MomentViewerDock';
+import { HEADER_ICON_SIZE } from '@/components/ui/HeaderIconButton';
 import { Icon } from '@/components/ui/Icon';
 import { useDeleteMoments, useMomentReaction, useSendMessage } from '@/hooks/queries';
 import { useTheme } from '@/hooks/useTheme';
@@ -212,12 +215,12 @@ export function MomentStoryViewer() {
       });
       setReply('');
       dismissViewer();
-      router.push('/chat');
+      router.navigate('/chat');
     } catch {
       setChatDraft(text);
       setChatMomentReply(momentToReplyContext(moment));
       dismissViewer();
-      router.push('/chat');
+      router.navigate('/chat');
     } finally {
       setSendingReply(false);
     }
@@ -255,6 +258,30 @@ export function MomentStoryViewer() {
 
   const onLayout = (e: LayoutChangeEvent) => setWidth(e.nativeEvent.layout.width);
 
+  // Swipe down anywhere to close, like Instagram / Photos. Taps (prev/next,
+  // hold to pause) still work — this only claims a clear downward drag.
+  const dragY = useSharedValue(0);
+  const swipeDown = Gesture.Pan()
+    .activeOffsetY(14)
+    .failOffsetY(-10)
+    .failOffsetX([-18, 18])
+    .onUpdate((e) => {
+      dragY.value = Math.max(0, e.translationY);
+    })
+    .onEnd((e) => {
+      if (e.translationY > 120 || e.velocityY > 800) {
+        dragY.value = withSpring(SCREEN_H, { damping: 30, stiffness: 260, velocity: e.velocityY }, (done) => {
+          if (done) runOnJS(dismissViewer)();
+        });
+        return;
+      }
+      dragY.value = withSpring(0, { damping: 30, stiffness: 260, velocity: e.velocityY });
+    });
+  const dragStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: dragY.value }],
+    borderRadius: dragY.value > 0 ? 28 : 0,
+  }));
+
   if (!viewer || !moment) return null;
 
   const showProgress = !isFocusMode && moments.length > 1;
@@ -271,6 +298,8 @@ export function MomentStoryViewer() {
   const tapBottom = DOCK_APPROX + insets.bottom;
 
   return (
+    <GestureDetector gesture={swipeDown}>
+    <Animated.View style={[styles.root, { overflow: 'hidden' }, dragStyle]}>
       <KeyboardAvoidingView
         style={[styles.root, { backgroundColor: chrome.background }]}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -295,8 +324,8 @@ export function MomentStoryViewer() {
         )}
 
         <View style={[styles.topBar, { paddingTop: showProgress ? 8 : insets.top + 12 }]}>
-          <Pressable onPress={dismissViewer} hitSlop={12} style={[styles.topIcon, { backgroundColor: chrome.surfaceSoft }]}>
-            <Icon name="close" size={26} color={chrome.text} />
+          <Pressable onPress={dismissViewer} hitSlop={6} style={styles.topIcon} accessibilityRole="button" accessibilityLabel="Close">
+            <Icon name="close" size={HEADER_ICON_SIZE} color={chrome.text} />
           </Pressable>
           <View style={styles.topCenter}>
             {focusLabel ? (
@@ -308,27 +337,27 @@ export function MomentStoryViewer() {
           <View style={styles.topRight}>
             <Pressable
               onPress={() => void downloadMedia()}
-              hitSlop={10}
-              style={[styles.topIcon, { backgroundColor: chrome.surfaceSoft }]}
+              hitSlop={6}
+              style={styles.topIcon}
               disabled={!moment.media_url || downloading}
               accessibilityLabel="Download">
               {downloading ? (
                 <ActivityIndicator color={chrome.text} size="small" />
               ) : (
-                <Icon name="download" size={20} color={chrome.text} />
+                <Icon name="download" size={HEADER_ICON_SIZE} color={chrome.text} />
               )}
             </Pressable>
             {isMine && (
               <Pressable
                 onPress={deleteCurrentMoment}
-                hitSlop={10}
-                style={[styles.topIcon, { backgroundColor: chrome.surfaceSoft }]}
+                hitSlop={6}
+                style={styles.topIcon}
                 disabled={deleteMomentsMutation.isPending}
                 accessibilityLabel="Delete moment">
                 {deleteMomentsMutation.isPending ? (
                   <ActivityIndicator color={chrome.error} size="small" />
                 ) : (
-                  <Icon name="trash" size={19} color={chrome.error} />
+                  <Icon name="trash" size={HEADER_ICON_SIZE - 2} color={chrome.error} />
                 )}
               </Pressable>
             )}
@@ -381,6 +410,8 @@ export function MomentStoryViewer() {
           bottomInset={insets.bottom}
         />
       </KeyboardAvoidingView>
+    </Animated.View>
+    </GestureDetector>
   );
 }
 
@@ -473,13 +504,12 @@ const styles = StyleSheet.create({
   },
   topCenter: { flex: 1, alignItems: 'center', paddingHorizontal: 8 },
   topIcon: {
-    padding: 6,
-    borderRadius: 20,
-    minWidth: 36,
+    width: 44,
+    height: 44,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  topRight: { flexDirection: 'row', alignItems: 'center', gap: 8, minWidth: 84, justifyContent: 'flex-end' },
+  topRight: { flexDirection: 'row', alignItems: 'center', gap: 2, minWidth: 88, justifyContent: 'flex-end' },
   focusLabelPill: {
     borderRadius: 999,
     paddingHorizontal: 12,

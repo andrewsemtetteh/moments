@@ -19,6 +19,7 @@ import { AuthFooter } from '@/components/auth/AuthFooter';
 import { AuthLegalLinks } from '@/components/auth/AuthLegalLinks';
 import { AppleIcon, GoogleIcon } from '@/components/auth/OAuthBrandIcon';
 import { OnboardingBackButton } from '@/components/onboarding/OnboardingChrome';
+import { Wordmark } from '@/components/ui/Wordmark';
 import { Radius, Spacing } from '@/constants/design-system';
 import { useTheme } from '@/hooks/useTheme';
 import { formatAuthError } from '@/lib/auth-errors';
@@ -99,6 +100,7 @@ export function GetStartedAuth({ showBack = true }: Props) {
 
         <View style={styles.content}>
           <View style={styles.brandBlock}>
+            <Wordmark size={34} />
             <Text style={[styles.tagline, { color: colors.textSecondary }]}>Closer, every day</Text>
           </View>
 

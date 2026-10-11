@@ -227,7 +227,7 @@ export default function AuthWelcomeScreen() {
             </Svg>
           </View>
 
-          <SafeAreaView style={styles.textZone} edges={['bottom', 'left', 'right']}>
+          <SafeAreaView style={styles.textZone} edges={['left', 'right']}>
             <View style={[styles.textColumn, { width: textColumnWidth }]}>
               <View style={styles.copyWrap}>
                 {SLIDES.map((slide, i) => (
@@ -293,7 +293,7 @@ export default function AuthWelcomeScreen() {
                   })}
                 </View>
 
-                <View style={{ paddingBottom: bottomInset + Spacing.md, gap: Spacing.sm }}>
+                <View style={{ paddingBottom: bottomInset + Spacing.sm, gap: Spacing.sm }}>
                   <Pressable
                     onPress={handleGetStarted}
                     style={({ pressed }) => [
@@ -383,7 +383,7 @@ const styles = StyleSheet.create({
   copyLayer: {
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
+    gap: 10,
   },
   // A small branded kicker above the title — uppercase, wide-tracked, tinted
   // with the accent color — rather than competing with the title for size.
@@ -397,7 +397,6 @@ const styles = StyleSheet.create({
   // "moments" wordmark's decorative signature treatment, and sized down so
   // it doesn't compete with the body copy underneath for the eye.
   title: {
-    marginTop: 4,
     fontWeight: '800',
     letterSpacing: -0.3,
     textAlign: 'center',
@@ -406,7 +405,6 @@ const styles = StyleSheet.create({
   // lighter-weight sentence of real context, the way a longer-copy onboarding
   // screen earns its two-line title instead of just asserting it.
   body: {
-    marginTop: 2,
     fontWeight: '400',
     textAlign: 'center',
   },
@@ -414,7 +412,7 @@ const styles = StyleSheet.create({
   // above the dots even when a slide's 3-line body runs to its full length.
   bottomCluster: {
     width: '100%',
-    gap: Spacing.xl,
+    gap: Spacing.lg + 4,
     paddingTop: Spacing.xl,
   },
   dots: {

@@ -5,14 +5,15 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { HEADER_ICON_SIZE } from '@/components/ui/HeaderIconButton';
 import { Icon, type IconName } from '@/components/ui/Icon';
-import { Avatar } from '@/components/ui/primitives';
+// Partner avatar + name are hidden in the header for now (see below).
+// import { Avatar } from '@/components/ui/primitives';
 import { useMinuteTick } from '@/hooks/useMinuteTick';
 import { useNotifications, useUnreadNotificationCount } from '@/hooks/queries';
 import { useOpenPartnerProfile } from '@/hooks/useOpenPartnerProfile';
 import { usePartnerPresence } from '@/hooks/usePartnerPresence';
 import { useTheme } from '@/hooks/useTheme';
 import { formatBadgeCount } from '@/lib/format-badge';
-import { getFirstName } from '@/lib/avatar-initial';
+// import { getFirstName } from '@/lib/avatar-initial';
 import { formatDistanceApart, haversineDistanceKm } from '@/lib/distance';
 import { hasValidCoords } from '@/lib/location';
 import { openCalendar } from '@/lib/router';
@@ -74,12 +75,13 @@ export function AppHeader({ showPlan = true }: AppHeaderProps) {
     location: distanceApart,
     clock: partnerClock,
   });
+  // const partnerFirstName = getFirstName(partner?.name);
 
   return (
     <View style={[styles.header, { paddingTop: insets.top + 6, backgroundColor: colors.background }]}>
       <View style={[styles.side, styles.left]}>
         {showPlan ? (
-          <HeaderIconButton icon="calendar" label="Open Plan" onPress={() => openCalendar()} />
+          <HeaderIconButton icon="calendar" label="Open Together" onPress={() => openCalendar()} />
         ) : (
           <View style={styles.iconSlot} />
         )}
@@ -94,14 +96,21 @@ export function AppHeader({ showPlan = true }: AppHeaderProps) {
         accessibilityRole="button"
         accessibilityLabel={partner ? `View ${partner.name ?? 'partner'} profile` : APP_NAME}>
         {partner ? (
+          // Paired: only the distance/clock line — no app name, avatar or partner name.
           <View style={styles.centerRow}>
+            {/* Hidden for now — kept to bring back easily:
             <Avatar name={partner.name} imageUrl={partner.avatar_url} size={34} />
+            */}
             <View style={styles.centerText}>
-              <Text style={[styles.title, { color: colors.text }]} numberOfLines={1}>
-                {getFirstName(partner.name) ?? APP_NAME}
-              </Text>
+              {/* Hidden for now — partner's first name above the distance/clock line:
+              {partnerFirstName ? (
+                <Text style={[styles.title, { color: colors.text }]} numberOfLines={1}>
+                  {partnerFirstName}
+                </Text>
+              ) : null}
+              */}
               {metaLine ? (
-                <Text style={[styles.meta, { color: colors.textSecondary }]} numberOfLines={1}>
+                <Text style={[styles.title, { color: colors.text }]} numberOfLines={1}>
                   {metaLine}
                 </Text>
               ) : null}

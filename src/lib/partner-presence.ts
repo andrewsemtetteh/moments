@@ -34,7 +34,7 @@ type ManagedPresence = {
 };
 
 const managedByRelationship = new Map<string, ManagedPresence>();
-const TOUCH_MIN_MS = 60_000;
+const TOUCH_MIN_MS = 5 * 60_000;
 
 function isPartnerPresent(state: Record<string, PresencePayload[]>, partnerId: string): boolean {
   return Object.values(state).some((presences) =>
@@ -99,10 +99,20 @@ function resyncAllOnForeground() {
   });
 }
 
+// Stamp last-seen as the user leaves so the periodic touch can stay infrequent.
+function touchAllOnBackground() {
+  managedByRelationship.forEach((entry) => {
+    if (!entry.shareOnlineStatus) return;
+    entry.lastTouchAt = 0;
+    void touchLastSeenDb(entry.userId, entry);
+  });
+}
+
 function ensureAppStateListener() {
   if (appStateSubscription) return;
   appStateSubscription = AppState.addEventListener('change', (state) => {
     if (state === 'active') resyncAllOnForeground();
+    else if (state === 'background') touchAllOnBackground();
   });
 }
 

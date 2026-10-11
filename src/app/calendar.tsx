@@ -21,7 +21,22 @@ import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-nati
 import Animated, { FadeIn, LinearTransition } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
 import { CreatePlanFlow, type CreatePlanPayload } from '@/components/calendar/plan/CreatePlanFlow';
+import {
+  HowWasItSheet,
+  MemoryDetailSheet,
+  MemoryEditorSheet,
+  memoryPhotos,
+  type MemoryDraft,
+} from '@/components/calendar/plan/MemorySheets';
+import { PlanDayView, ownerColor } from '@/components/calendar/plan/PlanDayView';
+import {
+  PlanMemoriesTab,
+  buildSuggestions,
+  type MemorySuggestion,
+} from '@/components/calendar/plan/PlanMemoriesTab';
 import { EventDetailsSheet } from '@/components/calendar/plan/EventDetailsSheet';
 import { PlanAgendaList } from '@/components/calendar/plan/PlanAgendaList';
 import { PlanListSheet } from '@/components/calendar/plan/PlanListSheet';
@@ -29,11 +44,16 @@ import { PlanMonthGrid, PlanWeekStrip } from '@/components/calendar/plan/PlanWee
 import { PlanToolbar } from '@/components/calendar/plan/PlanToolbar';
 import { ScreenHeader } from '@/components/layout/ScreenHeader';
 import { Icon } from '@/components/ui/Icon';
-import { EVENT_TYPE_META, getEventTypeColors } from '@/constants/calendar-events';
+import { getEventTypeColors } from '@/constants/calendar-events';
 import { Radius } from '@/constants/design-system';
 import {
+  useDayNotes,
+  useMemoryEntries,
+  useMoments,
   usePlanCalendarEvents,
   useRealtimeSubscription,
+  useRecentFinishedPlans,
+  useStreak,
   useUpcomingCalendarEvents,
 } from '@/hooks/queries';
 import { useTheme } from '@/hooks/useTheme';
@@ -44,16 +64,28 @@ import {
   syncChecklistIntoList,
   type PlanList,
 } from '@/lib/plan-local';
+import { getFirstName } from '@/lib/avatar-initial';
+import { filterMediaMoments } from '@/lib/moment-display';
+import { groupMomentsIntoPlaces, useMomentPlaces } from '@/lib/moment-places';
+import {
+  displayTitle,
+  freeTogetherWindow,
+  matchesOwnerFilter,
+  planOwner,
+  type OwnerFilter,
+} from '@/lib/plan-day';
 import {
   parsePlanMeta,
-  planKindEmoji,
+  planIcon,
   serializePlanMeta,
+  type MemoryType,
   type PlanKindKey,
+  type PlanMeta,
 } from '@/lib/plan-meta';
 import { getErrorMessage } from '@/lib/network-error';
 import { closeStackScreen } from '@/lib/router';
 import * as api from '@/services/api';
-import { useRelationshipStore } from '@/stores';
+import { useAuthStore, useRelationshipStore } from '@/stores';
 import type { CalendarEvent } from '@/types/database';
 
 function monthKey(day: Date) {
@@ -88,14 +120,31 @@ function countdownLabel(at: Date) {
 }
 
 const COMING_UP_LIMIT = 3;
+/** "How was it?" waits until an hour after the plan started. */
+const REVIEW_AFTER_MS = 60 * 60 * 1000;
+
+const dismissedKey = (relationshipId: string) => `memory-suggestions-dismissed:${relationshipId}`;
+
+function memoryTypeForPlan(kind: PlanKindKey | undefined): MemoryType {
+  if (kind === 'trip') return 'trip';
+  if (kind === 'celebration') return 'celebration';
+  if (kind === 'date' || kind === 'outing') return 'date';
+  return 'justus';
+}
 
 export default function CalendarScreen() {
   const { create } = useLocalSearchParams<{ create?: string }>();
   const insets = useSafeAreaInsets();
   const closePlan = useCallback(() => closeStackScreen(router), []);
   const relationship = useRelationshipStore((s) => s.relationship);
+  const partner = useRelationshipStore((s) => s.partner);
+  const me = useAuthStore((s) => s.user);
   const queryClient = useQueryClient();
   const { colors } = useTheme();
+  const partnerName = getFirstName(partner?.name) ?? 'Partner';
+
+  const [tab, setTab] = useState<'upcoming' | 'memories'>('upcoming');
+  const [ownerFilter, setOwnerFilter] = useState<OwnerFilter>('all');
 
   const [mode, setMode] = useState<'week' | 'month'>('week');
   const [selectedDate, setSelectedDate] = useState(() => startOfDay(new Date()));
@@ -134,7 +183,7 @@ export default function CalendarScreen() {
   }, [relationship]);
 
   const {
-    data: planEvents = [],
+    data: rawPlanEvents = [],
     isError,
     error,
     refetch,
@@ -142,9 +191,63 @@ export default function CalendarScreen() {
   } = usePlanCalendarEvents(currentMonth);
   useRealtimeSubscription('calendar_events');
 
+  // "Whose plans" chips filter the dots, the day and Coming up alike.
+  const planEvents = useMemo(
+    () => rawPlanEvents.filter((e) => matchesOwnerFilter(e, ownerFilter, me?.id)),
+    [rawPlanEvents, ownerFilter, me?.id],
+  );
+
+  // ── Memories & day notes (same synced table, see plan-meta `entry`) ──
+  const { data: memories = [] } = useMemoryEntries();
+  const { data: dayNotes = [] } = useDayNotes(selectedDate);
+  const { data: finishedPlans = [] } = useRecentFinishedPlans();
+  const { data: streak } = useStreak();
+  const { data: momentPages } = useMoments();
+  const allMoments = useMemo(() => filterMediaMoments(momentPages?.pages.flat() ?? []), [momentPages]);
+  const momentsById = useMemo(() => new Map(allMoments.map((m) => [m.id, m])), [allMoments]);
+  const { store: placesStore } = useMomentPlaces();
+  const placeNames = useMemo(
+    () =>
+      groupMomentsIntoPlaces(allMoments, placesStore)
+        .filter((p) => p.name)
+        .map((p) => `${p.name!.emoji} ${p.name!.name}`),
+    [allMoments, placesStore],
+  );
+
+  const myNote = dayNotes.find((n) => parsePlanMeta(n.description).owner === me?.id) ?? null;
+  const partnerNote = dayNotes.find((n) => {
+    const owner = parsePlanMeta(n.description).owner;
+    return !!owner && owner !== me?.id;
+  }) ?? null;
+
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [editorKey, setEditorKey] = useState(0);
+  const [editorInitial, setEditorInitial] = useState<MemoryDraft | null>(null);
+  const [editingMemory, setEditingMemory] = useState<CalendarEvent | null>(null);
+  const [openMemory, setOpenMemory] = useState<CalendarEvent | null>(null);
+  const [savingMemory, setSavingMemory] = useState(false);
+  const [skippedReviews, setSkippedReviews] = useState<string[]>([]);
+  const [dismissedSuggestions, setDismissedSuggestions] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (!relationship?.id) return;
+    void AsyncStorage.getItem(dismissedKey(relationship.id))
+      .then((raw) => setDismissedSuggestions(new Set(raw ? (JSON.parse(raw) as string[]) : [])))
+      .catch(() => undefined);
+  }, [relationship?.id]);
+
+  const suggestions = useMemo(
+    () => buildSuggestions(allMoments, memories, dismissedSuggestions),
+    [allMoments, memories, dismissedSuggestions],
+  );
+
   const dayEvents = useMemo(
     () => eventsForDay(planEvents, selectedDate),
     [planEvents, selectedDate],
+  );
+  const allDayEvents = useMemo(
+    () => eventsForDay(rawPlanEvents, selectedDate),
+    [rawPlanEvents, selectedDate],
   );
 
   // Captured once per open — Plan is a stack screen that remounts every time
@@ -157,10 +260,36 @@ export default function CalendarScreen() {
   const comingUp = useMemo(
     () =>
       upcomingEvents
+        .filter((e) => matchesOwnerFilter(e, ownerFilter, me?.id))
         .filter((e) => new Date(e.date_time).getTime() >= openedAt)
         .filter((e) => !isSameDay(new Date(e.date_time), selectedDate))
         .slice(0, COMING_UP_LIMIT),
-    [upcomingEvents, selectedDate, openedAt],
+    [upcomingEvents, selectedDate, openedAt, ownerFilter, me?.id],
+  );
+
+  const freeLabel = useMemo(() => {
+    if (!partner) return null;
+    if (startOfDay(selectedDate).getTime() < startOfDay(openedAt).getTime()) return null;
+    return freeTogetherWindow(allDayEvents, selectedDate, new Date(openedAt))?.label ?? null;
+  }, [partner, allDayEvents, selectedDate, openedAt]);
+
+  // The day after a plan: "How was it?" — once per plan per person.
+  const reviewPlan = useMemo(() => {
+    if (!me) return null;
+    return (
+      finishedPlans.find((p) => {
+        const meta = parsePlanMeta(p.description);
+        if (meta.reviewedBy?.includes(me.id) || skippedReviews.includes(p.id)) return false;
+        const owner = planOwner(p);
+        if (owner !== 'together' && owner !== me.id) return false;
+        return new Date(p.date_time).getTime() + REVIEW_AFTER_MS <= openedAt;
+      }) ?? null
+    );
+  }, [finishedPlans, me, skippedReviews, openedAt]);
+  const reviewDayMoments = useMemo(
+    () =>
+      reviewPlan ? allMoments.filter((m) => isSameDay(new Date(m.created_at), new Date(reviewPlan.date_time))) : [],
+    [reviewPlan, allMoments],
   );
 
   const activeList = useMemo(
@@ -337,6 +466,227 @@ export default function CalendarScreen() {
     }
   };
 
+  const saveDescription = async (event: CalendarEvent, patch: Partial<PlanMeta>) => {
+    const meta = parsePlanMeta(event.description);
+    const updated = await api.updateCalendarEvent(event.id, {
+      description: serializePlanMeta({ ...meta, ...patch, v: 1 }),
+    });
+    void invalidate();
+    return updated;
+  };
+
+  const momentPhotoUrlsFor = (ids: string[]) =>
+    Object.fromEntries(
+      ids.map((id) => [id, momentsById.get(id)?.media_url]).filter(([, u]) => !!u),
+    ) as Record<string, string>;
+
+  const createMemory = async (draft: MemoryDraft, extra: Partial<PlanMeta> = {}) => {
+    if (!relationship || !me) return;
+    const at = new Date(draft.date);
+    at.setHours(12, 0, 0, 0);
+    await api.createCalendarEvent(relationship.id, {
+      title: draft.title,
+      date_time: at.toISOString(),
+      type: 'custom',
+      source: 'manual',
+      description: serializePlanMeta({
+        v: 1,
+        entry: 'memory',
+        memoryType: draft.memoryType,
+        momentIds: draft.momentIds,
+        momentPhotoUrls: momentPhotoUrlsFor(draft.momentIds),
+        photoUrls: draft.photoUrls,
+        placeName: draft.placeName || undefined,
+        notes: draft.note || undefined,
+        createdBy: me.id,
+        ...extra,
+      }),
+    });
+    void invalidate();
+  };
+
+  const saveMemoryDraft = async (draft: MemoryDraft) => {
+    setSavingMemory(true);
+    try {
+      if (editingMemory) {
+        const at = new Date(draft.date);
+        at.setHours(12, 0, 0, 0);
+        const meta = parsePlanMeta(editingMemory.description);
+        const updated = await api.updateCalendarEvent(editingMemory.id, {
+          title: draft.title,
+          date_time: at.toISOString(),
+          description: serializePlanMeta({
+            ...meta,
+            v: 1,
+            memoryType: draft.memoryType,
+            momentIds: draft.momentIds,
+            momentPhotoUrls: { ...meta.momentPhotoUrls, ...momentPhotoUrlsFor(draft.momentIds) },
+            photoUrls: draft.photoUrls,
+            placeName: draft.placeName || undefined,
+            notes: draft.note || undefined,
+          }),
+        });
+        setOpenMemory(updated);
+        void invalidate();
+      } else {
+        await createMemory(draft);
+      }
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setEditorOpen(false);
+      setEditingMemory(null);
+    } catch (e) {
+      Alert.alert('Could not save memory', getErrorMessage(e) ?? 'Please try again.');
+    } finally {
+      setSavingMemory(false);
+    }
+  };
+
+  const openNewMemory = (initial: MemoryDraft | null = null) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setEditingMemory(null);
+    setEditorInitial(initial);
+    setEditorKey((k) => k + 1);
+    setEditorOpen(true);
+  };
+
+  const editMemory = (entry: CalendarEvent) => {
+    const meta = parsePlanMeta(entry.description);
+    setOpenMemory(null);
+    setEditingMemory(entry);
+    setEditorInitial({
+      title: entry.title,
+      date: startOfDay(new Date(entry.date_time)),
+      memoryType: meta.memoryType ?? 'justus',
+      momentIds: meta.momentIds ?? [],
+      photoUrls: meta.photoUrls ?? [],
+      placeName: meta.placeName ?? '',
+      note: meta.notes ?? '',
+    });
+    setEditorKey((k) => k + 1);
+    setEditorOpen(true);
+  };
+
+  const deleteMemory = async (entry: CalendarEvent) => {
+    try {
+      await api.deleteCalendarEvent(entry.id);
+      setOpenMemory(null);
+      void invalidate();
+    } catch (e) {
+      Alert.alert('Could not delete', getErrorMessage(e) ?? 'Please try again.');
+    }
+  };
+
+  const reactToMemory = async (entry: CalendarEvent, emoji: string) => {
+    if (!me) return;
+    const reactions = { ...parsePlanMeta(entry.description).reactions };
+    if (reactions[me.id] === emoji) delete reactions[me.id];
+    else reactions[me.id] = emoji;
+    try {
+      setOpenMemory(await saveDescription(entry, { reactions }));
+    } catch {
+      /* the next refresh shows the real state */
+    }
+  };
+
+  const acceptSuggestion = (sug: MemorySuggestion) =>
+    openNewMemory({
+      title: '',
+      date: sug.date,
+      memoryType: 'justus',
+      momentIds: sug.moments.filter((m) => m.type === 'photo').slice(0, 8).map((m) => m.id),
+      photoUrls: [],
+      placeName: '',
+      note: '',
+    });
+
+  const dismissSuggestion = (sug: MemorySuggestion) => {
+    if (!relationship) return;
+    const next = new Set(dismissedSuggestions).add(sug.key);
+    setDismissedSuggestions(next);
+    void AsyncStorage.setItem(dismissedKey(relationship.id), JSON.stringify([...next])).catch(() => undefined);
+  };
+
+  const saveMyNote = async (text: string) => {
+    if (!relationship || !me) return;
+    try {
+      if (myNote && !text) {
+        await api.deleteCalendarEvent(myNote.id);
+      } else if (myNote) {
+        await saveDescription(myNote, { notes: text });
+      } else if (text) {
+        await api.createCalendarEvent(relationship.id, {
+          title: 'My day',
+          date_time: new Date().toISOString(),
+          type: 'custom',
+          source: 'manual',
+          description: serializePlanMeta({ v: 1, entry: 'dayNote', owner: me.id, notes: text }),
+        });
+      }
+      void invalidate();
+    } catch (e) {
+      Alert.alert('Could not save', getErrorMessage(e) ?? 'Please try again.');
+    }
+  };
+
+  const cheerPartner = async (note: CalendarEvent, cheer: string) => {
+    if (!me) return;
+    try {
+      await saveDescription(note, { reactions: { ...parsePlanMeta(note.description).reactions, [me.id]: cheer } });
+    } catch {
+      /* non-blocking */
+    }
+  };
+
+  const markReviewed = async (plan: CalendarEvent) => {
+    if (!me) return;
+    setSkippedReviews((s) => [...s, plan.id]);
+    const meta = parsePlanMeta(plan.description);
+    try {
+      await saveDescription(plan, { reviewedBy: [...(meta.reviewedBy ?? []), me.id] });
+    } catch {
+      /* it'll ask again next time — harmless */
+    }
+  };
+
+  const saveReview = async (input: { rating: string | null; momentIds: string[]; note: string }) => {
+    if (!reviewPlan || !me) return;
+    setSavingMemory(true);
+    try {
+      const planMeta = parsePlanMeta(reviewPlan.description);
+      const existing = memories.find((m) => parsePlanMeta(m.description).fromPlanId === reviewPlan.id);
+      if (existing) {
+        // Your partner already saved it — add your rating and photos to theirs.
+        const meta = parsePlanMeta(existing.description);
+        const momentIds = [...new Set([...(meta.momentIds ?? []), ...input.momentIds])];
+        await saveDescription(existing, {
+          ratings: input.rating ? { ...meta.ratings, [me.id]: input.rating } : meta.ratings,
+          momentIds,
+          momentPhotoUrls: { ...meta.momentPhotoUrls, ...momentPhotoUrlsFor(input.momentIds) },
+          notes: meta.notes || input.note || undefined,
+        });
+      } else {
+        await createMemory(
+          {
+            title: reviewPlan.title,
+            date: startOfDay(new Date(reviewPlan.date_time)),
+            memoryType: memoryTypeForPlan(planMeta.kind),
+            momentIds: input.momentIds,
+            photoUrls: [],
+            placeName: planMeta.location ?? '',
+            note: input.note,
+          },
+          { fromPlanId: reviewPlan.id, ratings: input.rating ? { [me.id]: input.rating } : undefined },
+        );
+      }
+      await markReviewed(reviewPlan);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (e) {
+      Alert.alert('Could not save', getErrorMessage(e) ?? 'Please try again.');
+    } finally {
+      setSavingMemory(false);
+    }
+  };
+
   const cardBorder = {
     borderColor: colors.border,
     borderWidth: colors.boldBorder ? 2 : StyleSheet.hairlineWidth,
@@ -346,12 +696,85 @@ export default function CalendarScreen() {
     <View style={[styles.flex, { backgroundColor: colors.background }]}>
       {/* Plan slides in from the left (its icon sits top-left on Home), so it
           closes toward the left: chevron on the right, or swipe left. */}
-      <ScreenHeader title="Plan" onClose={closePlan} />
+      <ScreenHeader title="Together" onClose={closePlan} />
+
+      <View style={[styles.tabs, { backgroundColor: colors.surface }]}>
+        {(['upcoming', 'memories'] as const).map((key) => {
+          const on = tab === key;
+          return (
+            <Pressable
+              key={key}
+              onPress={() => {
+                Haptics.selectionAsync();
+                setTab(key);
+              }}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: on }}
+              style={[styles.tabBtn, on && { backgroundColor: colors.text }]}>
+              <Text style={[styles.tabText, { color: on ? colors.background : colors.textSecondary }]}>
+                {key === 'upcoming' ? 'Plan' : 'Memories'}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
 
       <ScrollView
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
-        contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 120 }]}>
+        contentContainerStyle={[
+          styles.scroll,
+          { paddingBottom: insets.bottom + 120 },
+          tab === 'memories' && styles.scrollFill,
+        ]}>
+        {tab === 'memories' ? (
+          <PlanMemoriesTab
+            memories={memories}
+            momentsById={momentsById}
+            suggestions={suggestions}
+            anniversaryDate={relationship?.anniversary_date}
+            currentStreak={streak?.current_streak ?? 0}
+            onOpen={setOpenMemory}
+            onAcceptSuggestion={acceptSuggestion}
+            onDismissSuggestion={dismissSuggestion}
+          />
+        ) : (
+        <>
+        {partner ? (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.ownerChipsScroll}
+            contentContainerStyle={styles.ownerChips}>
+            {(
+              [
+                { key: 'all', label: 'All', dot: null },
+                { key: 'together', label: 'Together', dot: ownerColor('together', me?.id, colors) },
+                { key: 'me', label: 'Me', dot: ownerColor(me?.id ?? 'me', me?.id, colors) },
+                { key: 'partner', label: partnerName, dot: ownerColor('partner', me?.id, colors) },
+              ] as const
+            ).map((c) => {
+              const on = ownerFilter === c.key;
+              return (
+                <Pressable
+                  key={c.key}
+                  onPress={() => {
+                    Haptics.selectionAsync();
+                    setOwnerFilter(c.key);
+                  }}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: on }}
+                  style={[styles.ownerChip, { backgroundColor: on ? colors.text : colors.surface }]}>
+                  {c.dot ? <View style={[styles.ownerDot, { backgroundColor: c.dot }]} /> : null}
+                  <Text style={[styles.ownerChipText, { color: on ? colors.background : colors.text }]} numberOfLines={1}>
+                    {c.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        ) : null}
+
         {/* One card for the whole calendar; LinearTransition animates its height
             when the month label expands the week strip into the full month. */}
         <Animated.View
@@ -419,6 +842,21 @@ export default function CalendarScreen() {
             <View style={styles.empty}>
               <Text style={[styles.emptyBody, { color: colors.textSecondary }]}>Loading plans…</Text>
             </View>
+          ) : partner ? (
+            <PlanDayView
+              day={selectedDate}
+              isTodaySelected={isToday(selectedDate)}
+              events={dayEvents}
+              me={me ?? null}
+              partner={partner}
+              myNote={myNote}
+              partnerNote={partnerNote}
+              freeLabel={freeLabel}
+              onPressEvent={(event) => setDetailEvent(event)}
+              onPlanFree={() => openCreate(undefined, false)}
+              onSaveMyNote={(text) => void saveMyNote(text)}
+              onCheer={(note, cheer) => void cheerPartner(note, cheer)}
+            />
           ) : (
             <PlanAgendaList
               events={dayEvents}
@@ -437,7 +875,7 @@ export default function CalendarScreen() {
               {comingUp.map((event, i) => {
                 const at = new Date(event.date_time);
                 const tc = getEventTypeColors(event.type, colors);
-                const emoji = planKindEmoji(event) ?? EVENT_TYPE_META[event.type]?.emoji ?? '📌';
+                const icon = planIcon(event);
                 return (
                   <Pressable
                     key={event.id}
@@ -453,11 +891,11 @@ export default function CalendarScreen() {
                     accessibilityRole="button"
                     accessibilityLabel={`${event.title}, ${countdownLabel(at)}`}>
                     <View style={[styles.upcomingBadge, { backgroundColor: tc.soft }]}>
-                      <Text style={styles.upcomingEmoji}>{emoji}</Text>
+                      <Icon name={icon} size={18} color={tc.main} />
                     </View>
                     <View style={styles.flexShrink}>
                       <Text style={[styles.upcomingTitle, { color: colors.text }]} numberOfLines={1}>
-                        {event.title}
+                        {displayTitle(event, me?.id)}
                       </Text>
                       <Text style={[styles.upcomingWhen, { color: tc.main }]} numberOfLines={1}>
                         {countdownLabel(at)}
@@ -470,14 +908,16 @@ export default function CalendarScreen() {
             </View>
           </Animated.View>
         ) : null}
+        </>
+        )}
       </ScrollView>
 
       {/* Primary action as a floating button, thumb-reachable bottom-right —
           the same gradient treatment as the tab bar's create button. */}
       <Pressable
-        onPress={() => openCreate(undefined, false)}
+        onPress={() => (tab === 'memories' ? openNewMemory() : openCreate(undefined, false))}
         accessibilityRole="button"
-        accessibilityLabel="Add a plan"
+        accessibilityLabel={tab === 'memories' ? 'Add a memory' : 'Add a plan'}
         style={({ pressed }) => [
           styles.fab,
           { bottom: insets.bottom + 20 },
@@ -503,6 +943,45 @@ export default function CalendarScreen() {
         onClose={() => setCreateOpen(false)}
         onSave={createEvent}
         saving={saving}
+        meId={me?.id}
+        partnerName={partner ? partnerName : undefined}
+      />
+
+      <MemoryEditorSheet
+        key={editorKey}
+        visible={editorOpen}
+        initial={editorInitial}
+        recentMoments={allMoments}
+        placeNames={placeNames}
+        saving={savingMemory}
+        onUploadPhoto={(uri) =>
+          api.uploadMomentMedia(`${relationship?.id}/${me?.id}/memory-${Date.now()}.jpg`, uri, 'image/jpeg')
+        }
+        onClose={() => {
+          setEditorOpen(false);
+          setEditingMemory(null);
+        }}
+        onSave={(draft) => void saveMemoryDraft(draft)}
+      />
+
+      <MemoryDetailSheet
+        entry={openMemory}
+        photos={openMemory ? memoryPhotos(openMemory, momentsById) : []}
+        me={me ?? null}
+        partner={partner}
+        onClose={() => setOpenMemory(null)}
+        onReact={(emoji) => openMemory && void reactToMemory(openMemory, emoji)}
+        onEdit={() => openMemory && editMemory(openMemory)}
+        onDelete={() => openMemory && void deleteMemory(openMemory)}
+      />
+
+      <HowWasItSheet
+        key={reviewPlan?.id ?? 'none'}
+        plan={editorOpen || openMemory || createOpen || detailEvent ? null : reviewPlan}
+        dayMoments={reviewDayMoments}
+        saving={savingMemory}
+        onSave={(input) => void saveReview(input)}
+        onSkip={() => reviewPlan && void markReviewed(reviewPlan)}
       />
 
       <EventDetailsSheet
@@ -583,6 +1062,24 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   flexShrink: { flex: 1, minWidth: 0 },
   scroll: { paddingHorizontal: 16, gap: 24 },
+  scrollFill: { flexGrow: 1 },
+  tabs: { flexDirection: 'row', marginHorizontal: 16, marginBottom: 14, padding: 4, borderRadius: 999 },
+  tabBtn: { flex: 1, height: 36, borderRadius: 999, alignItems: 'center', justifyContent: 'center' },
+  tabText: { fontSize: 15, fontWeight: '800' },
+  // Plan's "whose plans" filter, as in the design: one sideways row of pills
+  // (7×12 padding, 14pt bold, 8pt color dot), full-bleed to the screen edges.
+  ownerChipsScroll: { flexGrow: 0, marginHorizontal: -16, marginBottom: -10 },
+  ownerChips: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16 },
+  ownerChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 999,
+  },
+  ownerDot: { width: 8, height: 8, borderRadius: 4 },
+  ownerChipText: { fontSize: 14, fontWeight: '700' },
   calendarCard: {
     borderRadius: Radius.xl,
     paddingHorizontal: 12,

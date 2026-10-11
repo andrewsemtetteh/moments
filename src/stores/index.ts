@@ -74,9 +74,11 @@ interface UIState {
   momentHistoryReturnToCamera: boolean;
   momentViewer: MomentViewerState | null;
   momentHistoryScrollY: number;
+  /** Album open inside Moment history — kept here so it survives a round trip through the viewer. */
+  momentHistoryAlbumId: string | null;
+  /** "Our map" open inside Moment history — survives a round trip through the viewer. */
+  momentHistoryMapOpen: boolean;
   showWrapped: boolean;
-  showMomentRecapVideo: boolean;
-  recapVideoMoments: Moment[] | null;
   showMoodHistory: boolean;
   showPaywall: boolean;
   showPartnerProfile: boolean;
@@ -94,6 +96,8 @@ interface UIState {
   setShowMomentHistory: (show: boolean) => void;
   setMomentHistoryReturnToCamera: (returnToCamera: boolean) => void;
   setMomentHistoryScrollY: (y: number) => void;
+  setMomentHistoryAlbumId: (id: string | null) => void;
+  setMomentHistoryMapOpen: (open: boolean) => void;
   openMomentViewer: (
     moments: Moment[],
     startIndex?: number,
@@ -108,8 +112,6 @@ interface UIState {
   ) => void;
   closeMomentViewer: () => void;
   setShowWrapped: (show: boolean) => void;
-  openMomentRecapVideo: (moments: Moment[]) => void;
-  closeMomentRecapVideo: () => void;
   setShowMoodHistory: (show: boolean) => void;
   setChatDraft: (draft: string | null) => void;
   setChatMomentReply: (reply: MomentReplyContext | null) => void;
@@ -141,9 +143,9 @@ export const useUIStore = create<UIState>((set) => ({
   momentHistoryReturnToCamera: false,
   momentViewer: null,
   momentHistoryScrollY: 0,
+  momentHistoryAlbumId: null,
+  momentHistoryMapOpen: false,
   showWrapped: false,
-  showMomentRecapVideo: false,
-  recapVideoMoments: null,
   showMoodHistory: false,
   showPaywall: false,
   showPartnerProfile: false,
@@ -164,6 +166,8 @@ export const useUIStore = create<UIState>((set) => ({
   setShowMomentHistory: (showMomentHistory) => set({ showMomentHistory }),
   setMomentHistoryReturnToCamera: (momentHistoryReturnToCamera) => set({ momentHistoryReturnToCamera }),
   setMomentHistoryScrollY: (momentHistoryScrollY) => set({ momentHistoryScrollY }),
+  setMomentHistoryAlbumId: (momentHistoryAlbumId) => set({ momentHistoryAlbumId }),
+  setMomentHistoryMapOpen: (momentHistoryMapOpen) => set({ momentHistoryMapOpen }),
   openMomentViewer: (moments, startIndex = 0, options) => {
     const playback = options?.playback ?? 'story';
     const applyHomeWindow = options?.homeWindowOnly ?? playback === 'story';
@@ -193,8 +197,6 @@ export const useUIStore = create<UIState>((set) => ({
         : state.showPartnerProfile,
     })),
   setShowWrapped: (showWrapped) => set({ showWrapped }),
-  openMomentRecapVideo: (moments) => set({ recapVideoMoments: moments, showMomentRecapVideo: true }),
-  closeMomentRecapVideo: () => set({ recapVideoMoments: null, showMomentRecapVideo: false }),
   setShowMoodHistory: (showMoodHistory) => set({ showMoodHistory }),
   setChatDraft: (chatDraft) => set({ chatDraft }),
   setChatMomentReply: (chatMomentReply) => set({ chatMomentReply }),
