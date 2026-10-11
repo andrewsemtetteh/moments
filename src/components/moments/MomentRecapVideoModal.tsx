@@ -2,7 +2,7 @@ import * as Haptics from 'expo-haptics';
 import { Suspense, lazy, useEffect, useRef, useState } from 'react';
 import {
     ActivityIndicator,
-    Modal,
+    BackHandler,
     Pressable,
     StyleSheet,
     Text,
@@ -72,15 +72,25 @@ export function MomentRecapVideoModal() {
     })();
   }, [visible, moments]);
 
-  if (!visible || !moments?.length) return null;
-
-  const slideCount = moments.filter((moment) => moment.media_url).length;
-  const durationLabel = `${Math.round(getRecapVideoDurationSeconds(slideCount))}s`;
-
   const close = () => {
     generationRef.current += 1;
     closeMomentRecapVideo();
   };
+
+  useEffect(() => {
+    if (!visible) return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      close();
+      return true;
+    });
+    return () => sub.remove();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible]);
+
+  if (!visible || !moments?.length) return null;
+
+  const slideCount = moments.filter((moment) => moment.media_url).length;
+  const durationLabel = `${Math.round(getRecapVideoDurationSeconds(slideCount))}s`;
 
   const handleSave = async () => {
     if (!videoUri || saving) return;
@@ -99,7 +109,6 @@ export function MomentRecapVideoModal() {
     progress && progress.total > 0 ? Math.min(1, progress.current / progress.total) : 0;
 
   return (
-    <Modal visible animationType="slide" presentationStyle="fullScreen" onRequestClose={close}>
       <View style={[styles.root, { backgroundColor: colors.background, paddingTop: insets.top }]}>
         <View style={styles.header}>
           <Pressable onPress={close} hitSlop={12} style={styles.headerIcon} accessibilityLabel="Close">
@@ -167,7 +176,6 @@ export function MomentRecapVideoModal() {
           </Suspense>
         ) : null}
       </View>
-    </Modal>
   );
 }
 

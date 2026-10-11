@@ -24,40 +24,77 @@ import {
   type LayoutChangeEvent,
 } from 'react-native';
 
+import type { ThemeColors } from '@/constants/design-system';
+import { getEventTypeColors } from '@/constants/calendar-events';
 import { useTheme } from '@/hooks/useTheme';
 import type { CalendarEvent } from '@/types/database';
 
 const WEEK_STARTS_ON = 0 as const;
-/** Shared selected-day circle size for week + month. */
-const DAY_SIZE = 40;
+/** Shared day-circle size for week + month, so toggling doesn't shift the selection. */
+const DAY_SIZE = 38;
+const MAX_DOTS = 3;
 
-function weekKey(anchor: Date) {
-  return format(startOfWeek(anchor, { weekStartsOn: WEEK_STARTS_ON }), 'yyyy-MM-dd');
+function dayKey(day: Date) {
+  return format(day, 'yyyy-MM-dd');
 }
 
-function DayCircle({
+/**
+ * One dot per distinct plan *type* on a day (date, anniversary, trip…), in
+ * that type's color, capped at three — so a glance at the week shows what
+ * kind of plans are coming, not just that something exists.
+ */
+function useEventDots(events: CalendarEvent[], colors: ThemeColors) {
+  return useMemo(() => {
+    const map = new Map<string, string[]>();
+    const sorted = [...events].sort(
+      (a, b) => new Date(a.date_time).getTime() - new Date(b.date_time).getTime(),
+    );
+    for (const e of sorted) {
+      const key = dayKey(new Date(e.date_time));
+      const color = getEventTypeColors(e.type, colors).main;
+      const list = map.get(key) ?? [];
+      if (!list.includes(color) && list.length < MAX_DOTS) list.push(color);
+      map.set(key, list);
+    }
+    return map;
+  }, [events, colors]);
+}
+
+function DayCell({
   day,
   selected,
   muted,
-  hasEvents,
+  dots,
   onPress,
 }: {
   day: Date;
   selected: boolean;
   muted?: boolean;
-  hasEvents: boolean;
+  dots: string[];
   onPress: () => void;
 }) {
   const { colors } = useTheme();
   const today = isToday(day);
 
   return (
-    <Pressable onPress={onPress} hitSlop={6} style={styles.dayInner} accessibilityRole="button">
+    <Pressable
+      onPress={() => {
+        Haptics.selectionAsync();
+        onPress();
+      }}
+      hitSlop={4}
+      style={styles.dayInner}
+      accessibilityRole="button"
+      accessibilityState={{ selected }}
+      accessibilityLabel={`${format(day, 'EEEE, MMMM d')}${dots.length ? ', has plans' : ''}`}>
       <View
         style={[
           styles.circle,
-          selected && { backgroundColor: colors.accent },
-          !selected && today && { borderWidth: 1.5, borderColor: colors.accent },
+          selected
+            ? { backgroundColor: colors.accent }
+            : today
+              ? { backgroundColor: colors.accentSoft }
+              : null,
         ]}>
         <Text
           style={[
@@ -65,23 +102,22 @@ function DayCircle({
             {
               color: selected
                 ? colors.onAccent
-                : muted
-                  ? colors.textTertiary
-                  : colors.text,
-              fontWeight: selected || today ? '700' : '500',
+                : today
+                  ? colors.accent
+                  : muted
+                    ? colors.textTertiary
+                    : colors.text,
+              fontWeight: selected || today ? '800' : '500',
             },
           ]}>
           {format(day, 'd')}
         </Text>
       </View>
-      <View
-        style={[
-          styles.underMark,
-          selected
-            ? { backgroundColor: colors.accent, width: 6, height: 6, borderRadius: 3 }
-            : { backgroundColor: hasEvents ? colors.accent : 'transparent' },
-        ]}
-      />
+      <View style={styles.dots}>
+        {dots.map((color) => (
+          <View key={color} style={[styles.dot, { backgroundColor: color, opacity: muted ? 0.4 : 1 }]} />
+        ))}
+      </View>
     </Pressable>
   );
 }
@@ -101,8 +137,9 @@ export function PlanWeekStrip({
   const [weekAnchor, setWeekAnchor] = useState(() =>
     startOfWeek(selectedDate, { weekStartsOn: WEEK_STARTS_ON }),
   );
+  const dots = useEventDots(events, colors);
 
-  // Keep the strip on the week that contains the selected day (chevrons, create, month jumps).
+  // Keep the strip on the week that contains the selected day (Today pill, create, month jumps).
   useEffect(() => {
     const next = startOfWeek(selectedDate, { weekStartsOn: WEEK_STARTS_ON });
     setWeekAnchor((prev) => (isSameDay(prev, next) ? prev : next));
@@ -117,31 +154,23 @@ export function PlanWeekStrip({
     if (w > 0 && w !== pageW) setPageW(w);
   };
 
-  const eventDays = useMemo(() => {
-    const set = new Set<string>();
-    for (const e of events) set.add(format(new Date(e.date_time), 'yyyy-MM-dd'));
-    return set;
-  }, [events]);
+  const weeks = useMemo(
+    () => [subWeeks(weekAnchor, 1), weekAnchor, addWeeks(weekAnchor, 1)],
+    [weekAnchor],
+  );
 
-  const weeks = useMemo(() => {
-    const center = weekAnchor;
-    return [subWeeks(center, 1), center, addWeeks(center, 1)];
-  }, [weekAnchor]);
-
+  // Three pages (prev / current / next week); landing on an edge page re-centres
+  // on it, so the strip pages infinitely in both directions.
   const onMomentumEnd = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
     if (pageW <= 0) return;
     const page = Math.round(e.nativeEvent.contentOffset.x / pageW);
-    if (page === 0) {
-      setWeekAnchor((w) => subWeeks(w, 1));
-      requestAnimationFrame(() => scrollRef.current?.scrollTo({ x: pageW, animated: false }));
-    } else if (page === 2) {
-      setWeekAnchor((w) => addWeeks(w, 1));
-      requestAnimationFrame(() => scrollRef.current?.scrollTo({ x: pageW, animated: false }));
-    }
+    if (page === 1) return;
+    setWeekAnchor((w) => (page === 0 ? subWeeks(w, 1) : addWeeks(w, 1)));
+    requestAnimationFrame(() => scrollRef.current?.scrollTo({ x: pageW, animated: false }));
   };
 
   return (
-    <View onLayout={onLayout} style={{ width: '100%' }}>
+    <View onLayout={onLayout} style={styles.full}>
       {pageW > 0 ? (
         <ScrollView
           ref={scrollRef}
@@ -159,35 +188,30 @@ export function PlanWeekStrip({
               end: endOfWeek(weekStart, { weekStartsOn: WEEK_STARTS_ON }),
             });
             return (
-              <View key={weekKey(weekStart)} style={{ width: pageW }}>
-                <View style={styles.row}>
-                  {days.map((day) => {
-                    const selected = format(day, 'yyyy-MM-dd') === format(selectedDate, 'yyyy-MM-dd');
-                    const hasEvents = eventDays.has(format(day, 'yyyy-MM-dd'));
-                    return (
-                      <View key={format(day, 'yyyy-MM-dd')} style={styles.day}>
-                        <Text style={[styles.dow, { color: colors.textTertiary }]}>
-                          {format(day, 'EEEEE')}
-                        </Text>
-                        <DayCircle
-                          day={day}
-                          selected={selected}
-                          hasEvents={hasEvents}
-                          onPress={() => {
-                            Haptics.selectionAsync();
-                            onSelectDate(day);
-                          }}
-                        />
-                      </View>
-                    );
-                  })}
-                </View>
+              <View key={dayKey(weekStart)} style={[styles.row, { width: pageW }]}>
+                {days.map((day) => (
+                  <View key={dayKey(day)} style={styles.day}>
+                    <Text
+                      style={[
+                        styles.dow,
+                        { color: isToday(day) ? colors.accent : colors.textTertiary },
+                      ]}>
+                      {format(day, 'EEEEE')}
+                    </Text>
+                    <DayCell
+                      day={day}
+                      selected={dayKey(day) === dayKey(selectedDate)}
+                      dots={dots.get(dayKey(day)) ?? []}
+                      onPress={() => onSelectDate(day)}
+                    />
+                  </View>
+                ))}
               </View>
             );
           })}
         </ScrollView>
       ) : (
-        <View style={{ height: DAY_SIZE + 28 }} />
+        <View style={{ height: DAY_SIZE + 34 }} />
       )}
     </View>
   );
@@ -205,14 +229,18 @@ export function PlanMonthGrid({
   onSelectDate: (day: Date) => void;
 }) {
   const { colors } = useTheme();
-  const monthStart = startOfMonth(currentMonth);
-  const days = eachDayOfInterval({ start: monthStart, end: endOfMonth(currentMonth) });
+  const dots = useEventDots(events, colors);
+  // Full weeks (with the neighbouring months' days muted) so the grid is always
+  // a clean rectangle rather than a ragged first and last row.
+  const days = useMemo(
+    () =>
+      eachDayOfInterval({
+        start: startOfWeek(startOfMonth(currentMonth), { weekStartsOn: WEEK_STARTS_ON }),
+        end: endOfWeek(endOfMonth(currentMonth), { weekStartsOn: WEEK_STARTS_ON }),
+      }),
+    [currentMonth],
+  );
   const labels = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
-  const eventDays = useMemo(() => {
-    const set = new Set<string>();
-    for (const e of events) set.add(format(new Date(e.date_time), 'yyyy-MM-dd'));
-    return set;
-  }, [events]);
 
   return (
     <View>
@@ -224,37 +252,28 @@ export function PlanMonthGrid({
         ))}
       </View>
       <View style={styles.grid}>
-        {Array.from({ length: monthStart.getDay() }).map((_, i) => (
-          <View key={`e-${i}`} style={styles.cell} />
+        {days.map((day) => (
+          <View key={dayKey(day)} style={styles.cell}>
+            <DayCell
+              day={day}
+              selected={dayKey(day) === dayKey(selectedDate)}
+              muted={!isSameMonth(day, currentMonth)}
+              dots={dots.get(dayKey(day)) ?? []}
+              onPress={() => onSelectDate(day)}
+            />
+          </View>
         ))}
-        {days.map((day) => {
-          const selected = format(day, 'yyyy-MM-dd') === format(selectedDate, 'yyyy-MM-dd');
-          const hasEvents = eventDays.has(format(day, 'yyyy-MM-dd'));
-          return (
-            <View key={format(day, 'yyyy-MM-dd')} style={styles.cell}>
-              <DayCircle
-                day={day}
-                selected={selected}
-                muted={!isSameMonth(day, currentMonth)}
-                hasEvents={hasEvents}
-                onPress={() => {
-                  Haptics.selectionAsync();
-                  onSelectDate(day);
-                }}
-              />
-            </View>
-          );
-        })}
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  full: { width: '100%' },
   row: { flexDirection: 'row', justifyContent: 'space-between' },
   day: { flex: 1, alignItems: 'center', gap: 6 },
-  dayInner: { alignItems: 'center', gap: 5, minHeight: DAY_SIZE + 12 },
-  dow: { fontSize: 13, fontWeight: '600' },
+  dayInner: { alignItems: 'center', gap: 4, minHeight: DAY_SIZE + 10 },
+  dow: { fontSize: 12, fontWeight: '700', letterSpacing: 0.4 },
   circle: {
     width: DAY_SIZE,
     height: DAY_SIZE,
@@ -262,10 +281,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  num: { fontSize: 17 },
-  underMark: { width: 5, height: 5, borderRadius: 2.5 },
-  weekRow: { flexDirection: 'row', marginBottom: 8 },
-  dowLabel: { flex: 1, textAlign: 'center', fontSize: 13, fontWeight: '600' },
+  num: { fontSize: 16 },
+  dots: { flexDirection: 'row', gap: 3, height: 5 },
+  dot: { width: 5, height: 5, borderRadius: 2.5 },
+  weekRow: { flexDirection: 'row', marginBottom: 6 },
+  dowLabel: { flex: 1, textAlign: 'center', fontSize: 12, fontWeight: '700', letterSpacing: 0.4 },
   grid: { flexDirection: 'row', flexWrap: 'wrap' },
-  cell: { width: '14.2857%', alignItems: 'center', paddingVertical: 4 },
+  cell: { width: '14.2857%', alignItems: 'center', paddingVertical: 3 },
 });

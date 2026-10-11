@@ -137,7 +137,7 @@ export function DraggableSheet({
         <Animated.View
           style={[
             styles.sheet,
-            { backgroundColor: colors.backgroundElevated },
+            { backgroundColor: colors.surfaceElevated },
             sheetStyle,
             style,
           ]}>

@@ -17,8 +17,16 @@ type Props = Omit<TextInputProps, 'placeholder'> & {
   label: string;
   containerStyle?: ViewStyle;
   rightAdornment?: ReactNode;
-  /** Background behind the floated label notch (defaults to page background). */
-  labelBackgroundColor?: string;
+  /** Fixed glyph glued to the left of the input, e.g. "@" for a username field. */
+  prefix?: string;
+  /**
+   * The field's own fill — and the floated label's masking patch, which always
+   * matches it exactly so the border notch blends in instead of leaving a seam.
+   * Defaults to the page background (the field visually disappears into the
+   * page except for its border). Override on a sheet/modal whose own backdrop
+   * isn't the page background, e.g. `colors.surfaceElevated`.
+   */
+  fieldBackgroundColor?: string;
 };
 
 export function AuthTextField({
@@ -27,7 +35,8 @@ export function AuthTextField({
   onChangeText,
   containerStyle,
   rightAdornment,
-  labelBackgroundColor,
+  prefix,
+  fieldBackgroundColor,
   style,
   onFocus,
   onBlur,
@@ -36,7 +45,7 @@ export function AuthTextField({
   const { colors } = useTheme();
   const [focused, setFocused] = useState(false);
   const floated = focused || value.length > 0;
-  const notchBg = labelBackgroundColor ?? colors.background;
+  const fieldBg = fieldBackgroundColor ?? colors.background;
 
   const focusProgress = useSharedValue(0);
   const labelProgress = useSharedValue(floated ? 1 : 0);
@@ -50,23 +59,25 @@ export function AuthTextField({
   }, [floated, labelProgress]);
 
   const containerAnimStyle = useAnimatedStyle(() => ({
-    borderWidth: 1 + focusProgress.value * 0.5,
     borderColor: interpolateColor(focusProgress.value, [0, 1], [colors.border, colors.accent]),
   }));
 
   const labelAnimStyle = useAnimatedStyle(() => {
     const accent = colors.accent;
     const secondary = colors.textSecondary;
-    const tertiary = colors.textTertiary;
 
     return {
       top: interpolate(labelProgress.value, [0, 1], [14, -9]),
       fontSize: interpolate(labelProgress.value, [0, 1], [15, 11]),
       color:
         labelProgress.value < 0.5
-          ? tertiary
+          ? secondary
           : interpolateColor(focusProgress.value, [0, 1], [secondary, accent]),
-      backgroundColor: labelProgress.value > 0.05 ? notchBg : 'transparent',
+      // Matches the container's own fill exactly (fieldBg, not a guess), so the
+      // notch blends in perfectly instead of masking with a mismatched patch —
+      // that mismatch, not the masking itself, was what made the border look
+      // "spoiled." Without this, the border line visibly cuts through the text.
+      backgroundColor: labelProgress.value > 0.05 ? fieldBg : 'transparent',
     };
   });
 
@@ -74,7 +85,7 @@ export function AuthTextField({
     <Animated.View
       style={[
         styles.container,
-        { backgroundColor: colors.surface },
+        { backgroundColor: fieldBg },
         containerAnimStyle,
         containerStyle,
       ]}>
@@ -83,6 +94,7 @@ export function AuthTextField({
       </AnimatedText>
 
       <View style={styles.inputRow}>
+        {prefix && <Text style={[styles.prefix, { color: colors.textSecondary }]}>{prefix}</Text>}
         <TextInput
           {...rest}
           value={value}
@@ -108,6 +120,12 @@ export function AuthTextField({
 const styles = StyleSheet.create({
   container: {
     borderRadius: 12,
+    // Fixed at the OAuth buttons' own hairline weight (same `colors.border`
+    // token) so a field never reads heavier/darker than the rest of the
+    // screen — especially in `paper`'s solid-black border — at rest or
+    // focused. Only the color animates on focus, so there's no border-width
+    // change nudging the input's content box by a pixel.
+    borderWidth: StyleSheet.hairlineWidth,
     paddingHorizontal: 14,
     paddingBottom: 8,
     paddingTop: 8,
@@ -131,6 +149,11 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 15,
     paddingVertical: 4,
+    paddingTop: 6,
+  },
+  prefix: {
+    fontSize: 15,
+    fontWeight: '600',
     paddingTop: 6,
   },
 });

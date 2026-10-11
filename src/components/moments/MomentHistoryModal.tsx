@@ -3,8 +3,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  BackHandler,
   Dimensions,
-  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -50,6 +50,8 @@ export function MomentHistoryModal() {
   const setVisible = useUIStore((s) => s.setShowMomentHistory);
   const openMomentRecapVideo = useUIStore((s) => s.openMomentRecapVideo);
   const setShowMomentCreator = useUIStore((s) => s.setShowMomentCreator);
+  const returnToCamera = useUIStore((s) => s.momentHistoryReturnToCamera);
+  const setMomentHistoryReturnToCamera = useUIStore((s) => s.setMomentHistoryReturnToCamera);
   const openMomentViewer = useUIStore((s) => s.openMomentViewer);
   const setMomentHistoryScrollY = useUIStore((s) => s.setMomentHistoryScrollY);
   const savedScrollY = useUIStore((s) => s.momentHistoryScrollY);
@@ -120,6 +122,15 @@ export function MomentHistoryModal() {
   };
 
   const close = () => setVisible(false);
+
+  /** User-initiated dismiss (X button / hardware back) — returns to the camera if that's where History was opened from. */
+  const dismiss = () => {
+    close();
+    if (returnToCamera) {
+      setMomentHistoryReturnToCamera(false);
+      setShowMomentCreator(true);
+    }
+  };
 
   const exitSelection = () => {
     setSelecting(false);
@@ -296,29 +307,40 @@ export function MomentHistoryModal() {
     ]);
   };
 
-  if (!visible) return null;
+  useEffect(() => {
+    if (!visible) return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (selecting) exitSelection();
+      else dismiss();
+      return true;
+    });
+    return () => sub.remove();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible, selecting]);
 
   const selectionCount = selectedIds.size;
   const bottomPad = selecting ? insets.bottom + 118 : insets.bottom + 88;
-  const recapSurface = colors.isDark ? '#FFFFFF' : '#111111';
-  const recapInk = colors.isDark ? '#111111' : '#FFFFFF';
 
   return (
-    <Modal visible animationType="slide" presentationStyle="fullScreen" onRequestClose={selecting ? exitSelection : close}>
       <View style={[styles.root, { paddingTop: insets.top, backgroundColor: chrome.background }]}>
         {selecting ? (
-          <View style={styles.selectionHeader}>
-            <Pressable onPress={exitSelection} hitSlop={12} style={styles.selectionHeaderSide}>
-              <Text style={[styles.cancelText, { color: chrome.text }]}>Cancel</Text>
-            </Pressable>
-            <Text style={[styles.selectionHeaderTitle, { color: chrome.text }]}>
-              {selectionCount} selected
-            </Text>
-            <View style={[styles.selectionHeaderSide, styles.selectionHeaderSideRight]}>
+          <View style={styles.header}>
+            <View style={[styles.side, styles.sideLeft]}>
+              <Pressable onPress={exitSelection} hitSlop={12} style={styles.iconSlot} accessibilityLabel="Cancel">
+                <Text style={[styles.cancelText, { color: chrome.text }]}>Cancel</Text>
+              </Pressable>
+            </View>
+            <View style={styles.center}>
+              <Text style={[styles.title, { color: chrome.text }]} numberOfLines={1}>
+                {selectionCount} selected
+              </Text>
+            </View>
+            <View style={[styles.side, styles.sideRight]}>
               <Pressable
                 onPress={toggleSelectAll}
                 hitSlop={12}
                 style={[
+                  styles.iconSlot,
                   styles.selectAllBtn,
                   { borderColor: chrome.border, backgroundColor: chrome.surfaceSoft },
                   selectAllEngaged && { backgroundColor: chrome.accent, borderColor: chrome.accent },
@@ -335,16 +357,21 @@ export function MomentHistoryModal() {
           </View>
         ) : (
           <View style={styles.header}>
-            <Pressable onPress={close} hitSlop={12} style={styles.headerIcon} accessibilityLabel="Close">
-              <Icon name="close" size={26} color={chrome.text} />
-            </Pressable>
-            <View style={styles.headerCenter}>
-              <Text style={[styles.title, { color: chrome.text }]}>Your moments</Text>
-              <Text style={[styles.subtitle, { color: chrome.textSecondary }]}>Only visible to you two</Text>
+            <View style={[styles.side, styles.sideLeft]}>
+              <Pressable onPress={dismiss} hitSlop={12} style={styles.iconSlot} accessibilityLabel="Close">
+                <Icon name="close" size={26} color={chrome.text} />
+              </Pressable>
             </View>
-            <Pressable onPress={openCamera} hitSlop={12} style={styles.headerIcon} accessibilityLabel="New moment">
-              <Icon name="camera" size={24} color={chrome.text} />
-            </Pressable>
+            <View style={styles.center}>
+              <Text style={[styles.title, { color: chrome.text }]} numberOfLines={1}>
+                Your moments
+              </Text>
+            </View>
+            <View style={[styles.side, styles.sideRight]}>
+              <Pressable onPress={openCamera} hitSlop={12} style={styles.iconSlot} accessibilityLabel="New moment">
+                <Icon name="camera" size={24} color={chrome.text} />
+              </Pressable>
+            </View>
           </View>
         )}
 
@@ -354,11 +381,23 @@ export function MomentHistoryModal() {
           </View>
         ) : displayMoments.length === 0 ? (
           <View style={styles.centered}>
-            <Icon name="camera" size={40} color={chrome.textTertiary} />
+            <View style={[styles.emptyIcon, { backgroundColor: chrome.surfaceSoft }]}>
+              <Icon name="camera" size={36} color={chrome.accent} />
+            </View>
             <Text style={[styles.emptyTitle, { color: chrome.text }]}>No moments yet</Text>
             <Text style={[styles.emptySub, { color: chrome.textSecondary }]}>
               Photos and videos you share will appear here.
             </Text>
+            <Pressable
+              onPress={openCamera}
+              style={({ pressed }) => [
+                styles.emptyCta,
+                { backgroundColor: chrome.accent },
+                pressed && { opacity: 0.9 },
+              ]}>
+              <Icon name="camera" size={18} color={chrome.onAccent} />
+              <Text style={[styles.emptyCtaText, { color: chrome.onAccent }]}>Send a moment</Text>
+            </Pressable>
           </View>
         ) : (
           <ScrollView
@@ -369,7 +408,12 @@ export function MomentHistoryModal() {
             showsVerticalScrollIndicator={false}>
             {sections.map((section) => (
               <View key={section.key} style={styles.section}>
-                <Text style={[styles.sectionLabel, { color: chrome.text }]}>{section.label}</Text>
+                <View style={styles.sectionHeader}>
+                  <Text style={[styles.sectionLabel, { color: chrome.text }]}>{section.label}</Text>
+                  <Text style={[styles.sectionCount, { color: chrome.textTertiary }]}>
+                    {section.moments.length}
+                  </Text>
+                </View>
                 <View style={styles.grid}>
                   {section.moments.map((moment) => (
                     <View key={moment.id} style={styles.cell}>
@@ -378,6 +422,7 @@ export function MomentHistoryModal() {
                         size={TILE}
                         selecting={selecting}
                         selected={selectedIds.has(moment.id)}
+                        isMine={moment.user_id === user?.id}
                         reactionBadge={
                           selecting
                             ? null
@@ -434,18 +479,17 @@ export function MomentHistoryModal() {
               delayLongPress={400}
               style={({ pressed }) => [
                 styles.recapBtn,
-                { backgroundColor: recapSurface },
+                { backgroundColor: chrome.accent },
                 pressed && { opacity: 0.9 },
               ]}>
-              <View style={[styles.recapIcon, { borderColor: recapInk }]}>
-                <Icon name="plus" size={16} color={recapInk} />
+              <View style={[styles.recapIcon, { borderColor: chrome.onAccent }]}>
+                <Icon name="plus" size={16} color={chrome.onAccent} />
               </View>
-              <Text style={[styles.recapText, { color: recapInk }]}>Create recap</Text>
+              <Text style={[styles.recapText, { color: chrome.onAccent }]}>Create recap</Text>
             </Pressable>
           </View>
         )}
       </View>
-    </Modal>
   );
 }
 
@@ -454,41 +498,38 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingBottom: 18,
+    paddingHorizontal: 14,
+    paddingBottom: 12,
     paddingTop: 8,
   },
-  headerIcon: { width: 40, alignItems: 'center' },
-  headerCenter: { flex: 1, alignItems: 'center' },
-  title: { fontSize: 20, fontWeight: '800', letterSpacing: -0.3 },
-  subtitle: { fontSize: 13, fontWeight: '600', marginTop: 4 },
-  selectionHeader: {
-    flexDirection: 'row',
+  side: { flex: 1, flexDirection: 'row', alignItems: 'center' },
+  sideLeft: { justifyContent: 'flex-start' },
+  sideRight: { justifyContent: 'flex-end' },
+  center: { flexShrink: 1, maxWidth: '60%', alignItems: 'center' },
+  iconSlot: {
+    width: 44,
+    height: 44,
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingBottom: 14,
-    paddingTop: 8,
+    justifyContent: 'center',
   },
-  selectionHeaderSide: { width: 72, justifyContent: 'center' },
-  selectionHeaderSideRight: { alignItems: 'flex-end' },
-  selectionHeaderTitle: {
-    flex: 1,
-    textAlign: 'center',
-    fontSize: 17,
-    fontWeight: '800',
-  },
+  title: { fontSize: 18, fontWeight: '800', letterSpacing: -0.3 },
   cancelText: { fontSize: 16, fontWeight: '700' },
   selectAllBtn: {
     width: 40,
     height: 40,
     borderRadius: 20,
     borderWidth: 1.5,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   scroll: { paddingHorizontal: GRID_PAD },
-  section: { marginBottom: 28, overflow: 'visible' },
-  sectionLabel: { fontSize: 22, fontWeight: '800', marginBottom: 14, letterSpacing: -0.3 },
+  section: { marginBottom: 30, overflow: 'visible' },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 8,
+    marginBottom: 14,
+  },
+  sectionLabel: { fontSize: 22, fontWeight: '800', letterSpacing: -0.3 },
+  sectionCount: { fontSize: 14, fontWeight: '700' },
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -499,7 +540,6 @@ const styles = StyleSheet.create({
     width: `${100 / COLS}%`,
     paddingHorizontal: GRID_GAP / 2,
     paddingTop: 10,
-    paddingRight: 6,
     marginBottom: GRID_GAP + 10,
     alignItems: 'center',
     overflow: 'visible',
@@ -544,6 +584,24 @@ const styles = StyleSheet.create({
   },
   recapText: { fontSize: 16, fontWeight: '800' },
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32, gap: 12 },
+  emptyIcon: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
+  },
   emptyTitle: { fontSize: 18, fontWeight: '800' },
   emptySub: { fontSize: 14, textAlign: 'center', lineHeight: 20 },
+  emptyCta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 8,
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    borderRadius: 999,
+  },
+  emptyCtaText: { fontSize: 15, fontWeight: '800' },
 });

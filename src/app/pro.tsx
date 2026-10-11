@@ -1,5 +1,5 @@
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect } from 'react';
+import { useCallback, useEffect } from 'react';
 import { Platform } from 'react-native';
 
 import { PaywallScreen } from '@/components/subscription/PaywallScreen';
@@ -19,17 +19,17 @@ export default function ProScreen() {
   const isOnboarding = params.from === 'onboarding';
   const nextHref = params.next === 'welcome' ? '/(onboarding)/welcome' : '/(tabs)/home';
 
-  const finishOnboarding = async () => {
+  const finishOnboarding = useCallback(async () => {
     if (user) await markOnboardingPaywallDone(user.id);
     await markPaywallDismissed();
     markPaywallShownThisSession();
     router.replace(nextHref);
-  };
+  }, [user, nextHref, markPaywallShownThisSession, router]);
 
   useEffect(() => {
     if (!isOnboarding || !isPlus) return;
     void finishOnboarding();
-  }, [isOnboarding, isPlus]);
+  }, [isOnboarding, isPlus, finishOnboarding]);
 
   if (Platform.OS === 'web') {
     return <Redirect href="/(tabs)/home" />;

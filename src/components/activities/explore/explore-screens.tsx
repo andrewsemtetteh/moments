@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Alert, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 
 import { Icon } from '@/components/ui/Icon';
-import { PrimaryButton } from '@/components/ui/primitives';
+import { colorWithAlpha, PrimaryButton } from '@/components/ui/primitives';
 import {
     CARD_CATEGORIES,
     CARD_PROMPTS,
@@ -170,10 +170,10 @@ export function QuizScreen() {
     return (
       <View style={s.stack}>
         <LinearGradient colors={colors.gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.resultCard}>
-          <Icon name="heart" size={32} color="#fff" filled />
-          <Text style={s.resultEyebrow}>Your love language</Text>
-          <Text style={s.resultTitle}>{result.title}</Text>
-          <Text style={s.resultDesc}>{result.description}</Text>
+          <Icon name="heart" size={32} color={colors.onAccent} filled />
+          <Text style={[s.resultEyebrow, { color: colorWithAlpha(colors.onAccent, 0.8) }]}>Your love language</Text>
+          <Text style={[s.resultTitle, { color: colors.onAccent }]}>{result.title}</Text>
+          <Text style={[s.resultDesc, { color: colorWithAlpha(colors.onAccent, 0.92) }]}>{result.description}</Text>
         </LinearGradient>
         <Text style={[s.resultShare, { color: colors.textSecondary }]}>
           Share your result with your partner and compare.
@@ -509,11 +509,11 @@ export function CouplesTriviaScreen() {
     return (
       <View style={s.stack}>
         <LinearGradient colors={colors.gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.resultCard}>
-          <Text style={s.resultEyebrow}>Final score</Text>
-          <Text style={s.resultTitle}>
+          <Text style={[s.resultEyebrow, { color: colorWithAlpha(colors.onAccent, 0.8) }]}>Final score</Text>
+          <Text style={[s.resultTitle, { color: colors.onAccent }]}>
             {score}/{total}
           </Text>
-          <Text style={s.resultDesc}>
+          <Text style={[s.resultDesc, { color: colorWithAlpha(colors.onAccent, 0.92) }]}>
             {pct >= 80
               ? 'You two are in sync — relationship pros!'
               : pct >= 50
@@ -567,7 +567,7 @@ export function CouplesTriviaScreen() {
                     backgroundColor: correct
                       ? colors.accentSoft
                       : wrong
-                        ? 'rgba(255,80,80,0.12)'
+                        ? colorWithAlpha(colors.error, 0.12)
                         : selected
                           ? colors.accentSoft
                           : colors.surface,

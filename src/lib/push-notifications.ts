@@ -182,11 +182,8 @@ export function titleForType(type: string): string {
       return 'Mood update';
     case 'streak':
       return 'Streak update';
-    case 'watch_party':
-    case 'watch_party_nudge':
-      return 'Watch Together';
-    case 'watch_party_scheduled':
-      return 'Movie night scheduled';
+    case 'game_invite':
+      return 'Live game invite';
     default:
       return 'Moments';
   }

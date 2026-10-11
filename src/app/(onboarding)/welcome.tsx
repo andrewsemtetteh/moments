@@ -36,7 +36,7 @@ export default function PartnerWelcomeScreen() {
         </Animated.View>
 
         <Animated.View entering={FadeInDown.delay(100).duration(480).springify()} style={styles.copy}>
-          <Text style={[styles.eyebrow, { color: colors.textSecondary }]}>You're connected</Text>
+          <Text style={[styles.eyebrow, { color: colors.textSecondary }]}>You&apos;re connected</Text>
           <Text style={[styles.title, { color: colors.text }]}>
             Welcome to{'\n'}
             {relationship?.relationship_name ?? 'Moments'}

@@ -31,6 +31,7 @@ export function MomentsStrip({ moments, partnerOnly = false }: MomentsStripProps
   const partner = useRelationshipStore((s) => s.partner);
   const setShowMomentCreator = useUIStore((s) => s.setShowMomentCreator);
   const setShowMomentHistory = useUIStore((s) => s.setShowMomentHistory);
+  const setMomentHistoryReturnToCamera = useUIStore((s) => s.setMomentHistoryReturnToCamera);
   const openMomentViewer = useUIStore((s) => s.openMomentViewer);
 
   const { mine, theirs } = groupMomentsByUser(moments, user?.id ?? '', partner?.id);
@@ -128,10 +129,17 @@ export function MomentsStrip({ moments, partnerOnly = false }: MomentsStripProps
       {!partnerOnly && (
         <>
           <Pressable
-            onPress={() => setShowMomentHistory(true)}
+            onPress={() => {
+              setMomentHistoryReturnToCamera(false);
+              setShowMomentHistory(true);
+            }}
             style={({ pressed }) => [
               styles.composeChip,
-              { backgroundColor: colors.surface, borderColor: colors.border },
+              {
+                backgroundColor: colors.surface,
+                borderColor: colors.border,
+                borderWidth: colors.boldBorder ? 2 : StyleSheet.hairlineWidth,
+              },
               pressed && { opacity: 0.85 },
             ]}>
             <Icon name="image" size={18} color={colors.accent} />
@@ -142,7 +150,11 @@ export function MomentsStrip({ moments, partnerOnly = false }: MomentsStripProps
             onPress={() => setShowMomentCreator(true)}
             style={({ pressed }) => [
               styles.composeChip,
-              { backgroundColor: colors.surface, borderColor: colors.border },
+              {
+                backgroundColor: colors.surface,
+                borderColor: colors.border,
+                borderWidth: colors.boldBorder ? 2 : StyleSheet.hairlineWidth,
+              },
               pressed && { opacity: 0.85 },
             ]}>
             <Icon name="camera" size={18} color={colors.accent} />

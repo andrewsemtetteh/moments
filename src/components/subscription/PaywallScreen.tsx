@@ -1,6 +1,6 @@
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   Alert,
   Pressable,
@@ -11,9 +11,9 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { SwipeDismissView } from '@/components/layout/SwipeDismissView';
+import { SwipeDismissView, type SwipeDismissViewHandle } from '@/components/layout/SwipeDismissView';
 import { Icon } from '@/components/ui/Icon';
-import { PrimaryButton } from '@/components/ui/primitives';
+import { colorWithAlpha, PrimaryButton } from '@/components/ui/primitives';
 import { Radius } from '@/constants/design-system';
 import {
   getTrialCtaLabel,
@@ -58,8 +58,16 @@ export function PaywallScreen({ onClose, showClose = true, onSubscribe }: Props)
     Alert.alert('Restore purchase', 'Nothing to restore yet. Purchases will be available once billing is connected.');
   };
 
+  const swipeRef = useRef<SwipeDismissViewHandle>(null);
+  const closeAnimated = () => swipeRef.current?.dismiss();
+
   return (
-    <SwipeDismissView edge="end" onDismiss={onClose ?? (() => undefined)} enabled={!!(showClose && onClose)}>
+    <SwipeDismissView
+      ref={swipeRef}
+      edge="end"
+      onDismiss={onClose ?? (() => undefined)}
+      enabled={!!(showClose && onClose)}
+      animateEntrance={false}>
       <View style={[styles.root, { backgroundColor: colors.background }]}>
         <ScrollView
           showsVerticalScrollIndicator={false}
@@ -71,18 +79,23 @@ export function PaywallScreen({ onClose, showClose = true, onSubscribe }: Props)
             style={[styles.hero, { paddingTop: insets.top + 12 }]}>
             {showClose && onClose && (
               <Pressable
-                onPress={onClose}
+                onPress={closeAnimated}
                 accessibilityLabel="Close"
                 hitSlop={8}
-                style={[styles.closeBtn, { top: insets.top + 8, backgroundColor: 'rgba(255,255,255,0.22)' }]}>
-                <Icon name="close" size={20} color="#fff" />
+                style={[
+                  styles.closeBtn,
+                  { top: insets.top + 8, backgroundColor: colorWithAlpha(colors.onAccent, 0.22) },
+                ]}>
+                <Icon name="close" size={20} color={colors.onAccent} />
               </Pressable>
             )}
 
-            <Text style={styles.heroEyebrow}>Closer, every day</Text>
-            <Text style={styles.heroTitle}>Moments Plus</Text>
-            <Text style={styles.heroTrial}>{TRIAL_DAYS}-day free trial included</Text>
-            <Text style={styles.heroNote}>One subscription unlocks Plus for both of you.</Text>
+            <Text style={[styles.heroEyebrow, { color: colorWithAlpha(colors.onAccent, 0.85) }]}>Closer, every day</Text>
+            <Text style={[styles.heroTitle, { color: colors.onAccent }]}>Moments Plus</Text>
+            <Text style={[styles.heroTrial, { color: colors.onAccent }]}>{TRIAL_DAYS}-day free trial included</Text>
+            <Text style={[styles.heroNote, { color: colorWithAlpha(colors.onAccent, 0.82) }]}>
+              One subscription unlocks Plus for both of you.
+            </Text>
           </LinearGradient>
 
           <View style={[styles.featuresCard, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
@@ -212,26 +225,22 @@ const styles = StyleSheet.create({
     zIndex: 2,
   },
   heroEyebrow: {
-    color: 'rgba(255,255,255,0.85)',
     fontSize: 14,
     fontWeight: '600',
     marginBottom: 6,
   },
   heroTitle: {
-    color: '#fff',
     fontSize: 32,
     fontWeight: '800',
     letterSpacing: -0.8,
     marginBottom: 8,
   },
   heroTrial: {
-    color: '#fff',
     fontSize: 15,
     fontWeight: '700',
     marginBottom: 10,
   },
   heroNote: {
-    color: 'rgba(255,255,255,0.82)',
     fontSize: 14,
     fontWeight: '600',
     lineHeight: 20,

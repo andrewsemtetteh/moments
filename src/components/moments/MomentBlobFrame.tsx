@@ -25,7 +25,7 @@ export function MomentBlobFrame({
   const h = height ?? width * 1.12;
 
   return (
-    <View style={[{ width, height: h }, style]}>
+    <View style={[{ width, height: h }, styles.shadow, style]}>
       <Svg width={width} height={h} viewBox="0 0 100 112">
         <Defs>
           <ClipPath id="momentBlob">
@@ -54,4 +54,11 @@ export function MomentBlobFrame({
 
 const styles = StyleSheet.create({
   overlay: { ...StyleSheet.absoluteFill, alignItems: 'center', justifyContent: 'center' },
+  shadow: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.35,
+    shadowRadius: 22,
+    elevation: 12,
+  },
 });

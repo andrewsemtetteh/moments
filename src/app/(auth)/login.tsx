@@ -1,3 +1,4 @@
+import { useSignIn } from '@clerk/expo';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
@@ -21,9 +22,9 @@ import { AuthPrimaryButton } from '@/components/auth/AuthPrimaryButton';
 import { AuthTextField } from '@/components/auth/AuthTextField';
 import { PasswordInput } from '@/components/auth/PasswordInput';
 import { SocialAuthButtons } from '@/components/auth/SocialAuthButtons';
-import { LogoMark } from '@/components/ui/Logo';
+import { Wordmark } from '@/components/ui/Wordmark';
 import { useTheme } from '@/hooks/useTheme';
-import { hydrateAuthSession } from '@/lib/auth-session';
+import { formatAuthError } from '@/lib/auth-errors';
 import {
     getRememberedEmail,
     getRememberMe,
@@ -31,17 +32,18 @@ import {
     setRememberMe,
 } from '@/lib/remember-me-storage';
 import { sanitizeEmailInput, sanitizePasswordInput } from '@/lib/sanitize-input';
-import { supabase } from '@/lib/supabase';
 
 export default function LoginScreen() {
   const router = useRouter();
   const { colors } = useTheme();
   const linkColors = authLinkColors(colors);
+  const { signIn, errors, fetchStatus } = useSignIn();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [rememberMe, setRememberMeChecked] = useState(true);
-  const [loading, setLoading] = useState(false);
   const [prefsLoaded, setPrefsLoaded] = useState(false);
+
+  const loading = fetchStatus === 'fetching';
 
   useEffect(() => {
     let cancelled = false;
@@ -61,38 +63,26 @@ export default function LoginScreen() {
     };
   }, []);
 
-  const finishAuth = async () => {
-    await setRememberMe(true);
-    const { data: { session } } = await supabase.auth.getSession();
-    if (session) await hydrateAuthSession(session, false, { trustSession: true });
-    router.replace('/');
-  };
-
   const handleLogin = async () => {
-    const cleanEmail = sanitizeEmailInput(email).trim();
+    const cleanIdentifier = sanitizeEmailInput(email).trim();
     const cleanPassword = sanitizePasswordInput(password);
-    if (!cleanEmail || !cleanPassword) return;
-    setLoading(true);
-    try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: cleanEmail,
-        password: cleanPassword,
-      });
-      if (error) throw error;
-      if (!data.session) {
-        throw new Error('Sign in succeeded but no session was returned. Please try again.');
-      }
+    if (!cleanIdentifier || !cleanPassword) return;
 
-      await Promise.all([
-        setRememberMe(rememberMe),
-        rememberMe ? setRememberedEmail(cleanEmail) : Promise.resolve(),
-        hydrateAuthSession(data.session, false, { trustSession: true }),
-      ]);
-      router.replace('/');
-    } catch (e: unknown) {
-      Alert.alert('Sign in failed', e instanceof Error ? e.message : 'Please try again');
-    } finally {
-      setLoading(false);
+    await Promise.all([
+      setRememberMe(rememberMe),
+      rememberMe ? setRememberedEmail(cleanIdentifier) : Promise.resolve(),
+    ]);
+
+    const { error } = await signIn.password({ identifier: cleanIdentifier, password: cleanPassword });
+    if (error) {
+      Alert.alert('Sign in failed', formatAuthError(error));
+      return;
+    }
+
+    if (signIn.status === 'complete') {
+      await signIn.finalize({ navigate: () => router.replace('/') });
+    } else if (signIn.status === 'needs_second_factor') {
+      Alert.alert('Verification required', 'Two-factor sign-in is not supported yet in this app.');
     }
   };
 
@@ -102,11 +92,11 @@ export default function LoginScreen() {
         <ScrollView
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}>
+          showsVerticalScrollIndicator={false}
+          bounces={false}>
           <AuthScreenEnter style={styles.enter}>
             <View style={styles.brand}>
-              <LogoMark size={72} />
-              <Text style={[styles.logo, { color: colors.text }]}>Moments</Text>
+              <Wordmark size={34} />
               <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
                 Welcome back to your space
               </Text>
@@ -121,12 +111,23 @@ export default function LoginScreen() {
                 value={email}
                 onChangeText={(text) => setEmail(sanitizeEmailInput(text))}
               />
+              {errors.fields.identifier && (
+                <Text style={[styles.fieldError, { color: colors.error }]}>
+                  {errors.fields.identifier.message}
+                </Text>
+              )}
+
               <PasswordInput
                 label="Password"
                 autoComplete="password"
                 value={password}
                 onChangeText={(text) => setPassword(sanitizePasswordInput(text))}
               />
+              {errors.fields.password && (
+                <Text style={[styles.fieldError, { color: colors.error }]}>
+                  {errors.fields.password.message}
+                </Text>
+              )}
 
               <View style={styles.optionsRow}>
                 <AuthCheckbox
@@ -157,7 +158,7 @@ export default function LoginScreen() {
               />
             </View>
 
-            <SocialAuthButtons onSuccess={finishAuth} />
+            <SocialAuthButtons onSuccess={() => router.replace('/')} />
 
             <AuthLegalLinks prefix="By signing in, you agree to our" style={styles.legalNotice} />
 
@@ -175,9 +176,9 @@ const styles = StyleSheet.create({
   scrollContent: { flexGrow: 1, paddingHorizontal: 24, paddingVertical: 28, justifyContent: 'center' },
   enter: { width: '100%' },
   brand: { alignItems: 'center', marginBottom: 24, gap: 12 },
-  logo: { fontSize: 32, fontWeight: '800', textAlign: 'center', letterSpacing: -0.8 },
   subtitle: { fontSize: 15, textAlign: 'center', marginTop: 6, lineHeight: 21, maxWidth: 280 },
   form: { gap: 10 },
+  fieldError: { fontSize: 13, marginTop: -4 },
   optionsRow: {
     flexDirection: 'row',
     alignItems: 'center',

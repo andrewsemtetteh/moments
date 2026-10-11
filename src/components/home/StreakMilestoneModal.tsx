@@ -70,7 +70,7 @@ export function StreakMilestoneModal() {
   return (
     <Modal
       visible
-      animationType="none"
+      animationType="fade"
       onRequestClose={handleClose}
       statusBarTranslucent
       presentationStyle="fullScreen">

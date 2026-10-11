@@ -8,7 +8,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getTabBarBottomPadding, TAB_BAR_FAB_OVERFLOW, TAB_BAR_HEIGHT } from '@/components/layout/tab-bar-layout';
 import { Icon, type IconName } from '@/components/ui/Icon';
 import { Avatar } from '@/components/ui/primitives';
+import { useUnreadMessageCount } from '@/hooks/queries';
 import { useTheme } from '@/hooks/useTheme';
+import { formatBadgeCount } from '@/lib/format-badge';
+import { openChat } from '@/lib/router';
 import { useAuthStore, useUIStore } from '@/stores';
 
 const TAB_ICON_SIZE = 28;
@@ -23,7 +26,7 @@ const LEFT_TABS: { name: string; icon: IconName; label: string }[] = [
 ];
 
 const RIGHT_TABS: { name: string; icon: IconName; label: string }[] = [
-  { name: 'calendar', icon: 'calendar', label: 'Plan' },
+  { name: 'chat', icon: 'chat', label: 'Chat' },
   { name: 'profile', icon: 'user', label: 'You' },
 ];
 
@@ -64,13 +67,9 @@ export function AppTabBar({ state, navigation }: TabBarLikeProps) {
   const setTabBarOverlayHeight = useUIStore((s) => s.setTabBarOverlayHeight);
   const user = useAuthStore((s) => s.user);
   const [barWidth, setBarWidth] = useState(0);
+  const { data: unreadMessages = 0 } = useUnreadMessageCount();
 
   const activeName = state.routes[state.index]?.name;
-
-  // Full-screen flows — no floating tab bar over the content.
-  if (activeName === 'chat' || activeName === 'notifications') {
-    return null;
-  }
 
   const bottomPad = getTabBarBottomPadding(insets.bottom);
   const fill = colors.glass ? colors.surfaceGlass : colors.surfaceElevated;
@@ -81,26 +80,55 @@ export function AppTabBar({ state, navigation }: TabBarLikeProps) {
 
   const go = (name: string) => {
     Haptics.selectionAsync();
-    navigation.navigate(name);
+    // Chat isn't a tab route — it's a full-screen stack screen pushed over the tabs.
+    if (name === 'chat') openChat();
+    else navigation.navigate(name);
   };
 
   const renderTab = (tab: { name: string; icon: IconName; label: string }) => {
     const focused = activeName === tab.name;
     const isProfile = tab.name === 'profile';
+    const badge =
+      tab.name === 'chat' && Number.isFinite(unreadMessages) && unreadMessages >= 1
+        ? Math.floor(unreadMessages)
+        : 0;
 
     return (
-      <Pressable key={tab.name} onPress={() => go(tab.name)} style={styles.tab} hitSlop={6}>
+      <Pressable
+        key={tab.name}
+        onPress={() => go(tab.name)}
+        style={styles.tab}
+        hitSlop={6}
+        accessibilityRole="tab"
+        accessibilityState={{ selected: focused }}
+        accessibilityLabel={badge > 0 ? `${tab.label}, ${badge} unread` : tab.label}>
         {isProfile ? (
-          <View style={[styles.profileAvatar, focused && { borderColor: colors.accent, borderWidth: 2 }]}>
-            <Avatar name={user?.name} imageUrl={user?.avatar_url} size={TAB_ICON_SIZE} />
+          // The ring is always there (just transparent when unselected), so the
+          // avatar never shifts or shrinks when the tab is selected — previously
+          // the border was added on focus and squeezed the avatar inside it.
+          <View
+            style={[
+              styles.profileAvatar,
+              { borderColor: focused ? colors.accent : 'transparent' },
+            ]}>
+            <Avatar name={user?.name} imageUrl={user?.avatar_url} size={TAB_ICON_SIZE - 6} />
           </View>
         ) : (
-          <Icon
-            name={tab.icon}
-            size={TAB_ICON_SIZE}
-            color={focused ? colors.accent : colors.textSecondary}
-            filled={focused}
-          />
+          <View>
+            <Icon
+              name={tab.icon}
+              size={TAB_ICON_SIZE}
+              color={focused ? colors.accent : colors.textSecondary}
+              filled={focused}
+            />
+            {badge > 0 ? (
+              <View style={[styles.badge, { backgroundColor: colors.error, borderColor: colors.surfaceElevated }]}>
+                <Text style={styles.badgeText} numberOfLines={1}>
+                  {formatBadgeCount(badge)}
+                </Text>
+              </View>
+            ) : null}
+          </View>
         )}
         <Text style={[styles.label, { color: focused ? colors.accent : colors.textSecondary }]}>{tab.label}</Text>
       </Pressable>
@@ -113,7 +141,7 @@ export function AppTabBar({ state, navigation }: TabBarLikeProps) {
       pointerEvents="box-none"
       onLayout={(e) => setTabBarOverlayHeight(Math.ceil(e.nativeEvent.layout.height))}>
       <View
-        style={[styles.bar, { shadowColor: colors.shadow }]}
+        style={styles.bar}
         onLayout={onBarLayout}
         pointerEvents="box-none">
         {barWidth > 0 && (
@@ -145,8 +173,8 @@ export function AppTabBar({ state, navigation }: TabBarLikeProps) {
               colors={colors.gradient}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
-              style={[styles.fab, { shadowColor: colors.accent }]}>
-              <Icon name="plus" size={TAB_ICON_SIZE} color="#fff" />
+              style={styles.fab}>
+              <Icon name="plus" size={TAB_ICON_SIZE} color={colors.onAccent} />
             </LinearGradient>
           </Pressable>
         </View>
@@ -174,10 +202,6 @@ const styles = StyleSheet.create({
     maxWidth: 460,
     height: TAB_BAR_HEIGHT,
     paddingHorizontal: 14,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.25,
-    shadowRadius: 16,
-    elevation: 12,
   },
   tab: {
     flex: 1,
@@ -185,7 +209,20 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 3,
   },
-  label: { fontSize: 10, fontWeight: '700' },
+  label: { fontSize: 11, fontWeight: '700' },
+  badge: {
+    position: 'absolute',
+    top: -5,
+    right: -9,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    borderWidth: 2,
+    paddingHorizontal: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  badgeText: { color: '#fff', fontSize: 10, fontWeight: '800', lineHeight: 12 },
   profileAvatar: {
     width: TAB_ICON_SIZE,
     height: TAB_ICON_SIZE,
@@ -193,7 +230,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
-    borderWidth: 0,
+    borderWidth: 2,
   },
   center: {
     width: CUTOUT_RADIUS * 2,
@@ -211,9 +248,5 @@ const styles = StyleSheet.create({
     borderRadius: FAB_SIZE / 2,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.5,
-    shadowRadius: 12,
-    elevation: 10,
   },
 });

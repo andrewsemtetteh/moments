@@ -1,3 +1,4 @@
+import { useAuth, useUser } from '@clerk/expo';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -9,11 +10,10 @@ import { PrimaryButton } from '@/components/ui/primitives';
 import { Spacing } from '@/constants/design-system';
 import { useTheme } from '@/hooks/useTheme';
 import { ensureUserProfile } from '@/lib/auth-session';
+import { updateMyProfile } from '@/lib/moments-api';
 import { goToOnboardingBack } from '@/lib/onboarding-navigation';
 import { isPlaceholderProfileName } from '@/lib/profile-setup';
 import { sanitizeNameInput } from '@/lib/sanitize-input';
-import { supabase } from '@/lib/supabase';
-import * as api from '@/services/api';
 import { useAuthStore } from '@/stores';
 
 function initialNameFromProfile(name: string | null | undefined, email: string) {
@@ -29,6 +29,8 @@ export default function ProfileNameScreen() {
   const { colors } = useTheme();
   const user = useAuthStore((s) => s.user);
   const setUser = useAuthStore((s) => s.setUser);
+  const { user: clerkUser } = useUser();
+  const { getToken } = useAuth();
   const [name, setName] = useState('');
   const [loading, setLoading] = useState(false);
   const [bootstrapping, setBootstrapping] = useState(!user);
@@ -47,14 +49,17 @@ export default function ProfileNameScreen() {
         return;
       }
 
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.user) {
+      if (!clerkUser) {
         router.replace('/(auth)/login');
         return;
       }
 
       try {
-        const profile = await ensureUserProfile(session.user);
+        const profile = await ensureUserProfile({
+          id: clerkUser.id,
+          email: clerkUser.primaryEmailAddress?.emailAddress ?? null,
+          name: clerkUser.fullName,
+        });
         if (cancelled) return;
         setUser(profile);
       } catch (e: unknown) {
@@ -72,7 +77,7 @@ export default function ProfileNameScreen() {
     return () => {
       cancelled = true;
     };
-  }, [router, setUser, user]);
+  }, [router, setUser, user, clerkUser]);
 
   const saveName = async () => {
     const activeUser = useAuthStore.getState().user;
@@ -87,7 +92,9 @@ export default function ProfileNameScreen() {
     setLoading(true);
     try {
       if (cleanName !== activeUser.name?.trim()) {
-        const updated = await api.updateProfile(activeUser.id, { name: cleanName });
+        const token = await getToken();
+        if (!token) throw new Error('Not signed in');
+        const updated = await updateMyProfile(token, { name: cleanName });
         setUser(updated);
       }
 

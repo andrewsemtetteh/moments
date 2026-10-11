@@ -11,8 +11,11 @@ const BANNER_AUTO_DISMISS_MS = 3000;
 
 /**
  * Unread chat banner + header badge:
- * - Accurate unread count on open (server count, badge cleared immediately)
- * - Banner dismisses after a few seconds, when typing, or when scrolled past
+ * - Accurate unread count on open (server count)
+ * - Messages are only marked read — and the badge cleared — once the unread divider has
+ *   actually scrolled into view, the same way WhatsApp/iMessage wait for the message to be
+ *   seen rather than clearing read state the instant the thread mounts.
+ * - Banner dismisses after a few seconds once seen, when typing, or when scrolled past
  */
 export function useChatUnreadBanner(messages: Message[] | undefined) {
   const queryClient = useQueryClient();
@@ -71,6 +74,9 @@ export function useChatUnreadBanner(messages: Message[] | undefined) {
   const dismissRef = useRef(dismissUnreadBanner);
   dismissRef.current = dismissUnreadBanner;
 
+  const markReadRef = useRef(markReadAndClearBadge);
+  markReadRef.current = markReadAndClearBadge;
+
   // Snapshot unread messages once when the thread loads.
   useEffect(() => {
     if (!messages || !user || unreadBannerIds !== null) return;
@@ -97,10 +103,7 @@ export function useChatUnreadBanner(messages: Message[] | undefined) {
       setUnreadBannerCount(Math.max(count, unread.size));
     });
     setUnreadBannerCount(unread.size);
-
-    // Fix header badge as soon as chat opens.
-    markReadAndClearBadge();
-  }, [messages, user, relationship?.id, unreadBannerIds, markReadAndClearBadge, clearBadge]);
+  }, [messages, user, relationship?.id, unreadBannerIds, clearBadge]);
 
   // Auto-dismiss the "N UNREAD" label after a few seconds.
   useEffect(() => {
@@ -128,6 +131,8 @@ export function useChatUnreadBanner(messages: Message[] | undefined) {
 
       if (dividerVisible) {
         bannerSeenRef.current = true;
+        // The unread messages have actually been seen on screen now — safe to mark read.
+        markReadRef.current();
         return;
       }
 

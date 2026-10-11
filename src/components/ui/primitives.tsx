@@ -51,7 +51,7 @@ export function Card({
   const base: ViewStyle = {
     backgroundColor: colors.surface,
     borderColor: colors.border,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: colors.boldBorder ? 2 : StyleSheet.hairlineWidth,
     borderRadius: Radius.lg,
     padding,
   };
@@ -170,7 +170,7 @@ export function Avatar({
         const normalized = c.trim().toLowerCase();
         return normalized === '#fff' || normalized === '#ffffff' || normalized === 'white';
       });
-      const textColor = initialColor ?? (isWhiteBackground ? colors.accent : '#fff');
+      const textColor = initialColor ?? (isWhiteBackground ? colors.accent : colors.onAccent);
 
       return (
         <LinearGradient
@@ -229,6 +229,7 @@ export function Chip({
         {
           backgroundColor: active ? colors.accent : colors.surfaceElevated,
           borderColor: active ? colors.accent : colors.border,
+          borderWidth: colors.boldBorder ? 2 : StyleSheet.hairlineWidth,
         },
       ]}>
       {icon}
@@ -261,7 +262,12 @@ export function PrimaryButton({
       disabled={disabled || loading}
       style={({ pressed }) => [
         styles.primaryBtn,
-        { backgroundColor: colors.accent, opacity: disabled ? 0.45 : pressed ? 0.9 : 1 },
+        {
+          backgroundColor: colors.accent,
+          opacity: disabled ? 0.45 : pressed ? 0.9 : 1,
+          borderWidth: colors.boldBorder ? 2 : 0,
+          borderColor: colors.text,
+        },
         style,
       ]}>
       {loading ? (
@@ -276,7 +282,15 @@ export function PrimaryButton({
 export function StatPill({ value, label }: { value: string | number; label: string }) {
   const { colors } = useTheme();
   return (
-    <View style={[styles.statPill, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
+    <View
+      style={[
+        styles.statPill,
+        {
+          backgroundColor: colors.surfaceElevated,
+          borderColor: colors.border,
+          borderWidth: colors.boldBorder ? 2 : StyleSheet.hairlineWidth,
+        },
+      ]}>
       <Text style={[styles.statValue, { color: colors.text }]}>{value}</Text>
       <Text style={[styles.statLabel, { color: colors.textSecondary }]}>{label}</Text>
     </View>

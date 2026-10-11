@@ -53,7 +53,15 @@ export function MoodSnapshot({ moods, onSelectMood, onViewHistory }: MoodSnapsho
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+    <View
+      style={[
+        styles.container,
+        {
+          backgroundColor: colors.surface,
+          borderColor: colors.border,
+          borderWidth: colors.boldBorder ? 2 : StyleSheet.hairlineWidth,
+        },
+      ]}>
       <View style={styles.headerRow}>
         <Text style={[styles.label, { color: colors.textSecondary }]}>How we&apos;re feeling</Text>
         {onViewHistory && (

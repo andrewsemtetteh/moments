@@ -24,7 +24,7 @@ const SPRING_PEAK = { damping: 8, stiffness: 170, mass: 0.8 };
 const SPRING_SETTLE = { damping: 13, stiffness: 190 };
 
 /** Offsets for a solid outline around the streak number. */
-const OUTLINE_OFFSETS: Array<[number, number]> = [
+const OUTLINE_OFFSETS: [number, number][] = [
   [-3, 0],
   [3, 0],
   [0, -3],
@@ -55,9 +55,8 @@ type Props = {
  * high-contrast bordered digit.
  */
 export function SparkStreakFlame({ count, fromCount, onSettled }: Props) {
-  const { theme } = useTheme();
-  const isDark = theme === 'dark' || theme === 'black' || theme === 'green';
-  const grey = isDark ? '#5A5A62' : '#C5C5C8';
+  const { colors } = useTheme();
+  const grey = colors.isDark ? '#5A5A62' : '#C5C5C8';
 
   const progress = useSharedValue(0);
   const scale = useSharedValue(1);
@@ -192,7 +191,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   layer: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -211,7 +210,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   countWrap: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     alignItems: 'center',
     justifyContent: 'center',
   },

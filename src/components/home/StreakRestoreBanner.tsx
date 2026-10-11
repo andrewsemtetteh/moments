@@ -42,7 +42,11 @@ export function StreakRestoreBanner({ status }: StreakRestoreBannerProps) {
     <View
       style={[
         styles.card,
-        { backgroundColor: colors.surface, borderColor: colors.border },
+        {
+          backgroundColor: colors.surface,
+          borderColor: colors.border,
+          borderWidth: colors.boldBorder ? 2 : StyleSheet.hairlineWidth,
+        },
       ]}>
       <View style={styles.row}>
         <View style={[styles.flameWell, { backgroundColor: well.well }]}>

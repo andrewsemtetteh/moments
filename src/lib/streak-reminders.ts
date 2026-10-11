@@ -3,6 +3,7 @@ import { Platform } from 'react-native';
 import { localCalendarDate } from '@/lib/db-time';
 import { loadExpoNotifications } from '@/lib/expo-notifications-safe';
 import {
+  localMidnight,
   needsStreakReminders,
   STREAK_NUDGE_HOURS_BEFORE_MIDNIGHT,
   STREAK_WARN_HOURS_BEFORE_MIDNIGHT,
@@ -22,6 +23,7 @@ export {
 
 const WARN_ID_PREFIX = 'streak-warn-3h:';
 const NUDGE_ID_PREFIX = 'streak-nudge-1h:';
+const END_ID_PREFIX = 'streak-end:';
 
 function loadNotifications() {
   return loadExpoNotifications();
@@ -33,6 +35,10 @@ function warnIdentifier(day: string) {
 
 function nudgeIdentifier(day: string) {
   return `${NUDGE_ID_PREFIX}${day}`;
+}
+
+function endIdentifier(day: string) {
+  return `${END_ID_PREFIX}${day}`;
 }
 
 async function ensureStreakChannel(
@@ -54,7 +60,11 @@ async function cancelStreakReminderIds(
       scheduled
         .filter((n) => {
           const id = n.identifier;
-          return id.startsWith(WARN_ID_PREFIX) || id.startsWith(NUDGE_ID_PREFIX);
+          return (
+            id.startsWith(WARN_ID_PREFIX) ||
+            id.startsWith(NUDGE_ID_PREFIX) ||
+            id.startsWith(END_ID_PREFIX)
+          );
         })
         .map((n) => Notifications.cancelScheduledNotificationAsync(n.identifier)),
     );
@@ -70,8 +80,10 @@ export async function cancelStreakReminders(): Promise<void> {
 }
 
 /**
- * Schedules today's 3h warning and 1h nudge when the streak is at risk and
- * this user still needs to check in. Cancels otherwise.
+ * Schedules today's 3h warning, 1h nudge, and a midnight "streak ended"
+ * notification when the streak is at risk and this user still needs to
+ * check in. Cancels all three (including "ended") once the user checks in
+ * or the streak is no longer at risk.
  */
 export async function syncStreakReminders(
   status: StreakStatus,
@@ -131,6 +143,20 @@ export async function syncStreakReminders(
         },
       });
     }
+
+    await Notifications.scheduleNotificationAsync({
+      identifier: endIdentifier(day),
+      content: {
+        title: 'Streak ended',
+        body: `Your ${streakLabel} ended. Check in today to start a new one.`,
+        data: { type: 'streak', kind: 'ended' },
+        ...androidChannel,
+      },
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.DATE,
+        date: localMidnight(now),
+      },
+    });
   } catch {
     // Local reminders must never break the app.
   }

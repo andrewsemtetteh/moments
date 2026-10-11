@@ -202,6 +202,7 @@ export function TodaysPromptCard({ challenge, onOpenHistory }: Props) {
             color: colors.text,
             backgroundColor: colors.surfaceElevated,
             borderColor: colors.border,
+            borderWidth: colors.boldBorder ? 2 : 1.5,
           },
         ]}
         placeholder="Type your answer..."
@@ -270,6 +271,7 @@ function AnswerBubble({
         {
           backgroundColor: mine ? colors.accentSoft : colors.surfaceElevated,
           borderColor: colors.border,
+          borderWidth: colors.boldBorder ? 2 : StyleSheet.hairlineWidth,
         },
       ]}>
       <View style={styles.bubbleHead}>

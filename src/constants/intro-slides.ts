@@ -27,10 +27,10 @@ export const INTRO_SLIDES: IntroSlide[] = [
   },
   {
     id: 'together',
-    title: 'Plan',
-    highlight: 'your adventures',
-    body: 'Date ideas, shared calendars, watch nights, and activities made for couples.',
-    icons: ['calendar', 'film', 'gift'],
+    title: 'Play &',
+    highlight: 'plan together',
+    body: 'Live game nights with voice, level up as a couple, and a shared calendar for date ideas.',
+    icons: ['gamepad', 'calendar', 'gift'],
   },
   {
     id: 'private',

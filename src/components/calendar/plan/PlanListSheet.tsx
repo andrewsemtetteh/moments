@@ -25,6 +25,8 @@ export function PlanListSheet({
   const [activeSectionId, setActiveSectionId] = useState<string | null>(null);
   const [editingSectionId, setEditingSectionId] = useState<string | null>(null);
   const [editingItem, setEditingItem] = useState<{ sectionId: string; itemId: string } | null>(null);
+  const [sectionTitleDraft, setSectionTitleDraft] = useState('');
+  const [itemTitleDraft, setItemTitleDraft] = useState('');
   const progress = useMemo(() => (list ? listProgress(list) : null), [list]);
 
   useEffect(() => {
@@ -177,12 +179,13 @@ export function PlanListSheet({
                   <TextInput
                     defaultValue={section.title}
                     autoFocus
-                    onBlur={(e) => {
-                      renameSection(section.id, e.nativeEvent.text);
+                    onChangeText={setSectionTitleDraft}
+                    onBlur={() => {
+                      renameSection(section.id, sectionTitleDraft);
                       setEditingSectionId(null);
                     }}
-                    onSubmitEditing={(e) => {
-                      renameSection(section.id, e.nativeEvent.text);
+                    onSubmitEditing={() => {
+                      renameSection(section.id, sectionTitleDraft);
                       setEditingSectionId(null);
                     }}
                     style={[styles.sectionTitle, { color: colors.text, padding: 0 }]}
@@ -190,7 +193,10 @@ export function PlanListSheet({
                 ) : (
                   <Pressable
                     onPress={() => setActiveSectionId(section.id)}
-                    onLongPress={() => setEditingSectionId(section.id)}>
+                    onLongPress={() => {
+                      setSectionTitleDraft(section.title);
+                      setEditingSectionId(section.id);
+                    }}>
                     <Text style={[styles.sectionTitle, { color: colors.text }]}>{section.title}</Text>
                   </Pressable>
                 )}
@@ -211,12 +217,13 @@ export function PlanListSheet({
                         <TextInput
                           defaultValue={item.title}
                           autoFocus
-                          onBlur={(e) => {
-                            renameItem(section.id, item.id, e.nativeEvent.text);
+                          onChangeText={setItemTitleDraft}
+                          onBlur={() => {
+                            renameItem(section.id, item.id, itemTitleDraft);
                             setEditingItem(null);
                           }}
-                          onSubmitEditing={(e) => {
-                            renameItem(section.id, item.id, e.nativeEvent.text);
+                          onSubmitEditing={() => {
+                            renameItem(section.id, item.id, itemTitleDraft);
                             setEditingItem(null);
                           }}
                           style={{
@@ -230,7 +237,10 @@ export function PlanListSheet({
                       ) : (
                         <Pressable
                           style={{ flex: 1 }}
-                          onLongPress={() => setEditingItem({ sectionId: section.id, itemId: item.id })}>
+                          onLongPress={() => {
+                            setItemTitleDraft(item.title);
+                            setEditingItem({ sectionId: section.id, itemId: item.id });
+                          }}>
                           <Text
                             style={{
                               color: item.done ? colors.textTertiary : colors.text,

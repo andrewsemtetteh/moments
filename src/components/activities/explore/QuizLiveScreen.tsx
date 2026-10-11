@@ -13,7 +13,7 @@ import {
 
 import { exploreStyles as s } from '@/components/activities/explore/explore-styles';
 import { Icon } from '@/components/ui/Icon';
-import { PrimaryButton } from '@/components/ui/primitives';
+import { colorWithAlpha, PrimaryButton } from '@/components/ui/primitives';
 import {
   useActiveQuizLiveSession,
   useQuizLiveMutations,
@@ -71,13 +71,13 @@ export function QuizLiveScreen() {
       <View style={s.stack}>
         <LinearGradient colors={colors.gradient} style={quizStyles.heroEnd}>
           <Text style={quizStyles.heroEndEmoji}>🏆</Text>
-          <Text style={quizStyles.heroEndTitle}>Game over</Text>
-          <Text style={quizStyles.heroEndSub}>{session.topic}</Text>
+          <Text style={[quizStyles.heroEndTitle, { color: colors.onAccent }]}>Game over</Text>
+          <Text style={[quizStyles.heroEndSub, { color: colorWithAlpha(colors.onAccent, 0.88) }]}>{session.topic}</Text>
           <View style={quizStyles.scoreboard}>
             {memberIds.map((id) => (
               <View key={id} style={quizStyles.scoreRow}>
-                <Text style={quizStyles.scoreName}>{id === user?.id ? myName : partnerName}</Text>
-                <Text style={quizStyles.scoreVal}>{finalScores[id] ?? 0}</Text>
+                <Text style={[quizStyles.scoreName, { color: colors.onAccent }]}>{id === user?.id ? myName : partnerName}</Text>
+                <Text style={[quizStyles.scoreVal, { color: colors.onAccent }]}>{finalScores[id] ?? 0}</Text>
               </View>
             ))}
           </View>
@@ -98,8 +98,8 @@ export function QuizLiveScreen() {
       <View style={s.stack}>
         <LinearGradient colors={colors.gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={quizStyles.hero}>
           <Text style={quizStyles.heroEmoji}>🌐</Text>
-          <Text style={quizStyles.heroTitle}>Quiz Live</Text>
-          <Text style={quizStyles.heroSub}>
+          <Text style={[quizStyles.heroTitle, { color: colors.onAccent }]}>Quiz Live</Text>
+          <Text style={[quizStyles.heroSub, { color: colorWithAlpha(colors.onAccent, 0.9) }]}>
             Enter any topic and AI builds your round. You each play on your own phone.
           </Text>
         </LinearGradient>
@@ -337,12 +337,14 @@ function RevealPhase({
   return (
     <View style={s.stack}>
       <LinearGradient colors={colors.gradient} style={quizStyles.revealHero}>
-        <Text style={quizStyles.revealEyebrow}>
+        <Text style={[quizStyles.revealEyebrow, { color: colorWithAlpha(colors.onAccent, 0.8) }]}>
           Question {index + 1} of {total}
         </Text>
-        <Text style={quizStyles.revealTitle}>{headline}</Text>
-        <Text style={quizStyles.revealSub}>{sub}</Text>
-        {correctLabel ? <Text style={quizStyles.revealAnswer}>Answer: {correctLabel}</Text> : null}
+        <Text style={[quizStyles.revealTitle, { color: colors.onAccent }]}>{headline}</Text>
+        <Text style={[quizStyles.revealSub, { color: colorWithAlpha(colors.onAccent, 0.9) }]}>{sub}</Text>
+        {correctLabel ? (
+          <Text style={[quizStyles.revealAnswer, { color: colors.onAccent }]}>Answer: {correctLabel}</Text>
+        ) : null}
       </LinearGradient>
 
       <View style={[quizStyles.revealCard, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
@@ -389,12 +391,12 @@ const quizStyles = StyleSheet.create({
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 40, gap: 12 },
   hero: { borderRadius: 22, padding: 24, alignItems: 'center', gap: 8 },
   heroEmoji: { fontSize: 44 },
-  heroTitle: { color: '#fff', fontSize: 24, fontWeight: '800' },
-  heroSub: { color: 'rgba(255,255,255,0.9)', fontSize: 14, lineHeight: 20, textAlign: 'center' },
+  heroTitle: { fontSize: 24, fontWeight: '800' },
+  heroSub: { fontSize: 14, lineHeight: 20, textAlign: 'center' },
   heroEnd: { borderRadius: 22, padding: 28, alignItems: 'center', gap: 10 },
   heroEndEmoji: { fontSize: 52 },
-  heroEndTitle: { color: '#fff', fontSize: 26, fontWeight: '800' },
-  heroEndSub: { color: 'rgba(255,255,255,0.88)', fontSize: 14, textAlign: 'center' },
+  heroEndTitle: { fontSize: 26, fontWeight: '800' },
+  heroEndSub: { fontSize: 14, textAlign: 'center' },
   topicInput: {
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: 16,
@@ -439,10 +441,10 @@ const quizStyles = StyleSheet.create({
   waitingText: { fontSize: 15, fontWeight: '700' },
   waitingSub: { fontSize: 13, lineHeight: 18 },
   revealHero: { borderRadius: 22, padding: 22, alignItems: 'center', gap: 6 },
-  revealEyebrow: { color: 'rgba(255,255,255,0.8)', fontSize: 11, fontWeight: '800', letterSpacing: 1 },
-  revealTitle: { color: '#fff', fontSize: 28, fontWeight: '800' },
-  revealSub: { color: 'rgba(255,255,255,0.9)', fontSize: 15, textAlign: 'center' },
-  revealAnswer: { color: '#fff', fontSize: 14, fontWeight: '700', marginTop: 6 },
+  revealEyebrow: { fontSize: 11, fontWeight: '800', letterSpacing: 1 },
+  revealTitle: { fontSize: 28, fontWeight: '800' },
+  revealSub: { fontSize: 15, textAlign: 'center' },
+  revealAnswer: { fontSize: 14, fontWeight: '700', marginTop: 6 },
   revealCard: { borderRadius: 18, borderWidth: StyleSheet.hairlineWidth, padding: 18, gap: 14 },
   pickRow: { flexDirection: 'row', gap: 12 },
   pickCol: { flex: 1, gap: 4 },
@@ -450,8 +452,8 @@ const quizStyles = StyleSheet.create({
   pickVal: { fontSize: 15, fontWeight: '700', lineHeight: 20 },
   scoreboard: { width: '100%', gap: 8, marginVertical: 8 },
   scoreRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  scoreName: { color: '#fff', fontSize: 16, fontWeight: '700' },
-  scoreVal: { color: '#fff', fontSize: 22, fontWeight: '800' },
+  scoreName: { fontSize: 16, fontWeight: '700' },
+  scoreVal: { fontSize: 22, fontWeight: '800' },
   scoreboardInline: { flexDirection: 'row', gap: 10 },
   scorePill: {
     flex: 1,

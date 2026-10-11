@@ -1,0 +1,28 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "moments-api",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-29",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": {
+    "enabled": true
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "moments-db",
+      "database_id": "754fbc1f-4d66-4a4b-a828-37976aec4a2e",
+      "migrations_dir": "./migrations"
+    }
+  ],
+  "durable_objects": {
+    "bindings": [{ "name": "HUB", "class_name": "Hub" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Hub"] }],
+  "r2_buckets": [
+    {
+      "binding": "STORAGE",
+      "bucket_name": "moments-storage"
+    }
+  ]
+}

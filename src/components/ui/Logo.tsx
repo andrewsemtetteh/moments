@@ -1,17 +1,24 @@
 import { Image, type ImageStyle } from 'expo-image';
-import { StyleProp, View } from 'react-native';
+import { Platform, StyleProp, View } from 'react-native';
 
 import { MOMENTS_LOGO_PNG, MOMENTS_LOGO_SVG } from '@/constants/brand-assets';
 import { useTheme } from '@/hooks/useTheme';
 
 type LogoMarkProps = {
   size?: number;
-  /** SVG scales cleanly in UI; PNG for contexts that need a raster source. */
+  /** SVG scales cleanly in UI; PNG for contexts that need a raster source. Defaults to
+   * PNG on native — the source SVG lacks explicit width/height, which Metro's plain
+   * (non-transformed) asset pipeline needs to size it correctly, so it fails to load
+   * there. Web renders the SVG natively via the browser, so it defaults to SVG there. */
   variant?: 'svg' | 'png';
   style?: StyleProp<ImageStyle>;
 };
 
-export function LogoMark({ size = 72, variant = 'svg', style }: LogoMarkProps) {
+export function LogoMark({
+  size = 72,
+  variant = Platform.OS === 'web' ? 'svg' : 'png',
+  style,
+}: LogoMarkProps) {
   return (
     <Image
       source={variant === 'png' ? MOMENTS_LOGO_PNG : MOMENTS_LOGO_SVG}

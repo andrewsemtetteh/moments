@@ -29,9 +29,7 @@ export const NOTIFICATION_TYPE_ICON: Record<string, IconName> = {
   streak: 'fire',
   activity: 'gamepad',
   calendar: 'calendar',
-  watch_party: 'film',
-  watch_party_nudge: 'film',
-  watch_party_scheduled: 'calendar',
+  game_invite: 'gamepad',
 };
 
 export const NOTIFICATION_TYPE_LABEL: Record<string, string> = {
@@ -43,9 +41,7 @@ export const NOTIFICATION_TYPE_LABEL: Record<string, string> = {
   streak: 'Streak',
   activity: 'Activity',
   calendar: 'Calendar',
-  watch_party: 'Watch Together',
-  watch_party_nudge: 'Watch Together',
-  watch_party_scheduled: 'Watch Together',
+  game_invite: 'Live game',
 };
 
 /**

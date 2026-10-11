@@ -1,6 +1,6 @@
-import { supabase } from '@/lib/supabase';
+import { backend } from '@/lib/backend';
 
-/** Long-lived signed URLs; storage delivery is CDN-backed by Supabase. */
+/** Long-lived signed URLs; storage delivery is served from R2 by the Worker. */
 export const SIGNED_URL_TTL_SEC = 60 * 60 * 24 * 365 * 5;
 
 export type StorageImageSize = 'thumb' | 'display' | 'full';
@@ -24,7 +24,7 @@ export function isStorageImagePath(path: string): boolean {
   return IMAGE_EXTENSIONS.has(ext);
 }
 
-/** Extract object path after `/{bucket}/` in a Supabase storage URL. */
+/** Extract object path after `/{bucket}/` in a storage URL. */
 export function extractStoragePath(
   url: string | null | undefined,
   bucket: string,
@@ -53,7 +53,7 @@ export async function createStorageSignedUrl(
   const transform =
     size !== 'full' && isStorageImagePath(path) ? IMAGE_TRANSFORMS[size] : undefined;
 
-  const { data, error } = await supabase.storage.from(bucket).createSignedUrl(
+  const { data, error } = await backend.storage.from(bucket).createSignedUrl(
     path,
     ttl,
     transform ? { transform } : undefined,

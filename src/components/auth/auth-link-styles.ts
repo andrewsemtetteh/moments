@@ -1,15 +1,16 @@
 import { StyleSheet } from 'react-native';
 
+import { colorWithAlpha } from '@/components/ui/primitives';
 import type { ThemeColors } from '@/constants/design-system';
 
 /** Muted / emphasis link colors — matches get-started on dark auth screens. */
 export function authLinkColors(colors: ThemeColors) {
   if (colors.isDark) {
     return {
-      muted: 'rgba(255,255,255,0.72)',
-      emphasis: '#FFFFFF',
-      legalMuted: 'rgba(255,255,255,0.55)',
-      legalLink: 'rgba(255,255,255,0.85)',
+      muted: colorWithAlpha(colors.text, 0.72),
+      emphasis: colors.text,
+      legalMuted: colorWithAlpha(colors.text, 0.55),
+      legalLink: colorWithAlpha(colors.text, 0.85),
     };
   }
 

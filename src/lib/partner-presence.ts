@@ -1,6 +1,7 @@
-import type { RealtimeChannel } from '@supabase/supabase-js';
+import type { RealtimeChannel } from '@/lib/cloudflare';
+import { AppState } from 'react-native';
 
-import { supabase } from '@/lib/supabase';
+import { backend } from '@/lib/backend';
 
 interface PresencePayload {
   user_id: string;
@@ -84,13 +85,34 @@ async function trackSelf(entry: ManagedPresence) {
   void touchLastSeenDb(entry.userId, entry);
 }
 
+// Backgrounding an app can suspend the JS timer loop and/or drop the realtime socket, so the
+// 30s heartbeat can silently stop keeping presence fresh — leaving the partner's status stuck
+// on whatever it was when the app was backgrounded. Force an immediate re-track (and unthrottle
+// the DB touch) for every active channel the moment the app comes back to the foreground, rather
+// than waiting for the next heartbeat tick.
+let appStateSubscription: { remove: () => void } | null = null;
+
+function resyncAllOnForeground() {
+  managedByRelationship.forEach((entry, relationshipId) => {
+    entry.lastTouchAt = 0;
+    void trackSelf(entry).then(() => syncPresence(relationshipId));
+  });
+}
+
+function ensureAppStateListener() {
+  if (appStateSubscription) return;
+  appStateSubscription = AppState.addEventListener('change', (state) => {
+    if (state === 'active') resyncAllOnForeground();
+  });
+}
+
 function teardown(relationshipId: string) {
   const entry = managedByRelationship.get(relationshipId);
   if (!entry) return;
 
   if (entry.heartbeat) clearInterval(entry.heartbeat);
   void entry.channel.untrack();
-  supabase.removeChannel(entry.channel);
+  backend.removeChannel(entry.channel);
   managedByRelationship.delete(relationshipId);
 }
 
@@ -100,6 +122,8 @@ function ensureManagedChannel(
   partnerId: string,
   shareOnlineStatus: boolean,
 ) {
+  ensureAppStateListener();
+
   const existing = managedByRelationship.get(relationshipId);
   if (existing) {
     existing.refs += 1;
@@ -113,7 +137,7 @@ function ensureManagedChannel(
     return existing;
   }
 
-  const channel = supabase.channel(`presence:${relationshipId}`, {
+  const channel = backend.channel(`presence:${relationshipId}`, {
     config: { presence: { key: userId } },
   });
 

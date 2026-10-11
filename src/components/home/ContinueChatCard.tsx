@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { LocationMapPreview } from '@/components/moments/LocationMapPreview';
 import { Avatar } from '@/components/ui/primitives';
 import { Radius } from '@/constants/design-system';
 import { useLatestMessage, useUnreadMessageCount } from '@/hooks/queries';
 import { useTheme } from '@/hooks/useTheme';
 import { getFirstName } from '@/lib/avatar-initial';
 import {
+  continueChatAttachment,
   continueChatPreview,
   continueChatTitle,
   messageTimestampMs,
@@ -61,10 +63,13 @@ export function ContinueChatCard() {
       }),
       preview: continueChatPreview(latest, user.id, partnerFirst),
       ago: shortMessageAgo(latest.created_at, ref),
+      attachment: continueChatAttachment(latest),
     };
   }, [latest, partner?.name, unreadCount, user?.id, visible, now]);
 
   if (!partner || !copy) return null;
+
+  const { attachment } = copy;
 
   return (
     <Pressable
@@ -76,6 +81,7 @@ export function ContinueChatCard() {
         {
           backgroundColor: colors.surface,
           borderColor: colors.border,
+          borderWidth: colors.boldBorder ? 2 : StyleSheet.hairlineWidth,
           opacity: pressed ? 0.92 : 1,
           transform: [{ scale: pressed ? 0.99 : 1 }],
         },
@@ -90,7 +96,21 @@ export function ContinueChatCard() {
       </View>
 
       <View style={styles.bottomRow}>
-        <Avatar name={partner.name} imageUrl={partner.avatar_url} size={36} />
+        {attachment?.type === 'location' ? (
+          <LocationMapPreview
+            markers={[{ latitude: attachment.latitude, longitude: attachment.longitude, color: colors.accent }]}
+            height={36}
+            style={styles.attachmentThumb}
+          />
+        ) : attachment?.type === 'contact' ? (
+          <View style={[styles.contactThumb, { backgroundColor: colors.accentSoft }]}>
+            <Text style={[styles.contactThumbText, { color: colors.accent }]}>
+              {attachment.name.trim().charAt(0).toUpperCase() || '?'}
+            </Text>
+          </View>
+        ) : (
+          <Avatar name={partner.name} imageUrl={partner.avatar_url} size={36} />
+        )}
         <Text style={[styles.preview, { color: colors.textSecondary }]} numberOfLines={2}>
           {copy.preview}
         </Text>
@@ -132,5 +152,20 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
     lineHeight: 19,
+  },
+  attachmentThumb: {
+    width: 36,
+    borderRadius: 10,
+  },
+  contactThumb: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  contactThumbText: {
+    fontSize: 15,
+    fontWeight: '800',
   },
 });

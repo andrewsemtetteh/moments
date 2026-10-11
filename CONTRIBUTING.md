@@ -38,8 +38,8 @@ Contributors must follow the official stack:
 
 ## Backend
 
-* Supabase (Auth, DB, Storage, Realtime)
-* Edge Functions
+* Cloudflare Workers (D1, R2, Durable Objects)
+* Clerk (auth)
 
 ## Services
 
@@ -60,8 +60,7 @@ stores/
 services/
 hooks/
 utils/
-supabase/
-edge-functions/
+server/
 docs/
 ```
 
@@ -129,17 +128,17 @@ No:
 
 ---
 
-## 7.1 Supabase Rules
+## 7.1 Cloudflare Rules
 
 * all tables must include `relationship_id`
-* enforce Row Level Security (RLS)
+* enforce access in the Worker (`server/src/compat.ts` POLICIES)
 * no global tables unless explicitly justified
 
 ---
 
-## 7.2 Edge Function Rules
+## 7.2 Worker Function Rules
 
-* must validate auth (`auth.uid()`)
+* must validate auth (Clerk token)
 * must validate relationship membership
 * must fail fast on invalid input
 * must not contain UI logic

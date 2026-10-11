@@ -1,4 +1,3 @@
-import { FREE_ALBUM_STORAGE_BYTES } from '@/constants/design-system';
 import { isValidAnniversaryIso } from '@/lib/anniversary';
 import { extractChatStoragePath } from '@/lib/chat-media';
 import { challengeResponseField } from '@/lib/daily-prompt';
@@ -19,12 +18,10 @@ import {
     mergeScores,
     parseQuizQuestions,
 } from '@/lib/quiz-live';
-import { SharedAlbumStorageLimitError } from '@/lib/shared-album';
-import { hydrateSharedAlbumItems } from '@/lib/shared-album-media';
 import { createStorageSignedUrl } from '@/lib/storage-cdn';
 import { legacyStreakToStatus, parseStreakStatus, withEffectiveStreakRestore } from '@/lib/streak';
 import { hasActiveUserSubscription } from '@/lib/subscription';
-import { supabase } from '@/lib/supabase';
+import { backend } from '@/lib/backend';
 import type {
     Activity,
     BucketListItem,
@@ -38,22 +35,13 @@ import type {
     QuizLiveSession,
     Relationship,
     RelationshipType,
-    SharedAlbumItem,
     SharedGoal,
     Streak,
     StreakStatus,
-    StreamingConnection,
     SubscriptionTier,
     UserProfile,
-    WatchHistoryEntry,
-    WatchlistItem,
-    WatchMessage,
-    WatchReaction,
-    WatchSession,
-    WatchVote,
 } from '@/types/database';
 import { format, startOfDay } from 'date-fns';
-import * as Crypto from 'expo-crypto';
 
 async function readUriAsArrayBuffer(uri: string): Promise<ArrayBuffer> {
   const response = await fetch(uri);
@@ -87,10 +75,10 @@ function pickPrimaryRelationship(relationships: Relationship[], userId: string):
 }
 
 export async function fetchPartnerProfile(userId: string): Promise<UserProfile | null> {
-  const { data, error } = await supabase.from('users').select('*').eq('id', userId).maybeSingle();
+  const { data, error } = await backend.from('users').select('*').eq('id', userId).maybeSingle();
   if (!error && data) return data as UserProfile;
 
-  const { data: rpcData, error: rpcError } = await supabase.rpc('get_partner_profile', {
+  const { data: rpcData, error: rpcError } = await backend.rpc('get_partner_profile', {
     p_user_id: userId,
   });
   if (rpcError || !rpcData) return null;
@@ -98,13 +86,13 @@ export async function fetchPartnerProfile(userId: string): Promise<UserProfile |
 }
 
 export async function fetchProfile(userId: string): Promise<UserProfile | null> {
-  const { data, error } = await supabase.from('users').select('*').eq('id', userId).maybeSingle();
+  const { data, error } = await backend.from('users').select('*').eq('id', userId).maybeSingle();
   if (error) return null;
   return data;
 }
 
 export async function createProfile(profile: Pick<UserProfile, 'id' | 'email' | 'name'>) {
-  const { data, error } = await supabase
+  const { data, error } = await backend
     .from('users')
     .insert({
       id: profile.id,
@@ -118,7 +106,7 @@ export async function createProfile(profile: Pick<UserProfile, 'id' | 'email' | 
 }
 
 export async function updateProfile(userId: string, updates: Partial<UserProfile>) {
-  const { data, error } = await supabase.from('users').update(updates).eq('id', userId).select().single();
+  const { data, error } = await backend.from('users').update(updates).eq('id', userId).select().single();
   if (error) {
     throwSaveError(error, 'Could not save. Please try again.', 'gender');
   }
@@ -148,6 +136,11 @@ export async function updateLocationSharing(
   return updateProfile(userId, updates);
 }
 
+/** Synced from the device locale, not GPS — no permission prompt needed. */
+export async function updateTimezone(userId: string, timezone: string) {
+  return updateProfile(userId, { timezone });
+}
+
 export async function updateOnlineStatusVisibility(userId: string, enabled: boolean) {
   const updates: Partial<UserProfile> = {
     show_online_status: enabled,
@@ -165,7 +158,7 @@ export async function fetchRelationship(userId: string): Promise<{
   relationship: Relationship | null;
   partner: UserProfile | null;
 }> {
-  const { data: relationships, error } = await supabase
+  const { data: relationships, error } = await backend
     .from('relationships')
     .select('*')
     .or(`user_1_id.eq.${userId},user_2_id.eq.${userId}`)
@@ -249,7 +242,7 @@ export async function createRelationship(
   const inviteCode = generateInviteCode();
   const anniversaryDate = options?.anniversaryDate;
   const relationshipType = options?.relationshipType;
-  const { data, error } = await supabase
+  const { data, error } = await backend
     .from('relationships')
     .insert({
       user_1_id: userId,
@@ -263,13 +256,13 @@ export async function createRelationship(
     .single();
   if (error) throw error;
 
-  await supabase.from('streaks').insert({ relationship_id: data.id });
+  await backend.from('streaks').insert({ relationship_id: data.id });
   return syncRelationshipSubscription(data as Relationship, [userId]);
 }
 
 /** Ends pending solo spaces (creator waiting alone) so the user can join a partner's space. */
 export async function endEmptySoloRelationships(userId: string): Promise<void> {
-  const { data: soloSpaces, error } = await supabase
+  const { data: soloSpaces, error } = await backend
     .from('relationships')
     .select('id')
     .eq('user_1_id', userId)
@@ -308,7 +301,7 @@ export async function joinRelationship(userId: string, inviteCode: string): Prom
     throw new Error('Invalid or expired invite code');
   }
 
-  const { data, error } = await supabase.rpc('join_relationship_by_invite', {
+  const { data, error } = await backend.rpc('join_relationship_by_invite', {
     p_invite_code: normalizedCode,
   });
 
@@ -325,7 +318,7 @@ export async function joinRelationship(userId: string, inviteCode: string): Prom
   return { relationship, partner };
 }
 export async function ensureInviteCode(relationshipId: string): Promise<Relationship> {
-  const { data: rel, error } = await supabase
+  const { data: rel, error } = await backend
     .from('relationships')
     .select('*')
     .eq('id', relationshipId)
@@ -341,7 +334,7 @@ export async function ensureInviteCode(relationshipId: string): Promise<Relation
 
 /** End a relationship for both partners. Either member can leave. */
 export async function leaveRelationship(userId: string, relationshipId: string): Promise<Relationship> {
-  const { data: rel, error: fetchError } = await supabase
+  const { data: rel, error: fetchError } = await backend
     .from('relationships')
     .select('*')
     .eq('id', relationshipId)
@@ -362,7 +355,7 @@ export async function leaveRelationship(userId: string, relationshipId: string):
 }
 
 export async function fetchMoments(relationshipId: string, limit = 30, cursor?: string) {
-  let query = supabase
+  let query = backend
     .from('moments')
     .select('*')
     .eq('relationship_id', relationshipId)
@@ -385,7 +378,7 @@ export async function createMoment(
   },
   options?: { senderName?: string | null; partnerUserId?: string | null },
 ) {
-  const { data, error } = await supabase.rpc('create_moment', {
+  const { data, error } = await backend.rpc('create_moment', {
     p_relationship_id: relationshipId,
     p_type: moment.type,
     p_media_url: moment.media_url,
@@ -411,7 +404,7 @@ export async function createMoment(
 }
 
 export async function fetchMomentById(momentId: string) {
-  const { data, error } = await supabase.from('moments').select('*').eq('id', momentId).maybeSingle();
+  const { data, error } = await backend.from('moments').select('*').eq('id', momentId).maybeSingle();
   if (error) throw error;
   if (!data) return null;
   const [hydrated] = await hydrateMomentsMedia([data as Moment]);
@@ -419,14 +412,14 @@ export async function fetchMomentById(momentId: string) {
 }
 
 export async function markMomentViewed(momentId: string, _userId: string) {
-  const { error } = await supabase.rpc('mark_moment_viewed', {
+  const { error } = await backend.rpc('mark_moment_viewed', {
     p_moment_id: momentId,
   });
   if (error) throw error;
 }
 
 export async function deleteMoment(momentId: string, userId: string) {
-  const { data: moment, error: fetchError } = await supabase
+  const { data: moment, error: fetchError } = await backend
     .from('moments')
     .select('id, user_id, media_url')
     .eq('id', momentId)
@@ -439,17 +432,17 @@ export async function deleteMoment(momentId: string, userId: string) {
 
   const path = extractMomentsStoragePath(moment.media_url);
   if (path) {
-    await supabase.storage.from('moments').remove([path]);
+    await backend.storage.from('moments').remove([path]);
   }
 
-  const { error } = await supabase.from('moments').delete().eq('id', momentId);
+  const { error } = await backend.from('moments').delete().eq('id', momentId);
   if (error) throw error;
 }
 
 export async function deleteMoments(momentIds: string[], userId: string) {
   if (momentIds.length === 0) return { deleted: 0, skipped: 0 };
 
-  const { data: rows, error: fetchError } = await supabase
+  const { data: rows, error: fetchError } = await backend
     .from('moments')
     .select('id, user_id, media_url')
     .in('id', momentIds);
@@ -467,10 +460,10 @@ export async function deleteMoments(momentIds: string[], userId: string) {
     .filter((p): p is string => !!p);
 
   if (paths.length > 0) {
-    await supabase.storage.from('moments').remove(paths);
+    await backend.storage.from('moments').remove(paths);
   }
 
-  const { error } = await supabase.from('moments').delete().in(
+  const { error } = await backend.from('moments').delete().in(
     'id',
     owned.map((m) => m.id),
   );
@@ -479,115 +472,8 @@ export async function deleteMoments(momentIds: string[], userId: string) {
   return { deleted: owned.length, skipped };
 }
 
-export async function fetchSharedAlbumItems(relationshipId: string) {
-  const { data, error } = await supabase
-    .from('shared_album_items')
-    .select('*')
-    .eq('relationship_id', relationshipId)
-    .order('created_at', { ascending: false });
-  if (error) {
-    if (isMissingTableError(error)) return [];
-    throw error;
-  }
-  return hydrateSharedAlbumItems((data ?? []) as SharedAlbumItem[]);
-}
-
-export async function fetchSharedAlbumStorageUsed(relationshipId: string): Promise<number> {
-  const { data, error } = await supabase
-    .from('shared_album_items')
-    .select('file_size_bytes')
-    .eq('relationship_id', relationshipId);
-  if (error) {
-    if (isMissingTableError(error)) return 0;
-    throw error;
-  }
-  return (data ?? []).reduce((sum, row) => sum + Number(row.file_size_bytes ?? 0), 0);
-}
-
-export async function uploadSharedAlbumMedia(path: string, uri: string, contentType: string) {
-  const arrayBuffer = await readUriAsArrayBuffer(uri);
-
-  const { data, error } = await supabase.storage.from('shared-album').upload(path, arrayBuffer, {
-    contentType,
-    upsert: false,
-  });
-  if (error) throw error;
-
-  const signedUrl = await createStorageSignedUrl('shared-album', data.path, { size: 'full' });
-  return { path: data.path, signedUrl, byteLength: arrayBuffer.byteLength };
-}
-
-export async function createSharedAlbumItem(
-  relationshipId: string,
-  userId: string,
-  payload: {
-    uri: string;
-    mediaType: 'photo' | 'video';
-    fileSizeBytes?: number;
-    caption?: string | null;
-  },
-  options?: { isPlus?: boolean },
-) {
-  const isPlus = options?.isPlus ?? false;
-  const limitBytes = isPlus ? Number.POSITIVE_INFINITY : FREE_ALBUM_STORAGE_BYTES;
-
-  const arrayBuffer = await readUriAsArrayBuffer(payload.uri);
-  const byteLength =
-    payload.fileSizeBytes && payload.fileSizeBytes > 0 ? payload.fileSizeBytes : arrayBuffer.byteLength;
-
-  const usedBytes = await fetchSharedAlbumStorageUsed(relationshipId);
-  if (!isPlus && usedBytes + byteLength > limitBytes) {
-    throw new SharedAlbumStorageLimitError(usedBytes, limitBytes, byteLength);
-  }
-
-  const ext = payload.mediaType === 'video' ? 'mp4' : 'jpg';
-  const fileName = `${Crypto.randomUUID()}.${ext}`;
-  const storagePath = `${relationshipId}/${userId}/${fileName}`;
-  const contentType = payload.mediaType === 'video' ? 'video/mp4' : 'image/jpeg';
-
-  const { path } = await uploadSharedAlbumMedia(storagePath, payload.uri, contentType);
-
-  const { data, error } = await supabase
-    .from('shared_album_items')
-    .insert({
-      relationship_id: relationshipId,
-      user_id: userId,
-      media_type: payload.mediaType,
-      storage_path: path,
-      file_size_bytes: byteLength,
-      caption: payload.caption?.trim() || null,
-    })
-    .select()
-    .single();
-  if (error) {
-    await supabase.storage.from('shared-album').remove([path]);
-    throw error;
-  }
-
-  const [hydrated] = await hydrateSharedAlbumItems([data as SharedAlbumItem]);
-  return hydrated;
-}
-
-export async function deleteSharedAlbumItem(itemId: string, userId: string) {
-  const { data: item, error: fetchError } = await supabase
-    .from('shared_album_items')
-    .select('id, user_id, storage_path')
-    .eq('id', itemId)
-    .maybeSingle();
-  if (fetchError) throw fetchError;
-  if (!item) return;
-  if (item.user_id !== userId) {
-    throw new Error('You can only remove media you added.');
-  }
-
-  await supabase.storage.from('shared-album').remove([item.storage_path]);
-
-  const { error } = await supabase.from('shared_album_items').delete().eq('id', itemId);
-  if (error) throw error;
-}
-
 export async function fetchMessages(relationshipId: string, limit = 50, cursor?: string) {
-  let query = supabase
+  let query = backend
     .from('messages')
     .select('*')
     .eq('relationship_id', relationshipId)
@@ -618,7 +504,7 @@ export async function sendMessage(
   replyToId?: string,
   options?: { partnerUserId?: string | null; senderName?: string | null },
 ) {
-  const { data, error } = await supabase
+  const { data, error } = await backend
     .from('messages')
     .insert({
       relationship_id: relationshipId,
@@ -637,7 +523,7 @@ export async function sendMessage(
 }
 
 export async function markMessagesRead(relationshipId: string, userId: string) {
-  const { error } = await supabase.rpc('mark_messages_read', {
+  const { error } = await backend.rpc('mark_messages_read', {
     p_relationship_id: relationshipId,
     p_user_id: userId,
   });
@@ -645,7 +531,7 @@ export async function markMessagesRead(relationshipId: string, userId: string) {
 }
 
 export async function fetchUnreadMessageCount(relationshipId: string, userId: string) {
-  const { count, error } = await supabase
+  const { count, error } = await backend
     .from('messages')
     .select('*', { count: 'exact', head: true })
     .eq('relationship_id', relationshipId)
@@ -661,7 +547,7 @@ export async function fetchLatestMessage(
   relationshipId: string,
   userId: string,
 ): Promise<Message | null> {
-  const { data, error } = await supabase
+  const { data, error } = await backend
     .from('messages')
     .select('*')
     .eq('relationship_id', relationshipId)
@@ -685,7 +571,7 @@ export async function fetchLatestMessage(
 }
 
 export async function fetchActivities(relationshipId: string) {
-  const { data, error } = await supabase
+  const { data, error } = await backend
     .from('activities')
     .select('*')
     .eq('relationship_id', relationshipId)
@@ -700,7 +586,7 @@ export async function fetchCalendarEvents(relationshipId: string, month?: Date) 
   const start = new Date(base.getFullYear(), base.getMonth(), 1, 0, 0, 0, 0);
   const end = new Date(base.getFullYear(), base.getMonth() + 1, 0, 23, 59, 59, 999);
 
-  const { data, error } = await supabase
+  const { data, error } = await backend
     .from('calendar_events')
     .select('*')
     .eq('relationship_id', relationshipId)
@@ -718,7 +604,7 @@ export async function fetchCalendarEventsInRange(
   from: Date,
   to: Date,
 ) {
-  const { data, error } = await supabase
+  const { data, error } = await backend
     .from('calendar_events')
     .select('*')
     .eq('relationship_id', relationshipId)
@@ -738,7 +624,7 @@ export async function fetchUpcomingCalendarEvents(relationshipId: string, daysAh
   end.setDate(end.getDate() + daysAhead);
   end.setHours(23, 59, 59, 999);
 
-  const { data, error } = await supabase
+  const { data, error } = await backend
     .from('calendar_events')
     .select('*')
     .eq('relationship_id', relationshipId)
@@ -756,7 +642,7 @@ export async function fetchPastCalendarEvents(relationshipId: string, daysBack =
   const start = new Date();
   start.setDate(start.getDate() - daysBack);
 
-  const { data, error } = await supabase
+  const { data, error } = await backend
     .from('calendar_events')
     .select('*')
     .eq('relationship_id', relationshipId)
@@ -773,7 +659,7 @@ export async function createCalendarEvent(
   relationshipId: string,
   event: Omit<CalendarEvent, 'id' | 'relationship_id' | 'created_at'>,
 ) {
-  const { data, error } = await supabase
+  const { data, error } = await backend
     .from('calendar_events')
     .insert({ relationship_id: relationshipId, ...event })
     .select()
@@ -786,7 +672,7 @@ export async function updateCalendarEvent(
   eventId: string,
   patch: Partial<Pick<CalendarEvent, 'title' | 'date_time' | 'type' | 'description'>>,
 ) {
-  const { data, error } = await supabase
+  const { data, error } = await backend
     .from('calendar_events')
     .update(patch)
     .eq('id', eventId)
@@ -797,32 +683,28 @@ export async function updateCalendarEvent(
 }
 
 export async function deleteCalendarEvent(eventId: string) {
-  const { error } = await supabase.from('calendar_events').delete().eq('id', eventId);
+  const { error } = await backend.from('calendar_events').delete().eq('id', eventId);
   if (error) throw error;
 }
 
 export async function fetchLatestMoods(relationshipId: string, memberIds?: string[]) {
-  const {
-    data: { user: authUser },
-  } = await supabase.auth.getUser();
-
-  let userIds = uniqueUserIds([...(memberIds ?? []), authUser?.id]);
+  let userIds = uniqueUserIds(memberIds ?? []);
 
   if (userIds.length === 0) {
-    const { data: rel, error: relError } = await supabase
+    const { data: rel, error: relError } = await backend
       .from('relationships')
       .select('user_1_id, user_2_id')
       .eq('id', relationshipId)
       .maybeSingle();
     if (relError) throw relError;
-    userIds = uniqueUserIds([rel?.user_1_id, rel?.user_2_id, authUser?.id]);
+    userIds = uniqueUserIds([rel?.user_1_id, rel?.user_2_id]);
   }
 
   if (userIds.length === 0) return {};
 
   const rows = await Promise.all(
     userIds.map(async (userId) => {
-      const { data, error } = await supabase
+      const { data, error } = await backend
         .from('mood_logs')
         .select('*')
         .eq('relationship_id', relationshipId)
@@ -848,7 +730,7 @@ function uniqueUserIds(ids: (string | null | undefined)[]): string[] {
 
 /** Most-used moods for a user, most frequent first. */
 export async function fetchMoodFrequency(relationshipId: string, userId: string, limit = 40) {
-  const { data, error } = await supabase
+  const { data, error } = await backend
     .from('mood_logs')
     .select('mood')
     .eq('relationship_id', relationshipId)
@@ -877,7 +759,7 @@ export async function fetchMoodHistoryPage(
   },
 ) {
   const limit = options?.limit ?? 50;
-  const { data, error } = await supabase.rpc('get_mood_history_page', {
+  const { data, error } = await backend.rpc('get_mood_history_page', {
     p_relationship_id: relationshipId,
     p_limit: limit,
     p_before: options?.before ?? null,
@@ -888,7 +770,7 @@ export async function fetchMoodHistoryPage(
     return (data ?? []) as MoodLog[];
   }
 
-  let query = supabase
+  let query = backend
     .from('mood_logs')
     .select('*')
     .eq('relationship_id', relationshipId)
@@ -920,7 +802,7 @@ export async function fetchMoodHistoryOverview(
   const filterUserId = resolveMoodFilterUserId(options.filter, options.userId, options.partnerId);
   const offsetMinutes = getLocalTimezoneOffsetMinutes();
 
-  const { data, error } = await supabase.rpc('get_mood_history_overview', {
+  const { data, error } = await backend.rpc('get_mood_history_overview', {
     p_relationship_id: relationshipId,
     p_filter_user_id: filterUserId,
     p_days: options.days ?? 14,
@@ -932,7 +814,7 @@ export async function fetchMoodHistoryOverview(
     return mapRpcOverview(data as RpcMoodHistoryOverview, options.userId, options.partnerId);
   }
 
-  let query = supabase
+  let query = backend
     .from('mood_logs')
     .select('*')
     .eq('relationship_id', relationshipId)
@@ -953,8 +835,8 @@ export async function fetchMoodHistory(relationshipId: string, limit = 200) {
   return fetchMoodHistoryPage(relationshipId, { limit });
 }
 
-export async function updateMood(relationshipId: string, mood: string) {
-  const { data: rpcData, error: rpcError } = await supabase.rpc('log_mood', {
+export async function updateMood(relationshipId: string, mood: string, userId: string) {
+  const { data: rpcData, error: rpcError } = await backend.rpc('log_mood', {
     p_relationship_id: relationshipId,
     p_mood: mood,
   });
@@ -973,15 +855,9 @@ export async function updateMood(relationshipId: string, mood: string) {
     throw rpcError;
   }
 
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
-  if (authError || !user) throw authError ?? new Error('Not authenticated');
-
-  const { data, error } = await supabase
+  const { data, error } = await backend
     .from('mood_logs')
-    .insert({ relationship_id: relationshipId, user_id: user.id, mood })
+    .insert({ relationship_id: relationshipId, user_id: userId, mood })
     .select()
     .single();
   if (error) throw error;
@@ -989,7 +865,7 @@ export async function updateMood(relationshipId: string, mood: string) {
 }
 
 export async function fetchStreakStatus(relationshipId: string): Promise<StreakStatus | null> {
-  const { data, error } = await supabase.rpc('get_streak_status', {
+  const { data, error } = await backend.rpc('get_streak_status', {
     p_relationship_id: relationshipId,
   });
 
@@ -1015,7 +891,7 @@ export async function fetchStreakStatus(relationshipId: string): Promise<StreakS
     });
   }
 
-  const { data: row, error: rowError } = await supabase
+  const { data: row, error: rowError } = await backend
     .from('streaks')
     .select('current_streak, longest_streak, last_active_date, restorable_streak, restorable_lost_at')
     .eq('relationship_id', relationshipId)
@@ -1065,22 +941,22 @@ async function fetchRelationshipActivityDays(relationshipId: string): Promise<st
   const dates = new Set<string>();
 
   const [moments, messages, moods, challenges] = await Promise.all([
-    supabase
+    backend
       .from('moments')
       .select('created_at')
       .eq('relationship_id', relationshipId)
       .gte('created_at', sinceIso),
-    supabase
+    backend
       .from('messages')
       .select('created_at')
       .eq('relationship_id', relationshipId)
       .gte('created_at', sinceIso),
-    supabase
+    backend
       .from('mood_logs')
       .select('created_at')
       .eq('relationship_id', relationshipId)
       .gte('created_at', sinceIso),
-    supabase
+    backend
       .from('daily_challenges')
       .select('challenge_date, user_1_response, user_2_response')
       .eq('relationship_id', relationshipId)
@@ -1100,7 +976,7 @@ async function fetchRelationshipActivityDays(relationshipId: string): Promise<st
 }
 
 async function fetchStreakActiveDays(relationshipId: string): Promise<string[]> {
-  const { data, error } = await supabase
+  const { data, error } = await backend
     .from('streak_active_days')
     .select('activity_date')
     .eq('relationship_id', relationshipId)
@@ -1112,7 +988,7 @@ async function fetchStreakActiveDays(relationshipId: string): Promise<string[]> 
 }
 
 export async function restoreStreak(relationshipId: string): Promise<StreakStatus | null> {
-  const { data, error } = await supabase.rpc('restore_streak', {
+  const { data, error } = await backend.rpc('restore_streak', {
     p_relationship_id: relationshipId,
   });
   if (error) throw error;
@@ -1122,7 +998,7 @@ export async function restoreStreak(relationshipId: string): Promise<StreakStatu
 
 /** @deprecated use fetchStreakStatus */
 export async function fetchStreak(relationshipId: string) {
-  const { data, error } = await supabase
+  const { data, error } = await backend
     .from('streaks')
     .select('*')
     .eq('relationship_id', relationshipId)
@@ -1133,7 +1009,7 @@ export async function fetchStreak(relationshipId: string) {
 
 export async function fetchDailyChallenge(relationshipId: string, challengeDate?: string) {
   const today = challengeDate ?? localCalendarDate();
-  const { data, error } = await supabase
+  const { data, error } = await backend
     .from('daily_challenges')
     .select('*')
     .eq('relationship_id', relationshipId)
@@ -1167,7 +1043,7 @@ export async function ensureDailyChallenge(relationshipId: string): Promise<Dail
   const prompt = getDailyQuestion();
 
   if (existing?.type === 'skipped') {
-    const { data, error } = await supabase
+    const { data, error } = await backend
       .from('daily_challenges')
       .update({
         prompt,
@@ -1183,7 +1059,7 @@ export async function ensureDailyChallenge(relationshipId: string): Promise<Dail
     return data as DailyChallenge;
   }
 
-  const { data, error } = await supabase
+  const { data, error } = await backend
     .from('daily_challenges')
     .insert({
       relationship_id: relationshipId,
@@ -1212,7 +1088,7 @@ export async function respondToDailyChallenge(
 ) {
   const field = challengeResponseField(relationship, userId);
 
-  const { data, error } = await supabase
+  const { data, error } = await backend
     .from('daily_challenges')
     .update({ [field]: response })
     .eq('id', challengeId)
@@ -1225,7 +1101,7 @@ export async function respondToDailyChallenge(
   const bothIn = Boolean(updated.user_1_response && updated.user_2_response);
 
   if (bothIn && !updated.completed) {
-    const { data: completedRow, error: completeError } = await supabase
+    const { data: completedRow, error: completeError } = await backend
       .from('daily_challenges')
       .update({ completed: true })
       .eq('id', challengeId)
@@ -1273,7 +1149,7 @@ async function notifyPartnerPromptAnswered({
     const dedupKey = `prompt_answer:${challengeId}:${userId}:${bothIn ? 'reveal' : 'turn'}`;
     let shouldNotify = true;
     try {
-      const { data: claimed, error: dedupError } = await supabase.rpc('try_notification_dedup', {
+      const { data: claimed, error: dedupError } = await backend.rpc('try_notification_dedup', {
         p_relationship_id: relationshipId,
         p_dedup_key: dedupKey,
       });
@@ -1300,7 +1176,7 @@ async function notifyPartnerPromptAnswered({
 }
 
 export async function fetchDailyChallengeHistory(relationshipId: string, limit = 30) {
-  const { data, error } = await supabase
+  const { data, error } = await backend
     .from('daily_challenges')
     .select('*')
     .eq('relationship_id', relationshipId)
@@ -1311,7 +1187,7 @@ export async function fetchDailyChallengeHistory(relationshipId: string, limit =
 }
 
 export async function fetchBucketList(relationshipId: string) {
-  const { data, error } = await supabase
+  const { data, error } = await backend
     .from('bucket_list')
     .select('*')
     .eq('relationship_id', relationshipId)
@@ -1321,7 +1197,7 @@ export async function fetchBucketList(relationshipId: string) {
 }
 
 export async function fetchSharedGoals(relationshipId: string) {
-  const { data, error } = await supabase
+  const { data, error } = await backend
     .from('shared_goals')
     .select('*')
     .eq('relationship_id', relationshipId)
@@ -1333,13 +1209,13 @@ export async function fetchSharedGoals(relationshipId: string) {
 // Experiences marketplace paused — re-enable when backend is ready.
 /*
 export async function fetchExperiences() {
-  const { data, error } = await supabase.from('experiences').select('*').limit(50);
+  const { data, error } = await backend.from('experiences').select('*').limit(50);
   if (error) throw error;
   return data as Experience[];
 }
 
 export async function fetchSavedExperienceIds(relationshipId: string) {
-  const { data, error } = await supabase
+  const { data, error } = await backend
     .from('saved_experiences')
     .select('experience_id')
     .eq('relationship_id', relationshipId);
@@ -1348,14 +1224,14 @@ export async function fetchSavedExperienceIds(relationshipId: string) {
 }
 
 export async function saveExperience(relationshipId: string, experienceId: string) {
-  const { error } = await supabase
+  const { error } = await backend
     .from('saved_experiences')
     .insert({ relationship_id: relationshipId, experience_id: experienceId });
   if (error) throw error;
 }
 
 export async function unsaveExperience(relationshipId: string, experienceId: string) {
-  const { error } = await supabase
+  const { error } = await backend
     .from('saved_experiences')
     .delete()
     .eq('relationship_id', relationshipId)
@@ -1373,7 +1249,7 @@ export async function fetchNotificationsPage(
   options?: { limit?: number; before?: string },
 ) {
   const limit = options?.limit ?? 30;
-  let query = supabase
+  let query = backend
     .from('notifications')
     .select('*')
     .eq('user_id', userId)
@@ -1408,7 +1284,7 @@ async function hydrateNotificationMedia(items: Notification[]): Promise<Notifica
 }
 
 export async function fetchUnreadNotificationCount(userId: string) {
-  const { count, error } = await supabase
+  const { count, error } = await backend
     .from('notifications')
     .select('*', { count: 'exact', head: true })
     .eq('user_id', userId)
@@ -1420,7 +1296,7 @@ export async function fetchUnreadNotificationCount(userId: string) {
 }
 
 export async function deleteNotification(notificationId: string, userId: string) {
-  const { error } = await supabase
+  const { error } = await backend
     .from('notifications')
     .delete()
     .eq('id', notificationId)
@@ -1429,19 +1305,19 @@ export async function deleteNotification(notificationId: string, userId: string)
 }
 
 export async function clearAllNotifications(userId: string) {
-  const { error } = await supabase.from('notifications').delete().eq('user_id', userId);
+  const { error } = await backend.from('notifications').delete().eq('user_id', userId);
   if (error) throw error;
 }
 
 export async function markNotificationsRead(notificationIds?: string[]) {
-  const { error } = await supabase.rpc('mark_notifications_read', {
+  const { error } = await backend.rpc('mark_notifications_read', {
     p_notification_ids: notificationIds?.length ? notificationIds : null,
   });
   if (error) throw error;
 }
 
 export async function registerPushToken(token: string | null) {
-  const { error } = await supabase.rpc('register_push_token', {
+  const { error } = await backend.rpc('register_push_token', {
     p_token: token,
   });
   if (error) throw error;
@@ -1465,7 +1341,7 @@ export async function uploadMedia(
 ) {
   const arrayBuffer = await readUriAsArrayBuffer(uri);
 
-  const { data, error } = await supabase.storage.from(bucket).upload(path, arrayBuffer, {
+  const { data, error } = await backend.storage.from(bucket).upload(path, arrayBuffer, {
     contentType,
     upsert: true,
   });
@@ -1485,7 +1361,7 @@ export async function uploadMomentMedia(path: string, uri: string, contentType: 
 export async function uploadChatMedia(path: string, uri: string, contentType: string) {
   const arrayBuffer = await readUriAsArrayBuffer(uri);
 
-  const { data, error } = await supabase.storage.from('chat').upload(path, arrayBuffer, {
+  const { data, error } = await backend.storage.from('chat').upload(path, arrayBuffer, {
     contentType,
     upsert: true,
   });
@@ -1499,7 +1375,7 @@ export async function uploadProfileAvatar(userId: string, uri: string) {
   const path = `${userId}/avatar-${Date.now()}.jpg`;
   const arrayBuffer = await readUriAsArrayBuffer(uri);
 
-  const { data, error } = await supabase.storage.from('profiles').upload(path, arrayBuffer, {
+  const { data, error } = await backend.storage.from('profiles').upload(path, arrayBuffer, {
     contentType: 'image/jpeg',
     upsert: true,
   });
@@ -1512,7 +1388,7 @@ export async function invokeEdgeFunction<T>(
   name: string,
   body: Record<string, unknown>,
 ): Promise<T> {
-  const { data, error } = await supabase.functions.invoke(name, { body });
+  const { data, error } = await backend.functions.invoke(name, { body });
   if (error) throw error;
   return data as T;
 }
@@ -1523,7 +1399,7 @@ export async function trackEvent(
   eventType: string,
   metadata: Record<string, unknown> = {},
 ) {
-  await supabase.from('analytics_events').insert({
+  await backend.from('analytics_events').insert({
     relationship_id: relationshipId,
     user_id: userId,
     event_type: eventType,
@@ -1548,7 +1424,7 @@ export async function updateRelationshipAnniversary(relationshipId: string, anni
     throw new Error('Please pick a valid anniversary date.');
   }
 
-  const { data, error } = await supabase.rpc('set_relationship_anniversary', {
+  const { data, error } = await backend.rpc('set_relationship_anniversary', {
     p_relationship_id: relationshipId,
     p_anniversary_date: anniversaryDate,
   });
@@ -1565,7 +1441,7 @@ export async function updateRelationshipAnniversary(relationshipId: string, anni
 }
 
 export async function updateRelationship(relationshipId: string, updates: Partial<Relationship>) {
-  const { data, error } = await supabase
+  const { data, error } = await backend
     .from('relationships')
     .update(updates)
     .eq('id', relationshipId)
@@ -1578,7 +1454,7 @@ export async function updateRelationship(relationshipId: string, updates: Partia
 }
 
 export async function createBucketListItem(relationshipId: string, title: string, note?: string) {
-  const { data, error } = await supabase
+  const { data, error } = await backend
     .from('bucket_list')
     .insert({ relationship_id: relationshipId, title, note: note ?? null, status: 'pending' })
     .select()
@@ -1588,13 +1464,13 @@ export async function createBucketListItem(relationshipId: string, title: string
 }
 
 export async function updateBucketListItem(id: string, updates: Partial<BucketListItem>) {
-  const { data, error } = await supabase.from('bucket_list').update(updates).eq('id', id).select().single();
+  const { data, error } = await backend.from('bucket_list').update(updates).eq('id', id).select().single();
   if (error) throw error;
   return data as BucketListItem;
 }
 
 export async function createSharedGoal(relationshipId: string, title: string) {
-  const { data, error } = await supabase
+  const { data, error } = await backend
     .from('shared_goals')
     .insert({ relationship_id: relationshipId, title, progress: 0, status: 'active' })
     .select()
@@ -1604,13 +1480,13 @@ export async function createSharedGoal(relationshipId: string, title: string) {
 }
 
 export async function updateSharedGoal(id: string, updates: Partial<SharedGoal>) {
-  const { data, error } = await supabase.from('shared_goals').update(updates).eq('id', id).select().single();
+  const { data, error } = await backend.from('shared_goals').update(updates).eq('id', id).select().single();
   if (error) throw error;
   return data as SharedGoal;
 }
 
 export async function toggleMessageReaction(messageId: string, userId: string, emoji: string) {
-  const { error } = await supabase.rpc('toggle_message_reaction', {
+  const { error } = await backend.rpc('toggle_message_reaction', {
     p_message_id: messageId,
     p_user_id: userId,
     p_emoji: emoji,
@@ -1619,7 +1495,7 @@ export async function toggleMessageReaction(messageId: string, userId: string, e
 }
 
 export async function setMessagePinned(messageId: string, userId: string, isPinned: boolean) {
-  const { error } = await supabase.rpc('set_message_pinned', {
+  const { error } = await backend.rpc('set_message_pinned', {
     p_message_id: messageId,
     p_user_id: userId,
     p_is_pinned: isPinned,
@@ -1628,7 +1504,7 @@ export async function setMessagePinned(messageId: string, userId: string, isPinn
 }
 
 export async function hideMessageForUser(messageId: string, userId: string) {
-  const { error } = await supabase.rpc('hide_message_for_user', {
+  const { error } = await backend.rpc('hide_message_for_user', {
     p_message_id: messageId,
     p_user_id: userId,
   });
@@ -1636,7 +1512,7 @@ export async function hideMessageForUser(messageId: string, userId: string) {
 }
 
 export async function deleteMessageForAll(messageId: string, senderId: string) {
-  const { data: message, error: fetchError } = await supabase
+  const { data: message, error: fetchError } = await backend
     .from('messages')
     .select('id, sender_id, media_url')
     .eq('id', messageId)
@@ -1649,10 +1525,10 @@ export async function deleteMessageForAll(messageId: string, senderId: string) {
 
   const storagePath = extractChatStoragePath(message.media_url);
   if (storagePath) {
-    await supabase.storage.from('chat').remove([storagePath]);
+    await backend.storage.from('chat').remove([storagePath]);
   }
 
-  const { error } = await supabase
+  const { error } = await backend
     .from('messages')
     .update({
       deleted_for_all: true,
@@ -1667,187 +1543,12 @@ export async function deleteMessageForAll(messageId: string, senderId: string) {
 }
 
 export async function toggleMomentReaction(momentId: string, userId: string, emoji: string) {
-  const { error } = await supabase.rpc('toggle_moment_reaction', {
+  const { error } = await backend.rpc('toggle_moment_reaction', {
     p_moment_id: momentId,
     p_user_id: userId,
     p_emoji: emoji,
   });
   if (error) throw error;
-}
-
-// --- Watch Together ---
-
-export async function fetchActiveWatchSession(relationshipId: string): Promise<WatchSession | null> {
-  const { data, error } = await supabase
-    .from('watch_sessions')
-    .select('*')
-    .eq('relationship_id', relationshipId)
-    .neq('status', 'ended')
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (error) {
-    if (isMissingTableError(error)) return null;
-    throw error;
-  }
-  return (data as WatchSession | null) ?? null;
-}
-
-export async function createWatchSession(
-  relationshipId: string,
-  hostUserId: string,
-  payload: {
-    title: string;
-    link?: string;
-    platformId?: string;
-    contentId?: string;
-    contentSource?: WatchSession['content_source'];
-    scheduledAt?: string;
-    reminderMinutes?: number;
-    status?: WatchSession['status'];
-  },
-): Promise<WatchSession> {
-  const status = payload.status ?? (payload.scheduledAt ? 'scheduled' : 'setup');
-  const { data, error } = await supabase
-    .from('watch_sessions')
-    .insert({
-      relationship_id: relationshipId,
-      host_user_id: hostUserId,
-      title: payload.title.trim(),
-      link: payload.link?.trim() || null,
-      platform_id: payload.platformId ?? null,
-      content_id: payload.contentId ?? null,
-      content_source: payload.contentSource ?? 'streaming',
-      scheduled_at: payload.scheduledAt ?? null,
-      reminder_minutes: payload.reminderMinutes ?? null,
-      status,
-      ready_user_ids: status === 'scheduled' ? [] : [hostUserId],
-    })
-    .select()
-    .single();
-  if (error) throw error;
-  return data as WatchSession;
-}
-
-export async function updateWatchSession(sessionId: string, updates: Partial<WatchSession>) {
-  const { data, error } = await supabase
-    .from('watch_sessions')
-    .update(updates)
-    .eq('id', sessionId)
-    .select()
-    .single();
-  if (error) throw error;
-  return data as WatchSession;
-}
-
-export async function markWatchReady(sessionId: string, userId: string, readyIds: string[]) {
-  const next = readyIds.includes(userId) ? readyIds : [...readyIds, userId];
-  return updateWatchSession(sessionId, { ready_user_ids: next });
-}
-
-export async function startWatchCountdown(sessionId: string) {
-  const countdownAt = new Date(Date.now() + 5000).toISOString();
-  return updateWatchSession(sessionId, { status: 'countdown', countdown_at: countdownAt });
-}
-
-export async function beginWatching(sessionId: string) {
-  return updateWatchSession(sessionId, { status: 'watching', countdown_at: null });
-}
-
-export async function setWatchPlayback(
-  sessionId: string,
-  playbackState: WatchSession['playback_state'],
-  position?: number,
-) {
-  return updateWatchSession(sessionId, {
-    playback_state: playbackState,
-    playback_updated_at: new Date().toISOString(),
-    ...(position != null ? { playback_position: Math.round(position) } : {}),
-  });
-}
-
-export async function startScheduledSession(sessionId: string, hostUserId: string) {
-  return updateWatchSession(sessionId, {
-    status: 'watching',
-    ready_user_ids: [hostUserId],
-    scheduled_at: null,
-    playback_state: 'paused',
-    playback_position: 0,
-  });
-}
-
-export async function addWatchReaction(sessionId: string, reactions: WatchReaction[], userId: string, emoji: string) {
-  const next: WatchReaction[] = [...reactions, { user_id: userId, emoji, at: new Date().toISOString() }].slice(-40);
-  return updateWatchSession(sessionId, { reactions: next });
-}
-
-export async function endWatchSession(sessionId: string) {
-  return updateWatchSession(sessionId, { status: 'ended' });
-}
-
-export async function fetchWatchMessages(sessionId: string): Promise<WatchMessage[]> {
-  const { data, error } = await supabase
-    .from('watch_messages')
-    .select('*')
-    .eq('session_id', sessionId)
-    .order('created_at', { ascending: true })
-    .limit(200);
-  if (error) {
-    if (isMissingTableError(error)) return [];
-    throw error;
-  }
-  return (data as WatchMessage[]) ?? [];
-}
-
-export async function sendWatchMessage(
-  sessionId: string,
-  relationshipId: string,
-  senderId: string,
-  message: string,
-): Promise<WatchMessage> {
-  const { data, error } = await supabase
-    .from('watch_messages')
-    .insert({
-      session_id: sessionId,
-      relationship_id: relationshipId,
-      sender_id: senderId,
-      message: message.trim(),
-    })
-    .select()
-    .single();
-  if (error) throw error;
-  return data as WatchMessage;
-}
-
-export async function fetchStreamingConnections(userId: string): Promise<StreamingConnection[]> {
-  const { data, error } = await supabase
-    .from('user_streaming_connections')
-    .select('*')
-    .eq('user_id', userId)
-    .order('connected_at', { ascending: false });
-  if (error) {
-    if (isMissingTableError(error)) return [];
-    throw error;
-  }
-  return (data as StreamingConnection[]) ?? [];
-}
-
-export async function connectStreamingPlatform(userId: string, platformId: string, accountLabel?: string) {
-  const { data, error } = await supabase
-    .from('user_streaming_connections')
-    .upsert(
-      {
-        user_id: userId,
-        platform_id: platformId,
-        account_label: accountLabel ?? null,
-        connected_at: new Date().toISOString(),
-      },
-      { onConflict: 'user_id,platform_id' },
-    )
-    .select()
-    .single();
-  if (error) throw error;
-  return data as StreamingConnection;
 }
 
 export async function sendPartnerNotification(
@@ -1857,7 +1558,7 @@ export async function sendPartnerNotification(
   content: string,
   extras?: { mediaUrl?: string | null; relatedId?: string | null },
 ) {
-  const { error } = await supabase.rpc('create_partner_notification', {
+  const { error } = await backend.rpc('create_partner_notification', {
     p_relationship_id: relationshipId,
     p_recipient_id: partnerUserId,
     p_type: type,
@@ -1867,7 +1568,7 @@ export async function sendPartnerNotification(
   });
   if (error && !isMissingTableError(error)) {
     if (extras?.mediaUrl || extras?.relatedId) {
-      const fallback = await supabase.rpc('create_partner_notification', {
+      const fallback = await backend.rpc('create_partner_notification', {
         p_relationship_id: relationshipId,
         p_recipient_id: partnerUserId,
         p_type: type,
@@ -1881,190 +1582,10 @@ export async function sendPartnerNotification(
   void dispatchPendingPushNotifications();
 }
 
-export async function notifyWatchPartyStarted(
-  relationshipId: string,
-  partnerUserId: string,
-  hostName: string,
-  title: string,
-) {
-  await sendPartnerNotification(
-    relationshipId,
-    partnerUserId,
-    'watch_party',
-    `${hostName} started a watch party: ${title}`,
-  );
-}
-
-export async function nudgePartnerToWatchParty(
-  relationshipId: string,
-  partnerUserId: string,
-  senderName: string,
-) {
-  await sendPartnerNotification(
-    relationshipId,
-    partnerUserId,
-    'watch_party_nudge',
-    `${senderName} is waiting for you in Watch Together`,
-  );
-}
-
-export async function notifyWatchPartyScheduled(
-  relationshipId: string,
-  partnerUserId: string,
-  hostName: string,
-  title: string,
-  whenLabel: string,
-) {
-  await sendPartnerNotification(
-    relationshipId,
-    partnerUserId,
-    'watch_party_scheduled',
-    `${hostName} scheduled ${title} for ${whenLabel} 🍿`,
-  );
-}
-
-// --- Upcoming / scheduled sessions ---
-
-export async function fetchUpcomingSessions(relationshipId: string): Promise<WatchSession[]> {
-  const { data, error } = await supabase
-    .from('watch_sessions')
-    .select('*')
-    .eq('relationship_id', relationshipId)
-    .eq('status', 'scheduled')
-    .order('scheduled_at', { ascending: true });
-  if (error) {
-    if (isMissingTableError(error)) return [];
-    throw error;
-  }
-  return (data as WatchSession[]) ?? [];
-}
-
-// --- Shared watchlist ---
-
-export async function fetchWatchlist(relationshipId: string): Promise<WatchlistItem[]> {
-  const { data, error } = await supabase
-    .from('watch_watchlist')
-    .select('*')
-    .eq('relationship_id', relationshipId)
-    .order('watched', { ascending: true })
-    .order('created_at', { ascending: false });
-  if (error) {
-    if (isMissingTableError(error)) return [];
-    throw error;
-  }
-  return (data as WatchlistItem[]) ?? [];
-}
-
-export async function addWatchlistItem(
-  relationshipId: string,
-  addedBy: string,
-  payload: { title: string; platformId?: string; note?: string },
-): Promise<WatchlistItem> {
-  const { data, error } = await supabase
-    .from('watch_watchlist')
-    .insert({
-      relationship_id: relationshipId,
-      added_by: addedBy,
-      title: payload.title.trim(),
-      platform_id: payload.platformId ?? null,
-      note: payload.note?.trim() || null,
-      votes: {},
-    })
-    .select()
-    .single();
-  if (error) throw error;
-  return data as WatchlistItem;
-}
-
-export async function voteWatchlistItem(
-  itemId: string,
-  votes: Record<string, WatchVote>,
-  userId: string,
-  vote: WatchVote,
-) {
-  const next = { ...votes };
-  if (next[userId] === vote) {
-    delete next[userId];
-  } else {
-    next[userId] = vote;
-  }
-  const { data, error } = await supabase
-    .from('watch_watchlist')
-    .update({ votes: next })
-    .eq('id', itemId)
-    .select()
-    .single();
-  if (error) throw error;
-  return data as WatchlistItem;
-}
-
-export async function setWatchlistWatched(itemId: string, watched: boolean) {
-  const { data, error } = await supabase
-    .from('watch_watchlist')
-    .update({ watched, watched_at: watched ? new Date().toISOString() : null })
-    .eq('id', itemId)
-    .select()
-    .single();
-  if (error) throw error;
-  return data as WatchlistItem;
-}
-
-export async function removeWatchlistItem(itemId: string) {
-  const { error } = await supabase.from('watch_watchlist').delete().eq('id', itemId);
-  if (error) throw error;
-}
-
-// --- Watch history ---
-
-export async function fetchWatchHistory(relationshipId: string): Promise<WatchHistoryEntry[]> {
-  const { data, error } = await supabase
-    .from('watch_history')
-    .select('*')
-    .eq('relationship_id', relationshipId)
-    .order('watched_at', { ascending: false });
-  if (error) {
-    if (isMissingTableError(error)) return [];
-    throw error;
-  }
-  return (data as WatchHistoryEntry[]) ?? [];
-}
-
-export async function addWatchHistoryEntry(
-  relationshipId: string,
-  loggedBy: string,
-  payload: {
-    title: string;
-    platformId?: string | null;
-    contentId?: string | null;
-    rating?: number;
-    favoriteMoment?: string;
-    promptQuestion?: string;
-    promptAnswer?: string;
-  },
-): Promise<WatchHistoryEntry> {
-  const { data, error } = await supabase
-    .from('watch_history')
-    .insert({
-      relationship_id: relationshipId,
-      logged_by: loggedBy,
-      title: payload.title.trim(),
-      platform_id: payload.platformId ?? null,
-      content_id: payload.contentId ?? null,
-      rating: payload.rating ?? null,
-      favorite_moment: payload.favoriteMoment?.trim() || null,
-      prompt_question: payload.promptQuestion ?? null,
-      prompt_answer: payload.promptAnswer?.trim() || null,
-    })
-    .select()
-    .single();
-  if (error) throw error;
-  return data as WatchHistoryEntry;
-}
-
 // --- Quiz Live ---
 
 export async function fetchActiveQuizLiveSession(relationshipId: string): Promise<QuizLiveSession | null> {
-  const { data, error } = await supabase
+  const { data, error } = await backend
     .from('quiz_live_sessions')
     .select('*')
     .eq('relationship_id', relationshipId)
@@ -2090,7 +1611,7 @@ function normalizeQuizLiveSession(row: Record<string, unknown>): QuizLiveSession
 }
 
 export async function endActiveQuizLiveSessions(relationshipId: string): Promise<void> {
-  const { error } = await supabase
+  const { error } = await backend
     .from('quiz_live_sessions')
     .update({ status: 'finished', updated_at: new Date().toISOString() })
     .eq('relationship_id', relationshipId)
@@ -2103,7 +1624,7 @@ export async function createQuizLiveSession(
   hostUserId: string,
   topic: string,
 ): Promise<QuizLiveSession> {
-  const { data, error } = await supabase
+  const { data, error } = await backend
     .from('quiz_live_sessions')
     .insert({
       relationship_id: relationshipId,
@@ -2121,7 +1642,7 @@ export async function updateQuizLiveSession(
   sessionId: string,
   updates: Partial<QuizLiveSession>,
 ): Promise<QuizLiveSession> {
-  const { data, error } = await supabase
+  const { data, error } = await backend
     .from('quiz_live_sessions')
     .update({ ...updates, updated_at: new Date().toISOString() })
     .eq('id', sessionId)

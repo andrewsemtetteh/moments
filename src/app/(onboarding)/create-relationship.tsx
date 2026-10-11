@@ -1,3 +1,4 @@
+import { useAuth } from '@clerk/expo';
 import * as Clipboard from 'expo-clipboard';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
@@ -11,6 +12,7 @@ import { colorWithAlpha, PrimaryButton } from '@/components/ui/primitives';
 import { PromptLink } from '@/components/ui/PromptLink';
 import { Spacing } from '@/constants/design-system';
 import { useTheme } from '@/hooks/useTheme';
+import { createRelationship, ensureInviteCode } from '@/lib/moments-api';
 import { markRelationshipOnboardingDone } from '@/lib/onboarding-storage';
 import {
   buildOnboardingRelationshipParams,
@@ -20,7 +22,6 @@ import {
   type OnboardingRelationshipParams,
 } from '@/lib/onboarding-relationship-params';
 import { goToOnboardingBack } from '@/lib/onboarding-navigation';
-import * as api from '@/services/api';
 import { useAuthStore, useRelationshipStore } from '@/stores';
 
 export default function CreateRelationshipScreen() {
@@ -29,6 +30,7 @@ export default function CreateRelationshipScreen() {
   const params = useLocalSearchParams<OnboardingRelationshipParams>();
   const { colors } = useTheme();
   const user = useAuthStore((s) => s.user);
+  const { getToken } = useAuth();
   const relationship = useRelationshipStore((s) => s.relationship);
   const setRelationship = useRelationshipStore((s) => s.setRelationship);
   const [name, setName] = useState('');
@@ -51,12 +53,17 @@ export default function CreateRelationshipScreen() {
       let cancelled = false;
       const loadExisting = async () => {
         try {
-          const rel = relationship.invite_code
-            ? relationship
-            : await api.ensureInviteCode(relationship.id);
+          if (relationship.invite_code) {
+            if (cancelled) return;
+            setInviteCode(relationship.invite_code);
+            return;
+          }
+          const token = await getToken();
+          if (!token) throw new Error('Not signed in');
+          const code = await ensureInviteCode(token, relationship.id);
           if (cancelled) return;
-          setRelationship(rel);
-          setInviteCode(rel.invite_code);
+          setRelationship({ ...relationship, invite_code: code });
+          setInviteCode(code);
         } catch {
           if (!cancelled) {
             Alert.alert('Could not load your space', 'Go back to Profile and try again.');
@@ -84,6 +91,9 @@ export default function CreateRelationshipScreen() {
       return;
     }
     router.replace('/(onboarding)/anniversary-setup');
+    // deps list the individual primitive params fields deliberately; `params` itself is a new
+    // object every render (useLocalSearchParams) and would re-fire this effect on every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     inviteCode,
     hasSoloSpace,
@@ -114,9 +124,12 @@ export default function CreateRelationshipScreen() {
 
     setLoading(true);
     try {
-      const rel = await api.createRelationship(user.id, trimmed, {
-        anniversaryDate,
-        relationshipType,
+      const token = await getToken();
+      if (!token) throw new Error('Not signed in');
+      const rel = await createRelationship(token, {
+        relationship_name: trimmed,
+        anniversary_date: anniversaryDate,
+        relationship_type: relationshipType,
       });
       await markRelationshipOnboardingDone(user.id);
       setRelationship(rel);
@@ -145,7 +158,7 @@ export default function CreateRelationshipScreen() {
   const continueWithoutInvite = () => {
     Haptics.selectionAsync();
     router.replace({
-      pathname: '/(onboarding)/notification-prompt',
+      pathname: '/(onboarding)/theme-picker',
       params: { next: 'home' },
     });
   };

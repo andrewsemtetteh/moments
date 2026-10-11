@@ -10,7 +10,25 @@ export type CallSignal =
   | { type: 'ice'; callId: string; fromUserId: string; candidate: RTCIceCandidateInit }
   | { type: 'end'; callId: string; fromUserId: string };
 
-export const ICE_SERVERS: RTCIceServer[] = [{ urls: 'stun:stun.l.google.com:19302' }];
+const TURN_URL = process.env.EXPO_PUBLIC_TURN_URL;
+
+/**
+ * STUN alone fails behind symmetric NATs (most cellular networks), so calls and live-room voice
+ * silently never connect for many couples. Set EXPO_PUBLIC_TURN_URL (+ _USERNAME / _CREDENTIAL)
+ * to relay through a TURN server.
+ */
+export const ICE_SERVERS: RTCIceServer[] = [
+  { urls: 'stun:stun.l.google.com:19302' },
+  ...(TURN_URL
+    ? [
+        {
+          urls: TURN_URL.split(',').map((u) => u.trim()),
+          username: process.env.EXPO_PUBLIC_TURN_USERNAME,
+          credential: process.env.EXPO_PUBLIC_TURN_CREDENTIAL,
+        } as RTCIceServer,
+      ]
+    : []),
+];
 
 export function createCallId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;

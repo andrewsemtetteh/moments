@@ -1,13 +1,14 @@
-import { format } from 'date-fns';
-import { BlurView } from 'expo-blur';
-import { useEffect, useState } from 'react';
-import { Dimensions, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { isToday } from 'date-fns';
+import { useEffect, useRef, useState } from 'react';
+import { Dimensions, Keyboard, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 
 import { LocketReactionCluster } from '@/components/moments/LocketReactionCluster';
 import { Icon } from '@/components/ui/Icon';
 import { Avatar } from '@/components/ui/primitives';
 import { useTheme } from '@/hooks/useTheme';
-import { getMomentReactionHistory, getUserReactionEmoji } from '@/lib/moment-display';
+import { formatMomentDateLabel, getMomentReactionHistory, getUserReactionEmoji } from '@/lib/moment-display';
 import { momentChrome } from '@/lib/moment-theme';
 import type { Moment } from '@/types/database';
 
@@ -48,45 +49,89 @@ export function MomentViewerDock({
 }: MomentViewerDockProps) {
   const { colors } = useTheme();
   const chrome = momentChrome(colors);
-  const dateLabel = format(new Date(moment.created_at), 'EEEE · MMM d');
+  const createdAt = new Date(moment.created_at);
+  // "3 hours ago" is only useful the same day — past that, a plain date/weekday
+  // reads better than stacking a date next to a redundant relative time.
+  const dateLine = isToday(createdAt) ? timeAgo : formatMomentDateLabel(createdAt);
   const reactionHistory = getMomentReactionHistory(moment, userId, partnerId, partnerName);
   const userReaction = getUserReactionEmoji(moment, userId);
   const [pickerOpen, setPickerOpen] = useState(() => !userReaction);
 
   useEffect(() => {
+    // New moment (or viewer) — default open only when there's nothing reacted yet.
     setPickerOpen(!getUserReactionEmoji(moment, userId));
+    // keyed on moment.id on purpose: the full `moment` object changes reference whenever anyone
+    // reacts, which would otherwise reopen the picker on every reaction instead of only on
+    // moment navigation.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [moment.id, userId]);
 
-  const showPicker = !userReaction || pickerOpen;
+  // Not OR'd with `!userReaction` anymore — removing a reaction (tapping the same
+  // emoji again) used to force this back open right after closing it, since that
+  // toggle nulls userReaction. Closing should stay closed either way now.
+  const showPicker = pickerOpen;
 
   const handleReact = (emoji: string) => {
     onReact(emoji);
     setPickerOpen(false);
   };
 
+  const inputRef = useRef<TextInput>(null);
+  const [replyFocused, setReplyFocused] = useState(false);
+  const dragY = useSharedValue(0);
+
+  const dismissReplyKeyboard = () => {
+    inputRef.current?.blur();
+    Keyboard.dismiss();
+  };
+
+  // Only active while replying — drag the drawer down to dismiss the keyboard,
+  // same gesture language as the rest of the app's drag-to-dismiss sheets.
+  const dragHandle = Gesture.Pan()
+    .enabled(replyFocused)
+    .activeOffsetY([-6, 6])
+    .failOffsetX([-14, 14])
+    .onUpdate((event) => {
+      dragY.value = event.translationY > 0 ? event.translationY : 0;
+    })
+    .onEnd((event) => {
+      const shouldDismiss = event.translationY > 50 || event.velocityY > 600;
+      if (shouldDismiss) runOnJS(dismissReplyKeyboard)();
+      dragY.value = withSpring(0, { damping: 26, stiffness: 300 });
+    });
+
+  const dragStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: dragY.value }],
+  }));
+
   const body = (
     <View style={[styles.inner, { paddingBottom: bottomInset + 10 }]}>
+      <GestureDetector gesture={dragHandle}>
+        <View style={styles.handleTouchTarget} hitSlop={{ top: 8, bottom: 8, left: 24, right: 24 }}>
+          <View
+            style={[
+              styles.handle,
+              { backgroundColor: replyFocused ? colors.accent : chrome.border },
+            ]}
+          />
+        </View>
+      </GestureDetector>
+
       <View style={styles.authorRow}>
-        <Avatar name={authorName} imageUrl={authorAvatar} size={36} />
+        <View style={[styles.avatarRing, { borderColor: isMine ? '#e85d75' : '#5b8def' }]}>
+          <Avatar name={authorName} imageUrl={authorAvatar} size={36} />
+        </View>
         <View style={styles.authorMeta}>
-          <View style={styles.authorTop}>
-            <Text style={[styles.authorName, { color: chrome.text }]}>{isMine ? 'You' : authorName}</Text>
-            <View style={[styles.ownerPill, { backgroundColor: isMine ? colors.accentSoft : chrome.surfaceSoft }]}>
-              <Text style={[styles.ownerPillText, { color: isMine ? colors.accent : chrome.textSecondary }]}>
-                {isMine ? 'Your moment' : 'Their moment'}
-              </Text>
-            </View>
-          </View>
-          <Text style={[styles.dateLine, { color: chrome.textSecondary }]}>
-            {dateLabel} · {timeAgo}
-          </Text>
+          <Text style={[styles.authorName, { color: chrome.text }]}>{isMine ? 'You' : authorName}</Text>
+          <Text style={[styles.dateLine, { color: chrome.textSecondary }]}>{dateLine}</Text>
         </View>
       </View>
 
       <View style={styles.historyBlock}>
-        <Text style={[styles.historyTitle, { color: chrome.textTertiary }]}>Reaction history</Text>
+        {/* <Text style={[styles.historyTitle, { color: chrome.textTertiary }]}>Reaction history</Text> */}
         {reactionHistory.length === 0 ? (
-          <Text style={[styles.historyEmpty, { color: chrome.textTertiary }]}>No reactions yet. Be the first!</Text>
+          // <Text style={[styles.historyEmpty, { color: chrome.textTertiary }]}>No reactions yet. Be the first!</Text>
+          null
         ) : (
           <View style={styles.historyRow}>
             {reactionHistory.map((item, i) => {
@@ -102,7 +147,7 @@ export function MomentViewerDock({
                   <Pressable
                     key={`${item.emoji}-${item.label}-${i}`}
                     onPress={() => setPickerOpen(true)}
-                    style={[styles.historyChip, { backgroundColor: chrome.surfaceSoft, borderColor: colors.accent }]}>
+                    style={[styles.historyChip, { backgroundColor: colors.accentSoft, borderColor: colors.accent }]}>
                     {chip}
                   </Pressable>
                 );
@@ -131,6 +176,7 @@ export function MomentViewerDock({
 
       <View style={styles.replyRow}>
         <TextInput
+          ref={inputRef}
           value={reply}
           onChangeText={onReplyChange}
           placeholder={isMine ? 'Note to self…' : `Whisper to ${partnerName.split(' ')[0]}…`}
@@ -138,6 +184,8 @@ export function MomentViewerDock({
           style={[styles.replyInput, { backgroundColor: chrome.surfaceSoft, color: chrome.text, borderColor: chrome.border }]}
           returnKeyType="send"
           onSubmitEditing={onSendReply}
+          onFocus={() => setReplyFocused(true)}
+          onBlur={() => setReplyFocused(false)}
           editable={!sending}
         />
         <Pressable
@@ -159,33 +207,35 @@ export function MomentViewerDock({
     </View>
   );
 
-  if (Platform.OS === 'ios') {
-    return (
-      <BlurView intensity={50} tint={colors.isDark ? 'dark' : 'light'} style={[styles.dock, { borderColor: chrome.border }]}>
-        {body}
-      </BlurView>
-    );
-  }
-
-  return <View style={[styles.dock, styles.dockAndroid, { backgroundColor: chrome.elevated, borderColor: chrome.border }]}>{body}</View>;
+  return (
+    <Animated.View style={[styles.dockShadowWrap, dragStyle]}>
+      <View style={[styles.dock, { backgroundColor: chrome.elevated, borderColor: chrome.border }]}>{body}</View>
+    </Animated.View>
+  );
 }
 
 const styles = StyleSheet.create({
+  dockShadowWrap: {
+    zIndex: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 12,
+    elevation: 10,
+  },
   dock: {
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     overflow: 'hidden',
     borderTopWidth: StyleSheet.hairlineWidth,
-    zIndex: 6,
   },
-  dockAndroid: {},
-  inner: { paddingHorizontal: 18, paddingTop: 14, gap: 12 },
+  inner: { paddingHorizontal: 18, paddingTop: 6, gap: 12 },
+  handleTouchTarget: { alignSelf: 'center', paddingVertical: 8 },
+  handle: { width: 36, height: 4, borderRadius: 2 },
   authorRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  avatarRing: { borderRadius: 999, borderWidth: 2, padding: 1.5 },
   authorMeta: { flex: 1, gap: 3 },
-  authorTop: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
   authorName: { fontSize: 16, fontWeight: '800' },
-  ownerPill: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999 },
-  ownerPillText: { fontSize: 10, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5 },
   dateLine: { fontSize: 12, fontWeight: '600' },
   historyBlock: { gap: 8 },
   historyTitle: {

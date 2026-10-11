@@ -1,4 +1,4 @@
-import { format, isSameWeek, isThisWeek, isToday, isYesterday, subWeeks } from 'date-fns';
+import { format, isSameDay, isSameWeek, subDays, subWeeks } from 'date-fns';
 
 import type { Message } from '@/types/database';
 
@@ -14,10 +14,10 @@ export function formatChatDateLabel(iso: string, now = Date.now()): string {
   const date = new Date(iso);
   const nowDate = new Date(now);
 
-  if (isToday(date)) return 'Today';
-  if (isYesterday(date)) return 'Yesterday';
+  if (isSameDay(date, nowDate)) return 'Today';
+  if (isSameDay(date, subDays(nowDate, 1))) return 'Yesterday';
 
-  if (isThisWeek(date, WEEK_OPTS)) {
+  if (isSameWeek(date, nowDate, WEEK_OPTS)) {
     return format(date, 'EEEE');
   }
 

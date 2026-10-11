@@ -1,3 +1,4 @@
+import { useAuth, useUser } from '@clerk/expo';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
@@ -11,11 +12,10 @@ import { PrimaryButton } from '@/components/ui/primitives';
 import { Spacing } from '@/constants/design-system';
 import { useTheme } from '@/hooks/useTheme';
 import { ensureUserProfile } from '@/lib/auth-session';
+import { uploadMyAvatar } from '@/lib/moments-api';
 import { markAvatarPromptDone } from '@/lib/onboarding-storage';
 import { goToOnboardingBack } from '@/lib/onboarding-navigation';
 import { needsProfileName } from '@/lib/profile-setup';
-import { supabase } from '@/lib/supabase';
-import * as api from '@/services/api';
 import { useAuthStore } from '@/stores';
 
 export default function ProfileSetupScreen() {
@@ -24,6 +24,8 @@ export default function ProfileSetupScreen() {
   const { colors } = useTheme();
   const user = useAuthStore((s) => s.user);
   const setUser = useAuthStore((s) => s.setUser);
+  const { user: clerkUser } = useUser();
+  const { getToken } = useAuth();
   const [avatarUri, setAvatarUri] = useState<string | null>(user?.avatar_url ?? null);
   const [loading, setLoading] = useState(false);
   const [bootstrapping, setBootstrapping] = useState(!user);
@@ -46,14 +48,17 @@ export default function ProfileSetupScreen() {
         return;
       }
 
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.user) {
+      if (!clerkUser) {
         router.replace('/(auth)/login');
         return;
       }
 
       try {
-        const profile = await ensureUserProfile(session.user);
+        const profile = await ensureUserProfile({
+          id: clerkUser.id,
+          email: clerkUser.primaryEmailAddress?.emailAddress ?? null,
+          name: clerkUser.fullName,
+        });
         if (cancelled) return;
         setUser(profile);
       } catch (e: unknown) {
@@ -71,7 +76,7 @@ export default function ProfileSetupScreen() {
     return () => {
       cancelled = true;
     };
-  }, [router, setUser, user]);
+  }, [router, setUser, user, clerkUser]);
 
   const pickPhoto = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -97,17 +102,11 @@ export default function ProfileSetupScreen() {
     try {
       let currentUser = activeUser;
 
-      if (!skipPhoto) {
-        let avatarUrl = currentUser.avatar_url;
-
-        if (avatarUri && avatarUri !== currentUser.avatar_url && !avatarUri.startsWith('http')) {
-          avatarUrl = await api.uploadProfileAvatar(currentUser.id, avatarUri);
-        }
-
-        if (avatarUrl && avatarUrl !== currentUser.avatar_url) {
-          currentUser = await api.updateProfile(currentUser.id, { avatar_url: avatarUrl });
-          setUser(currentUser);
-        }
+      if (!skipPhoto && avatarUri && avatarUri !== currentUser.avatar_url && !avatarUri.startsWith('http')) {
+        const token = await getToken();
+        if (!token) throw new Error('Not signed in');
+        currentUser = await uploadMyAvatar(token, avatarUri);
+        setUser(currentUser);
       }
 
       await markAvatarPromptDone(currentUser.id);

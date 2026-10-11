@@ -83,7 +83,6 @@ export function MoodHistoryModal() {
     [timelineLogs, user?.id, partner?.name],
   );
 
-  const isLoading = tab === 'overview' ? overviewLoading : timelineLoading;
   const isError = tab === 'overview' ? overviewError : timelineError;
   const errorMessage = toUserFacingNetworkError(
     tab === 'overview' ? overviewErr : timelineErr,
@@ -133,17 +132,14 @@ export function MoodHistoryModal() {
   };
 
   return (
-    <Modal visible animationType="slide" presentationStyle="pageSheet" onRequestClose={close}>
+    <Modal visible animationType="slide" presentationStyle="fullScreen" onRequestClose={close}>
       <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>
         <View style={styles.header}>
           <Pressable onPress={close} hitSlop={10} style={styles.headerSide} accessibilityLabel="Close">
-            <Icon name="close" size={24} color={colors.text} />
+            <Icon name="close" size={26} color={colors.text} />
           </Pressable>
           <View style={styles.headerCenter}>
             <Text style={[styles.title, { color: colors.text }]}>Mood history</Text>
-            <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-              Trends and timeline for you two
-            </Text>
           </View>
           <View style={styles.headerSide} />
         </View>
@@ -244,12 +240,6 @@ export function MoodHistoryModal() {
             ) : null}
           </ScrollView>
         )}
-
-        {isRefreshing && !isLoading ? (
-          <View style={[styles.refreshPill, { backgroundColor: colors.surfaceElevated }]}>
-            <ActivityIndicator size="small" color={colors.accent} />
-          </View>
-        ) : null}
       </View>
     </Modal>
   );
@@ -259,14 +249,14 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   header: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     paddingHorizontal: 16,
-    paddingBottom: 12,
+    paddingTop: 8,
+    paddingBottom: 18,
   },
-  headerSide: { width: 56, paddingTop: 2 },
-  headerCenter: { flex: 1, alignItems: 'center', gap: 2 },
-  title: { fontSize: 18, fontWeight: '800' },
-  subtitle: { fontSize: 13, fontWeight: '600', textAlign: 'center' },
+  headerSide: { width: 40, alignItems: 'center' },
+  headerCenter: { flex: 1, alignItems: 'center' },
+  title: { fontSize: 20, fontWeight: '800', letterSpacing: -0.3 },
   filterRow: {
     flexDirection: 'row',
     marginHorizontal: 16,
@@ -299,12 +289,4 @@ const styles = StyleSheet.create({
   errorWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, gap: 12 },
   errorTitle: { fontSize: 18, fontWeight: '800', textAlign: 'center' },
   errorBody: { fontSize: 15, lineHeight: 22, textAlign: 'center' },
-  refreshPill: {
-    position: 'absolute',
-    top: 12,
-    alignSelf: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 999,
-  },
 });

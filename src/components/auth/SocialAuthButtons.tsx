@@ -1,9 +1,11 @@
+import { useSSO } from '@clerk/expo/experimental';
 import { useState } from 'react';
 import { ActivityIndicator, Alert, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { AppleIcon, GoogleIcon } from '@/components/auth/OAuthBrandIcon';
+import { colorWithAlpha } from '@/components/ui/primitives';
 import { useTheme } from '@/hooks/useTheme';
-import { signInWithApple, signInWithGoogle } from '@/lib/oauth';
+import { formatAuthError } from '@/lib/auth-errors';
 
 type Props = {
   onSuccess: () => void;
@@ -13,6 +15,7 @@ type Props = {
 
 export function SocialAuthButtons({ onSuccess, requireTerms = false, agreedToTerms = true }: Props) {
   const { colors } = useTheme();
+  const { startSSOFlow } = useSSO();
   const [loadingProvider, setLoadingProvider] = useState<'apple' | 'google' | null>(null);
 
   const guardTerms = () => {
@@ -23,31 +26,43 @@ export function SocialAuthButtons({ onSuccess, requireTerms = false, agreedToTer
     return true;
   };
 
-  const handleApple = async () => {
+  const handleSSO = async (strategy: 'oauth_apple' | 'oauth_google', provider: 'apple' | 'google') => {
     if (!guardTerms()) return;
-    setLoadingProvider('apple');
+    const label = provider === 'apple' ? 'Apple' : 'Google';
+    setLoadingProvider(provider);
     try {
-      const signedIn = await signInWithApple();
-      if (signedIn) onSuccess();
+      const { createdSessionId, signIn, signUp } = await startSSOFlow({ strategy });
+      if (createdSessionId) {
+        onSuccess();
+        return;
+      }
+
+      if (signIn?.existingSession || signUp?.existingSession) {
+        Alert.alert(
+          `Already signed in with ${label}`,
+          'This account is already signed in on another session. Sign out there first, or use a different account.',
+        );
+        return;
+      }
+
+      if (signUp?.status === 'missing_requirements') {
+        Alert.alert(
+          `${label} sign up incomplete`,
+          'Your account needs additional info to finish signing up. Please try again or use email instead.',
+        );
+        return;
+      }
+
+      // No createdSessionId, no error, and none of the above — the user cancelled the flow.
     } catch (e: unknown) {
-      Alert.alert('Apple sign in failed', e instanceof Error ? e.message : 'Please try again');
+      Alert.alert(`${label} sign in failed`, formatAuthError(e));
     } finally {
       setLoadingProvider(null);
     }
   };
 
-  const handleGoogle = async () => {
-    if (!guardTerms()) return;
-    setLoadingProvider('google');
-    try {
-      const signedIn = await signInWithGoogle();
-      if (signedIn) onSuccess();
-    } catch (e: unknown) {
-      Alert.alert('Google sign in failed', e instanceof Error ? e.message : 'Please try again');
-    } finally {
-      setLoadingProvider(null);
-    }
-  };
+  const handleApple = () => handleSSO('oauth_apple', 'apple');
+  const handleGoogle = () => handleSSO('oauth_google', 'google');
 
   const showApple = Platform.OS === 'ios' || Platform.OS === 'android';
   const busy = loadingProvider !== null;
@@ -70,8 +85,15 @@ export function SocialAuthButtons({ onSuccess, requireTerms = false, agreedToTer
             styles.appleBtn,
             {
               backgroundColor: appleBackground,
-              borderColor: appleOnDark ? colors.borderStrong : 'transparent',
-              borderWidth: appleOnDark ? StyleSheet.hairlineWidth : 0,
+              // Apple's button is always solid black/white regardless of app theme,
+              // so `colors.border` (tuned for the page's own background) isn't
+              // guaranteed to show up against it — paper's border is solid black,
+              // which would vanish on this button's own black fill. A border
+              // derived from the pill's own foreground color always contrasts
+              // against its paired background, and the hairline width matches
+              // every other input/button border in the app.
+              borderColor: colorWithAlpha(appleForeground, 0.18),
+              borderWidth: StyleSheet.hairlineWidth,
               opacity: busy && loadingProvider !== 'apple' ? 0.6 : 1,
             },
           ]}
@@ -137,7 +159,8 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   googleBtn: {
-    borderWidth: 1,
+    // Matches the hairline weight of AuthTextField and the other OAuth buttons.
+    borderWidth: StyleSheet.hairlineWidth,
   },
   googleBtnText: {
     fontSize: 15,

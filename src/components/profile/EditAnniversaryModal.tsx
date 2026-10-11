@@ -32,7 +32,7 @@ export function EditAnniversaryModal({ visible, value, saving = false, onClose, 
         value={draft}
         onChange={setDraft}
         subtitle="We use this for your anniversary countdown and how long you've been together."
-        surfaceColor={colors.backgroundElevated}
+        surfaceColor={colors.surfaceElevated}
       />
 
       <PrimaryButton

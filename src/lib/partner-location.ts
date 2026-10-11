@@ -1,6 +1,6 @@
-import type { RealtimeChannel } from '@supabase/supabase-js';
+import type { RealtimeChannel } from '@/lib/cloudflare';
 
-import { supabase } from '@/lib/supabase';
+import { backend } from '@/lib/backend';
 import type { UserProfile } from '@/types/database';
 
 type Listener = () => void;
@@ -15,15 +15,15 @@ type ManagedLocation = {
 const managedByPartner = new Map<string, ManagedLocation>();
 
 function removeChannelByTopic(topic: string) {
-  for (const existing of supabase.getChannels()) {
+  for (const existing of backend.getChannels()) {
     if (existing.topic === topic) {
-      void supabase.removeChannel(existing);
+      void backend.removeChannel(existing);
     }
   }
 }
 
 async function refreshPartnerProfile(partnerId: string, listeners: Set<Listener>) {
-  const { data } = await supabase.from('users').select('*').eq('id', partnerId).maybeSingle();
+  const { data } = await backend.from('users').select('*').eq('id', partnerId).maybeSingle();
   if (data) {
     listeners.forEach((listener) => listener());
   }
@@ -33,7 +33,7 @@ async function refreshPartnerProfile(partnerId: string, listeners: Set<Listener>
 function teardown(partnerId: string) {
   const entry = managedByPartner.get(partnerId);
   if (!entry) return;
-  void supabase.removeChannel(entry.channel);
+  void backend.removeChannel(entry.channel);
   managedByPartner.delete(partnerId);
 }
 
@@ -56,7 +56,7 @@ export function subscribePartnerLocation(
   const channelName = `partner-location:${partnerId}`;
   removeChannelByTopic(`realtime:${channelName}`);
 
-  const channel = supabase
+  const channel = backend
     .channel(channelName)
     .on(
       'postgres_changes',
@@ -84,6 +84,6 @@ export function subscribePartnerLocation(
 }
 
 export async function fetchPartnerProfileRow(partnerId: string): Promise<UserProfile | null> {
-  const { data } = await supabase.from('users').select('*').eq('id', partnerId).maybeSingle();
+  const { data } = await backend.from('users').select('*').eq('id', partnerId).maybeSingle();
   return (data as UserProfile | null) ?? null;
 }

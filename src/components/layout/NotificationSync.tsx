@@ -90,7 +90,7 @@ export function NotificationSync() {
 /** @deprecated Prefer openFromNotification — kept for type-only call sites. */
 export function openFromNotificationType(
   type: string | undefined,
-  router: { push: (href: Href) => void },
+  router: { navigate: (href: Href) => void },
 ) {
   void openFromNotification({ type }, router);
 }

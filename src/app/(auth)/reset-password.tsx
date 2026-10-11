@@ -1,3 +1,4 @@
+import { useSignIn } from '@clerk/expo';
 import { useEffect, useState } from 'react';
 import {
   Alert,
@@ -11,66 +12,55 @@ import {
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { LogoMark } from '@/components/ui/Logo';
 import { PasswordInput } from '@/components/auth/PasswordInput';
 import { AuthScreenEnter } from '@/components/auth/AuthMotion';
 import { AuthPrimaryButton } from '@/components/auth/AuthPrimaryButton';
 import { useTheme } from '@/hooks/useTheme';
-import { hydrateAuthSession } from '@/lib/auth-session';
+import { formatAuthError } from '@/lib/auth-errors';
 import { sanitizePasswordInput } from '@/lib/sanitize-input';
-import { supabase } from '@/lib/supabase';
 
 export default function ResetPasswordScreen() {
   const router = useRouter();
   const { colors } = useTheme();
+  const { signIn, fetchStatus } = useSignIn();
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [checkingSession, setCheckingSession] = useState(true);
+
+  const loading = fetchStatus === 'fetching';
 
   useEffect(() => {
-    let cancelled = false;
-
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (cancelled) return;
-      if (!session) router.replace('/(auth)/login');
-      setCheckingSession(false);
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [router]);
+    if (signIn.status !== 'needs_new_password') {
+      router.replace('/(auth)/login');
+    }
+    // Only checked once, on mount — status changes to 'complete' after a successful submit.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleSave = async () => {
     const cleanPassword = sanitizePasswordInput(password);
     const cleanConfirm = sanitizePasswordInput(confirmPassword);
     if (cleanPassword.length < 6 || cleanPassword !== cleanConfirm) return;
 
-    setLoading(true);
     try {
-      const { error } = await supabase.auth.updateUser({ password: cleanPassword });
+      const { error } = await signIn.resetPasswordEmailCode.submitPassword({ password: cleanPassword });
       if (error) throw error;
 
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) await hydrateAuthSession(session);
-
-      Alert.alert('Password updated', 'Your new password is ready. Welcome back.', [
-        { text: 'Continue', onPress: () => router.replace('/') },
-      ]);
+      if (signIn.status === 'complete') {
+        await signIn.finalize({
+          navigate: () => {
+            Alert.alert('Password updated', 'Your new password is ready. Welcome back.', [
+              { text: 'Continue', onPress: () => router.replace('/') },
+            ]);
+          },
+        });
+      }
     } catch (e: unknown) {
-      Alert.alert('Could not update password', e instanceof Error ? e.message : 'Please try again');
-    } finally {
-      setLoading(false);
+      Alert.alert('Could not update password', formatAuthError(e));
     }
   };
 
   const canSave =
-    password.length >= 6 &&
-    confirmPassword.length >= 6 &&
-    password === confirmPassword &&
-    !loading &&
-    !checkingSession;
+    password.length >= 6 && confirmPassword.length >= 6 && password === confirmPassword && !loading;
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
@@ -78,13 +68,13 @@ export default function ResetPasswordScreen() {
         <ScrollView
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}>
+          showsVerticalScrollIndicator={false}
+          bounces={false}>
           <AuthScreenEnter style={styles.content}>
             <View style={styles.brand}>
-              <LogoMark size={64} />
               <Text style={[styles.title, { color: colors.text }]}>Choose a new password</Text>
               <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-                Enter a new password with at least 6 characters.
+                Enter a new password with at least 8 characters.
               </Text>
             </View>
 

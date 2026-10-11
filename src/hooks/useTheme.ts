@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 
-import { Themes, resolveThemeColors, type AppTheme } from '@/constants/design-system';
+import { resolveThemeColors, type AppTheme } from '@/constants/design-system';
 import { useUIStore } from '@/stores';
 
 export function useTheme() {

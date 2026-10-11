@@ -10,7 +10,6 @@ export function useStartCall() {
   const partner = useRelationshipStore((s) => s.partner);
   const setPhase = useCallStore((s) => s.setPhase);
   const setMode = useCallStore((s) => s.setMode);
-  const setCallId = useCallStore((s) => s.setCallId);
   const setPartnerName = useCallStore((s) => s.setPartnerName);
   const setError = useCallStore((s) => s.setError);
   const reset = useCallStore((s) => s.reset);

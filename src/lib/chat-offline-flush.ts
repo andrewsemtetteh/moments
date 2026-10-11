@@ -30,7 +30,8 @@ export async function flushChatOfflineQueue(params: {
     if (item.type !== 'message') continue;
     try {
       const payload = item.payload;
-      let mediaUrl: string | undefined;
+      // Moment replies carry an already-hosted URL; only on-device media needs uploading.
+      let mediaUrl: string | undefined = payload.mediaUrl;
 
       if (payload.mediaLocalUri && payload.mediaType) {
         const { ext, contentType } = mediaUploadMeta(payload.mediaType, payload.mediaLocalUri);

@@ -1,5 +1,6 @@
-import { Platform, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
-import { WebView } from 'react-native-webview';
+import { useEffect } from 'react';
+import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
+import { useVideoPlayer, VideoView, type VideoContentFit } from 'expo-video';
 
 interface MomentVideoPlayerProps {
   uri: string;
@@ -8,27 +9,12 @@ interface MomentVideoPlayerProps {
   autoPlay?: boolean;
   fill?: boolean;
   loop?: boolean;
+  /** How the video fits its box — 'cover' crops to fill, 'contain' shows the full frame. */
+  contentFit?: VideoContentFit;
+  /** Native play/seek/volume controls. Defaults to on only when not autoplaying. */
+  controls?: boolean;
   onEnd?: () => void;
   style?: StyleProp<ViewStyle>;
-}
-
-function buildVideoHtml(uri: string, autoPlay: boolean, loop: boolean): string {
-  const autoplayAttr = autoPlay ? 'autoplay playsinline muted' : 'controls playsinline';
-  const loopAttr = loop ? 'loop' : '';
-  const endedHandler = loop
-    ? ''
-    : `document.querySelector('video').addEventListener('ended', () => window.ReactNativeWebView.postMessage('ended'));`;
-  return `<!DOCTYPE html>
-<html><head>
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
-<style>
-  html, body { margin:0; padding:0; background:#000; height:100%; overflow:hidden; }
-  video { width:100%; height:100%; object-fit:cover; }
-</style>
-</head><body>
-<video src="${uri}" ${autoplayAttr} ${loopAttr} playsinline></video>
-<script>${endedHandler}</script>
-</body></html>`;
 }
 
 export function MomentVideoPlayer({
@@ -38,30 +24,39 @@ export function MomentVideoPlayer({
   autoPlay = true,
   fill,
   loop = true,
+  contentFit = 'cover',
+  controls,
   onEnd,
   style,
 }: MomentVideoPlayerProps) {
+  const player = useVideoPlayer(uri, (playerInstance) => {
+    playerInstance.loop = loop;
+    playerInstance.muted = autoPlay;
+    if (autoPlay) playerInstance.play();
+  });
+
+  useEffect(() => {
+    if (!onEnd) return;
+    const subscription = player.addListener('playToEnd', onEnd);
+    return () => subscription.remove();
+  }, [player, onEnd]);
+
   const sizeStyle = fill
     ? StyleSheet.absoluteFill
     : { width: width ?? ('100%' as const), height: height ?? 200 };
 
   return (
     <View style={[sizeStyle, { overflow: 'hidden', backgroundColor: '#000' }, style]}>
-      <WebView
-        source={{ html: buildVideoHtml(uri, autoPlay, loop) }}
-        style={styles.webview}
-        scrollEnabled={false}
-        allowsInlineMediaPlayback
-        mediaPlaybackRequiresUserAction={!autoPlay}
-        onMessage={(event) => {
-          if (event.nativeEvent.data === 'ended') onEnd?.();
-        }}
-        {...(Platform.OS === 'android' ? { androidLayerType: 'hardware' as const } : {})}
+      <VideoView
+        player={player}
+        style={styles.video}
+        contentFit={contentFit}
+        nativeControls={controls ?? !autoPlay}
       />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  webview: { flex: 1, backgroundColor: '#000' },
+  video: { flex: 1 },
 });

@@ -37,7 +37,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   layer: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     alignItems: 'center',
     justifyContent: 'flex-end',
   },

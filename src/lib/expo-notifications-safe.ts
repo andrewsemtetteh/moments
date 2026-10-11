@@ -12,7 +12,7 @@ export function isExpoNotificationsSupported(): boolean {
 export function loadExpoNotifications(): ExpoNotificationsModule | null {
   if (!isExpoNotificationsSupported()) return null;
   try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    // eslint-disable-next-line @typescript-eslint/no-require-imports -- must stay synchronous so callers can check availability without awaiting
     return require('expo-notifications') as ExpoNotificationsModule;
   } catch {
     return null;

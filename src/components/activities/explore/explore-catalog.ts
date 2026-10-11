@@ -1,5 +1,6 @@
 import type { ActivityArtId } from '@/components/activities/explore/ActivityArt';
 import type { IconName } from '@/components/ui/Icon';
+import type { LiveGameKind } from '@/lib/game-room/types';
 
 export type ExploreModalKey =
   | 'cards'
@@ -34,6 +35,20 @@ export type ExploreModalKey =
   | 'personality'
   | 'attachment'
   | 'guessAnswer';
+
+/** Catalog cards that also have a live, two-phone version with voice (see LiveRoomModal). */
+export const CATALOG_TO_LIVE: Partial<Record<ExploreModalKey, LiveGameKind>> = {
+  wouldYouRather: 'wouldYouRather',
+  thisOrThat: 'thisOrThat',
+  whosLikely: 'whosLikely',
+  truth: 'truthDare',
+  guessAnswer: 'guessAnswer',
+  twoTruths: 'twoTruths',
+  quizLive: 'quiz',
+};
+
+/** XP for a first play of a solo / pass-the-phone activity each day. */
+export const SOLO_XP = 12;
 
 export type PlayGroupId = 'play' | 'quizzes' | 'talk' | 'challenges' | 'create';
 

@@ -22,7 +22,6 @@ export function CallOverlay() {
   const isSpeaker = useCallStore((s) => s.isSpeaker);
   const error = useCallStore((s) => s.error);
   const setPhase = useCallStore((s) => s.setPhase);
-  const setError = useCallStore((s) => s.setError);
   const toggleMute = useCallStore((s) => s.toggleMute);
   const toggleCamera = useCallStore((s) => s.toggleCamera);
   const toggleSpeaker = useCallStore((s) => s.toggleSpeaker);

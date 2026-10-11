@@ -1,9 +1,9 @@
-const EVENT_QUEUE: Array<{
+const EVENT_QUEUE: {
   relationshipId: string;
   userId: string;
   eventType: string;
   metadata: Record<string, unknown>;
-}> = [];
+}[] = [];
 
 let flushTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -33,8 +33,8 @@ async function flushEvents() {
 
   const batch = EVENT_QUEUE.splice(0, EVENT_QUEUE.length);
   try {
-    const { supabase } = await import('@/lib/supabase');
-    await supabase.from('analytics_events').insert(
+    const { backend } = await import('@/lib/backend');
+    await backend.from('analytics_events').insert(
       batch.map((e) => ({
         relationship_id: e.relationshipId,
         user_id: e.userId,
@@ -58,12 +58,4 @@ export const AnalyticsEvents = {
   MOOD_SELECTED: 'mood_selected',
   MOOD_VIEWED: 'mood_viewed',
   TAB_VIEWED: 'tab_viewed',
-  WATCH_PARTY_CREATED: 'watch_party_created',
-  WATCH_INVITATION_SENT: 'invitation_sent',
-  WATCH_INVITATION_ACCEPTED: 'invitation_accepted',
-  WATCH_CONTENT_ADDED: 'content_added_to_watchlist',
-  WATCH_SESSION_STARTED: 'session_started',
-  WATCH_SESSION_COMPLETED: 'session_completed',
-  WATCH_REACTION_SENT: 'reaction_sent',
-  WATCH_SCHEDULED: 'watch_party_scheduled',
 } as const;

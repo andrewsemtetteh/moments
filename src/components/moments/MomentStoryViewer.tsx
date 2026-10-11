@@ -7,9 +7,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
     ActivityIndicator,
     Alert,
+    BackHandler,
     Dimensions,
     KeyboardAvoidingView,
-    Modal,
     Platform,
     Pressable,
     StyleSheet,
@@ -19,14 +19,12 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { MomentBlobFrame } from '@/components/moments/MomentBlobFrame';
 import { MomentVideoPlayer } from '@/components/moments/MomentVideoPlayer';
 import { MomentViewerDock } from '@/components/moments/MomentViewerDock';
 import { Icon } from '@/components/ui/Icon';
 import { useDeleteMoments, useMomentReaction, useSendMessage } from '@/hooks/queries';
 import { useTheme } from '@/hooks/useTheme';
 import { downloadMomentMedia } from '@/lib/download-moment-media';
-import { fitMediaDimensions, getRemoteImageAspect } from '@/lib/media-aspect';
 import { toggleMomentReactionForUser } from '@/lib/moment-display';
 import { momentToReplyContext } from '@/lib/moment-reply';
 import { momentChrome } from '@/lib/moment-theme';
@@ -37,7 +35,6 @@ import type { Moment } from '@/types/database';
 
 const STORY_DURATION_MS = 8000;
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
-const BLOB_W = Math.min(SCREEN_W - 40, 360);
 const DOCK_APPROX = 300;
 
 function viewerSessionKey(
@@ -71,7 +68,6 @@ export function MomentStoryViewer() {
   const [paused, setPaused] = useState(false);
   const [reply, setReply] = useState('');
   const [width, setWidth] = useState(SCREEN_W);
-  const [nativeView, setNativeView] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [sendingReply, setSendingReply] = useState(false);
   const [localReactions, setLocalReactions] = useState<Record<string, Record<string, string[]>>>({});
@@ -105,6 +101,15 @@ export function MomentStoryViewer() {
   const dismissViewer = useCallback(() => {
     closeMomentViewer();
   }, [closeMomentViewer]);
+
+  useEffect(() => {
+    if (!viewer) return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      dismissViewer();
+      return true;
+    });
+    return () => sub.remove();
+  }, [viewer, dismissViewer]);
 
   const clearTimer = useCallback(() => {
     if (timerRef.current) {
@@ -143,7 +148,6 @@ export function MomentStoryViewer() {
     progressRef.current = 0;
     setReply('');
     setPaused(false);
-    setNativeView(false);
     setLocalReactions({});
   }, [sessionKey, viewer]);
 
@@ -157,6 +161,10 @@ export function MomentStoryViewer() {
       .catch(() => {
         /* non-blocking */
       });
+    // keyed on moment?.id/user?.id on purpose: the full `moment` object changes reference on
+    // every reaction/refetch, and we only want this to re-fire when the viewed moment or viewer
+    // actually changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [viewer, moment?.id, user?.id, isMine, relationship?.id, queryClient]);
 
   useEffect(() => {
@@ -174,6 +182,10 @@ export function MomentStoryViewer() {
       if (p >= 1) goNext();
     }, 50);
     return clearTimer;
+    // keyed on moment?.id on purpose: the full `moment` object changes reference on every
+    // reaction/refetch, which would otherwise reset the auto-advance timer whenever an
+    // unrelated field on it updates.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [viewer, moment?.id, isVideo, paused, isFocusMode, goNext, clearTimer]);
 
   const react = useCallback(
@@ -200,20 +212,15 @@ export function MomentStoryViewer() {
       });
       setReply('');
       dismissViewer();
-      router.push('/(tabs)/chat');
+      router.push('/chat');
     } catch {
       setChatDraft(text);
       setChatMomentReply(momentToReplyContext(moment));
       dismissViewer();
-      router.push('/(tabs)/chat');
+      router.push('/chat');
     } finally {
       setSendingReply(false);
     }
-  };
-
-  const toggleNativeView = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setNativeView((v) => !v);
   };
 
   const downloadMedia = async () => {
@@ -264,7 +271,6 @@ export function MomentStoryViewer() {
   const tapBottom = DOCK_APPROX + insets.bottom;
 
   return (
-    <Modal visible animationType="fade" presentationStyle="fullScreen" onRequestClose={dismissViewer}>
       <KeyboardAvoidingView
         style={[styles.root, { backgroundColor: chrome.background }]}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -289,43 +295,40 @@ export function MomentStoryViewer() {
         )}
 
         <View style={[styles.topBar, { paddingTop: showProgress ? 8 : insets.top + 12 }]}>
-          <Pressable onPress={dismissViewer} hitSlop={12} style={styles.topIcon}>
-            <Icon name="close" size={28} color={chrome.text} />
+          <Pressable onPress={dismissViewer} hitSlop={12} style={[styles.topIcon, { backgroundColor: chrome.surfaceSoft }]}>
+            <Icon name="close" size={26} color={chrome.text} />
           </Pressable>
           <View style={styles.topCenter}>
-            {focusLabel ? <Text style={[styles.focusLabel, { color: chrome.textSecondary }]}>{focusLabel}</Text> : null}
+            {focusLabel ? (
+              <View style={[styles.focusLabelPill, { backgroundColor: chrome.surfaceSoft }]}>
+                <Text style={[styles.focusLabel, { color: chrome.text }]}>{focusLabel}</Text>
+              </View>
+            ) : null}
           </View>
           <View style={styles.topRight}>
             <Pressable
-              onPress={toggleNativeView}
-              hitSlop={10}
-              style={[styles.topIcon, nativeView && { backgroundColor: chrome.accent }]}
-              accessibilityLabel={nativeView ? 'Story frame' : 'Original size'}>
-              <Icon name="expand" size={22} color={nativeView ? chrome.onAccent : chrome.text} />
-            </Pressable>
-            <Pressable
               onPress={() => void downloadMedia()}
               hitSlop={10}
-              style={styles.topIcon}
+              style={[styles.topIcon, { backgroundColor: chrome.surfaceSoft }]}
               disabled={!moment.media_url || downloading}
               accessibilityLabel="Download">
               {downloading ? (
                 <ActivityIndicator color={chrome.text} size="small" />
               ) : (
-                <Icon name="download" size={22} color={chrome.text} />
+                <Icon name="download" size={20} color={chrome.text} />
               )}
             </Pressable>
             {isMine && (
               <Pressable
                 onPress={deleteCurrentMoment}
                 hitSlop={10}
-                style={styles.topIcon}
+                style={[styles.topIcon, { backgroundColor: chrome.surfaceSoft }]}
                 disabled={deleteMomentsMutation.isPending}
                 accessibilityLabel="Delete moment">
                 {deleteMomentsMutation.isPending ? (
                   <ActivityIndicator color={chrome.error} size="small" />
                 ) : (
-                  <Icon name="trash" size={21} color={chrome.error} />
+                  <Icon name="trash" size={19} color={chrome.error} />
                 )}
               </Pressable>
             )}
@@ -344,11 +347,14 @@ export function MomentStoryViewer() {
         <View style={styles.stage}>
           <MomentMedia
             moment={moment}
-            nativeView={nativeView}
             advanceOnVideoEnd={!isFocusMode}
             onVideoEnd={goNext}
-            chrome={chrome}
           />
+          {moment.content?.trim() ? (
+            <Text style={styles.caption} numberOfLines={4}>
+              {moment.content.trim()}
+            </Text>
+          ) : null}
         </View>
 
         {paused && !isFocusMode && (
@@ -375,72 +381,42 @@ export function MomentStoryViewer() {
           bottomInset={insets.bottom}
         />
       </KeyboardAvoidingView>
-    </Modal>
   );
 }
 
+/**
+ * Media at its real, unboxed aspect ratio — no crop shape, no background card.
+ * The ambient blurred backdrop behind it (MomentBackdrop) supplies the atmosphere,
+ * so the media itself just floats at its natural size, the way Instagram/iMessage
+ * photo viewers do.
+ */
 function MomentMedia({
   moment,
-  nativeView,
   advanceOnVideoEnd,
   onVideoEnd,
-  chrome,
 }: {
   moment: Moment;
-  nativeView: boolean;
   advanceOnVideoEnd?: boolean;
   onVideoEnd?: () => void;
-  chrome: ReturnType<typeof momentChrome>;
 }) {
-  const [aspect, setAspect] = useState(1);
   const isVideo = moment.type === 'video' && !!moment.media_url;
   const isPhoto = moment.type === 'photo' && !!moment.media_url;
 
-  useEffect(() => {
-    if (!nativeView || !moment.media_url) return;
-    if (isVideo) {
-      setAspect(9 / 16);
-      return;
-    }
-    void getRemoteImageAspect(moment.media_url).then(setAspect);
-  }, [nativeView, moment.media_url, isVideo]);
-
-  if (!nativeView) {
-    if (isVideo) {
-      return (
-        <View style={{ width: BLOB_W, height: BLOB_W * 1.12, borderRadius: 24, overflow: 'hidden' }}>
-          <MomentVideoPlayer
-            uri={moment.media_url!}
-            fill
-            autoPlay
-            loop={!advanceOnVideoEnd}
-            onEnd={advanceOnVideoEnd ? onVideoEnd : undefined}
-          />
-        </View>
-      );
-    }
-    if (isPhoto) {
-      return <MomentBlobFrame width={BLOB_W} imageUri={moment.media_url} />;
-    }
-    return (
-      <MomentBlobFrame width={BLOB_W} fill={chrome.surface}>
-        <Icon name="heart" size={40} color={chrome.textTertiary} filled />
-      </MomentBlobFrame>
-    );
-  }
-
-  const size = fitMediaDimensions(aspect);
-  const radius = Math.abs(aspect - 1) < 0.08 ? 20 : 16;
-
+  // A generous fixed box with contentFit="contain" — no aspect ratio needs to be
+  // known ahead of time, so there's no async round-trip (previously via a separate
+  // Image.getSize() call) that could flash a wrong square size, or get stuck there
+  // permanently if that lookup failed against a signed/CDN URL.
   if (isVideo && moment.media_url) {
     return (
-      <View style={[size, { borderRadius: radius, overflow: 'hidden', backgroundColor: chrome.mediaBackdrop }]}>
+      <View style={[styles.mediaBox, styles.mediaMask]}>
         <MomentVideoPlayer
           uri={moment.media_url}
           fill
           autoPlay
           loop={!advanceOnVideoEnd}
           onEnd={advanceOnVideoEnd ? onVideoEnd : undefined}
+          contentFit="contain"
+          style={styles.mediaTransparentBg}
         />
       </View>
     );
@@ -448,38 +424,50 @@ function MomentMedia({
 
   if (isPhoto && moment.media_url) {
     return (
-      <View style={[size, { borderRadius: radius, overflow: 'hidden', backgroundColor: chrome.mediaBackdrop }]}>
+      <View style={[styles.mediaBox, styles.mediaMask]}>
         <Image source={{ uri: moment.media_url }} style={StyleSheet.absoluteFill} contentFit="contain" />
       </View>
     );
   }
 
   return (
-    <View
-      style={[
-        size,
-        {
-          borderRadius: radius,
-          backgroundColor: chrome.surface,
-          alignItems: 'center',
-          justifyContent: 'center',
-        },
-      ]}>
-      <Icon name="heart" size={40} color={chrome.textTertiary} filled />
+    <View style={[styles.mediaBox, styles.mediaMask, styles.mediaEmpty]}>
+      <Icon name="heart" size={40} color="rgba(128,128,128,0.6)" filled />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1, minHeight: SCREEN_H },
-  progressRow: { flexDirection: 'row', gap: 4, paddingHorizontal: 14, zIndex: 4 },
-  progressTrack: { flex: 1, height: 2, borderRadius: 1, overflow: 'hidden' },
-  progressFill: { height: '100%' },
+  caption: {
+    color: '#fff',
+    fontSize: 19,
+    fontWeight: '700',
+    lineHeight: 26,
+    textAlign: 'center',
+    marginTop: 20,
+    paddingHorizontal: 28,
+    textShadowColor: 'rgba(0,0,0,0.4)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 6,
+  },
+  mediaBox: { width: SCREEN_W - 32, height: SCREEN_H * 0.62 },
+  mediaMask: { borderRadius: 14, overflow: 'hidden' },
+  mediaTransparentBg: { backgroundColor: 'transparent' },
+  mediaEmpty: { alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(128,128,128,0.16)' },
+  progressRow: { flexDirection: 'row', gap: 5, paddingHorizontal: 14, zIndex: 4 },
+  progressTrack: {
+    flex: 1,
+    height: 3,
+    borderRadius: 1.5,
+    overflow: 'hidden',
+  },
+  progressFill: { height: '100%', borderRadius: 1.5 },
   progressDone: { width: '100%' },
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
+    paddingHorizontal: 14,
     zIndex: 4,
     gap: 8,
   },
@@ -492,7 +480,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   topRight: { flexDirection: 'row', alignItems: 'center', gap: 8, minWidth: 84, justifyContent: 'flex-end' },
-  focusLabel: { fontSize: 14, fontWeight: '700', textAlign: 'center' },
+  focusLabelPill: {
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+  },
+  focusLabel: { fontSize: 13, fontWeight: '700', textAlign: 'center' },
   tapLeft: { position: 'absolute', top: 0, left: 0, zIndex: 2 },
   tapRight: { position: 'absolute', top: 0, zIndex: 2 },
   stage: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 16, zIndex: 1 },

@@ -1,4 +1,4 @@
-/** Extract `{relationshipId}/{filename}` from a Supabase chat storage URL. */
+/** Extract `{relationshipId}/{filename}` from a chat storage URL. */
 export function extractChatStoragePath(url: string | null | undefined): string | null {
   if (!url) return null;
   const marker = '/chat/';

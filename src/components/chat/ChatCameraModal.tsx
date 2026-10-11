@@ -193,6 +193,7 @@ export function ChatCameraModal({ visible, onClose, onCapture }: Props) {
               facing={facing}
               flash={flash}
               mode="video"
+              videoQuality="720p"
               onCameraReady={() => setCameraReady(true)}
             />
           ) : (

@@ -1,0 +1,23 @@
+{
+  "name": "moments-api",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "types": "wrangler types",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^7.0.2",
+    "wrangler": "^4.127.1"
+  },
+  "allowScripts": {
+    "esbuild@0.28.1": true,
+    "workerd@1.20260828.1": true
+  },
+  "dependencies": {
+    "@clerk/backend": "^3.16.13",
+    "hono": "^4.13.5"
+  }
+}

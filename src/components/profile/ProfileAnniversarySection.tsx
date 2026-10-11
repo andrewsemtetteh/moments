@@ -67,6 +67,7 @@ export function ProfileAnniversarySection() {
           {
             backgroundColor: colors.surface,
             borderColor: colors.border,
+            borderWidth: colors.boldBorder ? 2 : StyleSheet.hairlineWidth,
             opacity: pressed ? 0.88 : 1,
           },
         ]}

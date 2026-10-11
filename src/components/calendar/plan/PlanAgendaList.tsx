@@ -1,9 +1,11 @@
 import { format, isBefore, isSameDay, isToday, startOfDay } from 'date-fns';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 
 import { Icon } from '@/components/ui/Icon';
 import { PrimaryButton } from '@/components/ui/primitives';
 import { EVENT_TYPE_META, getEventTypeColors } from '@/constants/calendar-events';
+import { Radius } from '@/constants/design-system';
 import { useTheme } from '@/hooks/useTheme';
 import { isPlanCompleted, parsePlanMeta, planKindEmoji } from '@/lib/plan-meta';
 import type { CalendarEvent } from '@/types/database';
@@ -56,17 +58,24 @@ export function PlanAgendaList({
 
   if (groups.length === 0) {
     return (
-      <View style={styles.empty}>
+      <View
+        style={[
+          styles.empty,
+          { borderColor: colors.border, borderWidth: colors.boldBorder ? 2 : StyleSheet.hairlineWidth },
+        ]}>
+        <View style={[styles.emptyIcon, { backgroundColor: colors.accentSoft }]}>
+          <Icon name={isPastEmpty ? 'moon' : 'calendar'} size={24} color={colors.accent} />
+        </View>
         <Text style={[styles.emptyTitle, { color: colors.text }]}>
-          {isPastEmpty ? 'Nothing planned' : 'Nothing planned yet'}
+          {isPastEmpty ? 'A quiet day' : 'Nothing planned yet'}
         </Text>
         <Text style={[styles.emptyBody, { color: colors.textSecondary }]}>
           {isPastEmpty
-            ? 'This day came and went without a plan.'
-            : 'Every memory starts with one plan.'}
+            ? 'No plans on this day.'
+            : 'Every memory starts with one plan. Pick something to look forward to together.'}
         </Text>
         {showAdd ? (
-          <PrimaryButton label="Add a plan" onPress={emptyAction} style={styles.emptyBtn} />
+          <PrimaryButton label="Plan something" onPress={emptyAction} style={styles.emptyBtn} />
         ) : null}
       </View>
     );
@@ -74,66 +83,27 @@ export function PlanAgendaList({
 
   return (
     <View style={styles.wrap}>
-      {groups.map((group) => {
-        const useTimeline = group.events.length > 1;
-        return (
-          <View key={group.key} style={styles.group}>
-            {!hideGroupLabel ? (
-              <Text style={[styles.groupLabel, { color: colors.accent }]}>{group.label}</Text>
-            ) : null}
-
-            {useTimeline ? (
-              <View style={styles.timeline}>
-                {group.events.map((event, index) => {
-                  const done = isPlanCompleted(event);
-                  const isLast = index === group.events.length - 1;
-
-                  return (
-                    <View key={event.id} style={styles.timelineRow}>
-                      <View style={styles.rail}>
-                        <View
-                          style={[
-                            styles.node,
-                            {
-                              backgroundColor: done ? colors.accent : colors.surface,
-                              borderColor: done ? colors.accent : colors.borderStrong,
-                            },
-                          ]}>
-                          {done ? <Icon name="check" size={10} color={colors.onAccent} /> : null}
-                        </View>
-                        {!isLast ? (
-                          <View
-                            style={[
-                              styles.railLine,
-                              { backgroundColor: done ? colors.accent : colors.border },
-                            ]}
-                          />
-                        ) : null}
-                      </View>
-                      <View style={styles.timelineCardWrap}>
-                        <PlanCard event={event} done={done} onPress={onPressEvent} />
-                      </View>
-                    </View>
-                  );
-                })}
-              </View>
-            ) : (
-              group.events.map((event) => (
-                <PlanCard
-                  key={event.id}
-                  event={event}
-                  done={isPlanCompleted(event)}
-                  onPress={onPressEvent}
-                />
-              ))
-            )}
-          </View>
-        );
-      })}
+      {groups.map((group) => (
+        <View key={group.key} style={styles.group}>
+          {!hideGroupLabel ? (
+            <Text style={[styles.groupLabel, { color: colors.accent }]}>{group.label}</Text>
+          ) : null}
+          {group.events.map((event, index) => (
+            <Animated.View key={event.id} entering={FadeInDown.delay(index * 50).duration(260)}>
+              <PlanCard event={event} done={isPlanCompleted(event)} onPress={onPressEvent} />
+            </Animated.View>
+          ))}
+        </View>
+      ))}
     </View>
   );
 }
 
+/**
+ * Time column on the left (the Structured / Apple Calendar day-view pattern —
+ * when a plan happens is the first thing you scan for), then a card with a
+ * type-colored accent bar, title, location and the plan's emoji.
+ */
 function PlanCard({
   event,
   done,
@@ -148,37 +118,63 @@ function PlanCard({
   const at = new Date(event.date_time);
   const meta = parsePlanMeta(event.description);
   const emoji = planKindEmoji(event) ?? EVENT_TYPE_META[event.type]?.emoji ?? '📌';
+  const typeLabel = EVENT_TYPE_META[event.type]?.label ?? 'Plan';
 
   return (
     <Pressable
       onPress={() => onPress?.(event)}
-      style={({ pressed }) => [
-        styles.card,
-        {
-          backgroundColor: colors.surface,
-          opacity: pressed ? 0.9 : done ? 0.75 : 1,
-        },
-      ]}>
-      <View style={[styles.dot, { backgroundColor: done ? colors.accent : tc.main }]} />
-      <View style={styles.body}>
-        <Text
-          style={[
-            styles.title,
-            {
-              color: colors.text,
-              textDecorationLine: done ? 'line-through' : 'none',
-            },
-          ]}
-          numberOfLines={1}>
-          {event.title}
+      style={({ pressed }) => [styles.row, { opacity: pressed ? 0.85 : 1 }]}
+      accessibilityRole="button"
+      accessibilityLabel={`${event.title}, ${format(at, 'h:mm a')}${done ? ', done' : ''}`}>
+      <View style={styles.timeCol}>
+        <Text style={[styles.time, { color: done ? colors.textTertiary : colors.text }]}>
+          {format(at, 'h:mm')}
         </Text>
-        <Text style={[styles.time, { color: colors.textSecondary }]}>
-          {format(at, 'h:mm a')}
-          {meta.location ? ` · ${meta.location}` : ''}
-        </Text>
+        <Text style={[styles.ampm, { color: colors.textTertiary }]}>{format(at, 'a')}</Text>
       </View>
-      <View style={[styles.thumb, { backgroundColor: done ? colors.accentSoft : tc.soft }]}>
-        <Text style={styles.thumbEmoji}>{emoji}</Text>
+
+      <View
+        style={[
+          styles.card,
+          {
+            backgroundColor: colors.surface,
+            borderColor: colors.border,
+            borderWidth: colors.boldBorder ? 2 : StyleSheet.hairlineWidth,
+            opacity: done ? 0.6 : 1,
+          },
+        ]}>
+        <View style={[styles.bar, { backgroundColor: done ? colors.textTertiary : tc.main }]} />
+        <View style={styles.body}>
+          <Text
+            style={[
+              styles.title,
+              { color: colors.text, textDecorationLine: done ? 'line-through' : 'none' },
+            ]}
+            numberOfLines={2}>
+            {event.title}
+          </Text>
+          <View style={styles.metaRow}>
+            {meta.location ? (
+              <>
+                <Icon name="location" size={12} color={colors.textSecondary} />
+                <Text style={[styles.meta, { color: colors.textSecondary }]} numberOfLines={1}>
+                  {meta.location}
+                </Text>
+              </>
+            ) : (
+              <Text style={[styles.meta, { color: tc.main }]} numberOfLines={1}>
+                {typeLabel}
+              </Text>
+            )}
+          </View>
+        </View>
+        <View style={[styles.badge, { backgroundColor: done ? colors.surfaceElevated : tc.soft }]}>
+          {done ? (
+            <Icon name="check" size={18} color={colors.success} />
+          ) : (
+            <Text style={styles.badgeEmoji}>{emoji}</Text>
+          )}
+        </View>
       </View>
     </Pressable>
   );
@@ -207,67 +203,53 @@ export function buildAgendaEvents(
 
 const styles = StyleSheet.create({
   wrap: { gap: 22 },
-  group: { gap: 8 },
-  groupLabel: {
-    fontSize: 13,
-    fontWeight: '700',
-    paddingHorizontal: 2,
-  },
-  timeline: { gap: 0 },
-  timelineRow: {
-    flexDirection: 'row',
-    gap: 12,
-    minHeight: 72,
-  },
-  rail: {
-    width: 18,
-    alignItems: 'center',
-  },
-  node: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    borderWidth: 2,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 18,
-    zIndex: 1,
-  },
-  railLine: {
-    width: 2,
-    flex: 1,
-    marginTop: 4,
-    marginBottom: -4,
-    borderRadius: 1,
-  },
-  timelineCardWrap: { flex: 1, paddingBottom: 8 },
+  group: { gap: 10 },
+  groupLabel: { fontSize: 13, fontWeight: '700', paddingHorizontal: 2 },
+  row: { flexDirection: 'row', alignItems: 'stretch', gap: 12 },
+  timeCol: { width: 48, alignItems: 'flex-end', paddingTop: 14 },
+  time: { fontSize: 15, fontWeight: '800', letterSpacing: -0.3, fontVariant: ['tabular-nums'] },
+  ampm: { fontSize: 11, fontWeight: '700', marginTop: 1 },
   card: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
     paddingVertical: 14,
-    paddingHorizontal: 14,
-    borderRadius: 14,
+    paddingLeft: 16,
+    paddingRight: 12,
+    borderRadius: Radius.lg,
+    overflow: 'hidden',
   },
-  dot: { width: 8, height: 8, borderRadius: 4 },
-  body: { flex: 1, gap: 3 },
-  title: { fontSize: 16, fontWeight: '600', letterSpacing: -0.2 },
-  time: { fontSize: 13, fontWeight: '500' },
-  thumb: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
+  bar: { position: 'absolute', left: 0, top: 0, bottom: 0, width: 4 },
+  body: { flex: 1, gap: 4 },
+  title: { fontSize: 16, fontWeight: '700', letterSpacing: -0.2 },
+  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  meta: { fontSize: 13, fontWeight: '600', flexShrink: 1 },
+  badge: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  thumbEmoji: { fontSize: 20 },
+  badgeEmoji: { fontSize: 19 },
   empty: {
     paddingVertical: 28,
-    paddingHorizontal: 12,
+    paddingHorizontal: 20,
     alignItems: 'center',
     gap: 8,
+    borderRadius: Radius.xl,
+    borderStyle: 'dashed',
   },
-  emptyTitle: { fontSize: 17, fontWeight: '700' },
-  emptyBody: { fontSize: 14, textAlign: 'center', lineHeight: 20, marginBottom: 4 },
-  emptyBtn: { marginTop: 8, minWidth: 160 },
+  emptyIcon: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
+  },
+  emptyTitle: { fontSize: 17, fontWeight: '800', letterSpacing: -0.2 },
+  emptyBody: { fontSize: 14, textAlign: 'center', lineHeight: 20, maxWidth: 280 },
+  emptyBtn: { marginTop: 10, minWidth: 180 },
 });

@@ -1,4 +1,4 @@
-import { StyleSheet, View, type ViewStyle } from 'react-native';
+import { StyleSheet, type ViewStyle } from 'react-native';
 
 import { getWebRTCModule } from '@/lib/webrtc-native';
 

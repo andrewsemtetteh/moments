@@ -49,7 +49,7 @@ export function ChangePasswordModal({
         autoComplete="current-password"
         value={currentPassword}
         onChangeText={onChangeCurrent}
-        labelBackgroundColor={colors.backgroundElevated}
+        fieldBackgroundColor={colors.surfaceElevated}
         containerStyle={styles.input}
       />
       <PasswordInput
@@ -58,7 +58,7 @@ export function ChangePasswordModal({
         autoComplete="new-password"
         value={newPassword}
         onChangeText={onChangeNew}
-        labelBackgroundColor={colors.backgroundElevated}
+        fieldBackgroundColor={colors.surfaceElevated}
         containerStyle={styles.input}
       />
       <PasswordInput
@@ -66,7 +66,7 @@ export function ChangePasswordModal({
         autoComplete="new-password"
         value={confirmPassword}
         onChangeText={onChangeConfirm}
-        labelBackgroundColor={colors.backgroundElevated}
+        fieldBackgroundColor={colors.surfaceElevated}
         containerStyle={styles.input}
       />
       {newPassword.length > 0 && newPassword === currentPassword && (

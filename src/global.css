@@ -7,3 +7,29 @@
   --font-rounded: 'SF Pro Rounded', 'Hiragino Maru Gothic ProN', Meiryo, 'MS PGothic', sans-serif;
   --font-serif: Georgia, 'Times New Roman', serif;
 }
+
+/* React Native Web renders Pressable/TouchableOpacity links (e.g. "Log in",
+ * "Forgot password?", legal links on the auth screens) as plain divs/anchors,
+ * which the browser gives a default focus ring and mobile tap-highlight —
+ * both can look like a lingering "hover" state that sticks around after a
+ * click. Neither is part of this app's own design, so they're suppressed
+ * globally rather than patched per link component.
+ *
+ * Scoped to role selectors alone missed plain `<Text onPress>` links (e.g.
+ * AuthLegalLinks' "Terms of Service"/"Privacy Policy") that never got an
+ * explicit `accessibilityRole`, so RN Web renders them as a bare div with no
+ * matching role/tag. `-webkit-tap-highlight-color` is safe to apply to every
+ * element (it only ever affects WebKit's touch-tap flash, never real
+ * hover/focus styling), and `[tabindex]` catches anything RN Web's
+ * Pressability made focusable even without a role. */
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+a:focus,
+button:focus,
+[role='button']:focus,
+[role='link']:focus,
+[tabindex]:focus {
+  outline: none;
+}

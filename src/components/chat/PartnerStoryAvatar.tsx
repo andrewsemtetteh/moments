@@ -3,7 +3,6 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { StyleSheet, View } from 'react-native';
 import { Pressable as GHPressable } from 'react-native-gesture-handler';
 
-import { Icon } from '@/components/ui/Icon';
 import { Avatar } from '@/components/ui/primitives';
 import { useTheme } from '@/hooks/useTheme';
 import { momentHasVisual } from '@/lib/moment-display';

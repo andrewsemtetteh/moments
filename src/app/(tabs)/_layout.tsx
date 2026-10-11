@@ -11,6 +11,7 @@ import { NotificationSync } from '@/components/layout/NotificationSync';
 import { StoreReviewSync } from '@/components/layout/StoreReviewSync';
 import { PartnerPresenceSync } from '@/components/profile/PartnerPresenceSync';
 import { PartnerProfileModal } from '@/components/profile/PartnerProfileModal';
+import { PartnerTimezoneSync } from '@/components/profile/PartnerTimezoneSync';
 import { useRealtimeSubscription } from '@/hooks/queries';
 import { useTheme } from '@/hooks/useTheme';
 import { useAuthStore } from '@/stores';
@@ -40,6 +41,7 @@ export default function TabsLayout() {
       <NotificationSync />
       <ChatMessageSync />
       <PartnerPresenceSync />
+      <PartnerTimezoneSync />
       <StreakMilestoneSync />
       <StreakSparkSync />
       <StreakReminderSync />
@@ -53,11 +55,9 @@ export default function TabsLayout() {
         }}>
         <Tabs.Screen name="home" />
         <Tabs.Screen name="activities" />
-        <Tabs.Screen name="calendar" />
         <Tabs.Screen name="profile" />
-        {/* Chat and notifications are reachable from the header, not the tab bar */}
-        <Tabs.Screen name="chat" options={{ href: null }} />
-        <Tabs.Screen name="notifications" options={{ href: null }} />
+        {/* Chat (tab-bar button), Plan and Notifications (header buttons) are
+            root stack screens pushed over these tabs, not tabs themselves. */}
       </Tabs>
       <PartnerProfileModal />
     </>

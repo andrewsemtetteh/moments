@@ -153,6 +153,7 @@ function MomentStackTile({
   width: number;
   isFront: boolean;
 }) {
+  const { colors } = useTheme();
   const isVideo = moment.type === 'video' && !!moment.media_url;
 
   if (isVideo) {
@@ -168,8 +169,8 @@ function MomentStackTile({
   }
 
   return (
-    <MomentBlobFrame width={width} fill="#2a2a35">
-      <Icon name="heart" size={36} color="rgba(255,255,255,0.5)" filled />
+    <MomentBlobFrame width={width} fill={colors.surfaceElevated}>
+      <Icon name="heart" size={36} color={colors.textTertiary} filled />
     </MomentBlobFrame>
   );
 }

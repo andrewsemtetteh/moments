@@ -1,13 +1,13 @@
-import type { RealtimeChannel } from '@supabase/supabase-js';
+import type { RealtimeChannel } from '@/lib/cloudflare';
 
 import { createCallId, ICE_SERVERS, type CallMode, type CallSignal } from '@/lib/call-types';
 import { getWebRTCModule } from '@/lib/webrtc-native';
-import { supabase } from '@/lib/supabase';
+import { backend } from '@/lib/backend';
 
 type NativeStream = {
-  getTracks: () => Array<{ stop: () => void; enabled: boolean }>;
-  getAudioTracks: () => Array<{ enabled: boolean }>;
-  getVideoTracks: () => Array<{ enabled: boolean }>;
+  getTracks: () => { stop: () => void; enabled: boolean }[];
+  getAudioTracks: () => { enabled: boolean }[];
+  getVideoTracks: () => { enabled: boolean }[];
   toURL: () => string;
 };
 
@@ -48,11 +48,11 @@ export class CallManager {
     this.userName = userName;
 
     if (this.channel) {
-      await supabase.removeChannel(this.channel);
+      await backend.removeChannel(this.channel);
       this.channel = null;
     }
 
-    const ch = supabase.channel(`call:${relationshipId}`, {
+    const ch = backend.channel(`call:${relationshipId}`, {
       config: { broadcast: { self: false } },
     });
 
@@ -69,7 +69,7 @@ export class CallManager {
 
   async detachChannel() {
     if (this.channel) {
-      await supabase.removeChannel(this.channel);
+      await backend.removeChannel(this.channel);
       this.channel = null;
     }
     this.ready = false;

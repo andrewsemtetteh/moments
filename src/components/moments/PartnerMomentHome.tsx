@@ -39,6 +39,7 @@ export function PartnerMomentHome({ partnerMoments }: PartnerMomentHomeProps) {
   const partner = useRelationshipStore((s) => s.partner);
   const openMomentViewer = useUIStore((s) => s.openMomentViewer);
   const setShowMomentHistory = useUIStore((s) => s.setShowMomentHistory);
+  const setMomentHistoryReturnToCamera = useUIStore((s) => s.setMomentHistoryReturnToCamera);
   const setChatDraft = useUIStore((s) => s.setChatDraft);
   const setChatMomentReply = useUIStore((s) => s.setChatMomentReply);
 
@@ -120,11 +121,11 @@ export function PartnerMomentHome({ partnerMoments }: PartnerMomentHomeProps) {
         mediaType: previewType,
       });
       setReply('');
-      router.push('/(tabs)/chat');
+      router.push('/chat');
     } catch {
       setChatDraft(text);
       setChatMomentReply(momentToReplyContext(moment));
-      router.push('/(tabs)/chat');
+      router.push('/chat');
     } finally {
       setSendingReply(false);
     }
@@ -144,7 +145,10 @@ export function PartnerMomentHome({ partnerMoments }: PartnerMomentHomeProps) {
             </View>
           </View>
           <Pressable
-            onPress={() => setShowMomentHistory(true)}
+            onPress={() => {
+              setMomentHistoryReturnToCamera(false);
+              setShowMomentHistory(true);
+            }}
             hitSlop={8}
             style={styles.historyBtn}
             accessibilityLabel="Moment history">
@@ -188,6 +192,7 @@ export function PartnerMomentHome({ partnerMoments }: PartnerMomentHomeProps) {
                 backgroundColor: colors.surfaceElevated,
                 color: colors.text,
                 borderColor: colors.border,
+                borderWidth: colors.boldBorder ? 2 : 1,
               },
             ]}
             returnKeyType="send"

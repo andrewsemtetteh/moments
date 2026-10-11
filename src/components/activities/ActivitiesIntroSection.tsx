@@ -1,13 +1,12 @@
 import * as Haptics from 'expo-haptics';
 import { useFocusEffect } from 'expo-router';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useCallback, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { PlayHero } from '@/components/games/PlayHub';
 import { TodaysPromptCard } from '@/components/home/TodaysPromptCard';
 import { Icon } from '@/components/ui/Icon';
 import { useTheme } from '@/hooks/useTheme';
-import { getFirstName } from '@/lib/avatar-initial';
 import { promptPhase } from '@/lib/daily-prompt';
 import { useAuthStore, useRelationshipStore } from '@/stores';
 import type { DailyChallenge } from '@/types/database';
@@ -31,7 +30,6 @@ export function ActivitiesIntroSection({
   const user = useAuthStore((s) => s.user);
   const relationship = useRelationshipStore((s) => s.relationship);
   const [answering, setAnswering] = useState(false);
-  const partnerFirst = getFirstName(partnerName) ?? 'your partner';
 
   const phase = challenge ? promptPhase(challenge, user?.id, relationship) : null;
   // Full card when answering, or when there's nothing left to "Answer" (waiting / reveal).
@@ -51,31 +49,17 @@ export function ActivitiesIntroSection({
 
   return (
     <View style={styles.section}>
-      <LinearGradient
-        colors={colors.gradient}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={[styles.hero, !challenge && styles.heroSolo]}>
-        <View style={styles.heroGlow} pointerEvents="none" />
-        <View style={styles.heroRow}>
-          <View style={styles.heroIcon}>
-            <Icon name="gamepad" size={26} color="#fff" filled />
-          </View>
-          <View style={styles.heroCopy}>
-            <Text style={styles.heroEyebrow}>PLAY TOGETHER</Text>
-            <Text style={styles.heroTitle}>We&apos;re bored?</Text>
-            <Text style={styles.heroSub}>
-              Pick something fun for you and {partnerFirst} below.
-            </Text>
-          </View>
-        </View>
-      </LinearGradient>
+      <PlayHero />
 
       {challenge && !showFullCard ? (
         <View
           style={[
             styles.challengePanel,
-            { backgroundColor: colors.surfaceElevated, borderColor: colors.border },
+            {
+              backgroundColor: colors.surfaceElevated,
+              borderColor: colors.border,
+              borderWidth: colors.boldBorder ? 2 : StyleSheet.hairlineWidth,
+            },
           ]}>
           <View style={styles.challengeHeader}>
             <Icon name="question" size={14} color={colors.accent} />
@@ -152,7 +136,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   challengePanel: {
-    marginTop: -18,
+    marginTop: 14,
     borderRadius: 22,
     borderWidth: StyleSheet.hairlineWidth,
     padding: 16,
@@ -185,6 +169,6 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   challengeWrap: {
-    marginTop: -18,
+    marginTop: 14,
   },
 });

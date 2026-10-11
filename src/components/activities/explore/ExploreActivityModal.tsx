@@ -1,4 +1,8 @@
+import { useEffect } from 'react';
+
 import type { ExploreModalKey } from '@/components/activities/ExploreSection';
+import { useRelationshipStore } from '@/stores';
+import { usePlayProgressStore } from '@/stores/play-progress-store';
 
 import {
   ComplimentJarScreen,
@@ -27,6 +31,7 @@ import {
   WhosLikelyScreen,
 } from './explore-play-screens';
 import { QuizLiveScreen } from './QuizLiveScreen';
+import { SOLO_XP } from './explore-catalog';
 import { EXPLORE_META } from './explore-meta';
 import { ExploreModalShell } from './ExploreModalShell';
 import {
@@ -46,7 +51,24 @@ interface ExploreActivityModalProps {
   onAddToCalendar: (title: string) => void;
 }
 
+/** How long an activity has to stay open before it counts as "played" (stops tap-and-close XP farming). */
+const PLAYED_AFTER_MS = 25_000;
+
 export function ExploreActivityModal({ activeModal, onClose }: ExploreActivityModalProps) {
+  const relationshipId = useRelationshipStore((s) => s.relationship?.id);
+
+  useEffect(() => {
+    if (!activeModal || !relationshipId) return;
+    const timer = setTimeout(() => {
+      void usePlayProgressStore.getState().award(
+        relationshipId,
+        { xp: SOLO_XP, stats: { games_played: 1, solo_games: 1 }, events: { game_played: 1 }, soloId: activeModal },
+        EXPLORE_META[activeModal]?.title ?? 'Played together',
+      );
+    }, PLAYED_AFTER_MS);
+    return () => clearTimeout(timer);
+  }, [activeModal, relationshipId]);
+
   if (!activeModal) return null;
 
   const meta = EXPLORE_META[activeModal];

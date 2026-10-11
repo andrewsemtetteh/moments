@@ -82,7 +82,7 @@ export function StreakDayTracker({ status, joinedAt }: StreakDayTrackerProps) {
         {
           backgroundColor: colors.surface,
           borderColor: colors.border,
-          borderWidth: StyleSheet.hairlineWidth,
+          borderWidth: colors.boldBorder ? 2 : StyleSheet.hairlineWidth,
         },
       ]}>
       <View style={styles.header}>

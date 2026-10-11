@@ -1,3 +1,4 @@
+import { useSignIn } from '@clerk/expo';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
 import {
@@ -11,40 +12,42 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { LogoMark } from '@/components/ui/Logo';
 import { AuthFooter } from '@/components/auth/AuthFooter';
 import { AuthScreenEnter } from '@/components/auth/AuthMotion';
 import { AuthTextField } from '@/components/auth/AuthTextField';
 import { AuthPrimaryButton } from '@/components/auth/AuthPrimaryButton';
 import { useTheme } from '@/hooks/useTheme';
-import { sendPasswordResetLink, formatAuthError } from '@/lib/auth-otp';
+import { formatAuthError, normalizeAuthEmail } from '@/lib/auth-errors';
 import { sanitizeEmailInput } from '@/lib/sanitize-input';
 
 export default function ForgotPasswordScreen() {
   const router = useRouter();
   const { colors } = useTheme();
+  const { signIn, fetchStatus } = useSignIn();
   const params = useLocalSearchParams<{ email?: string }>();
   const [email, setEmail] = useState(
     typeof params.email === 'string' ? sanitizeEmailInput(params.email) : '',
   );
-  const [loading, setLoading] = useState(false);
+
+  const loading = fetchStatus === 'fetching';
 
   const handleSend = async () => {
-    const trimmed = sanitizeEmailInput(email).trim();
+    const trimmed = normalizeAuthEmail(sanitizeEmailInput(email));
     if (!trimmed) return;
 
-    setLoading(true);
     try {
-      const { error } = await sendPasswordResetLink(trimmed);
+      const { error: createError } = await signIn.create({ identifier: trimmed });
+      if (createError) throw createError;
+
+      const { error } = await signIn.resetPasswordEmailCode.sendCode();
       if (error) throw error;
+
       router.push({
         pathname: '/(auth)/check-email',
         params: { email: trimmed, type: 'recovery' },
       });
     } catch (e: unknown) {
       Alert.alert('Could not send email', formatAuthError(e));
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -54,10 +57,10 @@ export default function ForgotPasswordScreen() {
         <ScrollView
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}>
+          showsVerticalScrollIndicator={false}
+          bounces={false}>
           <AuthScreenEnter style={styles.content}>
             <View style={styles.brand}>
-              <LogoMark size={64} />
               <Text style={[styles.title, { color: colors.text }]}>Reset password</Text>
               <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
                 Enter your email and we&apos;ll send a 6-digit code to verify it&apos;s you.
@@ -81,7 +84,7 @@ export default function ForgotPasswordScreen() {
               />
             </View>
 
-            <AuthFooter prompt="Remember your password?" linkLabel="Back to sign in" href="/(auth)/login" />
+            <AuthFooter prompt="Remember your password?" linkLabel="Sign in" href="/(auth)/login" />
           </AuthScreenEnter>
         </ScrollView>
       </KeyboardAvoidingView>

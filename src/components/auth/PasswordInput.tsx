@@ -10,17 +10,17 @@ type Props = Omit<TextInputProps, 'secureTextEntry' | 'placeholder'> & {
   /** @deprecated Use `label` instead. */
   placeholder?: string;
   containerStyle?: ViewStyle;
-  labelBackgroundColor?: string;
   /** When set, shows a hint below the field (e.g. minimum length). */
   minLength?: number;
+  fieldBackgroundColor?: string;
 };
 
 export function PasswordInput({
   label,
   placeholder,
   containerStyle,
-  labelBackgroundColor,
   minLength,
+  fieldBackgroundColor,
   style,
   value = '',
   ...rest
@@ -39,7 +39,7 @@ export function PasswordInput({
         {...rest}
         value={value}
         label={fieldLabel}
-        labelBackgroundColor={labelBackgroundColor}
+        fieldBackgroundColor={fieldBackgroundColor}
         style={style}
         secureTextEntry={!visible}
         autoCapitalize="none"

@@ -14,32 +14,39 @@ import {
     Text,
     View,
 } from 'react-native';
-import { GestureHandlerRootView, Pressable } from 'react-native-gesture-handler';
+import { GestureHandlerRootView, Gesture, GestureDetector, Pressable } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Animated, {
+  Easing,
+  runOnJS,
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+  withTiming,
+} from 'react-native-reanimated';
 
 import { PartnerStatusLine } from '@/components/chat/PartnerStatusLine';
 import { SwipeBackSheet } from '@/components/layout/SwipeBackSheet';
-import { LocationMapPreview, type MapMarker } from '@/components/moments/LocationMapPreview';
-import { FullScreenLocationMapModal } from '@/components/profile/FullScreenLocationMapModal';
+import { LocationMapPreview } from '@/components/moments/LocationMapPreview';
 import { FullScreenImageModal } from '@/components/ui/FullScreenImageModal';
 import { Icon, type IconName } from '@/components/ui/Icon';
-import { Avatar } from '@/components/ui/primitives';
+import { Avatar, colorWithAlpha } from '@/components/ui/primitives';
 import { MOOD_COLORS, MOOD_EMOJI, MOOD_LABELS } from '@/constants/design-system';
 import { useMoods, useStreak } from '@/hooks/queries';
 import { usePartnerActiveMoments } from '@/hooks/usePartnerActiveMoments';
 import { usePartnerPresence } from '@/hooks/usePartnerPresence';
-import { usePartnerLocationRealtime } from '@/hooks/useSharedLocationMap';
+import { buildSharedLocationMarkers, usePartnerLocationRealtime } from '@/hooks/useSharedLocationMap';
 import { useStartCall } from '@/hooks/useStartCall';
 import { useTheme } from '@/hooks/useTheme';
 import { getFirstName } from '@/lib/avatar-initial';
-import { hasValidCoords } from '@/lib/location';
 import { filterMomentsForHome, momentHasVisual } from '@/lib/moment-display';
-import { formatPartnerStatus } from '@/lib/partner-status';
 import * as api from '@/services/api';
 import { useAuthStore, useRelationshipStore, useUIStore } from '@/stores';
 import type { MoodType, UserProfile } from '@/types/database';
 
 const SCREEN_PAD = 20;
+const DRAG_DISMISS_DISTANCE = 100;
+const DRAG_DISMISS_VELOCITY = 800;
 
 export function PartnerProfileModal() {
   const router = useRouter();
@@ -49,8 +56,10 @@ export function PartnerProfileModal() {
   const closePartnerProfile = useUIStore((s) => s.closePartnerProfile);
   const typingUsers = useUIStore((s) => s.typingUsers);
   const setShowMomentHistory = useUIStore((s) => s.setShowMomentHistory);
+  const setMomentHistoryReturnToCamera = useUIStore((s) => s.setMomentHistoryReturnToCamera);
   const setShowMomentCreator = useUIStore((s) => s.setShowMomentCreator);
   const openMomentViewer = useUIStore((s) => s.openMomentViewer);
+  const openPartnerLocationMap = useUIStore((s) => s.openPartnerLocationMap);
 
   const user = useAuthStore((s) => s.user);
   const partner = useRelationshipStore((s) => s.partner);
@@ -92,24 +101,23 @@ export function PartnerProfileModal() {
   );
 
   const [showAvatar, setShowAvatar] = useState(false);
-  const [showFullMap, setShowFullMap] = useState(false);
+
+  const dragY = useSharedValue(0);
+
+  useEffect(() => {
+    if (visible) dragY.value = 0;
+  }, [visible, dragY]);
 
   const partnerTyping = profile?.id ? typingUsers.includes(profile.id) : false;
   const partnerMood = profile?.id ? moods?.[profile.id]?.mood ?? null : null;
-  const status = formatPartnerStatus(partnerTyping, isOnline, lastSeenAt, statusHidden);
 
   const sinceLabel = useMemo(() => {
     if (!relationship?.created_at) return null;
-    const date = new Date(relationship.created_at);
-    return {
-      long: format(date, 'MMMM d, yyyy'),
-      duration: formatDistanceToNow(date, { addSuffix: false }),
-    };
+    return { long: format(new Date(relationship.created_at), 'MMMM d, yyyy') };
   }, [relationship?.created_at]);
 
   const close = () => {
     setShowAvatar(false);
-    setShowFullMap(false);
     closePartnerProfile();
   };
 
@@ -121,11 +129,36 @@ export function PartnerProfileModal() {
   };
 
   const goToChat = () => {
-    leaveProfile(() => router.push('/(tabs)/chat'));
+    leaveProfile(() => router.push('/chat'));
   };
 
+  const dragHandlePan = Gesture.Pan()
+    .onUpdate((event) => {
+      dragY.value = event.translationY > 0 ? event.translationY : event.translationY * 0.2;
+    })
+    .onEnd((event) => {
+      const shouldDismiss =
+        event.translationY > DRAG_DISMISS_DISTANCE || event.velocityY > DRAG_DISMISS_VELOCITY;
+
+      if (shouldDismiss) {
+        dragY.value = withTiming(900, { duration: 220, easing: Easing.in(Easing.cubic) }, (finished) => {
+          if (finished) runOnJS(close)();
+        });
+        return;
+      }
+
+      dragY.value = withSpring(0, { damping: 24, stiffness: 280 });
+    });
+
+  const dragSheetStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: dragY.value }],
+  }));
+
   const openMomentsHistory = () => {
-    leaveProfile(() => setShowMomentHistory(true));
+    leaveProfile(() => {
+      setMomentHistoryReturnToCamera(false);
+      setShowMomentHistory(true);
+    });
   };
 
   const sendMoment = () => {
@@ -134,7 +167,10 @@ export function PartnerProfileModal() {
 
   const openFullMap = () => {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setShowFullMap(true);
+    // Close this pageSheet first, same as every other full-screen flow launched from the
+    // profile (call, moment creator, history) — the map then opens as its own independent,
+    // true full-screen Modal instead of being confined to the sheet's smaller frame.
+    leaveProfile(() => openPartnerLocationMap(locationMarkers, mapTitle));
   };
 
   const startVoiceCall = () => {
@@ -181,33 +217,16 @@ export function PartnerProfileModal() {
 
   const iShareLocation = Boolean(user?.location_sharing_enabled);
   const partnerName = profile?.name ?? 'Partner';
-  const spaceName = relationship?.relationship_name?.trim() || undefined;
   const locationLabel =
     iShareLocation && profile?.location_sharing_enabled
       ? profile.location_label?.trim()
       : null;
   const streakCount = streak?.current_streak;
 
-  const locationMarkers = useMemo((): MapMarker[] => {
-    const subject = partner ?? profile;
-    if (
-      !iShareLocation ||
-      !subject?.location_sharing_enabled ||
-      !hasValidCoords(subject.location_latitude, subject.location_longitude)
-    ) {
-      return [];
-    }
-    return [
-      {
-        latitude: subject.location_latitude!,
-        longitude: subject.location_longitude!,
-        label: subject.name?.trim() || 'Partner',
-        name: subject.name,
-        color: '#5b8def',
-        avatarUrl: subject.avatar_url,
-      },
-    ];
-  }, [iShareLocation, partner, profile]);
+  const locationMarkers = useMemo(
+    () => buildSharedLocationMarkers(user, profile ?? partner),
+    [user, profile, partner],
+  );
 
   const showLocation =
     iShareLocation &&
@@ -237,22 +256,16 @@ export function PartnerProfileModal() {
         visible={visible}
         animationType="slide"
         presentationStyle={Platform.OS === 'ios' ? 'pageSheet' : 'fullScreen'}
-        onRequestClose={goToChat}
-        onDismiss={goToChat}>
-        <GestureHandlerRootView style={styles.root}>
-        <View style={[styles.root, { backgroundColor: colors.background }]}>
+        onRequestClose={close}
+        onDismiss={close}>
+        <GestureHandlerRootView style={[styles.root, { backgroundColor: colors.background }]}>
+        <Animated.View style={[styles.root, { backgroundColor: colors.background }, dragSheetStyle]}>
           {!profile && isLoadingPartner ? (
             <View style={[styles.loadingState, { paddingTop: insets.top + 24 }]}>
-              <Pressable onPress={goToChat} hitSlop={10} style={styles.loadingBack}>
-                <Icon name="chevronLeft" size={24} color={colors.text} />
-              </Pressable>
               <ActivityIndicator size="large" color={colors.accent} />
             </View>
           ) : !profile ? (
             <View style={[styles.loadingState, { paddingTop: insets.top + 24 }]}>
-              <Pressable onPress={goToChat} hitSlop={10} style={styles.loadingBack}>
-                <Icon name="chevronLeft" size={24} color={colors.text} />
-              </Pressable>
               <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
                 {isPartnerError
                   ? 'Could not load partner profile.'
@@ -262,7 +275,18 @@ export function PartnerProfileModal() {
               </Text>
             </View>
           ) : (
-          <SwipeBackSheet onDismiss={goToChat}>
+          <SwipeBackSheet onDismiss={close}>
+            <GestureDetector gesture={dragHandlePan}>
+              <LinearGradient
+                colors={colors.gradient}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.dragHandleTouchTarget}
+                hitSlop={{ top: 10, bottom: 10, left: 30, right: 30 }}>
+                <View style={[styles.dragHandle, { backgroundColor: colorWithAlpha(colors.onAccent, 0.45) }]} />
+              </LinearGradient>
+            </GestureDetector>
+
             <ScrollView
               style={styles.scroll}
               showsVerticalScrollIndicator={false}
@@ -272,17 +296,7 @@ export function PartnerProfileModal() {
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
                 style={styles.heroBleed}>
-                <View style={[styles.screenInset, styles.heroInner, { paddingTop: insets.top + 12 }]}>
-                  <View style={styles.heroTopBar}>
-                    <Pressable
-                      onPress={goToChat}
-                      hitSlop={10}
-                      style={styles.backBtn}
-                      accessibilityLabel="Back to chat">
-                      <Icon name="chevronLeft" size={24} color="#fff" />
-                    </Pressable>
-                  </View>
-
+                <View style={[styles.screenInset, styles.heroInner]}>
               <Pressable
                 onPress={onAvatarPress}
                 onLongPress={onAvatarLongPress}
@@ -320,28 +334,28 @@ export function PartnerProfileModal() {
                         )}
                       </View>
                     </View>
-                    {status.variant === 'online' && (
+                    {isOnline && (
                       <View
                         style={[
                           styles.onlineDot,
-                          { backgroundColor: colors.success, borderColor: '#fff' },
+                          { backgroundColor: colors.success, borderColor: colors.onAccent },
                         ]}
                       />
                     )}
                   </LinearGradient>
                 ) : (
-                  <View style={[styles.avatarRing, { borderColor: 'rgba(255,255,255,0.35)' }]}>
+                  <View style={[styles.avatarRing, { borderColor: colorWithAlpha(colors.onAccent, 0.35) }]}>
                     <Avatar
                       name={profile.name}
                       imageUrl={profile.avatar_url}
                       size={108}
                       colorsOverride={['#ffffff', '#ffffff']}
                     />
-                    {status.variant === 'online' && (
+                    {isOnline && (
                       <View
                         style={[
                           styles.onlineDot,
-                          { backgroundColor: colors.success, borderColor: '#fff' },
+                          { backgroundColor: colors.success, borderColor: colors.onAccent },
                         ]}
                       />
                     )}
@@ -350,27 +364,22 @@ export function PartnerProfileModal() {
               </Pressable>
 
               {hasPartnerMoment ? (
-                <Text style={styles.avatarHint}>Tap for moment · Hold for photo</Text>
+                <Text style={[styles.avatarHint, { color: colorWithAlpha(colors.onAccent, 0.78) }]}>
+                  Tap for moment · Hold for photo
+                </Text>
               ) : null}
 
-              <Text style={styles.heroName}>{partnerName}</Text>
+              <Text style={[styles.heroName, { color: colors.onAccent }]}>{partnerName}</Text>
 
-              <View style={styles.heroStatus}>
+              <View style={[styles.heroStatus, { backgroundColor: colorWithAlpha(colors.onAccent, 0.16) }]}>
                 <PartnerStatusLine
                   isTyping={partnerTyping}
                   isOnline={isOnline}
                   lastSeenAt={lastSeenAt}
                   statusHidden={statusHidden}
-                  textStyle={styles.heroStatusText}
+                  textStyle={{ fontSize: 13, fontWeight: '600', color: colors.onAccent }}
                 />
               </View>
-
-              {sinceLabel && (
-                <Text style={styles.heroMeta}>
-                  Together {sinceLabel.duration}
-                  {spaceName ? ` · ${spaceName}` : ''}
-                </Text>
-              )}
                 </View>
               </LinearGradient>
 
@@ -387,7 +396,7 @@ export function PartnerProfileModal() {
                   <MoodRow mood={partnerMood as MoodType} colors={colors} />
                 ) : (
                   <Text style={[styles.muted, { color: colors.textSecondary }]}>
-                    {getFirstName(partnerName)} hasn't shared a mood yet today.
+                    {getFirstName(partnerName)} hasn&apos;t shared a mood yet today.
                   </Text>
                 )}
               </InfoCard>
@@ -399,7 +408,6 @@ export function PartnerProfileModal() {
                       <LocationMapPreview
                         markers={locationMarkers}
                         height={168}
-                        interactive
                         onPress={openFullMap}
                       />
                     </>
@@ -466,7 +474,7 @@ export function PartnerProfileModal() {
             </ScrollView>
           </SwipeBackSheet>
           )}
-        </View>
+        </Animated.View>
         </GestureHandlerRootView>
       </Modal>
 
@@ -476,13 +484,6 @@ export function PartnerProfileModal() {
         fallbackName={profile?.name}
         title={partnerName}
         onClose={() => setShowAvatar(false)}
-      />
-
-      <FullScreenLocationMapModal
-        visible={showFullMap}
-        markers={locationMarkers}
-        title={mapTitle}
-        onClose={() => setShowFullMap(false)}
       />
     </>
   );
@@ -576,25 +577,21 @@ const styles = StyleSheet.create({
   },
   heroInner: {
     alignItems: 'center',
+    paddingTop: 12,
   },
   heroBleed: {
     width: '100%',
     paddingBottom: 28,
   },
-  heroTopBar: {
+  dragHandleTouchTarget: {
     width: '100%',
-    flexDirection: 'row',
     alignItems: 'center',
-    alignSelf: 'stretch',
-    marginBottom: 8,
+    paddingVertical: 10,
   },
-  backBtn: {
+  dragHandle: {
     width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(0,0,0,0.18)',
+    height: 4,
+    borderRadius: 2,
   },
   avatarPress: { marginBottom: 14 },
   avatarStoryRing: {
@@ -630,7 +627,6 @@ const styles = StyleSheet.create({
   avatarHint: {
     marginTop: -6,
     marginBottom: 10,
-    color: 'rgba(255,255,255,0.78)',
     fontSize: 12,
     fontWeight: '600',
     letterSpacing: 0.2,
@@ -653,7 +649,6 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   heroName: {
-    color: '#fff',
     fontSize: 28,
     fontWeight: '800',
     letterSpacing: -0.5,
@@ -664,15 +659,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 5,
     borderRadius: 999,
-    backgroundColor: 'rgba(0,0,0,0.16)',
-  },
-  heroStatusText: { color: '#fff', fontSize: 13, fontWeight: '600' },
-  heroMeta: {
-    marginTop: 10,
-    color: 'rgba(255,255,255,0.88)',
-    fontSize: 14,
-    fontWeight: '500',
-    textAlign: 'center',
   },
   body: { paddingTop: 20, gap: 14, alignSelf: 'stretch' },
   actions: {
@@ -757,15 +743,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 32,
     gap: 16,
-  },
-  loadingBack: {
-    position: 'absolute',
-    top: 16,
-    left: SCREEN_PAD,
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   loadingText: { fontSize: 16, textAlign: 'center', lineHeight: 24 },
 });

@@ -2,6 +2,7 @@ import { Image } from 'expo-image';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Icon } from '@/components/ui/Icon';
+import { colorWithAlpha } from '@/components/ui/primitives';
 import { useTheme } from '@/hooks/useTheme';
 import { resolveMomentForReply } from '@/lib/moment-reply';
 import { useAuthStore, useRelationshipStore, useUIStore } from '@/stores';
@@ -30,7 +31,7 @@ export function MomentReplyCard({ message, isSelf }: MomentReplyCardProps) {
     openMomentViewer([moment], 0, { playback: 'focus', sectionLabel: 'From chat' });
   };
 
-  const borderColor = isSelf ? 'rgba(255,255,255,0.2)' : colors.border;
+  const borderColor = isSelf ? colorWithAlpha(colors.chatBubbleSelfText, 0.2) : colors.border;
 
   return (
     <Pressable
@@ -52,14 +53,14 @@ export function MomentReplyCard({ message, isSelf }: MomentReplyCardProps) {
         )}
       </View>
       <View style={styles.meta}>
-        <Text style={[styles.label, { color: isSelf ? 'rgba(255,255,255,0.85)' : colors.textSecondary }]}>
+        <Text style={[styles.label, { color: isSelf ? colorWithAlpha(colors.chatBubbleSelfText, 0.85) : colors.textSecondary }]}>
           Replied to moment
         </Text>
-        <Text style={[styles.hint, { color: isSelf ? 'rgba(255,255,255,0.55)' : colors.textTertiary }]}>
+        <Text style={[styles.hint, { color: isSelf ? colorWithAlpha(colors.chatBubbleSelfText, 0.55) : colors.textTertiary }]}>
           Tap to preview
         </Text>
       </View>
-      <Icon name="chevronRight" size={16} color={isSelf ? 'rgba(255,255,255,0.45)' : colors.textTertiary} />
+      <Icon name="chevronRight" size={16} color={isSelf ? colorWithAlpha(colors.chatBubbleSelfText, 0.45) : colors.textTertiary} />
     </Pressable>
   );
 }

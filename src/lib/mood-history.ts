@@ -1,6 +1,5 @@
 import {
   format,
-  isSameDay,
   isThisWeek,
   isThisYear,
   isToday,
@@ -79,9 +78,9 @@ export interface RpcMoodHistoryOverview {
     top_mood: string | null;
     top_mood_count: number;
   };
-  counts: Array<{ mood: string; log_count: number }>;
-  daily: Array<{ day_date: string; log_count: number; dominant_mood: string | null }>;
-  weekly: Array<{ week_start: string; user_id: string; log_count: number; top_mood: string | null }>;
+  counts: { mood: string; log_count: number }[];
+  daily: { day_date: string; log_count: number; dominant_mood: string | null }[];
+  weekly: { week_start: string; user_id: string; log_count: number; top_mood: string | null }[];
 }
 
 export function getLocalTimezoneOffsetMinutes(): number {
@@ -210,7 +209,7 @@ export function buildWeeklyActivity(logs: MoodLog[], weeks = 8, userId?: string 
 }
 
 export function buildPartnerWeeklyComparison(
-  weeklyRows: Array<{ week_start: string; user_id: string; log_count: number; top_mood: string | null }>,
+  weeklyRows: { week_start: string; user_id: string; log_count: number; top_mood: string | null }[],
   userId: string,
   partnerId?: string | null,
 ): MoodPartnerWeekRow[] {

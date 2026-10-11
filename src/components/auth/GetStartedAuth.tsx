@@ -1,3 +1,4 @@
+import { useSSO } from '@clerk/expo/experimental';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
@@ -17,15 +18,12 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { AuthFooter } from '@/components/auth/AuthFooter';
 import { AuthLegalLinks } from '@/components/auth/AuthLegalLinks';
 import { AppleIcon, GoogleIcon } from '@/components/auth/OAuthBrandIcon';
-import { SwipeDismissView } from '@/components/layout/SwipeDismissView';
-import { Icon } from '@/components/ui/Icon';
-import { LogoMark } from '@/components/ui/Logo';
+import { OnboardingBackButton } from '@/components/onboarding/OnboardingChrome';
 import { Radius, Spacing } from '@/constants/design-system';
-import { hydrateAuthSession } from '@/lib/auth-session';
+import { useTheme } from '@/hooks/useTheme';
+import { formatAuthError } from '@/lib/auth-errors';
 import { markIntroCompleted } from '@/lib/intro-storage';
-import { signInWithApple, signInWithGoogle } from '@/lib/oauth';
 import { goBackOrReplace } from '@/lib/router';
-import { supabase } from '@/lib/supabase';
 
 type Props = {
   showBack?: boolean;
@@ -34,69 +32,66 @@ type Props = {
 export function GetStartedAuth({ showBack = true }: Props) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { colors } = useTheme();
+  const { startSSOFlow } = useSSO();
   const [loadingProvider, setLoadingProvider] = useState<'apple' | 'google' | null>(null);
   const showApple = Platform.OS === 'ios' || Platform.OS === 'android';
   const busy = loadingProvider !== null;
 
-  const finishOAuth = async () => {
-    await markIntroCompleted();
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-    if (session) {
-      await hydrateAuthSession(session, false, { trustSession: true });
-      router.replace('/');
-    }
-  };
-
-  const handleApple = async () => {
-    setLoadingProvider('apple');
+  const handleSSO = async (strategy: 'oauth_apple' | 'oauth_google', provider: 'apple' | 'google') => {
+    const label = provider === 'apple' ? 'Apple' : 'Google';
+    setLoadingProvider(provider);
     try {
       void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      const signedIn = await signInWithApple();
-      if (signedIn) await finishOAuth();
+      await markIntroCompleted();
+      const { createdSessionId, signIn, signUp } = await startSSOFlow({ strategy });
+      if (createdSessionId) {
+        router.replace('/');
+        return;
+      }
+
+      if (signIn?.existingSession || signUp?.existingSession) {
+        Alert.alert(
+          `Already signed in with ${label}`,
+          'This account is already signed in on another session. Sign out there first, or use a different account.',
+        );
+        return;
+      }
+
+      if (signUp?.status === 'missing_requirements') {
+        Alert.alert(
+          `${label} sign up incomplete`,
+          'Your account needs additional info to finish signing up. Please try again or use email instead.',
+        );
+        return;
+      }
+
+      // No createdSessionId, no error, and none of the above — the user cancelled the flow.
     } catch (e: unknown) {
-      Alert.alert('Apple sign in failed', e instanceof Error ? e.message : 'Please try again');
+      Alert.alert(`${label} sign in failed`, formatAuthError(e));
     } finally {
       setLoadingProvider(null);
     }
   };
 
-  const handleGoogle = async () => {
-    setLoadingProvider('google');
-    try {
-      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      const signedIn = await signInWithGoogle();
-      if (signedIn) await finishOAuth();
-    } catch (e: unknown) {
-      Alert.alert('Google sign in failed', e instanceof Error ? e.message : 'Please try again');
-    } finally {
-      setLoadingProvider(null);
-    }
-  };
+  const handleApple = () => handleSSO('oauth_apple', 'apple');
+  const handleGoogle = () => handleSSO('oauth_google', 'google');
 
   const handleEmail = async () => {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     await markIntroCompleted();
-    router.push('/(auth)/signup');
+    router.push('/(auth)/signup-email');
   };
 
   const handleBack = () => goBackOrReplace(router, '/(auth)/welcome');
 
   return (
-    <SwipeDismissView onDismiss={handleBack} enabled={showBack && !busy}>
-      <View style={styles.root}>
-      <StatusBar style="light" />
+    <View style={[styles.root, { backgroundColor: colors.background }]}>
+      <StatusBar style={colors.isDark ? 'light' : 'dark'} />
       <SafeAreaView style={styles.safe} edges={['left', 'right', 'bottom']}>
         {showBack ? (
           <View style={[styles.topBar, { paddingTop: insets.top + Spacing.lg + Spacing.sm }]}>
-            <Pressable
-              onPress={handleBack}
-              hitSlop={8}
-              style={styles.backBtn}
-              accessibilityLabel="Go back">
-              <Icon name="chevronLeft" size={22} color="rgba(255,255,255,0.9)" />
-            </Pressable>
+            <OnboardingBackButton onPress={handleBack} />
           </View>
         ) : (
           <View style={{ height: insets.top + Spacing.lg + Spacing.sm }} />
@@ -104,16 +99,14 @@ export function GetStartedAuth({ showBack = true }: Props) {
 
         <View style={styles.content}>
           <View style={styles.brandBlock}>
-            <LogoMark size={88} />
-            <Text style={styles.brandName}>Moments</Text>
-            <Text style={styles.tagline}>Closer, every day</Text>
+            <Text style={[styles.tagline, { color: colors.textSecondary }]}>Closer, every day</Text>
           </View>
 
           <View style={styles.actions}>
             {showApple && (
               <OutlineAuthButton
                 label="Continue with Apple"
-                icon={<AppleIcon size={20} color="#FFFFFF" />}
+                icon={<AppleIcon size={20} color={colors.text} />}
                 onPress={handleApple}
                 loading={loadingProvider === 'apple'}
                 disabled={busy}
@@ -128,14 +121,17 @@ export function GetStartedAuth({ showBack = true }: Props) {
               disabled={busy}
             />
 
-            <Text style={styles.or}>or</Text>
+            <Text style={[styles.or, { color: colors.textSecondary }]}>or</Text>
 
             <Pressable
               onPress={handleEmail}
               disabled={busy}
-              style={({ pressed }) => [styles.emailBtn, { opacity: pressed || busy ? 0.9 : 1 }]}>
-              <Ionicons name="mail-outline" size={18} color="#000000" style={styles.emailIcon} />
-              <Text style={styles.emailBtnText}>Continue with Email</Text>
+              style={({ pressed }) => [
+                styles.emailBtn,
+                { backgroundColor: colors.text, opacity: pressed || busy ? 0.9 : 1 },
+              ]}>
+              <Ionicons name="mail-outline" size={18} color={colors.background} style={styles.emailIcon} />
+              <Text style={[styles.emailBtnText, { color: colors.background }]}>Continue with Email</Text>
             </Pressable>
           </View>
 
@@ -152,8 +148,7 @@ export function GetStartedAuth({ showBack = true }: Props) {
           />
         </View>
       </SafeAreaView>
-      </View>
-    </SwipeDismissView>
+    </View>
   );
 }
 
@@ -170,17 +165,25 @@ function OutlineAuthButton({
   loading?: boolean;
   disabled?: boolean;
 }) {
+  const { colors } = useTheme();
   return (
     <Pressable
       onPress={onPress}
       disabled={disabled || loading}
-      style={({ pressed }) => [styles.outlineBtn, { opacity: pressed || (disabled && !loading) ? 0.82 : 1 }]}>
+      style={({ pressed }) => [
+        styles.outlineBtn,
+        {
+          backgroundColor: colors.surface,
+          borderColor: colors.border,
+          opacity: pressed || (disabled && !loading) ? 0.82 : 1,
+        },
+      ]}>
       {loading ? (
-        <ActivityIndicator color="#FFFFFF" />
+        <ActivityIndicator color={colors.text} />
       ) : (
         <View style={styles.outlineContent}>
           {icon}
-          <Text style={styles.outlineBtnText}>{label}</Text>
+          <Text style={[styles.outlineBtnText, { color: colors.text }]}>{label}</Text>
         </View>
       )}
     </Pressable>
@@ -188,19 +191,12 @@ function OutlineAuthButton({
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#000000' },
+  root: { flex: 1 },
   safe: { flex: 1 },
   topBar: {
     minHeight: 44,
     justifyContent: 'center',
     paddingHorizontal: Spacing.lg,
-  },
-  backBtn: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: -4,
   },
   content: {
     flex: 1,
@@ -212,19 +208,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 40,
   },
-  brandName: {
-    marginTop: 20,
-    fontSize: 36,
-    fontWeight: '400',
-    color: '#FFFFFF',
-    letterSpacing: 0.5,
-    fontFamily: Platform.select({ ios: 'Georgia', android: 'serif', default: 'Georgia' }),
-  },
   tagline: {
     marginTop: 8,
     fontSize: 15,
     letterSpacing: 0.3,
-    color: 'rgba(255,255,255,0.72)',
     textAlign: 'center',
   },
   actions: {
@@ -236,9 +223,7 @@ const styles = StyleSheet.create({
   outlineBtn: {
     minHeight: 54,
     borderRadius: Radius.pill,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.55)',
-    backgroundColor: 'rgba(255,255,255,0.07)',
+    borderWidth: StyleSheet.hairlineWidth,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 20,
@@ -249,14 +234,12 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   outlineBtnText: {
-    color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '600',
     letterSpacing: -0.2,
   },
   or: {
     textAlign: 'center',
-    color: 'rgba(255,255,255,0.72)',
     fontSize: 15,
     fontStyle: 'italic',
     fontFamily: Platform.select({ ios: 'Georgia', android: 'serif', default: 'Georgia' }),
@@ -265,7 +248,6 @@ const styles = StyleSheet.create({
   emailBtn: {
     minHeight: 54,
     borderRadius: Radius.pill,
-    backgroundColor: '#FFFFFF',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -274,7 +256,6 @@ const styles = StyleSheet.create({
   },
   emailIcon: { opacity: 0.55 },
   emailBtnText: {
-    color: '#000000',
     fontSize: 16,
     fontWeight: '600',
     letterSpacing: -0.2,

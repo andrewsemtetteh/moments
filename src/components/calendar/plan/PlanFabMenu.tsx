@@ -1,6 +1,14 @@
 import * as Haptics from 'expo-haptics';
+import { useCallback, useEffect, useState } from 'react';
 import { Dimensions, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
-import Animated, { FadeIn, FadeOut, ZoomIn } from 'react-native-reanimated';
+import Animated, {
+  Easing,
+  runOnJS,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+  ZoomIn,
+} from 'react-native-reanimated';
 
 import { Icon } from '@/components/ui/Icon';
 import { useTheme } from '@/hooks/useTheme';
@@ -19,18 +27,51 @@ export function PlanRadialFab({
   onSelect: (kind: PlanKindKey) => void;
 }) {
   const { colors } = useTheme();
+  // `open` flips to false the instant a press handler calls onClose, but the Modal that
+  // hosts this content can't animate its own dismissal — unmounting it immediately would
+  // cut the fade/scale-out short. Stay mounted through the close animation ourselves,
+  // the same pattern DraggableSheet uses.
+  const [mounted, setMounted] = useState(open);
+  const backdropOpacity = useSharedValue(0);
+  const ringScale = useSharedValue(0.85);
 
-  if (!open) return null;
+  useEffect(() => {
+    if (open) {
+      setMounted(true);
+      backdropOpacity.value = withTiming(1, { duration: 160, easing: Easing.out(Easing.cubic) });
+      ringScale.value = withTiming(1, { duration: 160, easing: Easing.out(Easing.cubic) });
+    } else if (mounted) {
+      backdropOpacity.value = withTiming(0, { duration: 120 });
+      ringScale.value = withTiming(0.85, { duration: 120, easing: Easing.in(Easing.cubic) }, (finished) => {
+        if (finished) runOnJS(setMounted)(false);
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  const select = useCallback(
+    (kind: PlanKindKey) => {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      onSelect(kind);
+      onClose();
+    },
+    [onSelect, onClose],
+  );
+
+  const backdropStyle = useAnimatedStyle(() => ({ opacity: backdropOpacity.value }));
+  const ringStyle = useAnimatedStyle(() => ({
+    opacity: backdropOpacity.value,
+    transform: [{ scale: ringScale.value }],
+  }));
+
+  if (!mounted) return null;
 
   return (
-    <Modal visible={open} transparent animationType="none" onRequestClose={onClose}>
-      <Pressable style={styles.backdrop} onPress={onClose}>
+    <Modal visible transparent animationType="none" onRequestClose={onClose}>
+      <Pressable style={StyleSheet.absoluteFill} onPress={onClose}>
+        <Animated.View style={[styles.backdrop, backdropStyle]} />
         <View style={styles.stage} pointerEvents="box-none">
-          <Animated.View
-            entering={FadeIn.duration(160)}
-            exiting={FadeOut.duration(120)}
-            style={styles.ring}
-            pointerEvents="box-none">
+          <Animated.View style={[styles.ring, ringStyle]} pointerEvents="box-none">
             {FAB_ACTIONS.map((action, index) => {
               const angle = (-90 + index * 60) * (Math.PI / 180);
               const x = Math.cos(angle) * RADIUS;
@@ -38,17 +79,13 @@ export function PlanRadialFab({
               return (
                 <Animated.View
                   key={action.key}
-                  entering={ZoomIn.delay(40 + index * 30).springify().damping(14)}
+                  entering={open ? ZoomIn.delay(40 + index * 30).springify().damping(14) : undefined}
                   style={[
                     styles.actionWrap,
                     { transform: [{ translateX: x }, { translateY: y }] },
                   ]}>
                   <Pressable
-                    onPress={() => {
-                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                      onSelect(action.key);
-                      onClose();
-                    }}
+                    onPress={() => select(action.key)}
                     style={[
                       styles.action,
                       {
@@ -65,7 +102,7 @@ export function PlanRadialFab({
             })}
           </Animated.View>
 
-          <Animated.View entering={ZoomIn.springify().damping(14)}>
+          <Animated.View entering={open ? ZoomIn.springify().damping(14) : undefined}>
             <Pressable
               onPress={onClose}
               style={[styles.center, { backgroundColor: colors.accent, shadowColor: colors.shadow }]}>
@@ -80,7 +117,7 @@ export function PlanRadialFab({
 
 const styles = StyleSheet.create({
   backdrop: {
-    flex: 1,
+    ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(0,0,0,0.42)',
   },
   stage: {

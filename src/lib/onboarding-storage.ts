@@ -41,3 +41,41 @@ export async function isOnboardingPaywallDone(userId: string): Promise<boolean> 
   const value = await AsyncStorage.getItem(ONBOARDING_PAYWALL_KEY);
   return value === userId;
 }
+
+const THEME_PROMPT_KEY = 'moments_theme_prompt_done';
+
+export async function markThemePromptDone(userId: string) {
+  await AsyncStorage.setItem(THEME_PROMPT_KEY, userId);
+}
+
+export async function isThemePromptDone(userId: string): Promise<boolean> {
+  const value = await AsyncStorage.getItem(THEME_PROMPT_KEY);
+  return value === userId;
+}
+
+const WIDGET_PROMPT_KEY = 'moments_widget_prompt_done';
+const WIDGET_PREFERENCES_KEY = 'moments_widget_preferences';
+
+export async function markWidgetPromptDone(userId: string) {
+  await AsyncStorage.setItem(WIDGET_PROMPT_KEY, userId);
+}
+
+export async function isWidgetPromptDone(userId: string): Promise<boolean> {
+  const value = await AsyncStorage.getItem(WIDGET_PROMPT_KEY);
+  return value === userId;
+}
+
+export async function saveWidgetPreferences(widgetKeys: string[]) {
+  await AsyncStorage.setItem(WIDGET_PREFERENCES_KEY, JSON.stringify(widgetKeys));
+}
+
+export async function getWidgetPreferences(): Promise<string[]> {
+  const value = await AsyncStorage.getItem(WIDGET_PREFERENCES_KEY);
+  if (!value) return [];
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed.filter((v): v is string => typeof v === 'string') : [];
+  } catch {
+    return [];
+  }
+}

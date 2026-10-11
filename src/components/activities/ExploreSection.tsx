@@ -17,10 +17,12 @@ import { Spacing } from '@/constants/design-system';
 import { useTheme } from '@/hooks/useTheme';
 
 import {
+    CATALOG_TO_LIVE,
     getPlayTone,
     HOME_FILTERS,
     PLAY_GROUPS,
     sectionsForFilter,
+    SOLO_XP,
     type ExploreModalKey,
     type HomeFilterId,
     type PlayActivity,
@@ -101,14 +103,18 @@ export function ExploreSection({ onOpen }: ExploreSectionProps) {
     <View style={styles.section}>
       <View style={styles.sectionIntro}>
         <View style={[styles.sectionRule, { backgroundColor: colors.borderStrong }]} />
-        <Text style={[styles.sectionIntroText, { color: colors.textSecondary }]}>More to explore</Text>
+        <Text style={[styles.sectionIntroText, { color: colors.textSecondary }]}>All games & more</Text>
         <View style={[styles.sectionRule, { backgroundColor: colors.borderStrong }]} />
       </View>
 
       <View
         style={[
           styles.search,
-          { backgroundColor: colors.surfaceElevated, borderColor: colors.border },
+          {
+            backgroundColor: colors.surfaceElevated,
+            borderColor: colors.border,
+            borderWidth: colors.boldBorder ? 2 : StyleSheet.hairlineWidth,
+          },
         ]}>
         <Icon name="search" size={18} color={colors.textTertiary} />
         <TextInput
@@ -145,7 +151,7 @@ export function ExploreSection({ onOpen }: ExploreSectionProps) {
                   : {
                       backgroundColor: colors.surfaceElevated,
                       borderColor: colors.border,
-                      borderWidth: StyleSheet.hairlineWidth,
+                      borderWidth: colors.boldBorder ? 2 : StyleSheet.hairlineWidth,
                     },
               ]}>
               <Text style={[styles.chipText, { color: active ? colors.background : colors.text }]}>
@@ -212,6 +218,7 @@ function FeatureCard({
   const cta = activity.cta ?? 'Play';
   const tone = getPlayTone(activity.tone);
   const wash = colors.isDark ? tone.darkWash : tone.wash;
+  const live = CATALOG_TO_LIVE[activity.id];
 
   return (
     <Pressable
@@ -224,6 +231,7 @@ function FeatureCard({
           width,
           backgroundColor: colors.surfaceElevated,
           borderColor: colors.isDark ? colors.border : tone.soft,
+          borderWidth: colors.boldBorder ? 2 : StyleSheet.hairlineWidth,
           shadowColor: tone.accent,
         },
       ]}>
@@ -236,6 +244,16 @@ function FeatureCard({
       />
 
       <View style={styles.cardCopy}>
+        <View style={styles.chipsRow}>
+          <View style={[styles.xpChip, { backgroundColor: tone.soft }]}>
+            <Text style={[styles.xpChipText, { color: tone.accent }]}>⭐ {live ? 'Up to 140' : SOLO_XP} XP</Text>
+          </View>
+          {live ? (
+            <View style={styles.liveChip}>
+              <Text style={styles.liveChipText}>🎧 LIVE</Text>
+            </View>
+          ) : null}
+        </View>
         <Text style={[styles.cardTitle, { color: colors.text }]} numberOfLines={1}>
           {activity.title}
         </Text>
@@ -354,6 +372,11 @@ const styles = StyleSheet.create({
     zIndex: 1,
     minWidth: 0,
   },
+  chipsRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  xpChip: { borderRadius: 999, paddingHorizontal: 9, paddingVertical: 4 },
+  xpChipText: { fontSize: 11, fontWeight: '900', letterSpacing: 0.3 },
+  liveChip: { borderRadius: 999, paddingHorizontal: 9, paddingVertical: 4, backgroundColor: '#FF5A5F' },
+  liveChipText: { color: '#fff', fontSize: 10, fontWeight: '900', letterSpacing: 0.8 },
   cardTitle: {
     fontSize: 19,
     fontWeight: '800',

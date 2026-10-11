@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 
 import { LocationMapPreview } from '@/components/moments/LocationMapPreview';
+import { FullScreenLocationMapModal } from '@/components/profile/FullScreenLocationMapModal';
 import { Icon } from '@/components/ui/Icon';
 import { useLocationSharing } from '@/hooks/useLocationSharing';
 import { usePartnerLocationRealtime, useSharedLocationMap } from '@/hooks/useSharedLocationMap';
@@ -25,6 +26,10 @@ export function LocationSharingSettings() {
   const { markers, myPlace, partnerSharing, partnerOnMap, partner } = useSharedLocationMap();
   usePartnerLocationRealtime();
   const [locating, setLocating] = useState(false);
+  const [showMap, setShowMap] = useState(false);
+  // Instant switch feedback, decoupled from the GPS/network round trip below.
+  const [pendingEnabled, setPendingEnabled] = useState<boolean | null>(null);
+  const switchValue = pendingEnabled ?? enabled;
 
   const refreshMyLocation = async () => {
     setLocating(true);
@@ -53,19 +58,31 @@ export function LocationSharingSettings() {
 
   const onToggle = async (value: boolean) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setPendingEnabled(value);
+
     if (value) {
       setLocating(true);
       const result = await getCurrentPlace();
       setLocating(false);
       if (!result.ok) {
+        setPendingEnabled(null);
         showLocationError(result.message, result.reason);
         return;
       }
-      await setSharingEnabled(true, result.place);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      try {
+        await setSharingEnabled(true, result.place);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      } finally {
+        setPendingEnabled(null);
+      }
       return;
     }
-    await setSharingEnabled(false);
+
+    try {
+      await setSharingEnabled(false);
+    } finally {
+      setPendingEnabled(null);
+    }
   };
 
   if (!loaded) return null;
@@ -80,22 +97,22 @@ export function LocationSharingSettings() {
           <View style={styles.copy}>
             <Text style={[styles.title, { color: colors.text }]}>Location sharing</Text>
             <Text style={[styles.sub, { color: colors.textSecondary }]} numberOfLines={2}>
-              {enabled
+              {switchValue
                 ? "You can see each other's location"
                 : "Hidden for both. You won't see theirs either"}
             </Text>
           </View>
         </View>
         <Switch
-          value={enabled}
+          value={switchValue}
           onValueChange={(value) => void onToggle(value)}
           disabled={locating}
           trackColor={{ false: colors.border, true: colors.accentSoft }}
-          thumbColor={enabled ? colors.accent : colors.surfaceElevated}
+          thumbColor={switchValue ? colors.accent : colors.surfaceElevated}
         />
       </View>
 
-      {enabled && (
+      {switchValue && (
         <View style={styles.previewBlock}>
           {locating && markers.length === 0 ? (
             <View style={[styles.loadingBox, { backgroundColor: colors.surfaceElevated }]}>
@@ -106,7 +123,9 @@ export function LocationSharingSettings() {
             </View>
           ) : markers.length > 0 ? (
             <>
-              <LocationMapPreview markers={markers} height={180} interactive={false} />
+              <Pressable onPress={() => setShowMap(true)} accessibilityRole="button" accessibilityLabel="Open location map">
+                <LocationMapPreview markers={markers} height={180} interactive={false} />
+              </Pressable>
               <View style={styles.legend}>
                 {myPlace && (
                   <Text style={[styles.legendItem, { color: colors.textSecondary }]}>
@@ -152,6 +171,13 @@ export function LocationSharingSettings() {
           )}
         </View>
       )}
+
+      <FullScreenLocationMapModal
+        visible={showMap}
+        markers={markers}
+        title="Locations"
+        onClose={() => setShowMap(false)}
+      />
     </View>
   );
 }

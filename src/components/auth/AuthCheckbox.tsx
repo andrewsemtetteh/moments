@@ -40,7 +40,7 @@ export function AuthCheckbox({ checked, onToggle, label, hitSlop = 4 }: Props) {
         { borderColor: colors.border, backgroundColor: colors.surface },
         checked && { backgroundColor: colors.accent, borderColor: colors.accent },
       ]}>
-      {checked && <Text style={styles.checkmark}>✓</Text>}
+      {checked && <Text style={[styles.checkmark, { color: colors.onAccent }]}>✓</Text>}
     </Animated.View>
   );
 
@@ -79,6 +79,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  checkmark: { color: '#fff', fontSize: 14, fontWeight: '700' },
+  checkmark: { fontSize: 14, fontWeight: '700' },
   label: { fontSize: 15 },
 });

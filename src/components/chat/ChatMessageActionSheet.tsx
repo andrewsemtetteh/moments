@@ -82,9 +82,28 @@ export function ChatMessageActionSheet({
     ]);
   };
 
+  // One shared Modal instance whose content swaps — two separate transparent Modals that
+  // trade `visible` back and forth (one for the action sheet, one for "more emojis") both
+  // being mounted at once meant that toggling between them briefly left neither presented,
+  // flashing the raw chat screen underneath for a frame.
   return (
-    <>
-      <Modal visible={!showMoreEmojis} transparent animationType="fade" onRequestClose={handleClose}>
+    <Modal
+      visible
+      transparent
+      animationType="fade"
+      onRequestClose={showMoreEmojis ? () => setShowMoreEmojis(false) : handleClose}>
+      {showMoreEmojis ? (
+        <Pressable style={styles.emojiOverlay} onPress={() => setShowMoreEmojis(false)}>
+          <View style={styles.emojiSheet} onStartShouldSetResponder={() => true}>
+            <ChatEmojiPicker
+              onSelect={(emoji) => {
+                handleReact(emoji);
+                setShowMoreEmojis(false);
+              }}
+            />
+          </View>
+        </Pressable>
+      ) : (
         <Pressable style={styles.overlay} onPress={handleClose}>
           <View
             style={[styles.sheet, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}
@@ -150,21 +169,8 @@ export function ChatMessageActionSheet({
             </Pressable>
           </View>
         </Pressable>
-      </Modal>
-
-      <Modal visible={showMoreEmojis} transparent animationType="slide" onRequestClose={() => setShowMoreEmojis(false)}>
-        <Pressable style={styles.emojiOverlay} onPress={() => setShowMoreEmojis(false)}>
-          <View style={styles.emojiSheet} onStartShouldSetResponder={() => true}>
-            <ChatEmojiPicker
-              onSelect={(emoji) => {
-                handleReact(emoji);
-                setShowMoreEmojis(false);
-              }}
-            />
-          </View>
-        </Pressable>
-      </Modal>
-    </>
+      )}
+    </Modal>
   );
 }
 

@@ -11,10 +11,14 @@ export type NotificationNavTarget = {
   mediaUrl?: string | null;
 };
 
-type RouterLike = { push: (href: Href) => void };
+// `navigate`, not `push`: the tabs are already on the root stack underneath
+// (and Notifications/Chat/Plan are pushed above them), so pushing a tab route
+// would stack a second copy of the whole tab navigator instead of popping
+// back down to the existing one.
+type RouterLike = { navigate: (href: Href) => void };
 
 function goHome(router: RouterLike) {
-  router.push('/(tabs)/home');
+  router.navigate('/(tabs)/home');
 }
 
 function afterNavigate(action: () => void) {
@@ -39,6 +43,7 @@ async function openMomentFromNotification(relatedId?: string | null) {
       // Fall through
     }
   }
+  ui.setMomentHistoryReturnToCamera(false);
   ui.setShowMomentHistory(true);
 }
 
@@ -85,26 +90,12 @@ export async function openFromNotification(
       return;
 
     case 'activity':
+    case 'game_invite':
       openActivities();
       return;
 
-    case 'watch_party':
-    case 'watch_party_nudge':
-      goHome(router);
-      afterNavigate(() => {
-        useUIStore.getState().openWatchTogether('hub');
-      });
-      return;
-
-    case 'watch_party_scheduled':
-      goHome(router);
-      afterNavigate(() => {
-        useUIStore.getState().openWatchTogether('schedule');
-      });
-      return;
-
     default:
-      router.push('/(tabs)/notifications');
+      router.navigate('/notifications');
   }
 }
 

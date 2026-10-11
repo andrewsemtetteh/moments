@@ -1,12 +1,19 @@
 import { create } from 'zustand';
 
+import type { MapMarker } from '@/components/moments/LocationMapPreview';
 import type { AppTheme } from '@/constants/design-system';
 import { callManager } from '@/lib/call-manager';
 import type { CallMode, CallPhase } from '@/lib/call-types';
-import type { Relationship, UserProfile, Moment, SharedAlbumItem } from '@/types/database';
+import type { Relationship, UserProfile, Moment } from '@/types/database';
 import type { MomentReplyContext } from '@/lib/moment-reply';
 import type { ChatOfflineItem } from '@/lib/chat-offline-queue';
 import { filterMomentsForHome } from '@/lib/moment-display';
+import { saveTheme } from '@/lib/theme-storage';
+
+export interface PartnerLocationMapState {
+  markers: MapMarker[];
+  title?: string | null;
+}
 
 export type MomentViewerPlayback = 'story' | 'focus';
 
@@ -18,8 +25,6 @@ export interface MomentViewerState {
   sectionLabel?: string;
   /** Re-open moment history when the viewer closes (opened from history grid). */
   returnToHistory?: boolean;
-  /** Re-open shared album when the viewer closes (opened from album grid). */
-  returnToAlbum?: boolean;
   /** Re-open partner profile when the viewer closes (opened from profile avatar). */
   returnToPartnerProfile?: boolean;
 }
@@ -60,33 +65,24 @@ export const useRelationshipStore = create<RelationshipState>((set) => ({
   reset: () => set({ relationship: null, partner: null }),
 }));
 
-export interface AlbumViewerState {
-  items: SharedAlbumItem[];
-  startIndex: number;
-  sectionLabel?: string;
-  returnToAlbum?: boolean;
-}
-
 interface UIState {
   theme: AppTheme;
   isOffline: boolean;
   showMomentCreator: boolean;
   showMomentHistory: boolean;
-  showSharedAlbum: boolean;
-  albumViewer: AlbumViewerState | null;
+  /** History was opened from the camera — closing it should reopen the camera instead of exiting to Home. */
+  momentHistoryReturnToCamera: boolean;
   momentViewer: MomentViewerState | null;
   momentHistoryScrollY: number;
-  sharedAlbumScrollY: number;
   showWrapped: boolean;
   showMomentRecapVideo: boolean;
   recapVideoMoments: Moment[] | null;
   showMoodHistory: boolean;
   showPaywall: boolean;
   showPartnerProfile: boolean;
-  showWatchTogether: boolean;
+  partnerLocationMap: PartnerLocationMapState | null;
   streakMilestoneCount: number | null;
   streakSpark: { count: number; fromCount: number } | null;
-  watchInitialView: 'hub' | 'start' | 'watchlist' | 'schedule';
   chatDraft: string | null;
   chatMomentReply: MomentReplyContext | null;
   paywallShownThisSession: boolean;
@@ -96,15 +92,8 @@ interface UIState {
   setOffline: (offline: boolean) => void;
   setShowMomentCreator: (show: boolean) => void;
   setShowMomentHistory: (show: boolean) => void;
-  setShowSharedAlbum: (show: boolean) => void;
-  openAlbumViewer: (
-    items: SharedAlbumItem[],
-    startIndex?: number,
-    options?: { sectionLabel?: string; returnToAlbum?: boolean },
-  ) => void;
-  closeAlbumViewer: () => void;
+  setMomentHistoryReturnToCamera: (returnToCamera: boolean) => void;
   setMomentHistoryScrollY: (y: number) => void;
-  setSharedAlbumScrollY: (y: number) => void;
   openMomentViewer: (
     moments: Moment[],
     startIndex?: number,
@@ -112,7 +101,6 @@ interface UIState {
       playback?: MomentViewerPlayback;
       sectionLabel?: string;
       returnToHistory?: boolean;
-      returnToAlbum?: boolean;
       returnToPartnerProfile?: boolean;
       /** When true (default for story), only moments from the last 24h are shown. */
       homeWindowOnly?: boolean;
@@ -123,7 +111,6 @@ interface UIState {
   openMomentRecapVideo: (moments: Moment[]) => void;
   closeMomentRecapVideo: () => void;
   setShowMoodHistory: (show: boolean) => void;
-  setShowWatchTogether: (show: boolean) => void;
   setChatDraft: (draft: string | null) => void;
   setChatMomentReply: (reply: MomentReplyContext | null) => void;
   clearChatDraft: () => void;
@@ -131,8 +118,8 @@ interface UIState {
   closePaywall: () => void;
   openPartnerProfile: () => void;
   closePartnerProfile: () => void;
-  openWatchTogether: (view?: 'hub' | 'start' | 'watchlist' | 'schedule') => void;
-  closeWatchTogether: () => void;
+  openPartnerLocationMap: (markers: MapMarker[], title?: string | null) => void;
+  closePartnerLocationMap: () => void;
   openStreakMilestone: (count: number) => void;
   closeStreakMilestone: () => void;
   openStreakSpark: (count: number, fromCount: number) => void;
@@ -143,23 +130,24 @@ interface UIState {
 }
 
 export const useUIStore = create<UIState>((set) => ({
-  theme: 'black',
+  // Default until the theme-picker onboarding step runs and saves an explicit
+  // choice (src/lib/theme-storage.ts) — i.e. this is what every new signup sees
+  // through the whole auth/onboarding flow. Existing users' saved preference
+  // always overrides this on boot (see AppProviders), so this never touches them.
+  theme: 'paper',
   isOffline: false,
   showMomentCreator: false,
   showMomentHistory: false,
-  showSharedAlbum: false,
-  albumViewer: null,
+  momentHistoryReturnToCamera: false,
   momentViewer: null,
   momentHistoryScrollY: 0,
-  sharedAlbumScrollY: 0,
   showWrapped: false,
   showMomentRecapVideo: false,
   recapVideoMoments: null,
   showMoodHistory: false,
   showPaywall: false,
   showPartnerProfile: false,
-  showWatchTogether: false,
-  watchInitialView: 'hub',
+  partnerLocationMap: null,
   streakMilestoneCount: null,
   streakSpark: null,
   chatDraft: null,
@@ -167,27 +155,15 @@ export const useUIStore = create<UIState>((set) => ({
   paywallShownThisSession: false,
   typingUsers: [],
   tabBarOverlayHeight: 0,
-  setTheme: (theme) => set({ theme }),
+  setTheme: (theme) => {
+    set({ theme });
+    void saveTheme(theme);
+  },
   setOffline: (isOffline) => set({ isOffline }),
   setShowMomentCreator: (showMomentCreator) => set({ showMomentCreator }),
   setShowMomentHistory: (showMomentHistory) => set({ showMomentHistory }),
-  setShowSharedAlbum: (showSharedAlbum) => set({ showSharedAlbum }),
-  openAlbumViewer: (items, startIndex = 0, options) =>
-    set({
-      albumViewer: {
-        items,
-        startIndex: Math.max(0, Math.min(startIndex, Math.max(items.length - 1, 0))),
-        sectionLabel: options?.sectionLabel,
-        returnToAlbum: options?.returnToAlbum,
-      },
-    }),
-  closeAlbumViewer: () =>
-    set((state) => ({
-      albumViewer: null,
-      showSharedAlbum: state.albumViewer?.returnToAlbum ? true : state.showSharedAlbum,
-    })),
+  setMomentHistoryReturnToCamera: (momentHistoryReturnToCamera) => set({ momentHistoryReturnToCamera }),
   setMomentHistoryScrollY: (momentHistoryScrollY) => set({ momentHistoryScrollY }),
-  setSharedAlbumScrollY: (sharedAlbumScrollY) => set({ sharedAlbumScrollY }),
   openMomentViewer: (moments, startIndex = 0, options) => {
     const playback = options?.playback ?? 'story';
     const applyHomeWindow = options?.homeWindowOnly ?? playback === 'story';
@@ -204,7 +180,6 @@ export const useUIStore = create<UIState>((set) => ({
         playback,
         sectionLabel: options?.sectionLabel,
         returnToHistory: options?.returnToHistory,
-        returnToAlbum: options?.returnToAlbum,
         returnToPartnerProfile: options?.returnToPartnerProfile,
       },
     });
@@ -213,7 +188,6 @@ export const useUIStore = create<UIState>((set) => ({
     set((state) => ({
       momentViewer: null,
       showMomentHistory: state.momentViewer?.returnToHistory ? true : state.showMomentHistory,
-      showSharedAlbum: state.momentViewer?.returnToAlbum ? true : state.showSharedAlbum,
       showPartnerProfile: state.momentViewer?.returnToPartnerProfile
         ? true
         : state.showPartnerProfile,
@@ -222,7 +196,6 @@ export const useUIStore = create<UIState>((set) => ({
   openMomentRecapVideo: (moments) => set({ recapVideoMoments: moments, showMomentRecapVideo: true }),
   closeMomentRecapVideo: () => set({ recapVideoMoments: null, showMomentRecapVideo: false }),
   setShowMoodHistory: (showMoodHistory) => set({ showMoodHistory }),
-  setShowWatchTogether: (showWatchTogether) => set({ showWatchTogether }),
   setChatDraft: (chatDraft) => set({ chatDraft }),
   setChatMomentReply: (chatMomentReply) => set({ chatMomentReply }),
   clearChatDraft: () => set({ chatDraft: null, chatMomentReply: null }),
@@ -230,8 +203,8 @@ export const useUIStore = create<UIState>((set) => ({
   closePaywall: () => set({ showPaywall: false }),
   openPartnerProfile: () => set({ showPartnerProfile: true }),
   closePartnerProfile: () => set({ showPartnerProfile: false }),
-  openWatchTogether: (view = 'hub') => set({ showWatchTogether: true, watchInitialView: view }),
-  closeWatchTogether: () => set({ showWatchTogether: false }),
+  openPartnerLocationMap: (markers, title) => set({ partnerLocationMap: { markers, title } }),
+  closePartnerLocationMap: () => set({ partnerLocationMap: null }),
   openStreakMilestone: (count) => set({ streakMilestoneCount: count }),
   closeStreakMilestone: () => set({ streakMilestoneCount: null }),
   openStreakSpark: (count, fromCount) => set({ streakSpark: { count, fromCount } }),

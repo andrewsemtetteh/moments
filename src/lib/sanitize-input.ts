@@ -24,3 +24,4 @@ export function sanitizePasswordInput(value: string): string {
 export function sanitizeOtpInput(value: string): string {
   return value.replace(/\D/g, '').slice(0, 6);
 }
+

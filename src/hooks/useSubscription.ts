@@ -3,7 +3,6 @@ import { useMemo } from 'react';
 
 import {
   FREE_AI_REQUESTS,
-  FREE_ALBUM_STORAGE_BYTES,
   FREE_DAILY_MOMENTS,
   FREE_TIMELINE_MOMENTS,
 } from '@/constants/design-system';
@@ -13,7 +12,7 @@ import {
   hasActiveUserSubscription,
   isSubscriptionOwner,
 } from '@/lib/subscription';
-import { useMoments, useSharedAlbum } from '@/hooks/queries';
+import { useMoments } from '@/hooks/queries';
 import { useAuthStore, useRelationshipStore } from '@/stores';
 
 export type Entitlement = 'free' | 'plus';
@@ -24,18 +23,12 @@ export function useSubscription() {
   const tier = getEffectiveTier(user, relationship);
   const isPlus = tier === 'plus';
   const { data: momentsData } = useMoments();
-  const { data: sharedAlbumItems } = useSharedAlbum();
 
   const dailyMomentsUsed = useMemo(() => {
     const today = startOfDay(new Date());
     const all = momentsData?.pages.flat() ?? [];
     return all.filter((m) => m.user_id === user?.id && new Date(m.created_at) >= today).length;
   }, [momentsData, user?.id]);
-
-  const albumStorageUsedBytes = useMemo(
-    () => (sharedAlbumItems ?? []).reduce((sum, item) => sum + Number(item.file_size_bytes ?? 0), 0),
-    [sharedAlbumItems],
-  );
 
   return {
     tier,
@@ -44,12 +37,10 @@ export function useSubscription() {
     canManageBilling: canManageBilling(user?.id, relationship, user),
     hasPersonalSubscription: hasActiveUserSubscription(user),
     dailyMomentsUsed,
-    albumStorageUsedBytes,
     limits: {
       dailyMoments: isPlus ? Infinity : FREE_DAILY_MOMENTS,
       aiRequests: isPlus ? Infinity : FREE_AI_REQUESTS,
       timelineMoments: isPlus ? Infinity : FREE_TIMELINE_MOMENTS,
-      albumStorageBytes: isPlus ? Infinity : FREE_ALBUM_STORAGE_BYTES,
       wrapped: true,
       moodHistory: true,
     },

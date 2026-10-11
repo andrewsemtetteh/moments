@@ -51,6 +51,8 @@ export interface UserProfile {
   show_online_status?: boolean;
   /** Last time this user was actively online. */
   last_seen_at?: string | null;
+  /** IANA timezone identifier (e.g. "Europe/Lisbon"), synced from the device locale. */
+  timezone?: string | null;
   created_at: string;
 }
 
@@ -83,22 +85,6 @@ export interface Moment {
   reactions: Record<string, string[]>;
   viewed_by?: string[];
   created_at: string;
-  author?: UserProfile;
-}
-
-export type SharedAlbumMediaType = 'photo' | 'video';
-
-export interface SharedAlbumItem {
-  id: string;
-  relationship_id: string;
-  user_id: string;
-  media_type: SharedAlbumMediaType;
-  storage_path: string;
-  file_size_bytes: number;
-  caption: string | null;
-  created_at: string;
-  /** Hydrated signed URL for display */
-  media_url?: string | null;
   author?: UserProfile;
 }
 
@@ -249,37 +235,6 @@ export interface WrappedStats {
   created_at: string;
 }
 
-export type WatchSessionStatus = 'scheduled' | 'setup' | 'countdown' | 'watching' | 'ended';
-export type WatchPlaybackState = 'playing' | 'paused';
-export type WatchContentSource = 'streaming' | 'youtube' | 'video' | 'podcast' | 'music';
-
-export interface WatchReaction {
-  user_id: string;
-  emoji: string;
-  at: string;
-}
-
-export interface WatchSession {
-  id: string;
-  relationship_id: string;
-  host_user_id: string;
-  title: string;
-  link: string | null;
-  platform_id: string | null;
-  content_source: WatchContentSource;
-  content_id: string | null;
-  status: WatchSessionStatus;
-  ready_user_ids: string[];
-  countdown_at: string | null;
-  scheduled_at: string | null;
-  reminder_minutes: number | null;
-  playback_state: WatchPlaybackState;
-  playback_position: number;
-  playback_updated_at: string | null;
-  reactions: WatchReaction[];
-  created_at: string;
-}
-
 export type QuizLiveSessionStatus = 'lobby' | 'generating' | 'active' | 'finished';
 export type QuizLiveRoundPhase = 'answer' | 'reveal';
 
@@ -305,48 +260,3 @@ export interface QuizLiveSession {
   updated_at: string;
 }
 
-export interface WatchMessage {
-  id: string;
-  session_id: string;
-  relationship_id: string;
-  sender_id: string;
-  message: string;
-  created_at: string;
-}
-
-export interface StreamingConnection {
-  id: string;
-  user_id: string;
-  platform_id: string;
-  account_label: string | null;
-  connected_at: string;
-}
-
-export type WatchVote = 'interested' | 'not' | 'must';
-
-export interface WatchlistItem {
-  id: string;
-  relationship_id: string;
-  added_by: string;
-  title: string;
-  platform_id: string | null;
-  note: string | null;
-  votes: Record<string, WatchVote>;
-  watched: boolean;
-  watched_at: string | null;
-  created_at: string;
-}
-
-export interface WatchHistoryEntry {
-  id: string;
-  relationship_id: string;
-  logged_by: string | null;
-  title: string;
-  platform_id: string | null;
-  content_id: string | null;
-  rating: number | null;
-  favorite_moment: string | null;
-  prompt_question: string | null;
-  prompt_answer: string | null;
-  watched_at: string;
-}

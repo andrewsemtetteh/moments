@@ -1,3 +1,4 @@
+import { useSignUp } from '@clerk/expo';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import {
@@ -19,64 +20,56 @@ import { AuthPrimaryButton } from '@/components/auth/AuthPrimaryButton';
 import { AuthTextField } from '@/components/auth/AuthTextField';
 import { PasswordInput } from '@/components/auth/PasswordInput';
 import { SocialAuthButtons } from '@/components/auth/SocialAuthButtons';
-import { LogoMark } from '@/components/ui/Logo';
 import { useTheme } from '@/hooks/useTheme';
-import { formatAuthError, registerAccount } from '@/lib/auth-otp';
-import { hydrateAuthSession } from '@/lib/auth-session';
+import { formatAuthError, normalizeAuthEmail } from '@/lib/auth-errors';
 import { sanitizeEmailInput, sanitizePasswordInput } from '@/lib/sanitize-input';
-import { supabase } from '@/lib/supabase';
 
 export default function SignupScreen() {
   const router = useRouter();
   const { colors } = useTheme();
+  const { signUp, errors: signUpErrors, fetchStatus } = useSignUp();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [agreedToTerms, setAgreedToTerms] = useState(false);
-  const [loading, setLoading] = useState(false);
+
+  const loading = fetchStatus === 'fetching';
 
   const handleSignup = async () => {
-    const cleanEmail = sanitizeEmailInput(email).trim();
+    const cleanEmail = normalizeAuthEmail(sanitizeEmailInput(email));
     const cleanPassword = sanitizePasswordInput(password);
     if (!cleanEmail || !cleanPassword || !agreedToTerms) return;
-    setLoading(true);
-    try {
-      const result = await registerAccount({
-        email: cleanEmail,
-        password: cleanPassword,
-      });
 
-      if (result.error) throw result.error;
+    const { error } = await signUp.password({
+      emailAddress: cleanEmail,
+      password: cleanPassword,
+    });
+    if (error) {
+      Alert.alert('Sign up failed', formatAuthError(error));
+      return;
+    }
 
-      if (result.session) {
-        await hydrateAuthSession(result.session, false, { trustSession: true });
-        router.replace('/(onboarding)/profile-name');
+    if (signUp.status === 'complete') {
+      await signUp.finalize({ navigate: () => router.replace('/(onboarding)/profile-name') });
+      return;
+    }
+
+    if (signUp.unverifiedFields.includes('email_address')) {
+      const { error: codeError } = await signUp.verifications.sendEmailCode();
+      if (codeError) {
+        Alert.alert('Sign up failed', formatAuthError(codeError));
         return;
       }
-
-      if (!result.needsVerification) {
-        throw new Error('Could not finish sign up. Please try again.');
-      }
-
       router.push({
         pathname: '/(auth)/check-email',
-        params: { email: result.email, type: 'signup' },
+        params: { email: cleanEmail, type: 'signup' },
       });
-    } catch (e: unknown) {
-      Alert.alert('Sign up failed', formatAuthError(e));
-    } finally {
-      setLoading(false);
+      return;
     }
+
+    Alert.alert('Could not finish sign up', 'Please try again.');
   };
 
-  const finishOAuthSignup = async () => {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (session) {
-      await hydrateAuthSession(session, false, { trustSession: true });
-      router.replace('/(onboarding)/profile-name');
-    }
-  };
-
-  const canSubmit = email.length > 0 && password.length >= 6 && agreedToTerms && !loading;
+  const canSubmit = email.length > 0 && password.length >= 8 && agreedToTerms && !loading;
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
@@ -84,10 +77,10 @@ export default function SignupScreen() {
         <ScrollView
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}>
+          showsVerticalScrollIndicator={false}
+          bounces={false}>
           <AuthScreenEnter style={styles.enter}>
             <View style={styles.brand}>
-              <LogoMark size={72} />
               <Text style={[styles.logo, { color: colors.text }]}>Create your space</Text>
               <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
                 A private home for you and your partner
@@ -103,9 +96,15 @@ export default function SignupScreen() {
                 value={email}
                 onChangeText={(text) => setEmail(sanitizeEmailInput(text))}
               />
+              {signUpErrors.fields.emailAddress && (
+                <Text style={[styles.fieldError, { color: colors.error }]}>
+                  {signUpErrors.fields.emailAddress.message}
+                </Text>
+              )}
+
               <PasswordInput
                 label="Password"
-                minLength={6}
+                minLength={8}
                 autoComplete="new-password"
                 value={password}
                 onChangeText={(text) => setPassword(sanitizePasswordInput(text))}
@@ -126,7 +125,7 @@ export default function SignupScreen() {
             </View>
 
             <SocialAuthButtons
-              onSuccess={finishOAuthSignup}
+              onSuccess={() => router.replace('/(onboarding)/profile-name')}
               requireTerms
               agreedToTerms={agreedToTerms}
             />
@@ -148,6 +147,7 @@ const styles = StyleSheet.create({
   logo: { fontSize: 28, fontWeight: '800', textAlign: 'center', letterSpacing: -0.6 },
   subtitle: { fontSize: 15, textAlign: 'center', marginTop: 6, lineHeight: 21, maxWidth: 280 },
   form: { gap: 10 },
+  fieldError: { fontSize: 13, marginTop: -4 },
   agreementRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginTop: 2 },
   checkboxWrap: { marginTop: 1 },
   agreementText: { flex: 1, textAlign: 'left' },

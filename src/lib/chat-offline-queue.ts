@@ -3,6 +3,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 export interface ChatOfflinePayload {
   content: string;
   momentId?: string;
+  /** Already-hosted media (e.g. the moment a reply is attached to) — sent as-is. */
+  mediaUrl?: string;
+  /** On-device media still to be uploaded when the queue flushes. */
   mediaLocalUri?: string;
   mediaType?: string;
   replyToId?: string;

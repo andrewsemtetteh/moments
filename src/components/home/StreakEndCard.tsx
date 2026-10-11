@@ -117,6 +117,7 @@ export function StreakEndCard({ status }: StreakEndCardProps) {
               ? STREAK_COLORS.atRiskSoftDark
               : STREAK_COLORS.atRiskSoftLight
             : colors.surface,
+          borderWidth: colors.boldBorder ? 2 : StyleSheet.hairlineWidth,
         },
       ]}>
       <Pressable

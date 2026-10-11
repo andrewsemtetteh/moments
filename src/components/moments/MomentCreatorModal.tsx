@@ -7,7 +7,7 @@ import { useEffect, useRef, useState } from 'react';
 import {
     ActivityIndicator,
     Alert,
-    Modal,
+    BackHandler,
     Pressable,
     StyleSheet,
     Text,
@@ -27,6 +27,8 @@ import { momentChrome } from '@/lib/moment-theme';
 import { toUserFacingNetworkError } from '@/lib/network-error';
 import * as api from '@/services/api';
 import { useAuthStore, useMomentStore, useRelationshipStore, useUIStore } from '@/stores';
+import { todayKey } from '@/lib/play-progress';
+import { usePlayProgressStore } from '@/stores/play-progress-store';
 
 const VIEWFINDER_RADIUS = 28;
 const MAX_VIDEO_SEC = 30;
@@ -40,6 +42,7 @@ export function MomentCreatorModal() {
   const visible = useUIStore((s) => s.showMomentCreator);
   const setVisible = useUIStore((s) => s.setShowMomentCreator);
   const setShowMomentHistory = useUIStore((s) => s.setShowMomentHistory);
+  const setMomentHistoryReturnToCamera = useUIStore((s) => s.setMomentHistoryReturnToCamera);
   const { draft, setDraft, clearDraft } = useMomentStore();
   const createMoment = useCreateMoment();
   const relationship = useRelationshipStore((s) => s.relationship);
@@ -53,6 +56,11 @@ export function MomentCreatorModal() {
   const cameraRef = useRef<CameraView>(null);
   const holdTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const didStartRecordingRef = useRef(false);
+  // Guards against double-tap: `createMoment.isPending` only flips true once the mutation
+  // itself starts, which is after the (often multi-second) media upload — a second tap during
+  // the upload window would race past a state-based check and send the moment twice.
+  const sendLockRef = useRef(false);
+  const [sending, setSending] = useState(false);
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
   const [micPermission, requestMicPermission] = useMicrophonePermissions();
   const [facing, setFacing] = useState<'front' | 'back'>('front');
@@ -173,11 +181,14 @@ export function MomentCreatorModal() {
   };
 
   const handleSend = async () => {
+    if (sendLockRef.current) return;
     const type = draft.type ?? (previewIsVideo ? 'video' : 'photo');
     const mediaUri = draft.mediaUri ?? previewUri;
     if (!mediaUri || !relationship || !user) return;
     if (atDailyLimit && !requirePlus('Unlimited daily moments')) return;
 
+    sendLockRef.current = true;
+    setSending(true);
     try {
       const ext = type === 'video' ? 'mp4' : 'jpg';
       const contentType = type === 'video' ? 'video/mp4' : 'image/jpeg';
@@ -186,6 +197,11 @@ export function MomentCreatorModal() {
 
       await createMoment.mutateAsync({ type, media_url: mediaUrl });
       await api.trackEvent(relationship.id, user.id, 'moment_created', { type });
+      void usePlayProgressStore.getState().award(
+        relationship.id,
+        { xp: 10, stats: { moments_sent: 1 }, events: { moment_sent: 1 }, soloId: `moment-${todayKey()}` },
+        'Moment sent',
+      );
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       close();
     } catch (error) {
@@ -193,6 +209,9 @@ export function MomentCreatorModal() {
         'Could not send moment',
         toUserFacingNetworkError(error, 'Please check your connection and try again.').message,
       );
+    } finally {
+      sendLockRef.current = false;
+      setSending(false);
     }
   };
 
@@ -242,40 +261,46 @@ export function MomentCreatorModal() {
     });
   };
 
-  if (!visible) return null;
+  useEffect(() => {
+    if (!visible) return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      close();
+      return true;
+    });
+    return () => sub.remove();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible]);
 
   const inPreview = !!previewUri;
   const showCamera = !previewUri;
-  const sending = createMoment.isPending;
 
   return (
-    <Modal visible animationType="slide" presentationStyle="fullScreen" onRequestClose={close}>
       <View style={[styles.root, { paddingTop: insets.top, paddingBottom: insets.bottom, backgroundColor: chrome.background }]}>
         {inPreview ? (
           <>
             <View style={styles.previewTopBar}>
-              <Pressable onPress={resetPreview} style={[styles.topCircle, { backgroundColor: chrome.surface }]} accessibilityLabel="Discard preview">
-                <Icon name="close" size={22} color={chrome.text} />
+              <Pressable onPress={resetPreview} style={styles.topCircle} accessibilityLabel="Discard preview">
+                <Icon name="close" size={30} color={chrome.text} />
               </Pressable>
               <Text style={[styles.previewTitle, { color: chrome.text }]}>{previewIsVideo ? 'Video preview' : 'Photo preview'}</Text>
               <Pressable
                 onPress={() => void handleDownload()}
                 disabled={saving}
-                style={[styles.topCircle, { backgroundColor: chrome.surface }]}
+                style={styles.topCircle}
                 accessibilityLabel="Save to gallery">
                 {saving ? (
                   <ActivityIndicator color={chrome.text} size="small" />
                 ) : (
-                  <Icon name="download" size={22} color={chrome.text} />
+                  <Icon name="download" size={30} color={chrome.text} />
                 )}
               </Pressable>
             </View>
 
-            <View style={[styles.previewMedia, { backgroundColor: chrome.mediaBackdrop }]}>
+            <View style={styles.previewMedia}>
               {previewIsVideo ? (
-                <MomentVideoPlayer uri={previewUri} fill autoPlay />
+                <MomentVideoPlayer uri={previewUri} fill autoPlay contentFit="contain" style={styles.previewVideo} />
               ) : (
-                <Image source={{ uri: previewUri }} style={StyleSheet.absoluteFill} contentFit="cover" />
+                <Image source={{ uri: previewUri }} style={StyleSheet.absoluteFill} contentFit="contain" />
               )}
             </View>
 
@@ -304,8 +329,8 @@ export function MomentCreatorModal() {
         ) : (
           <>
             <View style={styles.topBar}>
-              <Pressable onPress={close} style={[styles.topCircle, { backgroundColor: chrome.surface }]}>
-                <Icon name="close" size={20} color={chrome.text} />
+              <Pressable onPress={close} style={styles.topCircle}>
+                <Icon name="close" size={28} color={chrome.text} />
               </Pressable>
 
               <View style={[styles.partnerPill, { backgroundColor: chrome.surface }]}>
@@ -318,10 +343,10 @@ export function MomentCreatorModal() {
               <Pressable
                 onPress={() => {
                   close();
-                  router.push('/(tabs)/chat');
+                  router.push('/chat');
                 }}
-                style={[styles.topCircle, { backgroundColor: chrome.surface }]}>
-                <Icon name="messages" size={20} color={chrome.text} />
+                style={styles.topCircle}>
+                <Icon name="messages" size={28} color={chrome.text} />
               </Pressable>
             </View>
 
@@ -337,6 +362,7 @@ export function MomentCreatorModal() {
                   flash={facing === 'back' ? flash : 'off'}
                   mirror={facing === 'front'}
                   mode="video"
+                  videoQuality="720p"
                   onCameraReady={() => setCameraReady(true)}
                 />
               ) : (
@@ -379,7 +405,7 @@ export function MomentCreatorModal() {
 
             <View style={styles.controls}>
               <Pressable onPress={() => void pickFromGallery()} style={styles.sideControl}>
-                <Icon name="image" size={26} color={chrome.text} />
+                <Icon name="image" size={30} color={chrome.text} />
               </Pressable>
 
               <Pressable
@@ -410,9 +436,9 @@ export function MomentCreatorModal() {
               <Pressable
                 onPress={flipCamera}
                 disabled={recording || !cameraReady}
-                style={[styles.sideControl, styles.flipControl, { backgroundColor: chrome.surfaceSoft }, (recording || !cameraReady) && styles.sideControlDisabled]}
+                style={[styles.sideControl, (recording || !cameraReady) && styles.sideControlDisabled]}
                 accessibilityLabel={`Switch to ${facing === 'front' ? 'back' : 'front'} camera`}>
-                <Icon name="flipCamera" size={24} color={chrome.text} />
+                <Icon name="flipCamera" size={30} color={chrome.text} />
               </Pressable>
             </View>
 
@@ -420,7 +446,13 @@ export function MomentCreatorModal() {
               {recording ? 'Release to finish video' : 'Tap for photo · hold for video'}
             </Text>
 
-            <Pressable onPress={() => setShowMomentHistory(true)} style={[styles.historyPill, { backgroundColor: chrome.surface }]}>
+            <Pressable
+              onPress={() => {
+                close();
+                setMomentHistoryReturnToCamera(true);
+                setShowMomentHistory(true);
+              }}
+              style={[styles.historyPill, { backgroundColor: chrome.surface }]}>
               <Icon name="image" size={14} color={chrome.text} />
               <Text style={[styles.historyText, { color: chrome.text }]}>Moment history</Text>
               <Icon name="chevronDown" size={14} color={chrome.textSecondary} />
@@ -432,7 +464,6 @@ export function MomentCreatorModal() {
           </>
         )}
       </View>
-    </Modal>
   );
 }
 
@@ -498,9 +529,6 @@ const styles = StyleSheet.create({
   recText: { fontSize: 11, fontWeight: '800' },
   controls: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 36, paddingVertical: 8 },
   sideControl: { width: 48, height: 48, alignItems: 'center', justifyContent: 'center' },
-  flipControl: {
-    borderRadius: 24,
-  },
   sideControlDisabled: { opacity: 0.4 },
   shutterOuter: { alignItems: 'center', justifyContent: 'center' },
   shutterRing: {
@@ -535,13 +563,8 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   previewTitle: { fontSize: 16, fontWeight: '700' },
-  previewMedia: {
-    flex: 1,
-    marginHorizontal: 12,
-    marginBottom: 16,
-    borderRadius: VIEWFINDER_RADIUS,
-    overflow: 'hidden',
-  },
+  previewMedia: { flex: 1 },
+  previewVideo: { backgroundColor: 'transparent' },
   previewActions: {
     flexDirection: 'row',
     alignItems: 'center',

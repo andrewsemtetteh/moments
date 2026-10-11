@@ -63,9 +63,9 @@ export const exploreStyles = StyleSheet.create({
   },
   quizOptionText: { flex: 1, fontSize: 14, lineHeight: 20 },
   resultCard: { borderRadius: 22, padding: 28, alignItems: 'center', gap: 8 },
-  resultEyebrow: { color: 'rgba(255,255,255,0.8)', fontSize: 11, fontWeight: '800', letterSpacing: 1, marginTop: 8 },
-  resultTitle: { color: '#fff', fontSize: 26, fontWeight: '800', textAlign: 'center' },
-  resultDesc: { color: 'rgba(255,255,255,0.92)', fontSize: 15, lineHeight: 22, textAlign: 'center', marginTop: 4 },
+  resultEyebrow: { fontSize: 11, fontWeight: '800', letterSpacing: 1, marginTop: 8 },
+  resultTitle: { fontSize: 26, fontWeight: '800', textAlign: 'center' },
+  resultDesc: { fontSize: 15, lineHeight: 22, textAlign: 'center', marginTop: 4 },
   resultShare: { fontSize: 13, textAlign: 'center', lineHeight: 18 },
   inputCard: {
     flexDirection: 'row',

@@ -103,7 +103,7 @@ export function HomeLocationSnapshot() {
         ) : (
           <>
             <Pressable onPress={() => setShowMap(true)} accessibilityRole="button" accessibilityLabel="Open location map">
-              <LocationMapPreview markers={displayMarkers} height={160} interactive />
+              <LocationMapPreview markers={displayMarkers} height={160} />
             </Pressable>
             <View style={styles.legend}>
               {isPreview ? (

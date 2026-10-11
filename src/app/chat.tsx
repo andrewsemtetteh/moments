@@ -1,30 +1,29 @@
-import { useQueryClient } from '@tanstack/react-query';
 import {
-    RecordingPresets,
-    requestRecordingPermissionsAsync,
-    setAudioModeAsync,
-    useAudioRecorder,
+  RecordingPresets,
+  requestRecordingPermissionsAsync,
+  setAudioModeAsync,
+  useAudioRecorder,
 } from 'expo-audio';
 import * as Contacts from 'expo-contacts';
 import * as DocumentPicker from 'expo-document-picker';
 import * as Haptics from 'expo-haptics';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-    Alert,
-    Dimensions,
-    Keyboard,
-    PanResponder,
-    Platform,
-    Pressable,
-    StyleSheet,
-    Text,
-    TextInput,
-    View,
-    type NativeScrollEvent,
-    type NativeSyntheticEvent,
+  Alert,
+  Dimensions,
+  Keyboard,
+  PanResponder,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
 } from 'react-native';
 import { FlatList } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -40,15 +39,16 @@ import { ChatReplyBar } from '@/components/chat/ChatReplyBar';
 import { ChatVoiceRecorder } from '@/components/chat/ChatVoiceRecorder';
 import { ChatWallpaper } from '@/components/chat/ChatWallpaper';
 import { PartnerStatusLine } from '@/components/chat/PartnerStatusLine';
+import { TypingIndicator } from '@/components/chat/TypingIndicator';
 import { LoadingState } from '@/components/home/MoodSnapshot';
-import { SwipeDismissView } from '@/components/layout/SwipeDismissView';
+import { HeaderIconButton } from '@/components/ui/HeaderIconButton';
 import { Icon } from '@/components/ui/Icon';
-import { FullScreenImageModal } from '@/components/ui/FullScreenImageModal';
 import { Avatar } from '@/components/ui/primitives';
+import { FullScreenImageModal } from '@/components/ui/FullScreenImageModal';
 import {
-    useInfiniteMessages,
-    useMessageActions,
-    useSendMessage,
+  useInfiniteMessages,
+  useMessageActions,
+  useSendMessage,
 } from '@/hooks/queries';
 import { useChatUnreadBanner } from '@/hooks/useChatUnreadBanner';
 import { useOpenPartnerProfile } from '@/hooks/useOpenPartnerProfile';
@@ -59,9 +59,10 @@ import { encodeAttachment } from '@/lib/chat-attachments';
 import { buildChatListItems, type ChatListItem } from '@/lib/chat-list';
 import { messagePreviewLabel } from '@/lib/chat-media';
 import { flushChatOfflineQueue } from '@/lib/chat-offline-flush';
+import type { ChatOfflinePayload } from '@/lib/chat-offline-queue';
 import { getCurrentPlace } from '@/lib/location';
-import { goBackOrReplace } from '@/lib/router';
-import { supabase } from '@/lib/supabase';
+import { closeStackScreen } from '@/lib/router';
+import { backend } from '@/lib/backend';
 import * as api from '@/services/api';
 import { useAuthStore, useOfflineStore, useRelationshipStore, useUIStore } from '@/stores';
 import type { Message } from '@/types/database';
@@ -69,7 +70,6 @@ import type { Message } from '@/types/database';
 export default function ChatScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const queryClient = useQueryClient();
   const { colors } = useTheme();
   const relationship = useRelationshipStore((s) => s.relationship);
   const partner = useRelationshipStore((s) => s.partner);
@@ -80,6 +80,7 @@ export default function ChatScreen() {
   const clearChatDraft = useUIStore((s) => s.clearChatDraft);
   const setChatMomentReply = useUIStore((s) => s.setChatMomentReply);
   const openPartnerProfileView = useOpenPartnerProfile();
+  const [showPartnerPhoto, setShowPartnerPhoto] = useState(false);
   const offlineQueue = useOfflineStore((s) => s.queue);
   const addToQueue = useOfflineStore((s) => s.addToQueue);
   const removeFromQueue = useOfflineStore((s) => s.removeFromQueue);
@@ -95,7 +96,6 @@ export default function ChatScreen() {
   const [showEmoji, setShowEmoji] = useState(false);
   const [showAttachment, setShowAttachment] = useState(false);
   const [showCamera, setShowCamera] = useState(false);
-  const [showPartnerPhoto, setShowPartnerPhoto] = useState(false);
   // Recording
   const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const [isRecording, setIsRecording] = useState(false);
@@ -110,7 +110,7 @@ export default function ChatScreen() {
   const [keyboardVisible, setKeyboardVisible] = useState(false);
 
   const listRef = useRef<FlatList>(null);
-  const typingChannel = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const typingChannel = useRef<ReturnType<typeof backend.channel> | null>(null);
   const typingChannelReady = useRef(false);
   const lastTypingSent = useRef(0);
   const typingTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -137,10 +137,31 @@ export default function ChatScreen() {
     onViewableItemsChanged,
     viewabilityConfig,
   } = useChatUnreadBanner(messages);
-  const { isOnline: partnerOnline, lastSeenAt: partnerLastSeenAt, statusHidden: partnerStatusHidden } =
-    usePartnerPresence(relationship?.id, user?.id, partner?.id);
+  const {
+    isOnline: partnerOnline,
+    lastSeenAt: partnerLastSeenAt,
+    statusHidden: partnerStatusHidden,
+  } = usePartnerPresence(relationship?.id, user?.id, partner?.id);
   const sendMessage = useSendMessage();
   const { react, pin, deleteForMe, deleteForAll } = useMessageActions();
+
+  useEffect(() => {
+    if (!relationship?.id || !user?.id || partner?.id) return;
+    const partnerId =
+      relationship.user_1_id === user.id ? relationship.user_2_id : relationship.user_1_id;
+    if (!partnerId) return;
+
+    let cancelled = false;
+    void api.fetchPartnerProfile(partnerId).then((profile) => {
+      if (!cancelled && profile) {
+        useRelationshipStore.getState().setPartner(profile);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [relationship?.id, relationship?.user_1_id, relationship?.user_2_id, user?.id, partner?.id]);
 
   const scrollToLatest = useCallback((animated = true) => {
     requestAnimationFrame(() => {
@@ -148,14 +169,57 @@ export default function ChatScreen() {
     });
   }, []);
 
+  // Opening the thread should land you where you left off (the first unread message), not
+  // jump straight past unread history to the very bottom — same as WhatsApp/iMessage, and
+  // consistent with the unread divider only marking things read once actually scrolled by.
+  const scrollToLatestOrUnread = useCallback(
+    (animated = true) => {
+      if (unreadBannerIds && unreadBannerIds.size > 0) {
+        setPendingScrollMessageId('unread-divider');
+        return;
+      }
+      scrollToLatest(animated);
+    },
+    [unreadBannerIds, scrollToLatest],
+  );
+
   const scrollToLatestIfNearBottom = useCallback(
     (animated = true) => {
-      if (!initialScrollDoneRef.current || nearBottomRef.current) {
-        scrollToLatest(animated);
+      if (!initialScrollDoneRef.current) {
+        scrollToLatestOrUnread(animated);
         initialScrollDoneRef.current = true;
+        return;
+      }
+      if (nearBottomRef.current) {
+        scrollToLatest(animated);
       }
     },
-    [scrollToLatest],
+    [scrollToLatest, scrollToLatestOrUnread],
+  );
+
+  // Belt-and-suspenders initial scroll: FlatList's onLayout/onContentSizeChange can fire
+  // before item heights are fully settled (especially for a long first page of messages),
+  // so also force a scroll-to-bottom (or scroll-to-unread) once the first page lands.
+  useEffect(() => {
+    if (initialScrollDoneRef.current || messages.length === 0) return;
+    const t = setTimeout(() => {
+      scrollToLatestOrUnread(false);
+      initialScrollDoneRef.current = true;
+    }, 60);
+    return () => clearTimeout(t);
+     
+  }, [messages.length, unreadBannerIds, scrollToLatestOrUnread]);
+
+  // Chat is a stack screen that remounts on every open, but it can also regain focus without
+  // remounting (e.g. returning from a screen pushed on top of it) — re-land on the latest or
+  // first-unread message then too, rather than wherever the list happened to be scrolled.
+  useFocusEffect(
+    useCallback(() => {
+      const t = setTimeout(() => {
+        scrollToLatestOrUnread(false);
+      }, 60);
+      return () => clearTimeout(t);
+    }, [scrollToLatestOrUnread]),
   );
 
   // Lift composer above the keyboard + autocorrect suggestion bar.
@@ -215,7 +279,7 @@ export default function ChatScreen() {
   // Typing broadcast
   useEffect(() => {
     if (!relationship?.id || !user?.id) return;
-    const ch = supabase.channel(`typing:${relationship.id}`, {
+    const ch = backend.channel(`typing:${relationship.id}`, {
       config: { broadcast: { self: false } },
     });
     ch.on('broadcast', { event: 'typing' }, (payload) => {
@@ -230,14 +294,19 @@ export default function ChatScreen() {
     typingChannel.current = ch;
     return () => {
       typingChannelReady.current = false;
-      supabase.removeChannel(ch);
+      backend.removeChannel(ch);
       typingChannel.current = null;
     };
   }, [relationship?.id, user?.id]);
 
-  // Flush durable offline queue sequentially when back online
+  // Flush durable offline queue sequentially when back online. A failed flush
+  // backs off before retrying — otherwise a message the server keeps rejecting
+  // would be re-sent in a tight loop the instant the previous attempt ended.
+  const flushPausedRef = useRef(false);
+  const [flushRetryTick, setFlushRetryTick] = useState(0);
   useEffect(() => {
     if (isOffline || offlineQueue.length === 0 || !relationship || !user || flushingOffline) return;
+    if (flushPausedRef.current) return;
 
     const pending = offlineQueue.filter((item) => item.type === 'message');
     if (pending.length === 0) return;
@@ -251,7 +320,16 @@ export default function ChatScreen() {
       senderName: user.name,
       onSent: removeFromQueue,
     })
-      .then(() => refetch())
+      .then(async ({ failed }) => {
+        await refetch();
+        if (failed > 0) {
+          flushPausedRef.current = true;
+          setTimeout(() => {
+            flushPausedRef.current = false;
+            setFlushRetryTick((n) => n + 1);
+          }, 15_000);
+        }
+      })
       .finally(() => setFlushingOffline(false));
   }, [
     isOffline,
@@ -262,12 +340,41 @@ export default function ChatScreen() {
     flushingOffline,
     removeFromQueue,
     refetch,
+    flushRetryTick,
   ]);
 
-  const allMessages = useMemo(
-    () => [...messages, ...optimisticMessages],
-    [messages, optimisticMessages],
-  );
+  // Unsent messages render straight from the durable offline queue, so they
+  // survive an app restart and disappear the moment they actually send (the
+  // real message then arrives via the realtime refetch) — never a temp bubble
+  // left behind next to its delivered twin.
+  const queuedMessages = useMemo<Message[]>(() => {
+    if (!user || !relationship) return [];
+    return offlineQueue
+      .filter((item) => item.type === 'message')
+      .map((item) => ({
+        id: item.id,
+        relationship_id: relationship.id,
+        sender_id: user.id,
+        content: item.payload.content,
+        media_url: item.payload.mediaLocalUri ?? item.payload.mediaUrl ?? null,
+        media_type: (item.payload.mediaType as Message['media_type']) ?? null,
+        moment_id: item.payload.momentId ?? null,
+        reply_to_id: item.payload.replyToId ?? null,
+        reactions: {},
+        is_pinned: false,
+        deleted_for_all: false,
+        hidden_for: [],
+        read_at: null,
+        created_at: item.createdAt,
+      }));
+  }, [offlineQueue, user, relationship]);
+
+  const allMessages = useMemo(() => {
+    const pending = [...queuedMessages, ...optimisticMessages].sort(
+      (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
+    );
+    return [...messages, ...pending];
+  }, [messages, queuedMessages, optimisticMessages]);
   const messageById = useMemo(
     () => new Map(allMessages.map((message) => [message.id, message])),
     [allMessages],
@@ -301,6 +408,31 @@ export default function ChatScreen() {
     });
   };
 
+  /** A local, not-yet-confirmed message (shown with a pending clock, not a sent tick). */
+  const pendingMessage = (id: string, fields: Partial<Message>): Message => ({
+    id,
+    relationship_id: relationship?.id ?? '',
+    sender_id: user?.id ?? '',
+    content: '',
+    media_url: null,
+    media_type: null,
+    moment_id: null,
+    reply_to_id: null,
+    reactions: {},
+    is_pinned: false,
+    deleted_for_all: false,
+    hidden_for: [],
+    read_at: null,
+    created_at: new Date().toISOString(),
+    ...fields,
+  });
+
+  /** A send failed: hand it to the durable queue under the same id, so the bubble stays put. */
+  const moveToQueue = (id: string, payload: ChatOfflinePayload) => {
+    setOptimisticMessages((prev) => prev.filter((m) => m.id !== id));
+    if (relationship) addToQueue({ id, type: 'message', payload }, relationship.id);
+  };
+
   const handleSend = useCallback(async () => {
     if (!text.trim() || !user || !relationship) return;
     const content = text.trim();
@@ -320,51 +452,39 @@ export default function ChatScreen() {
     setShowEmoji(false);
     setChatMomentReply(null);
     setReplyTo(null);
-
-    const optimistic: Message = {
-      id: `temp-${Date.now()}`,
-      relationship_id: relationship.id,
-      sender_id: user.id,
-      content,
-      media_url: momentPayload.mediaUrl ?? null,
-      media_type: momentPayload.mediaType ?? null,
-      moment_id: momentPayload.momentId ?? null,
-      reply_to_id: replyToId ?? null,
-      reactions: {},
-      is_pinned: false,
-      deleted_for_all: false,
-      hidden_for: [],
-      read_at: null,
-      created_at: new Date().toISOString(),
-    };
-    setOptimisticMessages((prev) => [...prev, optimistic]);
     nearBottomRef.current = true;
 
+    const id = `temp-${Date.now()}`;
+    const payload = { content, ...momentPayload, replyToId };
+
+    // Offline: straight into the durable queue (which renders its own pending bubble).
     if (isOffline) {
-      addToQueue(
-        {
-          id: optimistic.id,
-          type: 'message',
-          payload: { content, ...momentPayload, replyToId },
-        },
-        relationship.id,
-      );
+      addToQueue({ id, type: 'message', payload }, relationship.id);
       return;
     }
+
+    setOptimisticMessages((prev) => [
+      ...prev,
+      pendingMessage(id, {
+        content,
+        media_url: momentPayload.mediaUrl ?? null,
+        media_type: momentPayload.mediaType ?? null,
+        moment_id: momentPayload.momentId ?? null,
+        reply_to_id: replyToId ?? null,
+      }),
+    ]);
     try {
-      await sendMessage.mutateAsync({ content, ...momentPayload, replyToId });
-      await api.trackEvent(relationship.id, user.id, 'message_sent');
-      setOptimisticMessages((prev) => prev.filter((m) => m.id !== optimistic.id));
+      await sendMessage.mutateAsync(payload);
     } catch {
-      addToQueue(
-        {
-          id: optimistic.id,
-          type: 'message',
-          payload: { content, ...momentPayload, replyToId },
-        },
-        relationship.id,
-      );
+      moveToQueue(id, payload);
+      return;
     }
+    setOptimisticMessages((prev) => prev.filter((m) => m.id !== id));
+    // Analytics only — kept out of the try above so a tracking failure can never
+    // re-queue (and so double-send) a message that already went through.
+    void api.trackEvent(relationship.id, user.id, 'message_sent').catch(() => undefined);
+    // pendingMessage/moveToQueue are recreated each render but only read stable state.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [text, user, relationship, chatMomentReply, replyTo, isOffline, sendMessage, addToQueue, setChatMomentReply]);
 
   // ─── Emoji insert ─────────────────────────────────────────────────────────
@@ -381,61 +501,50 @@ export default function ChatScreen() {
   };
 
   // ─── Image / Camera ───────────────────────────────────────────────────────
-  const sendImageMessage = async (uri: string, mediaType: 'image' | 'video') => {
+  /**
+   * Shared by photos, videos and voice notes: the bubble appears instantly from
+   * the on-device file (no blank wait while it uploads), then upload + send;
+   * on failure it moves into the offline queue under the same id, keeping the
+   * local file so the queue can retry the upload later.
+   */
+  const sendLocalMedia = async (
+    uri: string,
+    mediaType: 'image' | 'video' | 'voice',
+    content = '',
+  ) => {
     if (!user || !relationship) return;
+    const id = `temp-${Date.now()}`;
+    const queuePayload: ChatOfflinePayload = { content, mediaLocalUri: uri, mediaType };
+    nearBottomRef.current = true;
+
+    if (isOffline) {
+      addToQueue({ id, type: 'message', payload: queuePayload }, relationship.id);
+      return;
+    }
+
+    setOptimisticMessages((prev) => [
+      ...prev,
+      pendingMessage(id, { content, media_url: uri, media_type: mediaType }),
+    ]);
     setIsSendingMedia(true);
     try {
-      if (isOffline) {
-        addToQueue(
-          {
-            id: `temp-${Date.now()}`,
-            type: 'message',
-            payload: { content: '', mediaLocalUri: uri, mediaType },
-          },
-          relationship.id,
-        );
-        return;
-      }
-
-      const ext = uri.split('.').pop() ?? 'jpg';
-      const contentType = mediaType === 'video' ? 'video/mp4' : 'image/jpeg';
-      const path = `${relationship.id}/${user.id}-${Date.now()}.${ext}`;
+      const ext =
+        mediaType === 'voice' ? 'm4a' : mediaType === 'video' ? 'mp4' : (uri.split('.').pop() ?? 'jpg');
+      const contentType =
+        mediaType === 'voice' ? 'audio/mp4' : mediaType === 'video' ? 'video/mp4' : 'image/jpeg';
+      const path = `${relationship.id}/${user.id}-${mediaType}-${Date.now()}.${ext}`;
       const mediaUrl = await api.uploadChatMedia(path, uri, contentType);
-
-      const optimistic: Message = {
-        id: `temp-${Date.now()}`,
-        relationship_id: relationship.id,
-        sender_id: user.id,
-        content: '',
-        media_url: mediaUrl,
-        media_type: mediaType,
-        moment_id: null,
-        reply_to_id: null,
-        reactions: {},
-        is_pinned: false,
-        deleted_for_all: false,
-        hidden_for: [],
-        read_at: null,
-        created_at: new Date().toISOString(),
-      };
-      setOptimisticMessages((prev) => [...prev, optimistic]);
-
-      await sendMessage.mutateAsync({ content: '', mediaUrl, mediaType });
-      setOptimisticMessages((prev) => prev.filter((m) => m.id !== optimistic.id));
-    } catch (e) {
-      addToQueue(
-        {
-          id: `temp-${Date.now()}`,
-          type: 'message',
-          payload: { content: '', mediaLocalUri: uri, mediaType },
-        },
-        relationship.id,
-      );
-      Alert.alert('Upload failed', e instanceof Error ? e.message : 'Queued to send when online.');
+      await sendMessage.mutateAsync({ content, mediaUrl, mediaType });
+      setOptimisticMessages((prev) => prev.filter((m) => m.id !== id));
+    } catch {
+      moveToQueue(id, queuePayload);
     } finally {
       setIsSendingMedia(false);
     }
   };
+
+  const sendImageMessage = (uri: string, mediaType: 'image' | 'video') =>
+    sendLocalMedia(uri, mediaType);
 
   const handlePickGallery = async () => {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -466,35 +575,25 @@ export default function ChatScreen() {
   const sendAttachmentMessage = async (content: string) => {
     if (!user || !relationship) return;
     const replyToId = replyTo?.id.startsWith('temp-') ? undefined : replyTo?.id;
-
-    const optimistic: Message = {
-      id: `temp-${Date.now()}`,
-      relationship_id: relationship.id,
-      sender_id: user.id,
-      content,
-      media_url: null,
-      media_type: null,
-      moment_id: null,
-      reply_to_id: replyToId ?? null,
-      reactions: {},
-      is_pinned: false,
-      deleted_for_all: false,
-      hidden_for: [],
-      read_at: null,
-      created_at: new Date().toISOString(),
-    };
-    setOptimisticMessages((prev) => [...prev, optimistic]);
+    const id = `temp-${Date.now()}`;
+    const payload: ChatOfflinePayload = { content, replyToId };
+    setReplyTo(null);
+    nearBottomRef.current = true;
 
     if (isOffline) {
-      addToQueue({ id: optimistic.id, type: 'message', payload: { content, replyToId } }, relationship.id);
+      addToQueue({ id, type: 'message', payload }, relationship.id);
       return;
     }
 
+    setOptimisticMessages((prev) => [
+      ...prev,
+      pendingMessage(id, { content, reply_to_id: replyToId ?? null }),
+    ]);
     try {
       await sendMessage.mutateAsync({ content, replyToId });
-      setOptimisticMessages((prev) => prev.filter((m) => m.id !== optimistic.id));
+      setOptimisticMessages((prev) => prev.filter((m) => m.id !== id));
     } catch {
-      addToQueue({ id: optimistic.id, type: 'message', payload: { content, replyToId } }, relationship.id);
+      moveToQueue(id, payload);
     }
   };
 
@@ -681,61 +780,12 @@ export default function ChatScreen() {
       await audioRecorder.stop();
       await setAudioModeAsync({ allowsRecording: false });
       uri = audioRecorder.uri;
-      if (!uri) return;
-
-      if (isOffline) {
-        addToQueue(
-          {
-            id: `temp-${Date.now()}`,
-            type: 'message',
-            payload: { content: '🎙 Voice message', mediaLocalUri: uri, mediaType: 'voice' },
-          },
-          relationship.id,
-        );
-        return;
-      }
-
-      setIsSendingMedia(true);
-      const path = `${relationship.id}/${user.id}-voice-${Date.now()}.m4a`;
-      const mediaUrl = await api.uploadChatMedia(path, uri, 'audio/mp4');
-
-      const optimistic: Message = {
-        id: `temp-${Date.now()}`,
-        relationship_id: relationship.id,
-        sender_id: user.id,
-        content: '🎙 Voice message',
-        media_url: mediaUrl,
-        media_type: 'voice',
-        moment_id: null,
-        reply_to_id: null,
-        reactions: {},
-        is_pinned: false,
-        deleted_for_all: false,
-        hidden_for: [],
-        read_at: null,
-        created_at: new Date().toISOString(),
-      };
-      setOptimisticMessages((prev) => [...prev, optimistic]);
-      nearBottomRef.current = true;
-      await sendMessage.mutateAsync({ content: '🎙 Voice message', mediaUrl, mediaType: 'voice' });
-      setOptimisticMessages((prev) => prev.filter((m) => m.id !== optimistic.id));
     } catch (e) {
-      if (uri) {
-        addToQueue(
-          {
-            id: `temp-${Date.now()}`,
-            type: 'message',
-            payload: { content: '🎙 Voice message', mediaLocalUri: uri, mediaType: 'voice' },
-          },
-          relationship.id,
-        );
-        Alert.alert('Send failed', 'Queued to send when online.');
-      } else {
-        Alert.alert('Send failed', e instanceof Error ? e.message : 'Please try again');
-      }
-    } finally {
-      setIsSendingMedia(false);
+      Alert.alert('Recording failed', e instanceof Error ? e.message : 'Please try again');
+      return;
     }
+    if (!uri) return;
+    await sendLocalMedia(uri, 'voice', '🎙 Voice message');
   };
 
   const cancelRecording = async () => {
@@ -762,7 +812,9 @@ export default function ChatScreen() {
   useEffect(() => {
     if (!pendingScrollMessageId) return;
     const index = listItems.findIndex(
-      (item) => item.type === 'message' && item.id === pendingScrollMessageId,
+      (item) =>
+        (item.type === 'message' && item.id === pendingScrollMessageId) ||
+        (item.type === 'unread' && item.id === pendingScrollMessageId),
     );
     if (index < 0) {
       if (hasNextPage && !isFetchingNextPage && !loadingOlderRef.current) {
@@ -809,7 +861,7 @@ export default function ChatScreen() {
   );
 
   const closeChat = useCallback(() => {
-    goBackOrReplace(router, '/(tabs)/home');
+    closeStackScreen(router);
   }, [router]);
 
   const hasText = text.trim().length > 0;
@@ -839,23 +891,15 @@ export default function ChatScreen() {
         <ChatEmptyProfile
           partner={partner}
           relationship={relationship}
-          isTyping={partnerTyping}
           isOnline={partnerOnline}
-          lastSeenAt={partnerLastSeenAt}
-          statusHidden={partnerStatusHidden}
           onOpenProfile={openPartnerProfileView}
+          onPickStarter={(line) => {
+            setText(line);
+            inputRef.current?.focus();
+          }}
         />
       ) : null,
-    [
-      showProfileIntro,
-      partner,
-      relationship,
-      partnerTyping,
-      partnerOnline,
-      partnerLastSeenAt,
-      partnerStatusHidden,
-      openPartnerProfileView,
-    ],
+    [showProfileIntro, partner, relationship, partnerOnline, openPartnerProfileView],
   );
 
   const renderItem = ({ item }: { item: ChatListItem }) => {
@@ -879,8 +923,7 @@ export default function ChatScreen() {
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
-      <SwipeDismissView edge="end" onDismiss={closeChat} style={styles.flex}>
-        <View style={[styles.shell, { backgroundColor: colors.background }]}>
+      <View style={styles.flex}>
         <View
           style={[
             styles.header,
@@ -891,6 +934,9 @@ export default function ChatScreen() {
             },
           ]}>
           <View style={styles.headerProfile}>
+            <View style={styles.headerBackSlot}>
+              <HeaderIconButton icon="chevronLeft" onPress={closeChat} accessibilityLabel="Close chat" />
+            </View>
             <Pressable
               onPress={() => setShowPartnerPhoto(true)}
               accessibilityRole="button"
@@ -915,18 +961,21 @@ export default function ChatScreen() {
           </View>
 
           <View style={styles.headerActions}>
-            <Pressable onPress={() => startCall('video')} hitSlop={8} style={styles.headerIconSlot}>
-              <Icon name="videocam" size={24} color={colors.accent} />
-            </Pressable>
-            <Pressable onPress={() => startCall('audio')} hitSlop={8} style={styles.headerIconSlot}>
-              <Icon name="call" size={22} color={colors.accent} />
+            <Pressable
+              onPress={() => startCall('video')}
+              hitSlop={8}
+              style={styles.headerIconSlot}
+              accessibilityRole="button"
+              accessibilityLabel="Video call">
+              <Icon name="videocam" size={27} color={colors.accent} />
             </Pressable>
             <Pressable
-              onPress={closeChat}
-              hitSlop={10}
-              accessibilityLabel="Close chat"
-              style={styles.headerCloseBtn}>
-              <Icon name="chevronRight" size={26} color={colors.accent} />
+              onPress={() => startCall('audio')}
+              hitSlop={8}
+              style={styles.headerIconSlot}
+              accessibilityRole="button"
+              accessibilityLabel="Voice call">
+              <Icon name="call" size={25} color={colors.accent} />
             </Pressable>
           </View>
         </View>
@@ -946,14 +995,6 @@ export default function ChatScreen() {
         </Pressable>
       )}
 
-      {/* ── Offline banner ── */}
-      {isOffline && (
-        <View style={[styles.offlineBar, { backgroundColor: colors.warning }]}>
-          <Text style={styles.offlineText}>
-            Offline. {offlineQueue.length} message{offlineQueue.length === 1 ? '' : 's'} will send when reconnected
-          </Text>
-        </View>
-      )}
       {flushingOffline && (
         <View style={[styles.offlineBar, { backgroundColor: colors.accentSoft }]}>
           <Text style={[styles.offlineText, { color: colors.accent }]}>Sending queued messages…</Text>
@@ -1025,9 +1066,7 @@ export default function ChatScreen() {
 
               {partnerTyping && (
                 <View style={styles.typingBubble}>
-                  <View style={[styles.typingPill, { backgroundColor: colors.chatBubblePartner, borderColor: colors.border }]}>
-                    <Text style={[styles.typingDots, { color: colors.textSecondary }]}>● ● ●</Text>
-                  </View>
+                  <TypingIndicator />
                 </View>
               )}
             </ChatWallpaper>
@@ -1100,24 +1139,32 @@ export default function ChatScreen() {
                 paddingBottom: inputBarPad,
               },
             ]}>
-          {/* + Attachment */}
+          {/* Gallery — tap to pick a photo/video directly; long-press for the
+              full attachment sheet (file, contact, location). */}
           <Pressable
             hitSlop={8}
             style={styles.inputSideBtn}
             disabled={isRecording}
-            accessibilityLabel={showAttachment ? 'Close attachments' : 'Add attachment'}
+            delayLongPress={350}
+            accessibilityLabel={showAttachment ? 'Close attachments' : 'Add photo or video'}
+            accessibilityHint={showAttachment ? undefined : 'Long press for more attachment options'}
             onPress={() => {
-              if (!showAttachment) inputRef.current?.blur();
+              if (showAttachment) {
+                setShowAttachment(false);
+                return;
+              }
+              void handlePickGallery();
+            }}
+            onLongPress={() => {
+              if (showAttachment) return;
+              inputRef.current?.blur();
               setShowEmoji(false);
-              setShowAttachment((open) => {
-                const next = !open;
-                if (next) scrollToLatest(true);
-                return next;
-              });
+              setShowAttachment(true);
+              scrollToLatest(true);
             }}>
             <Icon
-              name={showAttachment ? 'close' : 'plus'}
-              size={showAttachment ? 22 : 26}
+              name={showAttachment ? 'close' : 'image'}
+              size={showAttachment ? 22 : 24}
               color={showAttachment ? colors.accent : colors.textSecondary}
             />
           </Pressable>
@@ -1191,7 +1238,6 @@ export default function ChatScreen() {
         </View>
       </View>
       </View>
-      </SwipeDismissView>
 
       <ChatMessageActionSheet
         message={selected}
@@ -1212,8 +1258,8 @@ export default function ChatScreen() {
       <FullScreenImageModal
         visible={showPartnerPhoto}
         imageUrl={partner?.avatar_url}
-        title={partner?.name ?? 'Partner'}
         fallbackName={partner?.name}
+        title={partner?.name ?? 'Partner'}
         onClose={() => setShowPartnerPhoto(false)}
       />
     </View>
@@ -1222,7 +1268,6 @@ export default function ChatScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  shell: { flex: 1 },
   flex: { flex: 1 },
   messageArea: { flex: 1, minHeight: 0 },
 
@@ -1245,12 +1290,8 @@ const styles = StyleSheet.create({
   },
   headerActions: { flexDirection: 'row', alignItems: 'center' },
   headerIconSlot: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-  headerCloseBtn: {
-    width: 30,
-    height: 44,
-    alignItems: 'flex-end',
-    justifyContent: 'center',
-  },
+  // Tight to the avatar — the 44pt tap area already gives the icon breathing room.
+  headerBackSlot: { marginRight: -6 },
   headerText: { flex: 1, minWidth: 0 },
   headerName: { fontSize: 16, fontWeight: '700' },
 
@@ -1285,15 +1326,6 @@ const styles = StyleSheet.create({
 
   // Typing bubble
   typingBubble: { paddingHorizontal: 12, paddingBottom: 8 },
-  typingPill: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 18,
-    borderBottomLeftRadius: 4,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
-  typingDots: { fontSize: 10, letterSpacing: 3 },
 
   momentReplyBar: {
     flexDirection: 'row',

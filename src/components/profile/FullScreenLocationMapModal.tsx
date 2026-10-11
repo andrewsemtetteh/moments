@@ -1,8 +1,10 @@
+import { useEffect, useState } from 'react';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { LocationMapPreview, type MapMarker } from '@/components/moments/LocationMapPreview';
 import { Icon } from '@/components/ui/Icon';
+import { Avatar } from '@/components/ui/primitives';
 import { useTheme } from '@/hooks/useTheme';
 import { openInMaps } from '@/lib/location';
 
@@ -16,6 +18,11 @@ interface Props {
 export function FullScreenLocationMapModal({ visible, markers, title, onClose }: Props) {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
+  const [focusedIndex, setFocusedIndex] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!visible) setFocusedIndex(null);
+  }, [visible]);
 
   if (markers.length === 0) return null;
 
@@ -30,27 +37,63 @@ export function FullScreenLocationMapModal({ visible, markers, title, onClose }:
     openInMaps(centerLat, centerLng, title ?? subtitle);
   };
 
+  const toggleFocus = (index: number) => {
+    setFocusedIndex((current) => (current === index ? null : index));
+  };
+
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="fullScreen" onRequestClose={onClose}>
       <View style={[styles.root, { backgroundColor: colors.background }]}>
-        <View style={[styles.topBar, { paddingTop: insets.top + 8, borderBottomColor: colors.border }]}>
+        <View style={[styles.topBar, { paddingTop: insets.top, borderBottomColor: colors.border }]}>
           <View style={styles.titleWrap}>
             {title ? (
               <Text style={[styles.title, { color: colors.text }]} numberOfLines={1}>
                 {title}
               </Text>
             ) : null}
-            <Text style={[styles.subtitle, { color: colors.textSecondary }]} numberOfLines={1}>
-              {subtitle}
-            </Text>
           </View>
           <Pressable onPress={onClose} hitSlop={12} style={styles.iconBtn} accessibilityLabel="Close map">
             <Icon name="close" size={24} color={colors.text} />
           </Pressable>
         </View>
 
+        {markers.length > 1 && (
+          <View style={styles.tagsRow}>
+            {markers.map((m, index) => {
+              const active = focusedIndex === index;
+              const tint = m.color ?? colors.accent;
+              const name = m.name?.trim() || m.label?.trim() || 'Location';
+              return (
+                <Pressable
+                  key={`${m.latitude}-${m.longitude}-${index}`}
+                  onPress={() => toggleFocus(index)}
+                  style={[
+                    styles.tag,
+                    {
+                      backgroundColor: active ? `${tint}1F` : colors.surfaceElevated,
+                      borderColor: active ? tint : colors.border,
+                    },
+                  ]}>
+                  <View style={[styles.tagAvatarRing, { borderColor: tint }]}>
+                    <Avatar
+                      name={name}
+                      imageUrl={m.avatarUrl}
+                      size={20}
+                      colorsOverride={['#ffffff', '#ffffff']}
+                      initialColor={tint}
+                    />
+                  </View>
+                  <Text style={[styles.tagText, { color: colors.text }]} numberOfLines={1}>
+                    {name}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        )}
+
         <View style={[styles.mapWrap, { paddingBottom: insets.bottom + 12 }]}>
-          <LocationMapPreview markers={markers} interactive style={styles.map} />
+          <LocationMapPreview markers={markers} interactive focusedIndex={focusedIndex} style={styles.map} />
         </View>
 
         <View style={[styles.footer, { paddingBottom: insets.bottom + 16 }]}>
@@ -87,6 +130,29 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  tagsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingTop: 12,
+  },
+  tag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingLeft: 4,
+    paddingRight: 12,
+    paddingVertical: 4,
+    borderRadius: 999,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  tagAvatarRing: {
+    padding: 1.5,
+    borderRadius: 999,
+    borderWidth: 1.5,
+  },
+  tagText: { fontSize: 13, fontWeight: '700', maxWidth: 120 },
   mapWrap: {
     flex: 1,
     paddingHorizontal: 12,

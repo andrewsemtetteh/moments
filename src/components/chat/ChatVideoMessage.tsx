@@ -32,7 +32,7 @@ export function ChatVideoMessage({ uri, isSelf }: Props) {
       <View style={styles.poster} />
       <View style={styles.overlay}>
         <View style={[styles.playBtn, { backgroundColor: `${accent}E6` }]}>
-          <Icon name="play" size={28} color="#fff" filled />
+          <Icon name="play" size={28} color={isSelf ? colors.chatBubbleSelf : colors.onAccent} filled />
         </View>
         <View style={styles.badge}>
           <Icon name="videocam" size={12} color="#fff" />

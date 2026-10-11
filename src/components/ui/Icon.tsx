@@ -81,7 +81,9 @@ const ICON_MAP: Record<IconName, { outline: IoniconName; filled: IoniconName }> 
   calendar: { outline: 'calendar-outline', filled: 'calendar' },
   user: { outline: 'person-outline', filled: 'person' },
   people: { outline: 'people-outline', filled: 'people' },
-  chat: { outline: 'chatbubble-ellipses-outline', filled: 'chatbubble-ellipses' },
+  // The two-bubble mark (same as `messages`, used on the Moments camera header)
+  // is the app's one chat icon — a conversation between two people.
+  chat: { outline: 'chatbubbles-outline', filled: 'chatbubbles' },
   messages: { outline: 'chatbubbles-outline', filled: 'chatbubbles' },
   journal: { outline: 'book-outline', filled: 'book' },
   bell: { outline: 'notifications-outline', filled: 'notifications' },

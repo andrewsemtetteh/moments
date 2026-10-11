@@ -22,9 +22,16 @@ interface LocationMapPreviewProps {
   interactive?: boolean;
   onPress?: () => void;
   style?: StyleProp<ViewStyle>;
+  /** Index of a marker to zoom in close on, instead of the default fit-everyone view. */
+  focusedIndex?: number | null;
 }
 
-function buildMapHtml(markers: MapMarker[], interactive: boolean): string {
+function buildMapHtml(
+  markers: MapMarker[],
+  interactive: boolean,
+  focusedIndex: number | null,
+  fallbackGradient: [string, string],
+): string {
   const scrollZoom = interactive ? 'true' : 'false';
   const dragging = interactive ? 'true' : 'false';
   const tap = interactive ? 'true' : 'false';
@@ -47,7 +54,14 @@ function buildMapHtml(markers: MapMarker[], interactive: boolean): string {
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <style>
       html, body, #map { margin: 0; padding: 0; width: 100%; height: 100%; background: #1a1a1a; }
-      .leaflet-control-attribution { font-size: 9px !important; }
+      .leaflet-control-attribution {
+        font-size: 8px !important;
+        background: transparent !important;
+        box-shadow: none !important;
+        color: rgba(255,255,255,0.5) !important;
+        padding: 1px 4px !important;
+      }
+      .leaflet-control-attribution a { color: rgba(255,255,255,0.65) !important; }
       .pin-label { font-size: 11px; font-weight: 700; white-space: nowrap; }
       .avatar-pin-wrap { background: transparent !important; border: none !important; }
     </style>
@@ -64,6 +78,7 @@ function buildMapHtml(markers: MapMarker[], interactive: boolean): string {
       }
 
       var markers = ${markersJson};
+      var fallbackGradient = ${JSON.stringify(fallbackGradient)};
       var map = L.map('map', {
         zoomControl: ${interactive ? 'true' : 'false'},
         scrollWheelZoom: ${scrollZoom},
@@ -96,7 +111,7 @@ function buildMapHtml(markers: MapMarker[], interactive: boolean): string {
         var pinH = avatarSize + pointerH;
         var face = m.avatarUrl
           ? '<img src="' + escapeHtml(m.avatarUrl) + '" alt="" style="width:100%;height:100%;object-fit:cover;display:block;border-radius:50%;" />'
-          : '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;border-radius:50%;background:linear-gradient(135deg,#ffffff 0%,#f4f4f4 100%);color:' + ring + ';font-size:11px;font-weight:800;letter-spacing:-0.3px;">' + initial + '</div>';
+          : '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;border-radius:50%;background:linear-gradient(135deg,' + fallbackGradient[0] + ' 0%,' + fallbackGradient[1] + ' 100%);color:#fff;font-size:11px;font-weight:800;letter-spacing:-0.3px;">' + initial + '</div>';
         var icon = L.divIcon({
           className: 'avatar-pin-wrap',
           html:
@@ -114,7 +129,10 @@ function buildMapHtml(markers: MapMarker[], interactive: boolean): string {
         group.push(marker);
       });
 
-      if (group.length === 1) {
+      var focusedIndex = ${focusedIndex != null ? focusedIndex : 'null'};
+      if (focusedIndex !== null && markers[focusedIndex]) {
+        map.setView([markers[focusedIndex].lat, markers[focusedIndex].lng], 17);
+      } else if (group.length === 1) {
         map.setView([markers[0].lat, markers[0].lng], 14);
       } else if (group.length > 1) {
         map.fitBounds(L.featureGroup(group).getBounds().pad(0.3));
@@ -130,9 +148,13 @@ export function LocationMapPreview({
   interactive = false,
   onPress,
   style,
+  focusedIndex = null,
 }: LocationMapPreviewProps) {
   const { colors } = useTheme();
-  const html = useMemo(() => buildMapHtml(markers, interactive), [markers, interactive]);
+  const html = useMemo(
+    () => buildMapHtml(markers, interactive, focusedIndex, colors.gradient),
+    [markers, interactive, focusedIndex, colors.gradient],
+  );
 
   if (markers.length === 0) return null;
 

@@ -117,6 +117,7 @@ const WEEK_OPTS = { weekStartsOn: 1 as const };
 /** Locket-style buckets: Today → This week → Last week → months → years. */
 export function groupMomentsForHistory(moments: Moment[]): { key: string; label: string; moments: Moment[] }[] {
   const today: Moment[] = [];
+  const yesterday: Moment[] = [];
   const thisWeek: Moment[] = [];
   const lastWeek: Moment[] = [];
   const thisMonth: Moment[] = [];
@@ -140,6 +141,8 @@ export function groupMomentsForHistory(moments: Moment[]): { key: string; label:
     const d = new Date(moment.created_at);
     if (isToday(d)) {
       today.push(moment);
+    } else if (isYesterday(d)) {
+      yesterday.push(moment);
     } else if (isWithinInterval(d, thisWeekInterval)) {
       thisWeek.push(moment);
     } else if (isWithinInterval(d, lastWeekInterval)) {
@@ -167,6 +170,7 @@ export function groupMomentsForHistory(moments: Moment[]): { key: string; label:
 
   const sections: { key: string; label: string; moments: Moment[] }[] = [];
   if (today.length) sections.push({ key: 'today', label: 'Today', moments: today });
+  if (yesterday.length) sections.push({ key: 'yesterday', label: 'Yesterday', moments: yesterday });
   if (thisWeek.length) sections.push({ key: 'this-week', label: 'This week', moments: thisWeek });
   if (lastWeek.length) sections.push({ key: 'last-week', label: 'Last week', moments: lastWeek });
   if (thisMonth.length) sections.push({ key: 'this-month', label: 'This month', moments: thisMonth });

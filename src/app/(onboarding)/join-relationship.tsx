@@ -1,3 +1,4 @@
+import { useAuth } from '@clerk/expo';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Alert, StyleSheet, Text, TextInput, View } from 'react-native';
@@ -8,6 +9,7 @@ import { PromptLink } from '@/components/ui/PromptLink';
 import { PrimaryButton } from '@/components/ui/primitives';
 import { Spacing } from '@/constants/design-system';
 import { useTheme } from '@/hooks/useTheme';
+import { joinRelationshipByInvite, updateRelationship } from '@/lib/moments-api';
 import {
   buildOnboardingRelationshipParams,
   hasChosenSpacePath,
@@ -19,7 +21,6 @@ import { markRelationshipOnboardingDone } from '@/lib/onboarding-storage';
 import { goToOnboardingBack } from '@/lib/onboarding-navigation';
 import { goBackOrReplace } from '@/lib/router';
 import { queryClient } from '@/providers/AppProviders';
-import * as api from '@/services/api';
 import { useAuthStore, useRelationshipStore } from '@/stores';
 import type { RelationshipType } from '@/types/database';
 
@@ -38,6 +39,7 @@ function JoinRelationshipContent({
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const user = useAuthStore((s) => s.user);
+  const { getToken } = useAuth();
   const setRelationship = useRelationshipStore((s) => s.setRelationship);
   const setPartner = useRelationshipStore((s) => s.setPartner);
   const [code, setCode] = useState('');
@@ -47,9 +49,11 @@ function JoinRelationshipContent({
     if (!user || !code.trim()) return;
     setLoading(true);
     try {
-      let { relationship, partner } = await api.joinRelationship(user.id, code.trim());
+      const token = await getToken();
+      if (!token) throw new Error('Not signed in');
+      let { relationship, partner } = await joinRelationshipByInvite(token, code.trim());
       if (relationshipType && !relationship.relationship_type) {
-        relationship = await api.updateRelationship(relationship.id, {
+        relationship = await updateRelationship(token, relationship.id, {
           relationship_type: relationshipType,
         });
       }
@@ -58,7 +62,7 @@ function JoinRelationshipContent({
       setPartner(partner);
       queryClient.clear();
       router.replace({
-        pathname: '/(onboarding)/notification-prompt',
+        pathname: '/(onboarding)/theme-picker',
         params: { next: 'welcome' },
       });
     } catch (e: unknown) {
@@ -140,6 +144,9 @@ export default function JoinRelationshipScreen() {
     if (!hasCompletedPreSpaceOnboarding(params)) {
       router.replace('/(onboarding)/anniversary-setup');
     }
+    // deps list the individual primitive params fields deliberately; `params`/`parsed` are new
+    // objects every render (useLocalSearchParams) and would re-fire this effect on every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     fromProfile,
     router,

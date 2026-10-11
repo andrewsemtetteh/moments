@@ -1,42 +1,46 @@
-import { useFocusEffect, usePathname, useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { HEADER_ICON_SIZE } from '@/components/ui/HeaderIconButton';
 import { Icon, type IconName } from '@/components/ui/Icon';
 import { Avatar } from '@/components/ui/primitives';
-import { useNotifications, useUnreadMessageCount, useUnreadNotificationCount } from '@/hooks/queries';
+import { useMinuteTick } from '@/hooks/useMinuteTick';
+import { useNotifications, useUnreadNotificationCount } from '@/hooks/queries';
 import { useOpenPartnerProfile } from '@/hooks/useOpenPartnerProfile';
+import { usePartnerPresence } from '@/hooks/usePartnerPresence';
 import { useTheme } from '@/hooks/useTheme';
 import { formatBadgeCount } from '@/lib/format-badge';
+import { getFirstName } from '@/lib/avatar-initial';
+import { formatDistanceApart, haversineDistanceKm } from '@/lib/distance';
+import { hasValidCoords } from '@/lib/location';
+import { openCalendar } from '@/lib/router';
 import { filterInboxNotifications } from '@/lib/notification-display';
-import { useRelationshipStore } from '@/stores';
+import { buildPartnerHeaderLine, formatPartnerClock } from '@/lib/partner-header-line';
+import { useAuthStore, useRelationshipStore } from '@/stores';
 
 const APP_NAME = 'Moments';
-const HEADER_ICON_SIZE = 28;
 
 interface AppHeaderProps {
-  showChat?: boolean;
+  /** Plan (calendar) shortcut in the left slot. */
+  showPlan?: boolean;
 }
 
-export function AppHeader({ showChat = true }: AppHeaderProps) {
+export function AppHeader({ showPlan = true }: AppHeaderProps) {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const pathname = usePathname();
   const { colors } = useTheme();
   const openPartnerProfile = useOpenPartnerProfile();
+  const relationship = useRelationshipStore((s) => s.relationship);
   const partner = useRelationshipStore((s) => s.partner);
+  const user = useAuthStore((s) => s.user);
+  // Keeps `partner` (location/online-status fields) fresh via realtime subscriptions;
+  // the returned view is unused here since the meta line below covers status display.
+  usePartnerPresence(relationship?.id, user?.id, partner?.id);
   const { data: unreadNotificationsCount = 0, refetch: refetchUnreadNotifications } =
     useUnreadNotificationCount();
   const { data: notifications } = useNotifications();
-  const { data: unreadMessages = 0 } = useUnreadMessageCount();
-  const onChatScreen = pathname.includes('/chat');
-  // Never show a chat badge while already in chat, or when count isn't a positive integer.
-  const chatBadge =
-    onChatScreen || !Number.isFinite(unreadMessages) || unreadMessages < 1
-      ? 0
-      : Math.floor(unreadMessages);
-
   const unreadNotifications = useMemo(() => {
     const fromFeed = filterInboxNotifications(notifications ?? []).filter(
       (notification) => !notification.read,
@@ -50,17 +54,32 @@ export function AppHeader({ showChat = true }: AppHeaderProps) {
     }, [refetchUnreadNotifications]),
   );
 
+  // Re-render on each real minute boundary (and on foreground) so the partner's
+  // local clock and "X minutes ago" status stay live instead of freezing at mount time.
+  useMinuteTick();
+
+  const sharesLocation = Boolean(user?.location_sharing_enabled && partner?.location_sharing_enabled);
+  const distanceApart = useMemo(() => {
+    if (!sharesLocation) return null;
+    if (!hasValidCoords(user?.location_latitude, user?.location_longitude)) return null;
+    if (!hasValidCoords(partner?.location_latitude, partner?.location_longitude)) return null;
+    const km = haversineDistanceKm(
+      { latitude: user!.location_latitude!, longitude: user!.location_longitude! },
+      { latitude: partner!.location_latitude!, longitude: partner!.location_longitude! },
+    );
+    return formatDistanceApart(km);
+  }, [sharesLocation, user, partner]);
+  const partnerClock = formatPartnerClock(partner?.timezone);
+  const metaLine = buildPartnerHeaderLine({
+    location: distanceApart,
+    clock: partnerClock,
+  });
+
   return (
     <View style={[styles.header, { paddingTop: insets.top + 6, backgroundColor: colors.background }]}>
       <View style={[styles.side, styles.left]}>
-        {showChat ? (
-          <HeaderIconButton
-            icon="messages"
-            label="Open chat"
-            active={onChatScreen}
-            onPress={() => router.push('/(tabs)/chat')}
-            badge={chatBadge}
-          />
+        {showPlan ? (
+          <HeaderIconButton icon="calendar" label="Open Plan" onPress={() => openCalendar()} />
         ) : (
           <View style={styles.iconSlot} />
         )}
@@ -76,13 +95,20 @@ export function AppHeader({ showChat = true }: AppHeaderProps) {
         accessibilityLabel={partner ? `View ${partner.name ?? 'partner'} profile` : APP_NAME}>
         {partner ? (
           <View style={styles.centerRow}>
-            <Avatar name={partner.name} imageUrl={partner.avatar_url} size={30} />
-            <Text style={[styles.title, { color: colors.text }]} numberOfLines={1}>
-              {APP_NAME}
-            </Text>
+            <Avatar name={partner.name} imageUrl={partner.avatar_url} size={34} />
+            <View style={styles.centerText}>
+              <Text style={[styles.title, { color: colors.text }]} numberOfLines={1}>
+                {getFirstName(partner.name) ?? APP_NAME}
+              </Text>
+              {metaLine ? (
+                <Text style={[styles.meta, { color: colors.textSecondary }]} numberOfLines={1}>
+                  {metaLine}
+                </Text>
+              ) : null}
+            </View>
           </View>
         ) : (
-          <Text style={[styles.title, { color: colors.text }]} numberOfLines={1}>
+          <Text style={[styles.appName, { color: colors.text }]} numberOfLines={1}>
             {APP_NAME}
           </Text>
         )}
@@ -92,7 +118,7 @@ export function AppHeader({ showChat = true }: AppHeaderProps) {
         <HeaderIconButton
           icon="bell"
           label={unreadNotifications > 0 ? `${unreadNotifications} unread notifications` : 'Notifications'}
-          onPress={() => router.push('/(tabs)/notifications')}
+          onPress={() => router.navigate('/notifications')}
           badge={unreadNotifications}
           filledWhenActive={false}
           badgePlacement="trailing"
@@ -141,7 +167,7 @@ function HeaderIconButton({
         <Icon
           name={icon}
           size={HEADER_ICON_SIZE}
-          color={isHighlighted ? colors.accent : colors.textSecondary}
+          color={isHighlighted ? colors.accent : colors.text}
           filled={isHighlighted}
         />
         {showBadge ? (
@@ -180,7 +206,11 @@ const styles = StyleSheet.create({
   right: { justifyContent: 'flex-end', paddingRight: 2 },
   center: { flexShrink: 1, maxWidth: '52%', alignItems: 'center' },
   centerRow: { flexDirection: 'row', alignItems: 'center', gap: 8, maxWidth: '100%' },
-  title: { fontSize: 18, fontWeight: '800', letterSpacing: -0.4, flexShrink: 1 },
+  centerText: { flexShrink: 1, minWidth: 0 },
+  // Was 12px / 9px — below comfortable reading size, especially the 9px status line.
+  title: { fontSize: 15, fontWeight: '700', letterSpacing: -0.2, flexShrink: 1, lineHeight: 19 },
+  meta: { fontSize: 12, fontWeight: '600', flexShrink: 1, lineHeight: 15 },
+  appName: { fontSize: 17, fontWeight: '800', letterSpacing: -0.4 },
   iconSlot: {
     width: 44,
     height: 44,
@@ -196,27 +226,28 @@ const styles = StyleSheet.create({
     overflow: 'visible',
   },
   iconPressed: { opacity: 0.65 },
+  // Same size as the tab bar's unread badge, so counts look identical app-wide.
   badge: {
     position: 'absolute',
-    minWidth: 22,
-    height: 22,
-    borderRadius: 11,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
     borderWidth: 2,
-    paddingHorizontal: 5,
+    paddingHorizontal: 4,
     alignItems: 'center',
     justifyContent: 'center',
   },
   badgeDefault: {
-    top: -8,
-    right: -10,
+    top: -6,
+    right: -9,
   },
   badgeTrailing: {
-    top: -8,
-    right: -4,
+    top: -6,
+    right: -6,
   },
   badgeText: {
-    fontSize: 12,
+    fontSize: 10,
     fontWeight: '800',
-    lineHeight: 14,
+    lineHeight: 12,
   },
 });

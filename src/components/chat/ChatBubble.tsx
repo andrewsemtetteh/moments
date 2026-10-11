@@ -44,6 +44,10 @@ export function ChatBubble({
   const { colors } = useTheme();
   const user = useAuthStore((s) => s.user);
   const isSelf = message.sender_id === user?.id;
+  // Local-only until the server confirms it (sending now, or waiting in the
+  // offline queue) — gets a clock instead of a "sent" tick, and no message
+  // actions, since react/pin/delete need a real server id.
+  const isPending = message.id.startsWith('temp-');
   const reactions = Object.entries(message.reactions ?? {}).filter(([, users]) => users.length > 0);
   const translateX = useSharedValue(0);
 
@@ -53,6 +57,9 @@ export function ChatBubble({
   const timeColor = isSelf ? `${selfTextColor}99` : colors.textTertiary;
   const isDeleted = message.deleted_for_all;
   const attachment = !isDeleted ? parseAttachment(message.content) : null;
+  // Boxy cards (maps, contacts, photos) sit flush against their own borders — the default
+  // bubble gap reads as touching when two are stacked back to back, so give them more room.
+  const isBoxyContent = !isDeleted && (!!attachment || (!!message.media_url && message.media_type !== 'voice'));
   const replyAuthor =
     replyToMessage?.sender_id === user?.id ? 'You' : partner?.name ?? 'Partner';
 
@@ -63,19 +70,20 @@ export function ChatBubble({
     onSwipeReply?.(message);
   };
 
+  // Swipe LEFT to reply — a right swipe anywhere on the screen closes the chat.
   const swipeReply = Gesture.Pan()
-    .activeOffsetX(14)
-    .failOffsetX(-10)
+    .activeOffsetX(-14)
+    .failOffsetX(10)
     .failOffsetY([-14, 14])
     .onUpdate((event) => {
-      if (event.translationX > 0) {
-        translateX.value = Math.min(event.translationX, 84);
+      if (event.translationX < 0) {
+        translateX.value = Math.max(event.translationX, -84);
       }
     })
     .onEnd((event) => {
       if (
         onSwipeReply &&
-        (event.translationX > SWIPE_REPLY_THRESHOLD || event.velocityX > SWIPE_REPLY_VELOCITY)
+        (event.translationX < -SWIPE_REPLY_THRESHOLD || event.velocityX < -SWIPE_REPLY_VELOCITY)
       ) {
         runOnJS(triggerReply)();
       }
@@ -87,21 +95,21 @@ export function ChatBubble({
   }));
 
   const replyHintStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(translateX.value, [0, 28, 72], [0, 0.5, 1]),
-    transform: [{ scale: interpolate(translateX.value, [0, 72], [0.6, 1]) }],
+    opacity: interpolate(-translateX.value, [0, 28, 72], [0, 0.5, 1]),
+    transform: [{ scale: interpolate(-translateX.value, [0, 72], [0.6, 1]) }],
   }));
 
   return (
-    <View style={[styles.row, isSelf ? styles.rowSelf : styles.rowPartner]}>
+    <View style={[styles.row, isSelf ? styles.rowSelf : styles.rowPartner, isBoxyContent && styles.rowBoxy]}>
       <Animated.View
-        style={[styles.replyHint, isSelf ? styles.replyHintSelf : styles.replyHintPartner, replyHintStyle]}>
+        style={[styles.replyHint, replyHintStyle]}>
         <Icon name="reply" size={20} color={colors.accent} />
       </Animated.View>
 
       <GestureDetector gesture={swipeReply}>
         <Animated.View style={bubbleAnimStyle}>
           <Pressable
-            onLongPress={() => onLongPress?.(message)}
+            onLongPress={isPending ? undefined : () => onLongPress?.(message)}
             delayLongPress={250}
             style={[
               styles.bubble,
@@ -175,14 +183,16 @@ export function ChatBubble({
               <Text style={[styles.time, { color: timeColor }]}>
                 {format(new Date(message.created_at), 'h:mm a')}
               </Text>
-              {isSelf && (
+              {isSelf && isPending ? (
+                <Icon name="time" size={13} color={`${selfTextColor}80`} />
+              ) : isSelf ? (
                 <Icon
                   name={message.read_at ? 'checkDone' : 'check'}
                   size={14}
                   color={message.read_at ? colors.chatReadReceipt : `${selfTextColor}80`}
                   filled={!!message.read_at}
                 />
-              )}
+              ) : null}
             </View>
           </Pressable>
         </Animated.View>
@@ -209,16 +219,16 @@ export function ChatBubble({
 
 const styles = StyleSheet.create({
   row: { marginBottom: 4, paddingHorizontal: 6, position: 'relative' },
+  rowBoxy: { marginBottom: 10 },
   rowSelf: { alignItems: 'flex-end' },
   rowPartner: { alignItems: 'flex-start' },
   replyHint: {
     position: 'absolute',
     top: '50%',
     marginTop: -12,
+    right: 18,
     zIndex: 0,
   },
-  replyHintPartner: { left: 18 },
-  replyHintSelf: { right: 18 },
   bubble: {
     maxWidth: '82%',
     paddingHorizontal: 10,

@@ -3,8 +3,9 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { OnboardingChrome } from '@/components/onboarding/OnboardingChrome';
 import { Icon, type IconName } from '@/components/ui/Icon';
 import { Card, PrimaryButton } from '@/components/ui/primitives';
 import { Radius, Spacing } from '@/constants/design-system';
@@ -64,12 +65,11 @@ export default function NotificationPromptScreen() {
   };
 
   return (
-    <View style={[styles.root, { backgroundColor: colors.background }]}>
-      <SafeAreaView
+    <OnboardingChrome stepId="notification-prompt">
+      <View
         style={[
           styles.safe,
           {
-            paddingTop: Spacing.sm,
             paddingBottom: insets.bottom + Spacing.lg,
           },
         ]}>
@@ -138,14 +138,13 @@ export default function NotificationPromptScreen() {
             <Text style={[styles.skip, { color: colors.textSecondary }]}>Not now</Text>
           </Pressable>
         </Animated.View>
-      </SafeAreaView>
-    </View>
+      </View>
+    </OnboardingChrome>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1 },
-  safe: { flex: 1, paddingHorizontal: 24 },
+  safe: { flex: 1, paddingHorizontal: Spacing.lg },
   body: { flex: 1, justifyContent: 'center' },
   hero: { alignItems: 'center', marginBottom: 24 },
   iconWrap: {

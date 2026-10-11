@@ -1,3 +1,4 @@
+import { getAttachmentPreviewText, parseAttachment, type ChatAttachment } from '@/lib/chat-attachments';
 import { parseDbTimestampMs } from '@/lib/db-time';
 import type { Message } from '@/types/database';
 
@@ -25,6 +26,15 @@ export function shortMessageAgo(iso: string, now = new Date()): string {
   return `${Math.floor(days / 7)}w ago`;
 }
 
+/** The shared location/contact/file card riding on this message, if any — used to render a richer preview than plain text. */
+export function continueChatAttachment(message: Message): ChatAttachment | null {
+  if (message.media_type === 'image' || message.media_type === 'video' || message.media_type === 'voice') {
+    return null;
+  }
+  if (message.moment_id) return null;
+  return parseAttachment(message.content);
+}
+
 export function continueChatPreview(
   message: Message,
   currentUserId: string,
@@ -38,6 +48,9 @@ export function continueChatPreview(
   if (message.media_type === 'video') return `${prefix}Sent a video`;
   if (message.media_type === 'voice') return `${prefix}Sent a voice note`;
   if (message.moment_id) return `${prefix}Shared a moment`;
+
+  const attachment = continueChatAttachment(message);
+  if (attachment) return `${prefix}${getAttachmentPreviewText(attachment)}`;
 
   const text = (message.content ?? '').trim().replace(/\s+/g, ' ');
   if (!text) return fromYou ? 'You sent a message' : `${who} sent you a message`;

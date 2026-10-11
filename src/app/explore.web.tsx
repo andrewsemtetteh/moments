@@ -1,142 +1,197 @@
-import { Platform, Pressable, ScrollView, StyleSheet } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Platform, ScrollView, StyleSheet, View } from 'react-native';
 
-import { ExternalLink } from '@/components/external-link';
+import { FeatureCard } from '@/components/feature-card';
+import { Icon } from '@/components/ui/Icon';
+import { StoreBadges } from '@/components/store-badges';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { Collapsible } from '@/components/ui/collapsible';
-import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
+import { WebFooter } from '@/components/web-footer';
+import { MaxContentWidth, Radius, Spacing, TextContentWidth, WebNavClearance } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { useWebViewportWidth } from '@/hooks/use-web-viewport-width';
 
 export default function FeaturesScreen() {
-  const safeAreaInsets = useSafeAreaInsets();
-  const insets = {
-    ...safeAreaInsets,
-    bottom: safeAreaInsets.bottom + BottomTabInset + Spacing.three,
-  };
   const theme = useTheme();
+  const width = useWebViewportWidth();
+  const isNarrow = width < 760;
 
   return (
-    <ScrollView
-      style={[styles.scrollView, { backgroundColor: theme.background }]}
-      contentInset={insets}
-      contentContainerStyle={styles.contentContainer}>
-      <ThemedView style={styles.container}>
-        <ThemedView style={styles.titleContainer}>
-          <ThemedText type="subtitle">Features</ThemedText>
-          <ThemedText style={styles.centerText} themeColor="textSecondary">
-            Everything in Moments exists inside a private{'\n'}relationship space for two people.
-          </ThemedText>
+    <ThemedView style={styles.page}>
+      <LinearGradient colors={theme.gradient} style={StyleSheet.absoluteFill} />
 
-          <ExternalLink href="https://apps.apple.com" asChild>
-            <Pressable style={({ pressed }) => pressed && styles.pressed}>
-              <ThemedView type="backgroundElement" style={styles.linkButton}>
-                <ThemedText type="link">Download Moments</ThemedText>
-              </ThemedView>
-            </Pressable>
-          </ExternalLink>
-        </ThemedView>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}>
+        <View style={styles.shell}>
+          <View style={styles.main}>
+            <View style={styles.titleBlock}>
+              <ThemedText type="eyebrow" themeColor="accent">
+                What is inside
+              </ThemedText>
+              <ThemedText type="display" style={[styles.title, isNarrow && styles.titleNarrow]}>
+                Everything lives in one shared space
+              </ThemedText>
+              <ThemedText type="body" themeColor="textSecondary" style={styles.centerText}>
+                Moments is not a social network. Every feature below exists inside a private
+                relationship space made for exactly two people.
+              </ThemedText>
+            </View>
 
-        <ThemedView style={styles.sectionsWrapper}>
-          <Collapsible title="Moments & memories">
-            <ThemedText type="small">
-              Share photo and video moments with your partner on a private memory wall.
-              Your relationship history stays between the two of you — never a public feed.
-            </ThemedText>
-          </Collapsible>
+            <View style={styles.grid}>
+              <FeatureCard
+                icon="camera"
+                tint="accent"
+                title="Moments and memories"
+                body="Share photo and video moments with your partner on a private memory wall. Your relationship history stays between the two of you, never a public feed."
+              />
+              <FeatureCard
+                icon="messages"
+                tint="accentSecondary"
+                title="Real-time chat"
+                body="One private conversation per relationship. Messages sync instantly with read receipts, media sharing, and offline support when you are apart."
+              />
+              <FeatureCard
+                icon="dice"
+                tint="spark"
+                title="Activities together"
+                body="Daily challenges, conversation cards, date ideas, and an AI activity generator for when you are bored. Built to help you do things together, not scroll alone."
+              />
+              <FeatureCard
+                icon="calendar"
+                tint="accent"
+                title="Calendar and planning"
+                body="Shared date nights, anniversaries, and reminders. Both partners see the same plan and get notified when something is coming up."
+              />
+              <FeatureCard
+                icon="heart"
+                tint="accentSecondary"
+                title="Mood check-ins"
+                body="Check in on how you feel and see a mood snapshot of you and your partner right on the home screen."
+              />
+              <FeatureCard
+                icon="lock"
+                tint="spark"
+                title="Privacy first"
+                body="Every feature is scoped to your relationship, with data isolation by design."
+              />
+            </View>
 
-          <Collapsible title="Real-time chat">
-            <ThemedText type="small">
-              One private conversation per relationship. Messages sync in real time with read receipts,
-              media sharing, and offline support when you are apart.
-            </ThemedText>
-          </Collapsible>
+            <View style={styles.privacyBanner}>
+              <View style={[styles.privacyIcon, { backgroundColor: theme.backgroundElement }]}>
+                <Icon name="lock" size={24} color={theme.accent} />
+              </View>
+              <ThemedText type="subtitle" style={styles.privacyTitle}>
+                Built for two, never for a crowd
+              </ThemedText>
+              <ThemedText type="body" themeColor="textSecondary" style={styles.centerText}>
+                There is no public profile, no search, and no algorithm deciding what you see.
+                Everything you share stays inside your relationship, period.
+              </ThemedText>
+            </View>
 
-          <Collapsible title="Activities together">
-            <ThemedText type="small">
-              Daily challenges, conversation cards, date ideas, and an AI activity generator for
-              when you are bored. Built to help you do things together, not scroll alone.
-            </ThemedText>
-          </Collapsible>
+            <View style={styles.ctaBlock}>
+              <ThemedText type="subtitle" style={styles.ctaTitle}>
+                Get Moments
+              </ThemedText>
+              <ThemedText type="body" themeColor="textSecondary" style={styles.centerText}>
+                Available on iOS and Android now.
+              </ThemedText>
+              <StoreBadges style={styles.badges} />
+            </View>
 
-          <Collapsible title="Calendar & planning">
-            <ThemedText type="small">
-              Shared date nights, anniversaries, and reminders — both partners see the same plan
-              and get notified when something is coming up.
-            </ThemedText>
-          </Collapsible>
+            {Platform.OS === 'web' && (
+              <ThemedText type="small" themeColor="textTertiary" style={styles.tagline}>
+                This page is for information only. Create your space inside the mobile app.
+              </ThemedText>
+            )}
+          </View>
 
-          <Collapsible title="Mood check-ins">
-            <ThemedText type="small">
-              Check in on how you feel and see a mood snapshot of you and your partner on the home
-              screen.
-            </ThemedText>
-          </Collapsible>
-
-          <Collapsible title="Privacy first">
-            <ThemedText type="small">
-              No ads, no followers, no discovery. Every feature is scoped to your{' '}
-              <ThemedText type="code">relationship_id</ThemedText> — data isolation by design.
-            </ThemedText>
-            <ExternalLink href="https://apps.apple.com">
-              <ThemedText type="linkPrimary">Get the app</ThemedText>
-            </ExternalLink>
-          </Collapsible>
-        </ThemedView>
-
-        {Platform.OS === 'web' && (
-          <ThemedText type="small" themeColor="textSecondary" style={styles.footer}>
-            Available on iOS and Android. Web is for info only — sign up in the mobile app.
-          </ThemedText>
-        )}
-      </ThemedView>
-    </ScrollView>
+          {Platform.OS === 'web' && <WebFooter />}
+        </View>
+      </ScrollView>
+    </ThemedView>
   );
 }
 
 const styles = StyleSheet.create({
-  scrollView: {
+  page: {
     flex: 1,
   },
-  contentContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    paddingTop: Spacing.six,
-    paddingBottom: Spacing.four,
+  scroll: {
+    flex: 1,
   },
-  container: {
-    maxWidth: MaxContentWidth,
+  scrollContent: {
     flexGrow: 1,
-  },
-  titleContainer: {
-    gap: Spacing.three,
     alignItems: 'center',
+    paddingBottom: Spacing.six,
+  },
+  shell: {
+    width: '100%',
+    maxWidth: MaxContentWidth,
     paddingHorizontal: Spacing.four,
-    paddingVertical: Spacing.six,
+    paddingTop: WebNavClearance,
+    alignItems: 'center',
+  },
+  main: {
+    width: '100%',
+    alignItems: 'center',
+  },
+  titleBlock: {
+    alignItems: 'center',
+    gap: Spacing.two,
+    maxWidth: TextContentWidth,
+    paddingBottom: Spacing.five,
+  },
+  title: {
+    textAlign: 'center',
+  },
+  titleNarrow: {
+    fontSize: 34,
+    lineHeight: 38,
+    letterSpacing: -0.6,
   },
   centerText: {
     textAlign: 'center',
   },
-  pressed: {
-    opacity: 0.7,
-  },
-  linkButton: {
+  grid: {
     flexDirection: 'row',
-    paddingHorizontal: Spacing.four,
-    paddingVertical: Spacing.two,
-    borderRadius: Spacing.five,
+    flexWrap: 'wrap',
+    gap: Spacing.three,
     justifyContent: 'center',
-    gap: Spacing.one,
+    width: '100%',
+  },
+  privacyBanner: {
     alignItems: 'center',
+    gap: Spacing.two,
+    maxWidth: TextContentWidth,
+    marginTop: Spacing.six,
   },
-  sectionsWrapper: {
-    gap: Spacing.five,
-    paddingHorizontal: Spacing.four,
-    paddingTop: Spacing.three,
+  privacyIcon: {
+    width: 52,
+    height: 52,
+    borderRadius: Radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: Spacing.one,
   },
-  footer: {
+  privacyTitle: {
     textAlign: 'center',
-    paddingHorizontal: Spacing.four,
-    paddingVertical: Spacing.five,
+  },
+  ctaBlock: {
+    alignItems: 'center',
+    gap: Spacing.three,
+    marginTop: Spacing.six,
+  },
+  ctaTitle: {
+    textAlign: 'center',
+  },
+  badges: {
+    marginTop: Spacing.two,
+  },
+  tagline: {
+    textAlign: 'center',
+    marginTop: Spacing.four,
   },
 });

@@ -12,23 +12,22 @@ import {
 import { useAuthStore } from '@/stores';
 import type { Moment } from '@/types/database';
 
-const ARC_W = 280;
+const ROW_W = 280;
 const LOCKET_BTN = 42;
-const LOCKET_STAGE_H = 104;
 
 const LOCKET_SLOTS = [
-  { key: 'laugh', emoji: '😂', x: 0.17, y: 30 },
-  { key: 'heart', emoji: '❤️', x: 0.5, y: 4 },
-  { key: 'plus', type: 'plus' as const, x: 0.83, y: 30 },
-  { key: 'sad', emoji: '🥹', x: 0.32, y: 58 },
-  { key: 'fire', emoji: '🔥', x: 0.68, y: 58 },
+  { key: 'laugh', emoji: '😂' },
+  { key: 'heart', emoji: '❤️' },
+  { key: 'sad', emoji: '🥹' },
+  { key: 'fire', emoji: '🔥' },
+  { key: 'plus', type: 'plus' as const },
 ] as const;
 
 interface LocketReactionClusterProps {
   moment: Moment;
   width?: number;
   onReact: (emoji: string) => void;
-  /** preview: parent controls visibility; home: always shows arc when rendered */
+  /** preview: parent controls visibility; home: always shows the row when rendered */
   variant?: 'home' | 'preview';
   onPicked?: () => void;
 }
@@ -52,9 +51,8 @@ export function LocketReactionCluster({
     setPickedThisSession(false);
   }, [moment.id]);
 
-  const stageW = width ?? ARC_W;
-  const scale = stageW / ARC_W;
-  const stageH = Math.round(LOCKET_STAGE_H * scale);
+  const rowW = width ?? ROW_W;
+  const scale = Math.min(1, rowW / ROW_W);
   const btnSize = Math.round(LOCKET_BTN * scale);
   const glyphSize = Math.round(20 * scale);
 
@@ -74,7 +72,11 @@ export function LocketReactionCluster({
   return (
     <View style={styles.wrap}>
       {showExtra && (
-        <View style={[styles.extraRow, { marginBottom: 8 }]}>
+        <View
+          style={[
+            styles.extraDrawer,
+            { backgroundColor: colors.surface, borderColor: colors.border },
+          ]}>
           {LOCKET_EXTRA_EMOJIS.map((emoji) => (
             <Pressable
               key={emoji}
@@ -96,10 +98,8 @@ export function LocketReactionCluster({
         </View>
       )}
 
-      <View style={[styles.stage, { width: stageW, height: stageH }]}>
+      <View style={[styles.row, { width: rowW }]}>
         {LOCKET_SLOTS.map((slot) => {
-          const left = slot.x * stageW - btnSize / 2;
-          const top = Math.round(slot.y * scale);
           const isPlus = 'type' in slot && slot.type === 'plus';
           const emoji = 'emoji' in slot ? slot.emoji : null;
           const active = emoji !== null && showActive(emoji);
@@ -111,8 +111,6 @@ export function LocketReactionCluster({
               style={[
                 styles.btn,
                 {
-                  left,
-                  top,
                   width: btnSize,
                   height: btnSize,
                   borderRadius: btnSize / 2,
@@ -122,7 +120,7 @@ export function LocketReactionCluster({
                 },
               ]}>
               {isPlus ? (
-                <Icon name="plus" size={glyphSize} color={colors.text} />
+                <Icon name={showExtra ? 'close' : 'plus'} size={glyphSize} color={colors.text} />
               ) : (
                 <Text style={[styles.glyph, { fontSize: glyphSize }]}>{emoji}</Text>
               )}
@@ -136,19 +134,26 @@ export function LocketReactionCluster({
 
 const styles = StyleSheet.create({
   wrap: { alignItems: 'center', width: '100%' },
-  stage: { position: 'relative' },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
   btn: {
-    position: 'absolute',
     alignItems: 'center',
     justifyContent: 'center',
   },
   glyph: { textAlign: 'center' },
-  extraRow: {
+  extraDrawer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'center',
     gap: 8,
-    paddingHorizontal: 8,
+    width: '100%',
+    marginBottom: 10,
+    padding: 12,
+    borderRadius: 18,
+    borderWidth: StyleSheet.hairlineWidth,
   },
   extraBtn: {
     alignItems: 'center',

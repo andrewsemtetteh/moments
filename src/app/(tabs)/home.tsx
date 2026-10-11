@@ -12,13 +12,14 @@ import { StreakDayTracker } from '@/components/home/StreakDayTracker';
 import { StreakEndCard } from '@/components/home/StreakEndCard';
 import { StreakRestoreBanner } from '@/components/home/StreakRestoreBanner';
 import { TodaysPromptCard } from '@/components/home/TodaysPromptCard';
+import { PlayPulseCard } from '@/components/games/PlayPulse';
 import { AppHeader } from '@/components/layout/AppHeader';
 import { ScreenContainer } from '@/components/layout/ScreenContainer';
 import { TabScreenScroll } from '@/components/layout/TabScreenScroll';
 import { MomentsStrip } from '@/components/moments/MomentsStrip';
 import { PartnerMomentHome } from '@/components/moments/PartnerMomentHome';
 import { Icon, type IconName } from '@/components/ui/Icon';
-import { Avatar, Card, SectionTitle } from '@/components/ui/primitives';
+import { Avatar, Card, SectionTitle, colorWithAlpha } from '@/components/ui/primitives';
 import { Radius, Spacing } from '@/constants/design-system';
 import {
     useCalendarEvents,
@@ -207,7 +208,7 @@ export default function HomeScreen() {
   const smartSuggestion = getSmartSuggestion(moods ?? {}, upcomingEvents.length, partner?.name);
 
   return (
-    <ScreenContainer padded={false} tabSwipe>
+    <ScreenContainer padded={false}>
       <AppHeader />
       <TabScreenScroll
         showsVerticalScrollIndicator={false}
@@ -219,8 +220,8 @@ export default function HomeScreen() {
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={styles.hero}>
-          <Text style={styles.greeting}>{greeting(user?.name)}</Text>
-          <Text style={styles.heroName}>{relationship?.relationship_name ?? 'Moments'}</Text>
+          <Text style={[styles.greeting, { color: colorWithAlpha(colors.onAccent, 0.85) }]}>{greeting(user?.name)}</Text>
+          <Text style={[styles.heroName, { color: colors.onAccent }]}>{relationship?.relationship_name ?? 'Moments'}</Text>
           <View style={styles.heroFooter}>
             <View style={styles.avatars}>
               <Avatar name={user?.name} imageUrl={user?.avatar_url} size={38} colorsOverride={['#ffffff', '#ffffff']} />
@@ -237,14 +238,16 @@ export default function HomeScreen() {
               <View
                 style={[
                   styles.heroStreak,
-                  streakStatus && isStreakVisuallyAtRisk(streakStatus) && styles.heroStreakAtRisk,
+                  { backgroundColor: colorWithAlpha(colors.onAccent, 0.2) },
+                  streakStatus &&
+                    isStreakVisuallyAtRisk(streakStatus) && { backgroundColor: colorWithAlpha(colors.error, 0.55) },
                 ]}>
                 <AnimatedStreakFire
-                  color="#fff"
+                  color={colors.onAccent}
                   size={18}
                   animate={false}
                 />
-                <Text style={styles.heroStreakText}>
+                <Text style={[styles.heroStreakText, { color: colors.onAccent }]}>
                   {streakStatus.current_streak > 0
                     ? `${streakStatus.current_streak} day${streakStatus.current_streak === 1 ? '' : 's'}`
                     : 'Start streak'}
@@ -284,6 +287,7 @@ export default function HomeScreen() {
         ) : null}
 
         {session && partner ? <ContinueChatCard /> : null}
+        {session && partner ? <PlayPulseCard /> : null}
 
         {upcomingEvents.length > 0 && (
           <View style={styles.stack}>
@@ -320,6 +324,7 @@ export default function HomeScreen() {
               {
                 backgroundColor: colors.surface,
                 borderColor: colors.border,
+                borderWidth: colors.boldBorder ? 2 : StyleSheet.hairlineWidth,
               },
             ]}>
             <View style={styles.suggestionIcon}>
@@ -398,8 +403,8 @@ const styles = StyleSheet.create({
     marginBottom: 0,
   },
   hero: { borderRadius: Radius.xl, padding: Spacing.xl - 4 },
-  greeting: { color: 'rgba(255,255,255,0.85)', fontSize: 14, fontWeight: '600' },
-  heroName: { color: '#fff', fontSize: 26, fontWeight: '800', marginTop: 2, letterSpacing: -0.5 },
+  greeting: { fontSize: 14, fontWeight: '600' },
+  heroName: { fontSize: 26, fontWeight: '800', marginTop: 2, letterSpacing: -0.5 },
   heroFooter: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -412,13 +417,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: 'rgba(255,255,255,0.2)',
     paddingHorizontal: 12,
     paddingVertical: 7,
     borderRadius: 999,
   },
-  heroStreakAtRisk: { backgroundColor: 'rgba(224,65,79,0.55)' },
-  heroStreakText: { color: '#fff', fontWeight: '700', fontSize: 13 },
+  heroStreakText: { fontWeight: '700', fontSize: 13 },
   eventRow: { flexDirection: 'row', alignItems: 'center', gap: 14 },
   eventDateBox: {
     width: 48,

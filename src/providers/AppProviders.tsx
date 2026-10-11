@@ -1,13 +1,20 @@
+import { useAuth, useUser } from '@clerk/expo';
 import { ReactNode, useEffect, useRef } from 'react';
-import { AppState, Platform } from 'react-native';
+import { Platform } from 'react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import NetInfo from '@react-native-community/netinfo';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import * as Font from 'expo-font';
 
+import {
+  WORDMARK_FONT_ASSET,
+  WORDMARK_FONT_FAMILY,
+  WORDMARK_FONT_FAMILY_ITALIC,
+  WORDMARK_FONT_ITALIC_ASSET,
+} from '@/constants/fonts';
 import { clearAuthSession, hydrateAuthSession } from '@/lib/auth-session';
-import { ensureValidSession, invalidateLocalSession } from '@/lib/auth-token';
 import { getRememberMe } from '@/lib/remember-me-storage';
-import { getSupabase } from '@/lib/supabase';
+import { getSavedTheme } from '@/lib/theme-storage';
 import { CallProvider } from '@/providers/CallProvider';
 import { useAuthStore, useUIStore } from '@/stores';
 
@@ -22,12 +29,25 @@ const queryClient = new QueryClient({
 });
 
 function AuthSync({ children }: { children: ReactNode }) {
+  const { isLoaded, isSignedIn, userId, signOut } = useAuth();
+  const { user } = useUser();
   const setLoading = useAuthStore((s) => s.setLoading);
   const setOffline = useUIStore((s) => s.setOffline);
-  const bootstrappedRef = useRef(false);
+  const checkedRememberMeRef = useRef(false);
 
   useEffect(() => {
     void Ionicons.loadFont();
+    void Font.loadAsync({
+      [WORDMARK_FONT_FAMILY]: WORDMARK_FONT_ASSET,
+      [WORDMARK_FONT_FAMILY_ITALIC]: WORDMARK_FONT_ITALIC_ASSET,
+    });
+  }, []);
+
+  useEffect(() => {
+    void (async () => {
+      const saved = await getSavedTheme();
+      if (saved) useUIStore.setState({ theme: saved });
+    })();
   }, []);
 
   useEffect(() => {
@@ -36,89 +56,61 @@ function AuthSync({ children }: { children: ReactNode }) {
       return;
     }
 
-    const supabase = getSupabase();
-    supabase.auth.startAutoRefresh();
-
-    const appStateSub = AppState.addEventListener('change', (state) => {
-      if (state === 'active') {
-        supabase.auth.startAutoRefresh();
-        void ensureValidSession().catch(() => undefined);
-      } else {
-        void supabase.auth.stopAutoRefresh();
-      }
-    });
-
     const unsubscribeNet = NetInfo.addEventListener((state) => {
       setOffline(!state.isConnected);
     });
 
+    return () => unsubscribeNet();
+  }, [setOffline, setLoading]);
+
+  // Failsafe: if Clerk never reports loaded (offline, slow network, Expo Go),
+  // stop waiting after a while and treat the user as signed out rather than
+  // leaving the splash up forever. If Clerk loads later, the effect below still runs.
+  useEffect(() => {
+    if (Platform.OS === 'web' || isLoaded) return;
+    const timer = setTimeout(() => setLoading(false), 8000);
+    return () => clearTimeout(timer);
+  }, [isLoaded, setLoading]);
+
+  useEffect(() => {
+    if (Platform.OS === 'web' || !isLoaded) return;
+
     void (async () => {
       try {
-        const rememberMe = await getRememberMe();
-        if (!rememberMe) {
-          queryClient.clear();
-          await invalidateLocalSession();
-          return;
+        // "Remember me" opt-out: sign out a session Clerk restored from the
+        // keychain if the user asked not to be kept signed in. Only checked once.
+        if (!checkedRememberMeRef.current) {
+          checkedRememberMeRef.current = true;
+          if (isSignedIn && !(await getRememberMe())) {
+            queryClient.clear();
+            await clearAuthSession();
+            await signOut().catch(() => undefined);
+            return;
+          }
         }
 
-        const activeSession = await ensureValidSession();
-        queryClient.clear();
-        if (activeSession?.user) {
-          await hydrateAuthSession(activeSession);
+        if (isSignedIn && userId) {
+          const existingUser = useAuthStore.getState().user;
+          // Login/signup already hydrated this user — share/skip, don't wipe caches.
+          if (existingUser?.id === userId && useAuthStore.getState().session) {
+            return;
+          }
+          await hydrateAuthSession({
+            id: userId,
+            email: user?.primaryEmailAddress?.emailAddress ?? null,
+            name: user?.fullName ?? null,
+          });
         } else {
+          queryClient.clear();
           await clearAuthSession();
         }
       } catch {
-        queryClient.clear();
-        await invalidateLocalSession();
+        await clearAuthSession();
       } finally {
-        bootstrappedRef.current = true;
         setLoading(false);
       }
     })();
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'INITIAL_SESSION' || event === 'TOKEN_REFRESHED') return;
-
-      // Never await inside onAuthStateChange — it blocks Supabase's auth lock and breaks refresh.
-      queueMicrotask(() => {
-        void (async () => {
-          if (!bootstrappedRef.current && event === 'SIGNED_IN') return;
-
-          try {
-            if (session?.user) {
-              const existingUser = useAuthStore.getState().user;
-              // Login/signup already hydrated this user — share/skip, don't wipe caches.
-              if (event === 'SIGNED_IN' && existingUser?.id === session.user.id) {
-                setLoading(false);
-                return;
-              }
-              // Do not clear the query cache on SIGNED_IN — that races login hydrate.
-              await hydrateAuthSession(session, false, {
-                trustSession: event === 'SIGNED_IN',
-              });
-            } else {
-              queryClient.clear();
-              await clearAuthSession();
-            }
-          } catch {
-            await invalidateLocalSession();
-          } finally {
-            setLoading(false);
-          }
-        })();
-      });
-    });
-
-    return () => {
-      subscription.unsubscribe();
-      unsubscribeNet();
-      appStateSub.remove();
-      void supabase.auth.stopAutoRefresh();
-    };
-  }, [setLoading, setOffline]);
+  }, [isLoaded, isSignedIn, userId, user, signOut, setLoading]);
 
   return <>{children}</>;
 }

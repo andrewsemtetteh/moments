@@ -1,5 +1,4 @@
-import type { Href } from 'expo-router';
-import type { useRouter } from 'expo-router';
+import type { Href , useRouter } from 'expo-router';
 
 import type { OnboardingFlowStepId } from '@/constants/onboarding-flow';
 import {
@@ -12,6 +11,8 @@ export function getOnboardingBackHref(
   params?: ParsedOnboardingRelationshipParams,
 ): Href {
   switch (stepId) {
+    case 'signup-email':
+      return '/(auth)/get-started';
     case 'profile-name':
       return '/(auth)/get-started';
     case 'profile-setup':

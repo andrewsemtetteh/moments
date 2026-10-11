@@ -51,7 +51,7 @@ export function PromptHistoryModal({ visible, onClose }: Props) {
   };
 
   return (
-    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={close}>
+    <Modal visible={visible} animationType="slide" presentationStyle="fullScreen" onRequestClose={close}>
       <View style={[styles.root, { paddingTop: insets.top, backgroundColor: colors.background }]}>
         <View style={styles.header}>
           <Pressable
@@ -59,7 +59,7 @@ export function PromptHistoryModal({ visible, onClose }: Props) {
             hitSlop={12}
             style={styles.headerBtn}
             accessibilityLabel={selected ? 'Back' : 'Close'}>
-            <Icon name={selected ? 'chevronLeft' : 'close'} size={24} color={colors.text} />
+            <Icon name={selected ? 'chevronLeft' : 'close'} size={26} color={colors.text} />
           </Pressable>
           <Text style={[styles.title, { color: colors.text }]} numberOfLines={1}>
             {selected ? format(parseISO(selected.challenge_date), 'MMM d, yyyy') : 'Your history'}
@@ -183,10 +183,11 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingBottom: 12,
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 18,
   },
-  headerBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  headerBtn: { width: 40, alignItems: 'center', justifyContent: 'center' },
   title: {
     flex: 1,
     textAlign: 'center',

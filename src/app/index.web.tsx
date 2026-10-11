@@ -1,100 +1,180 @@
-import { Platform, StyleSheet } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useRouter } from 'expo-router';
+import { Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { AnimatedIcon } from '@/components/animated-icon.web';
-import { ExternalLink } from '@/components/external-link';
-import { HintRow } from '@/components/hint-row';
+import { FeatureCard } from '@/components/feature-card';
+import { StoreBadges } from '@/components/store-badges';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
+import { WebFooter } from '@/components/web-footer';
+import { MaxContentWidth, Radius, Spacing, TextContentWidth, WebNavClearance } from '@/constants/theme';
+import { useTheme } from '@/hooks/use-theme';
+import { useWebViewportWidth } from '@/hooks/use-web-viewport-width';
 
 export default function HomeScreen() {
+  const theme = useTheme();
+  const router = useRouter();
+  const width = useWebViewportWidth();
+  const isNarrow = width < 760;
+
   return (
-    <ThemedView style={styles.container}>
-      <SafeAreaView style={styles.safeArea}>
-        <ThemedView style={styles.heroSection}>
-          <AnimatedIcon />
-          <ThemedText type="title" style={styles.title}>
-            Moments
-          </ThemedText>
-        </ThemedView>
+    <ThemedView style={styles.page}>
+      <LinearGradient colors={theme.gradient} style={StyleSheet.absoluteFill} />
+      <View
+        pointerEvents="none"
+        style={[styles.blob, { top: -80, right: -60, backgroundColor: theme.spark }]}
+      />
+      <View
+        pointerEvents="none"
+        style={[styles.blob, { bottom: -100, left: -80, backgroundColor: theme.accentSecondary }]}
+      />
 
-        <ThemedText type="code" style={styles.code}>
-          your private space for two
-        </ThemedText>
-
-        <ThemedView type="backgroundElement" style={styles.stepContainer}>
-          <HintRow
-            title="Share moments"
-            hint="Capture photos, mood, and memories together — just the two of you"
-          />
-          <HintRow
-            title="Stay connected"
-            hint="Real-time chat, shared calendar, and activities when you need ideas"
-          />
-          <HintRow
-            title="Get the app"
-            hint={
-              <ThemedText type="small" themeColor="textSecondary">
-                Download on{' '}
-                <ExternalLink href="https://apps.apple.com">
-                  <ThemedText type="linkPrimary">App Store</ThemedText>
-                </ExternalLink>
-                {' · '}
-                <ExternalLink href="https://play.google.com/store">
-                  <ThemedText type="linkPrimary">Google Play</ThemedText>
-                </ExternalLink>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}>
+        <View style={styles.shell}>
+          <View style={styles.main}>
+            <View style={styles.hero}>
+              <AnimatedIcon />
+              <ThemedText type="eyebrow" themeColor="accent" style={styles.eyebrow}>
+                Private, just the two of you
               </ThemedText>
-            }
-          />
-        </ThemedView>
+              <ThemedText
+                type="display"
+                style={[styles.headline, isNarrow && styles.headlineNarrow]}>
+                A relationship space built for two
+              </ThemedText>
+              <ThemedText type="body" themeColor="textSecondary" style={styles.subhead}>
+                Moments keeps your photos, chats, plans, and check-ins in one calm place made
+                only for the two of you. No feed, no followers, no strangers.
+              </ThemedText>
+              <StoreBadges style={styles.badges} />
+            </View>
 
-        {Platform.OS === 'web' && (
-          <ThemedText type="small" themeColor="textSecondary" style={styles.footer}>
-            Not social media. A relationship system built for two people.
-          </ThemedText>
-        )}
-      </SafeAreaView>
+            <View style={[styles.previewGrid, isNarrow && styles.previewGridNarrow]}>
+              <FeatureCard
+                icon="camera"
+                tint="accent"
+                title="Share moments"
+                body="Capture photos and mood together, just the two of you, saved to a private wall."
+              />
+              <FeatureCard
+                icon="messages"
+                tint="accentSecondary"
+                title="Stay connected"
+                body="One private chat that syncs in real-time, wherever either of you is."
+              />
+              <FeatureCard
+                icon="calendar"
+                tint="spark"
+                title="Plan together"
+                body="A shared calendar, date ideas, and reminders that both of you see."
+              />
+            </View>
+
+            <Pressable
+              onPress={() => router.push('/explore')}
+              style={({ pressed }) => [styles.moreLink, pressed && styles.pressed]}>
+              <ThemedText type="linkPrimary" themeColor="accent" style={styles.moreLinkText}>
+                See everything Moments does
+              </ThemedText>
+            </Pressable>
+
+            {Platform.OS === 'web' && (
+              <ThemedText type="small" themeColor="textTertiary" style={styles.tagline}>
+                Not social media. A relationship system built for two people.
+              </ThemedText>
+            )}
+          </View>
+
+          {Platform.OS === 'web' && <WebFooter />}
+        </View>
+      </ScrollView>
     </ThemedView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  page: {
     flex: 1,
-    justifyContent: 'center',
-    flexDirection: 'row',
   },
-  safeArea: {
+  blob: {
+    position: 'absolute',
+    width: 420,
+    height: 420,
+    borderRadius: 420,
+    opacity: 0.14,
+  },
+  scroll: {
     flex: 1,
-    paddingHorizontal: Spacing.four,
+  },
+  scrollContent: {
+    flexGrow: 1,
     alignItems: 'center',
-    gap: Spacing.three,
-    paddingBottom: BottomTabInset + Spacing.three,
+    paddingBottom: Spacing.six,
+  },
+  shell: {
+    width: '100%',
     maxWidth: MaxContentWidth,
-  },
-  heroSection: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    flex: 1,
     paddingHorizontal: Spacing.four,
-    gap: Spacing.four,
+    paddingTop: WebNavClearance,
+    alignItems: 'center',
   },
-  title: {
+  main: {
+    width: '100%',
+    alignItems: 'center',
+  },
+  hero: {
+    alignItems: 'center',
+    gap: Spacing.two,
+    maxWidth: TextContentWidth,
+    paddingBottom: Spacing.six,
+  },
+  eyebrow: {
+    marginTop: Spacing.three,
+  },
+  headline: {
     textAlign: 'center',
   },
-  code: {
-    textTransform: 'uppercase',
+  headlineNarrow: {
+    fontSize: 36,
+    lineHeight: 40,
+    letterSpacing: -0.6,
   },
-  stepContainer: {
+  subhead: {
+    textAlign: 'center',
+    marginTop: Spacing.one,
+  },
+  badges: {
+    marginTop: Spacing.four,
+  },
+  previewGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: Spacing.three,
-    alignSelf: 'stretch',
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.four,
-    borderRadius: Spacing.four,
+    justifyContent: 'center',
+    width: '100%',
   },
-  footer: {
+  previewGridNarrow: {
+    flexDirection: 'column',
+  },
+  moreLink: {
+    marginTop: Spacing.five,
+    paddingVertical: Spacing.two,
+    paddingHorizontal: Spacing.four,
+    borderRadius: Radius.pill,
+  },
+  pressed: {
+    opacity: 0.7,
+  },
+  moreLinkText: {
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  tagline: {
     textAlign: 'center',
-    marginTop: Spacing.two,
+    marginTop: Spacing.four,
   },
 });
