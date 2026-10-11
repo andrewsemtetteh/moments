@@ -427,7 +427,7 @@ const styles = StyleSheet.create({
   ringLevel: { fontSize: 30, fontWeight: '900', lineHeight: 34 },
   heroCopy: { flex: 1, gap: 2 },
   heroEyebrow: { fontSize: 10, fontWeight: '900', letterSpacing: 1.3 },
-  heroTitle: { fontSize: 24, fontWeight: '900', letterSpacing: -0.4 },
+  heroTitle: { fontSize: 24, fontWeight: '800', letterSpacing: -0.4 },
   heroXp: { fontSize: 12, fontWeight: '700', marginTop: 2 },
   avatars: { flexDirection: 'row', alignItems: 'center' },
   avatarOverlap: { marginLeft: -12 },
@@ -437,7 +437,7 @@ const styles = StyleSheet.create({
 
   section: { marginTop: 22, gap: 12 },
   sectionHead: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  sectionTitle: { fontSize: 21, fontWeight: '900', letterSpacing: -0.3 },
+  sectionTitle: { fontSize: 20, fontWeight: '800', letterSpacing: -0.3 },
   sectionSub: { fontSize: 13, fontWeight: '600', marginTop: 2 },
   seeAll: { fontSize: 14, fontWeight: '800' },
   presencePill: {

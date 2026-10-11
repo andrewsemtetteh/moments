@@ -208,9 +208,9 @@ const styles = StyleSheet.create({
   centerRow: { flexDirection: 'row', alignItems: 'center', gap: 8, maxWidth: '100%' },
   centerText: { flexShrink: 1, minWidth: 0 },
   // Was 12px / 9px — below comfortable reading size, especially the 9px status line.
-  title: { fontSize: 15, fontWeight: '700', letterSpacing: -0.2, flexShrink: 1, lineHeight: 19 },
+  title: { fontSize: 17, fontWeight: '700', letterSpacing: -0.2, flexShrink: 1, lineHeight: 21 },
   meta: { fontSize: 12, fontWeight: '600', flexShrink: 1, lineHeight: 15 },
-  appName: { fontSize: 17, fontWeight: '800', letterSpacing: -0.4 },
+  appName: { fontSize: 17, fontWeight: '700', letterSpacing: -0.2 },
   iconSlot: {
     width: 44,
     height: 44,

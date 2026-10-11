@@ -1293,7 +1293,7 @@ const styles = StyleSheet.create({
   // Tight to the avatar — the 44pt tap area already gives the icon breathing room.
   headerBackSlot: { marginRight: -6 },
   headerText: { flex: 1, minWidth: 0 },
-  headerName: { fontSize: 16, fontWeight: '700' },
+  headerName: { fontSize: 17, fontWeight: '700', letterSpacing: -0.2 },
 
   pinnedBar: {
     flexDirection: 'row',

@@ -5,7 +5,6 @@ import {
   getDate,
   getDaysInMonth,
   isSameDay,
-  isSameMonth,
   isToday,
   isTomorrow,
   isYesterday,
@@ -163,22 +162,6 @@ export default function CalendarScreen() {
         .slice(0, COMING_UP_LIMIT),
     [upcomingEvents, selectedDate, openedAt],
   );
-
-  const monthSummary = useMemo(() => {
-    const now = new Date(openedAt);
-    const monthName = format(currentMonth, 'MMMM');
-    const inMonth = planEvents.filter((e) => isSameMonth(new Date(e.date_time), currentMonth));
-    const plural = (n: number) => `${n} plan${n === 1 ? '' : 's'}`;
-    // A month that's already over gets a recap; this month or later counts
-    // only what's still ahead.
-    if (startOfMonth(currentMonth) < startOfMonth(now)) {
-      return inMonth.length ? `${plural(inMonth.length)} in ${monthName}` : `No plans in ${monthName}`;
-    }
-    const ahead = inMonth.filter((e) => new Date(e.date_time).getTime() >= now.getTime()).length;
-    return ahead
-      ? `${plural(ahead)} to look forward to in ${monthName}`
-      : `Nothing planned in ${monthName} yet`;
-  }, [planEvents, currentMonth, openedAt]);
 
   const activeList = useMemo(
     () => lists.find((l) => l.id === activeListId) ?? null,
@@ -363,7 +346,7 @@ export default function CalendarScreen() {
     <View style={[styles.flex, { backgroundColor: colors.background }]}>
       {/* Plan slides in from the left (its icon sits top-left on Home), so it
           closes toward the left: chevron on the right, or swipe left. */}
-      <ScreenHeader title="Plan" subtitle={monthSummary} onClose={closePlan} />
+      <ScreenHeader title="Plan" onClose={closePlan} />
 
       <ScrollView
         showsVerticalScrollIndicator={false}
@@ -614,11 +597,11 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: 12,
   },
-  dayTitle: { fontSize: 24, fontWeight: '800', letterSpacing: -0.5 },
+  dayTitle: { fontSize: 20, fontWeight: '800', letterSpacing: -0.3 },
   daySub: { fontSize: 13, fontWeight: '600', marginTop: 2 },
   countPill: { paddingHorizontal: 12, height: 28, borderRadius: 14, justifyContent: 'center' },
   countText: { fontSize: 13, fontWeight: '700' },
-  sectionLabel: { fontSize: 12, fontWeight: '800', letterSpacing: 1.2 },
+  sectionLabel: { fontSize: 13, fontWeight: '700', letterSpacing: 0.6 },
   upcomingCard: { borderRadius: Radius.lg, overflow: 'hidden' },
   upcomingRow: {
     flexDirection: 'row',

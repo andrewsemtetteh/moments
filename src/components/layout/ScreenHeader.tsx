@@ -15,14 +15,11 @@ import { useTheme } from '@/hooks/useTheme';
  */
 export function ScreenHeader({
   title,
-  subtitle,
   onBack,
   onClose,
   right,
 }: {
   title: string;
-  /** Short status line under the title (e.g. "3 unread"). */
-  subtitle?: string | null;
   /** Back chevron on the left (screens that slide in from the right). */
   onBack?: () => void;
   /** Close chevron on the right (screens that slide in from the left). */
@@ -43,11 +40,6 @@ export function ScreenHeader({
             accessibilityRole="header">
             {title}
           </Text>
-          {subtitle ? (
-            <Text style={[styles.subtitle, { color: colors.textSecondary }]} numberOfLines={1}>
-              {subtitle}
-            </Text>
-          ) : null}
         </View>
         {right ? <View style={styles.rightEdge}>{right}</View> : null}
       </View>
@@ -68,11 +60,6 @@ export function ScreenHeader({
           accessibilityRole="header">
           {title}
         </Text>
-        {subtitle ? (
-          <Text style={[styles.subtitle, { color: colors.textSecondary }]} numberOfLines={1}>
-            {subtitle}
-          </Text>
-        ) : null}
       </View>
       <View style={[styles.slot, styles.rightEdge]}>
         {onClose ? (
@@ -101,8 +88,8 @@ const styles = StyleSheet.create({
   leftEdge: { marginLeft: -10 },
   rightEdge: { marginRight: -10 },
   centerText: { flex: 1, minWidth: 0, alignItems: 'center' },
-  title: { fontSize: 17, fontWeight: '700', letterSpacing: -0.2, textAlign: 'center' },
+  // Same size as the tab-root title ("You") so every page title matches.
+  title: { fontSize: 24, fontWeight: '800', letterSpacing: -0.5, textAlign: 'center' },
   largeText: { flex: 1, minWidth: 0 },
   largeTitle: { fontSize: 24, fontWeight: '800', letterSpacing: -0.5 },
-  subtitle: { fontSize: 12, fontWeight: '600', marginTop: 1 },
 });

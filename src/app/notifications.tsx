@@ -142,18 +142,7 @@ function NotificationsScreenNative() {
     <View style={[styles.root, { backgroundColor: colors.background }]}>
         <View style={styles.flex}>
           {/* Notifications enters from the right, so its back button points left. */}
-          <ScreenHeader
-            title="Notifications"
-            // Hidden until loaded, so it never claims "all caught up" before it knows.
-            subtitle={
-              !isLoading && !isError
-                ? unreadCount > 0
-                  ? `${unreadCount} unread`
-                  : "You're all caught up"
-                : null
-            }
-            onBack={goBack}
-          />
+          <ScreenHeader title="Notifications" onBack={goBack} />
 
           <View style={styles.filterRow}>
             <FilterPill
@@ -486,8 +475,10 @@ const styles = StyleSheet.create({
   listContent: { paddingHorizontal: 20, paddingTop: 4 },
   listContentEmpty: { flexGrow: 1, justifyContent: 'center' },
   sectionTitle: {
-    fontSize: 15,
-    fontWeight: '600',
+    fontSize: 13,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
     marginTop: 14,
     marginBottom: 2,
   },
