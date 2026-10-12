@@ -7,7 +7,7 @@ const WIDTH = 112;
 const HEIGHT = 58;
 
 /**
- * Interlocking rings between the two avatars — soft dashed bridges,
+ * Interlocking rings between the two avatars, joined to them by wavy bridges,
  * with a stroked heart sitting in the overlap (no chip behind it).
  * Rendered on top of the theme's hero gradient, so `ringColor` should be
  * whatever reads on that gradient (i.e. `colors.onAccent`), not a fixed white.
@@ -24,20 +24,18 @@ export function ProfileCoupleLink({ accent, ringColor = '#FFFFFF' }: { accent: s
           </LinearGradient>
         </Defs>
 
-        {/* Soft dashed bridges from each avatar into the rings */}
+        {/* Wavy bridges from each avatar into the rings */}
         <Path
-          d="M 2 29 C 14 29, 22 29, 30 29"
+          d="M 0 29 Q 3.75 24 7.5 29 T 15 29 T 22.5 29 T 30 29"
           stroke="url(#ringFade)"
-          strokeWidth={1.5}
-          strokeDasharray="2.5 3.5"
+          strokeWidth={1.6}
           strokeLinecap="round"
           fill="none"
         />
         <Path
-          d="M 110 29 C 98 29, 90 29, 82 29"
+          d="M 112 29 Q 108.25 24 104.5 29 T 97 29 T 89.5 29 T 82 29"
           stroke="url(#ringFade)"
-          strokeWidth={1.5}
-          strokeDasharray="2.5 3.5"
+          strokeWidth={1.6}
           strokeLinecap="round"
           fill="none"
         />

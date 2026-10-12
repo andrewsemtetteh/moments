@@ -96,7 +96,7 @@ export function OurMapView({
         </View>
         <Text style={[styles.emptyTitle, { color: chrome.text }]}>No pins yet</Text>
         <Text style={[styles.emptySub, { color: chrome.textSecondary }]}>
-          Turn on “Add location” when you send a moment, and it lands here — the café, a trip, home.
+          Turn on “Add location” when you send a moment, and it lands here: the café, a trip, home.
         </Text>
       </View>
     );

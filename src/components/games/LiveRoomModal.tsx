@@ -68,7 +68,7 @@ export function LiveRoomModal() {
 
   const leave = () => {
     if (isHost && inGame) {
-      Alert.alert('End the game?', 'You’re hosting — leaving closes the room for both of you.', [
+      Alert.alert('End the game?', 'You’re hosting, so leaving closes the room for both of you.', [
         { text: 'Keep playing', style: 'cancel' },
         { text: 'End & leave', style: 'destructive', onPress: () => void gameRoom.leaveRoom() },
       ]);
@@ -170,7 +170,7 @@ export function LiveRoomModal() {
   );
 }
 
-function RoundView({ state }: { state: RoomState }) {
+export function RoundView({ state }: { state: RoomState }) {
   const tone = useGameTone(state.game);
   switch (state.game) {
     case 'wouldYouRather':
@@ -198,9 +198,9 @@ function Loading({ state }: { state: RoomState }) {
         {def.emoji}
       </Animated.Text>
       <ActivityIndicator color={PLAY_TONES[def.tone].accent} />
-      <Text style={[styles.centerTitle, { color: colors.text }]}>Writing your rounds…</Text>
+      <Text style={[styles.centerTitle, { color: colors.text }]}>Setting up your rounds…</Text>
       <Text style={[styles.centerText, { color: colors.textSecondary }]}>
-        AI is tuning {def.title} to a {state.vibe} vibe for you two.
+        Getting {def.title} ready with a {state.vibe} vibe for you two.
       </Text>
     </View>
   );
@@ -212,7 +212,7 @@ function Loading({ state }: { state: RoomState }) {
 
 function Lobby({ state, isHost }: { state: RoomState; isHost: boolean }) {
   const { colors } = useTheme();
-  const { partner } = useRoomPlayers();
+  const { meId, partner } = useRoomPlayers();
   const partnerInRoom = useGameRoomStore((s) => s.partnerInRoom);
   const def = getGameDefinition(state.game);
   const tone = PLAY_TONES[def.tone];
@@ -236,8 +236,9 @@ function Lobby({ state, isHost }: { state: RoomState; isHost: boolean }) {
       ) : null}
 
       <RoundEnter>
-        <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>
-          {isHost ? 'PICK A GAME' : `${hostName.toUpperCase()} IS PICKING`}
+        <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>PICK A GAME TOGETHER</Text>
+        <Text style={[styles.lobbyHint, { color: colors.textTertiary }]}>
+          Tap to suggest. When you both pick the same one, it’s set.
         </Text>
       </RoundEnter>
 
@@ -245,20 +246,22 @@ function Lobby({ state, isHost }: { state: RoomState; isHost: boolean }) {
         {LIVE_GAMES.map((game, i) => {
           const t = PLAY_TONES[game.tone];
           const selected = game.kind === state.game;
+          const iWant = state.suggestions?.[meId] === game.kind;
+          const theyWant = state.suggestions?.[partner.id] === game.kind;
+          const vote = theyWant ? `${firstName(partner.name).toUpperCase()} WANTS` : iWant ? 'YOU WANT' : null;
           return (
             <RoundEnter key={game.kind} delay={i * 40}>
               <Pressable
-                disabled={!isHost}
-                onPress={() => configure({ game: game.kind })}
+                onPress={() => gameRoom.dispatch({ t: 'suggest', game: game.kind })}
                 accessibilityRole="button"
                 accessibilityState={{ selected }}
+                accessibilityLabel={`${game.title}${vote ? `, ${vote.toLowerCase()}` : ''}`}
                 style={({ pressed }) => [
                   styles.gameCard,
                   {
                     backgroundColor: selected ? t.accent : colors.surfaceElevated,
-                    borderColor: selected ? shade(t.accent, -0.3) : colors.border,
+                    borderColor: selected ? shade(t.accent, -0.3) : theyWant || iWant ? t.accent : colors.border,
                     borderBottomWidth: pressed ? 2 : 5,
-                    opacity: !isHost && !selected ? 0.55 : 1,
                   },
                 ]}>
                 <Text style={styles.gameEmoji}>{game.emoji}</Text>
@@ -270,7 +273,7 @@ function Lobby({ state, isHost }: { state: RoomState; isHost: boolean }) {
                 </View>
                 <View style={[styles.modeChip, { backgroundColor: selected ? 'rgba(255,255,255,0.22)' : t.soft }]}>
                   <Text style={[styles.modeChipText, { color: selected ? '#fff' : t.accent }]}>
-                    {game.team ? 'TEAM' : 'VERSUS'}
+                    {vote ?? (game.team ? 'TEAM' : 'VERSUS')}
                   </Text>
                 </View>
               </Pressable>
@@ -479,6 +482,7 @@ const styles = StyleSheet.create({
   reactionDock: { paddingTop: 6, alignItems: 'center' },
   lobby: { gap: 14 },
   sectionLabel: { fontSize: 11, fontWeight: '900', letterSpacing: 1.4, marginTop: 4 },
+  lobbyHint: { fontSize: 13, fontWeight: '600', marginTop: 4 },
   gameList: { gap: 10 },
   gameCard: {
     flexDirection: 'row',

@@ -90,7 +90,7 @@ export function ChatAttachmentCard({ attachment, isSelf }: Props) {
             <Text style={[styles.avatarText, { color: badgeIconColor }]}>{initial}</Text>
           </View>
           <View style={styles.metaText}>
-            <Text style={[styles.contactKicker, { color: subColor }]}>CONTACT</Text>
+            <Text style={[styles.contactKicker, { color: subColor }]}>Contact</Text>
             <Text style={[styles.contactName, { color: textColor }]} numberOfLines={1}>
               {attachment.name}
             </Text>

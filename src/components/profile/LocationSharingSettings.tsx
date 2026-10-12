@@ -91,11 +91,11 @@ export function LocationSharingSettings() {
     <View>
       <View style={styles.row}>
         <View style={styles.left}>
-          <View style={styles.iconWrap}>
-            <Icon name="location" size={20} color={colors.textSecondary} />
+          <View style={[styles.iconWrap, { backgroundColor: colors.boldBorder ? colors.backgroundElevated : colors.surfaceElevated }]}>
+            <Icon name="location" size={20} color={colors.text} />
           </View>
           <View style={styles.copy}>
-            <Text style={[styles.title, { color: colors.text }]}>Location sharing</Text>
+            <Text style={[styles.title, { color: colors.text }]}>Share my location</Text>
             <Text style={[styles.sub, { color: colors.textSecondary }]} numberOfLines={2}>
               {switchValue
                 ? "You can see each other's location"
@@ -107,8 +107,8 @@ export function LocationSharingSettings() {
           value={switchValue}
           onValueChange={(value) => void onToggle(value)}
           disabled={locating}
-          trackColor={{ false: colors.border, true: colors.accentSoft }}
-          thumbColor={switchValue ? colors.accent : colors.surfaceElevated}
+          trackColor={{ false: colors.border, true: colors.accent }}
+          thumbColor="#FFFFFF"
         />
       </View>
 
@@ -187,25 +187,27 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
     gap: 12,
   },
   left: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 14,
+    alignItems: 'center',
+    gap: 12,
     flex: 1,
     minWidth: 0,
   },
   iconWrap: {
-    height: 20,
-    marginTop: 1,
+    width: 34,
+    height: 34,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
   },
   copy: { flex: 1, minWidth: 0 },
-  title: { fontSize: 15, fontWeight: '600', lineHeight: 20 },
-  sub: { fontSize: 12, marginTop: 2, lineHeight: 16 },
+  title: { fontSize: 16, fontWeight: '600', lineHeight: 21 },
+  sub: { fontSize: 13, marginTop: 2, lineHeight: 17 },
   previewBlock: { gap: 10, paddingHorizontal: 16, paddingBottom: 16 },
   loadingBox: {
     height: 140,

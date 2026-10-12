@@ -255,6 +255,8 @@ function pushTitle(type: string): string {
       return "Today's question";
     case 'game_invite':
       return 'Game time';
+    case 'game_turn':
+      return 'Your move';
     default:
       return 'Moments';
   }

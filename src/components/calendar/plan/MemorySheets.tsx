@@ -128,6 +128,7 @@ export function MemoryEditorSheet({
     <FullScreenPage
       visible={visible}
       title={initial?.title ? 'Edit memory' : 'New memory'}
+      avoidKeyboard={false}
       onBack={onClose}
       right={
         saving ? (
@@ -144,7 +145,8 @@ export function MemoryEditorSheet({
       <ScrollView
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
-        keyboardDismissMode="on-drag"
+        keyboardDismissMode="none"
+        automaticallyAdjustKeyboardInsets
         contentContainerStyle={[form.formScroll, form.formFill]}>
         <TextInput
           value={draft.title}
@@ -283,7 +285,7 @@ export function MemoryEditorSheet({
       </ScrollView>
 
       {/* Pinned under the form, always in reach — doesn't scroll away. */}
-      <PageFooter>
+      <PageFooter hideWhileTyping>
         <PrimaryButton
           label={initial?.title ? 'Save changes' : 'Save memory'}
           onPress={save}
@@ -361,7 +363,7 @@ export function MemoryDetailSheet({
           <View style={styles.detailTop}>
             <View style={[styles.tag, { backgroundColor: colors.accentSoft }]}>
               <Icon name={type.icon} size={13} color={colors.accent} />
-              <Text style={[styles.tagText, { color: colors.accent }]}>{type.label.toUpperCase()}</Text>
+              <Text style={[styles.tagText, { color: colors.accent }]}>{type.label}</Text>
             </View>
             <Pressable onPress={openMenu} hitSlop={8} accessibilityLabel="Memory options" style={styles.moreBtn}>
               <Icon name="more" size={26} color={colors.text} />
@@ -503,7 +505,7 @@ export function HowWasItSheet({
 
         {photos.length > 0 ? (
           <>
-            <Text style={[styles.label, { color: colors.textSecondary }]}>FROM THAT DAY’S MOMENTS</Text>
+            <Text style={[styles.label, { color: colors.textSecondary }]}>From that day’s moments</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.photoRow}>
               {photos.map((m) => {
                 const on = picked.includes(m.id);
@@ -577,7 +579,7 @@ const styles = StyleSheet.create({
   groupValue: { fontSize: 15, fontWeight: '700' },
   placeInput: { flex: 1, fontSize: 15, fontWeight: '600', padding: 0 },
   datePicker: { paddingHorizontal: 8, paddingBottom: 8 },
-  label: { fontSize: 13, fontWeight: '700', letterSpacing: 0.6 },
+  label: { fontSize: 14, fontWeight: '800' },
   photoRow: { gap: 10 },
   // Bigger tiles on New memory so photos are easy to see and tap.
   addTile: {
@@ -628,7 +630,7 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     borderRadius: 999,
   },
-  tagText: { fontSize: 12, fontWeight: '800', letterSpacing: 0.4 },
+  tagText: { fontSize: 13, fontWeight: '800' },
   moreBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', marginRight: -10 },
   hero: { height: 300, borderRadius: 28 },
   dots: { flexDirection: 'row', justifyContent: 'center', gap: 6, marginTop: 10 },

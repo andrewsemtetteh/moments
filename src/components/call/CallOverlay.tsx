@@ -126,7 +126,7 @@ export function CallOverlay() {
 
         {!isWebRTCAvailable() && phase !== 'incoming' && (
           <View style={styles.banner}>
-            <Text style={styles.bannerText}>Calls need a dev build — WebRTC isn&apos;t available in Expo Go.</Text>
+            <Text style={styles.bannerText}>Calls need a dev build. WebRTC isn&apos;t available in Expo Go.</Text>
           </View>
         )}
       </View>

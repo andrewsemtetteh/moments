@@ -29,6 +29,7 @@ export function FullScreenPage({
   title,
   onBack,
   right,
+  avoidKeyboard = true,
   children,
 }: {
   visible: boolean;
@@ -37,6 +38,12 @@ export function FullScreenPage({
   onBack: () => void;
   /** Header action on the right (e.g. a ✓ save button). */
   right?: ReactNode;
+  /**
+   * Shrink the page above the keyboard (iOS). Turn off for long forms whose
+   * ScrollView uses automaticallyAdjustKeyboardInsets instead, which also
+   * scrolls the focused field into view.
+   */
+  avoidKeyboard?: boolean;
   children: ReactNode;
 }) {
   const { colors } = useTheme();
@@ -87,7 +94,7 @@ export function FullScreenPage({
             <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
               <View style={styles.flex}>
                 <ScreenHeader title={title} onBack={onBack} right={right} />
-                <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+                <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' && avoidKeyboard ? 'padding' : undefined}>
                   {children}
                 </KeyboardAvoidingView>
               </View>
@@ -121,10 +128,18 @@ const FOOTER_GAP = 12;
  * above and below the button. Normally that sits above the home indicator;
  * while typing the inset is dropped so the gap to the keyboard matches.
  */
-export function PageFooter({ children }: { children: ReactNode }) {
+export function PageFooter({
+  hideWhileTyping = false,
+  children,
+}: {
+  /** Step aside while the keyboard is up so the form gets the room (the header ✓ still saves). */
+  hideWhileTyping?: boolean;
+  children: ReactNode;
+}) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const keyboardOpen = useKeyboardOpen();
+  if (hideWhileTyping && keyboardOpen) return null;
   return (
     <View
       style={[

@@ -1,17 +1,19 @@
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRef, useState } from 'react';
-import {
-  Alert,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { StatusBar } from 'expo-status-bar';
+import { useMemo, useState } from 'react';
+import { Alert, Dimensions, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import Animated, {
+  runOnJS,
+  useAnimatedScrollHandler,
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+  withTiming,
+} from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { SwipeDismissView, type SwipeDismissViewHandle } from '@/components/layout/SwipeDismissView';
 import { Icon } from '@/components/ui/Icon';
 import { colorWithAlpha, PrimaryButton } from '@/components/ui/primitives';
 import { Radius } from '@/constants/design-system';
@@ -26,13 +28,27 @@ import {
 } from '@/constants/subscription';
 import { useTheme } from '@/hooks/useTheme';
 
+const SCREEN_H = Dimensions.get('window').height;
+
+/** True for light colours like #FFFFFF (so text on the banner is light). */
+function isLightColor(hex: string) {
+  const h = hex.replace('#', '');
+  if (h.length !== 6) return true;
+  const [r, g, b] = [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16));
+  return 0.299 * r + 0.587 * g + 0.114 * b > 150;
+}
+const DISMISS_DISTANCE = 120;
+const DISMISS_VELOCITY = 800;
+
 type Props = {
   onClose?: () => void;
   showClose?: boolean;
   onSubscribe?: (planId: SubscriptionPlanId) => void | Promise<void>;
+  /** Swipe down to close (the in-app overlay). Off on the sign-up step, which has nothing behind it. */
+  swipeToClose?: boolean;
 };
 
-export function PaywallScreen({ onClose, showClose = true, onSubscribe }: Props) {
+export function PaywallScreen({ onClose, showClose = true, onSubscribe, swipeToClose = true }: Props) {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const [selectedPlan, setSelectedPlan] = useState<SubscriptionPlanId>('weekly');
@@ -58,20 +74,66 @@ export function PaywallScreen({ onClose, showClose = true, onSubscribe }: Props)
     Alert.alert('Restore purchase', 'Nothing to restore yet. Purchases will be available once billing is connected.');
   };
 
-  const swipeRef = useRef<SwipeDismissViewHandle>(null);
-  const closeAnimated = () => swipeRef.current?.dismiss();
+  // Swipe down to close, like Moments: the page follows your finger and
+  // slides away. A drag that starts while the page is scrolled down only
+  // scrolls it (decided once, on touch down).
+  const canClose = !!(showClose && onClose && swipeToClose);
+  const translateY = useSharedValue(0);
+  const scrollY = useSharedValue(0);
+  const dragsPage = useSharedValue(false);
+  const native = useMemo(() => Gesture.Native(), []);
+  const finish = () => onClose?.();
+  const slideAway = (velocity = 0) => {
+    translateY.value = withTiming(SCREEN_H, { duration: Math.max(140, 220 - Math.abs(velocity) / 20) }, (done) => {
+      if (done) runOnJS(finish)();
+    });
+  };
+  // Slide away only where the app is behind it; the sign-up step just moves on.
+  const closeAnimated = () => (canClose ? slideAway(0) : onClose?.());
+
+  const pan = Gesture.Pan()
+    .enabled(canClose)
+    .activeOffsetY([-8, 8])
+    .failOffsetX([-14, 14])
+    .simultaneousWithExternalGesture(native)
+    .onBegin(() => {
+      dragsPage.value = scrollY.value <= 0;
+    })
+    .onUpdate((e) => {
+      if (!dragsPage.value) return;
+      if (scrollY.value > 0 && translateY.value <= 0) {
+        dragsPage.value = false;
+        return;
+      }
+      translateY.value = Math.max(0, e.translationY);
+    })
+    .onEnd((e) => {
+      if (dragsPage.value && translateY.value > 0 && (e.translationY > DISMISS_DISTANCE || e.velocityY > DISMISS_VELOCITY)) {
+        runOnJS(slideAway)(e.velocityY);
+        return;
+      }
+      if (translateY.value !== 0) translateY.value = withSpring(0, { damping: 26, stiffness: 300 });
+    });
+
+  const onScroll = useAnimatedScrollHandler((e) => {
+    scrollY.value = e.contentOffset.y;
+  });
+  const pageStyle = useAnimatedStyle(() => ({ transform: [{ translateY: translateY.value }] }));
 
   return (
-    <SwipeDismissView
-      ref={swipeRef}
-      edge="end"
-      onDismiss={onClose ?? (() => undefined)}
-      enabled={!!(showClose && onClose)}
-      animateEntrance={false}>
-      <View style={[styles.root, { backgroundColor: colors.background }]}>
-        <ScrollView
+    <GestureDetector gesture={pan}>
+      <Animated.View
+        style={[styles.root, { backgroundColor: colors.background }, pageStyle]}>
+        {/* The banner fills the top behind the status bar, so match its text to
+            the banner (light on dark banners) while this page is open. */}
+        <StatusBar style={isLightColor(colors.onAccent) ? 'light' : 'dark'} />
+        <GestureDetector gesture={native}>
+        <Animated.ScrollView
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 24 }]}>
+          bounces={false}
+          scrollEventThrottle={16}
+          onScroll={onScroll}
+          contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 16 }]}>
           <LinearGradient
             colors={colors.gradient}
             start={{ x: 0, y: 0 }}
@@ -199,9 +261,10 @@ export function PaywallScreen({ onClose, showClose = true, onSubscribe }: Props)
           <Pressable onPress={handleRestore} hitSlop={8} style={styles.restore}>
             <Text style={[styles.restoreText, { color: colors.textSecondary }]}>Restore purchase</Text>
           </Pressable>
-        </ScrollView>
-      </View>
-    </SwipeDismissView>
+        </Animated.ScrollView>
+        </GestureDetector>
+      </Animated.View>
+    </GestureDetector>
   );
 }
 

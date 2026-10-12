@@ -24,17 +24,17 @@ export function streakMilestoneHeadline(days: number): string {
   if (days === 365) return 'One year together';
   if (days === 400) return 'Four hundred days';
   if (days === 500) return 'Five hundred days';
-  if (days >= 1000 && days % 500 === 0) return `${days} days — legendary`;
+  if (days >= 1000 && days % 500 === 0) return `${days} days, legendary`;
   if (days % 100 === 0) return `${days} days strong`;
   return `${days} day milestone`;
 }
 
 export function streakMilestoneCheer(days: number): string {
   if (days >= 365) return 'A whole year of showing up for each other 👑';
-  if (days >= 100) return 'Legendary streak — you two are unstoppable 🔥';
+  if (days >= 100) return 'Legendary streak. You two are unstoppable 🔥';
   if (days >= 50) return "You're on fire! Keep it going 🔥";
   if (days >= 30) return 'A month of consistency together 🔥';
-  if (days >= 15) return "Two weeks strong — don't stop now 🔥";
+  if (days >= 15) return "Two weeks strong. Don't stop now 🔥";
   if (days >= 7) return "You're on fire! 🔥";
   return 'Keep showing up for each other';
 }

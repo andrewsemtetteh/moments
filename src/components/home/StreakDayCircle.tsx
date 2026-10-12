@@ -1,6 +1,7 @@
 import { StyleSheet, Text, View } from 'react-native';
 
-import { AnimatedStreakFire } from '@/components/home/AnimatedStreakFire';
+import { StreakFlame } from '@/components/home/StreakFlame';
+import { DashedRing } from '@/components/ui/DashedRing';
 import { Icon } from '@/components/ui/Icon';
 import { useTheme } from '@/hooks/useTheme';
 import { STREAK_COLORS } from '@/lib/streak-colors';
@@ -61,12 +62,7 @@ export function StreakDayCircle({
             borderColor: STREAK_COLORS.active,
           },
         ]}>
-        <AnimatedStreakFire
-          color={STREAK_COLORS.active}
-          size={dim.fire}
-          layered
-          animate={false}
-        />
+        <StreakFlame size={dim.fire} tone="active" />
         <View
           style={[
             styles.checkBadge,
@@ -100,9 +96,7 @@ export function StreakDayCircle({
           },
         ]}>
         {dayLabel ? (
-          <Text style={[styles.dayText, { fontSize: dim.day, color: STREAK_COLORS.lostDeep }]}>
-            {dayLabel}
-          </Text>
+          <Text style={[styles.dayText, { fontSize: dim.day, color: STREAK_COLORS.lostDeep }]}>{dayLabel}</Text>
         ) : (
           <Icon name="close" size={dim.icon} color={STREAK_COLORS.lostDeep} />
         )}
@@ -138,7 +132,7 @@ export function StreakDayCircle({
             borderWidth: 2,
           },
         ]}>
-        <Icon name="warning" size={dim.icon + 2} color={STREAK_COLORS.atRiskBright} filled />
+        <StreakFlame size={dim.fire - 2} tone="risk" />
       </View>
     );
   }
@@ -154,17 +148,12 @@ export function StreakDayCircle({
             height: dim.outer,
             borderRadius: radius,
             backgroundColor: fill,
-            borderColor: STREAK_COLORS.pending,
+            borderColor: 'transparent',
             borderWidth: 2,
-            borderStyle: 'dashed',
           },
         ]}>
-        <AnimatedStreakFire
-          color={STREAK_COLORS.pendingBright}
-          size={dim.fire - 4}
-          layered
-          animate={false}
-        />
+        <DashedRing size={dim.outer} color={STREAK_COLORS.pending} />
+        <StreakFlame size={dim.fire - 4} tone="idle" />
       </View>
     );
   }
@@ -183,9 +172,7 @@ export function StreakDayCircle({
         },
       ]}>
       {dayLabel ? (
-        <Text style={[styles.dayText, { fontSize: dim.day, color: colors.textTertiary }]}>
-          {dayLabel}
-        </Text>
+        <Text style={[styles.dayText, { fontSize: dim.day, color: colors.textTertiary }]}>{dayLabel}</Text>
       ) : null}
     </View>
   );

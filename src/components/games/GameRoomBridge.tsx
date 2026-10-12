@@ -1,10 +1,9 @@
 import * as Haptics from 'expo-haptics';
 import { useEffect } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
-import Animated, { FadeInUp, FadeOutUp } from 'react-native-reanimated';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { PLAY_TONES } from '@/components/activities/explore/explore-catalog';
+import { DraggableSheet } from '@/components/ui/DraggableSheet';
 import { useTheme } from '@/hooks/useTheme';
 import { gameRoom } from '@/lib/game-room/manager';
 import { getGameDefinition } from '@/lib/game-room/types';
@@ -15,46 +14,59 @@ import { usePlayProgressStore } from '@/stores/play-progress-store';
 import { CelebrationHost } from './Celebration';
 import { LiveRoomModal } from './LiveRoomModal';
 
-function InviteBanner() {
+/** Your partner opened a live session: a sheet to join (optionally muted) or pass for now. */
+function InviteSheet() {
   const { colors } = useTheme();
-  const insets = useSafeAreaInsets();
   const invite = useGameRoomStore((s) => s.invite);
   const open = useGameRoomStore((s) => s.open);
+  const room = useGameRoomStore((s) => s.state);
+  const def = invite ? getGameDefinition(invite.game) : null;
+  const tone = def ? PLAY_TONES[def.tone] : null;
+  const inLobby = room?.phase === 'lobby';
 
-  if (!invite || open) return null;
-  const def = getGameDefinition(invite.game);
-  const tone = PLAY_TONES[def.tone];
+  const join = (muted: boolean) => {
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    if (muted) gameRoom.setMuted(true);
+    void gameRoom.openRoom();
+  };
 
   return (
-    <View pointerEvents="box-none" style={[StyleSheet.absoluteFill, { paddingTop: insets.top + 8 }]}>
-      <Animated.View
-        entering={FadeInUp.springify().damping(14)}
-        exiting={FadeOutUp.duration(180)}
-        style={[styles.banner, { backgroundColor: colors.surfaceElevated, borderColor: tone.accent }]}>
-        <Text style={styles.bannerEmoji}>{def.emoji}</Text>
-        <View style={{ flex: 1 }}>
-          <Text style={[styles.bannerTitle, { color: colors.text }]} numberOfLines={1}>
-            {invite.fromName} is playing live 🎧
-          </Text>
-          <Text style={[styles.bannerSub, { color: colors.textSecondary }]} numberOfLines={1}>
-            {def.title} · join with voice
-          </Text>
+    <DraggableSheet visible={!!invite && !open} onClose={() => gameRoom.dismissInvite()}>
+      {invite && def && tone ? (
+        <View style={styles.sheet}>
+          <View style={[styles.liveBadge, { backgroundColor: colors.success }]}>
+            <Text style={styles.liveBadgeText}>LIVE</Text>
+          </View>
+          <Text style={[styles.sheetTitle, { color: colors.text }]}>{invite.fromName} wants to play live</Text>
+          <Text style={[styles.sheetSub, { color: colors.textSecondary }]}>They’re in the session now, with voice on.</Text>
+          <View style={[styles.gameCard, { backgroundColor: colors.background, borderColor: colors.border }]}>
+            <View style={[styles.gameTile, { backgroundColor: tone.accent }]}>
+              <Text style={styles.gameEmoji}>{def.emoji}</Text>
+            </View>
+            <View style={{ flex: 1, gap: 2 }}>
+              <Text style={[styles.gameTitle, { color: colors.text }]}>{inLobby ? 'Picking a game' : def.title}</Text>
+              <Text style={[styles.gameSub, { color: colors.textSecondary }]}>
+                {inLobby ? 'You’ll choose one together inside' : 'You can switch game inside'}
+              </Text>
+            </View>
+          </View>
+          <Pressable
+            onPress={() => join(false)}
+            accessibilityRole="button"
+            style={[styles.joinBtn, { backgroundColor: colors.accent }]}>
+            <Text style={[styles.joinText, { color: colors.onAccent }]}>Join</Text>
+          </Pressable>
+          <View style={styles.secondaryRow}>
+            <Pressable onPress={() => join(true)} accessibilityRole="button" style={styles.secondaryBtn}>
+              <Text style={[styles.secondaryText, { color: colors.textSecondary }]}>Join muted</Text>
+            </Pressable>
+            <Pressable onPress={() => gameRoom.dismissInvite()} accessibilityRole="button" style={styles.secondaryBtn}>
+              <Text style={[styles.secondaryText, { color: colors.textSecondary }]}>Not now</Text>
+            </Pressable>
+          </View>
         </View>
-        <Pressable
-          onPress={() => {
-            void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-            void gameRoom.openRoom();
-          }}
-          accessibilityRole="button"
-          accessibilityLabel="Join live game"
-          style={[styles.joinBtn, { backgroundColor: tone.accent }]}>
-          <Text style={styles.joinText}>Join</Text>
-        </Pressable>
-        <Pressable onPress={() => gameRoom.dismissInvite()} hitSlop={10} accessibilityLabel="Dismiss invite">
-          <Text style={[styles.dismiss, { color: colors.textTertiary }]}>✕</Text>
-        </Pressable>
-      </Animated.View>
-    </View>
+      ) : null}
+    </DraggableSheet>
   );
 }
 
@@ -108,32 +120,35 @@ export function GameRoomBridge() {
   return (
     <>
       <LiveRoomModal />
-      <InviteBanner />
+      <InviteSheet />
       <CelebrationHost surface="root" />
     </>
   );
 }
 
 const styles = StyleSheet.create({
-  banner: {
-    marginHorizontal: 12,
+  sheet: { alignItems: 'center', gap: 8, paddingBottom: 8 },
+  liveBadge: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4, marginBottom: 4 },
+  liveBadgeText: { color: '#14100D', fontSize: 11, fontWeight: '900', letterSpacing: 0.6 },
+  sheetTitle: { fontSize: 22, fontWeight: '800', textAlign: 'center', letterSpacing: -0.4 },
+  sheetSub: { fontSize: 14, fontWeight: '600', textAlign: 'center', marginBottom: 8 },
+  gameCard: {
+    alignSelf: 'stretch',
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 12,
     borderRadius: 20,
-    borderWidth: 2,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    shadowColor: '#000',
-    shadowOpacity: 0.2,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 8,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: 12,
+    marginBottom: 8,
   },
-  bannerEmoji: { fontSize: 28 },
-  bannerTitle: { fontSize: 15, fontWeight: '900' },
-  bannerSub: { fontSize: 12, fontWeight: '600', marginTop: 1 },
-  joinBtn: { borderRadius: 999, paddingHorizontal: 16, paddingVertical: 8 },
-  joinText: { color: '#fff', fontSize: 14, fontWeight: '900' },
-  dismiss: { fontSize: 16, fontWeight: '800', paddingHorizontal: 4 },
+  gameTile: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  gameEmoji: { fontSize: 22 },
+  gameTitle: { fontSize: 15, fontWeight: '800' },
+  gameSub: { fontSize: 12, fontWeight: '600' },
+  joinBtn: { alignSelf: 'stretch', height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center' },
+  joinText: { fontSize: 17, fontWeight: '800' },
+  secondaryRow: { alignSelf: 'stretch', flexDirection: 'row' },
+  secondaryBtn: { flex: 1, height: 48, alignItems: 'center', justifyContent: 'center' },
+  secondaryText: { fontSize: 15, fontWeight: '700' },
 });

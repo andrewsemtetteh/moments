@@ -61,18 +61,19 @@ export type PlanMeta = {
   createdBy?: string;
 };
 
-export type MemoryType = 'milestone' | 'date' | 'trip' | 'celebration' | 'justus';
+export type MemoryType = 'milestone' | 'date' | 'trip' | 'celebration' | 'family' | 'justus';
 
 export const MEMORY_TYPES: { key: MemoryType; label: string; emoji: string; icon: IconName }[] = [
   { key: 'milestone', label: 'Milestone', emoji: '💞', icon: 'flag' },
   { key: 'date', label: 'Date', emoji: '🍝', icon: 'heart' },
   { key: 'trip', label: 'Trip', emoji: '✈️', icon: 'airplane' },
   { key: 'celebration', label: 'Celebration', emoji: '🎉', icon: 'balloon' },
+  { key: 'family', label: 'Family', emoji: '🏡', icon: 'home' },
   { key: 'justus', label: 'Just us', emoji: '✨', icon: 'people' },
 ];
 
 export function memoryTypeMeta(type: MemoryType | undefined) {
-  return MEMORY_TYPES.find((t) => t.key === type) ?? MEMORY_TYPES[4];
+  return MEMORY_TYPES.find((t) => t.key === type) ?? MEMORY_TYPES[MEMORY_TYPES.length - 1];
 }
 
 /** Plans are everything that isn't a memory or a day note — old rows included. */

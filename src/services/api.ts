@@ -12,12 +12,6 @@ import {
     type RpcMoodHistoryOverview,
 } from '@/lib/mood-history';
 import { getErrorMessage, isMissingColumnError, isMissingTableError, isNoRowsUpdatedError, isRpcNotFoundError, toUserFacingNetworkError } from '@/lib/network-error';
-import {
-    clientFallbackQuestions,
-    computeRoundPoints,
-    mergeScores,
-    parseQuizQuestions,
-} from '@/lib/quiz-live';
 import { createStorageSignedUrl } from '@/lib/storage-cdn';
 import { legacyStreakToStatus, parseStreakStatus, withEffectiveStreakRestore } from '@/lib/streak';
 import { hasActiveUserSubscription } from '@/lib/subscription';
@@ -32,8 +26,6 @@ import type {
     Moment,
     MoodLog,
     Notification,
-    QuizLiveQuestion,
-    QuizLiveSession,
     Relationship,
     RelationshipType,
     SharedGoal,
@@ -368,6 +360,41 @@ export async function fetchMoments(relationshipId: string, limit = 30, cursor?: 
   const { data, error } = await query;
   if (error) throw error;
   return hydrateMomentsMedia(data as Moment[]);
+}
+
+/** Both partners' mood logs since a date (who, which mood, when) for Wrapped. */
+export async function fetchMoodLogsSince(relationshipId: string, sinceIso: string) {
+  const { data, error } = await backend
+    .from('mood_logs')
+    .select('user_id,mood,created_at')
+    .eq('relationship_id', relationshipId)
+    .gte('created_at', sinceIso)
+    .limit(5000);
+  if (error) throw error;
+  return (data ?? []) as { user_id: string; mood: string; created_at: string }[];
+}
+
+/** How many moments the two of you have shared, ever (for the You page). */
+export async function countMoments(relationshipId: string) {
+  const { count, error } = await backend
+    .from('moments')
+    .select('*', { count: 'exact', head: true })
+    .eq('relationship_id', relationshipId);
+  if (error) throw error;
+  return count ?? 0;
+}
+
+/** Moments since a date — who, what and when only (no media) — for Wrapped's counts. */
+export async function fetchMomentStatsSince(relationshipId: string, sinceIso: string) {
+  const { data, error } = await backend
+    .from('moments')
+    .select('id,user_id,type,created_at')
+    .eq('relationship_id', relationshipId)
+    .gte('created_at', sinceIso)
+    .order('created_at', { ascending: true })
+    .limit(5000);
+  if (error) throw error;
+  return (data ?? []) as Pick<Moment, 'id' | 'user_id' | 'type' | 'created_at'>[];
 }
 
 export async function createMoment(
@@ -1621,153 +1648,3 @@ export async function sendPartnerNotification(
 }
 
 // --- Quiz Live ---
-
-export async function fetchActiveQuizLiveSession(relationshipId: string): Promise<QuizLiveSession | null> {
-  const { data, error } = await backend
-    .from('quiz_live_sessions')
-    .select('*')
-    .eq('relationship_id', relationshipId)
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (error) {
-    if (isMissingTableError(error)) return null;
-    throw error;
-  }
-  if (!data) return null;
-  return normalizeQuizLiveSession(data);
-}
-
-function normalizeQuizLiveSession(row: Record<string, unknown>): QuizLiveSession {
-  const base = row as unknown as QuizLiveSession;
-  return {
-    ...base,
-    questions: parseQuizQuestions(row.questions),
-    responses: (row.responses as Record<string, Record<string, number>>) ?? {},
-    scores: (row.scores as Record<string, number>) ?? {},
-  };
-}
-
-export async function endActiveQuizLiveSessions(relationshipId: string): Promise<void> {
-  const { error } = await backend
-    .from('quiz_live_sessions')
-    .update({ status: 'finished', updated_at: new Date().toISOString() })
-    .eq('relationship_id', relationshipId)
-    .in('status', ['lobby', 'generating', 'active']);
-  if (error && !isMissingTableError(error)) throw error;
-}
-
-export async function createQuizLiveSession(
-  relationshipId: string,
-  hostUserId: string,
-  topic: string,
-): Promise<QuizLiveSession> {
-  const { data, error } = await backend
-    .from('quiz_live_sessions')
-    .insert({
-      relationship_id: relationshipId,
-      host_user_id: hostUserId,
-      topic: topic.trim(),
-      status: 'lobby',
-    })
-    .select()
-    .single();
-  if (error) throw error;
-  return normalizeQuizLiveSession(data as Record<string, unknown>);
-}
-
-export async function updateQuizLiveSession(
-  sessionId: string,
-  updates: Partial<QuizLiveSession>,
-): Promise<QuizLiveSession> {
-  const { data, error } = await backend
-    .from('quiz_live_sessions')
-    .update({ ...updates, updated_at: new Date().toISOString() })
-    .eq('id', sessionId)
-    .select()
-    .single();
-  if (error) throw error;
-  return normalizeQuizLiveSession(data as Record<string, unknown>);
-}
-
-export async function startQuizLiveSession(
-  relationshipId: string,
-  hostUserId: string,
-  topic: string,
-): Promise<QuizLiveSession> {
-  await endActiveQuizLiveSessions(relationshipId);
-  const created = await createQuizLiveSession(relationshipId, hostUserId, topic);
-  await updateQuizLiveSession(created.id, { status: 'generating' });
-
-  let questions: QuizLiveQuestion[] = [];
-  try {
-    const result = await invokeEdgeFunction<{ questions: QuizLiveQuestion[] }>('generate-quiz-live', {
-      relationship_id: relationshipId,
-      topic: topic.trim(),
-      count: 6,
-    });
-    questions = parseQuizQuestions(result.questions);
-  } catch {
-    questions = [];
-  }
-  if (!questions.length) {
-    questions = clientFallbackQuestions(topic.trim());
-  }
-
-  return updateQuizLiveSession(created.id, {
-    status: 'active',
-    round_phase: 'answer',
-    current_index: 0,
-    questions,
-    responses: {},
-    scores: {},
-  });
-}
-
-export async function submitQuizLiveAnswer(
-  session: QuizLiveSession,
-  userId: string,
-  answerIndex: number,
-  memberIds: string[],
-): Promise<QuizLiveSession> {
-  const key = String(session.current_index);
-  const responses = { ...session.responses };
-  const round = { ...(responses[key] ?? {}) };
-  round[userId] = answerIndex;
-  responses[key] = round;
-
-  const updates: Partial<QuizLiveSession> = { responses };
-  const allAnswered = memberIds.length > 0 && memberIds.every((id) => typeof round[id] === 'number');
-
-  if (allAnswered) {
-    updates.round_phase = 'reveal';
-    const question = session.questions[session.current_index];
-    let scores = { ...session.scores };
-    if (question) {
-      for (const id of memberIds) {
-        const partnerId = memberIds.find((m) => m !== id);
-        const partnerAnswer = partnerId !== undefined ? round[partnerId] : undefined;
-        const pts = computeRoundPoints(question, round[id], partnerAnswer);
-        scores = mergeScores(scores, id, pts);
-      }
-    }
-    updates.scores = scores;
-  }
-
-  return updateQuizLiveSession(session.id, updates);
-}
-
-export async function advanceQuizLiveRound(session: QuizLiveSession): Promise<QuizLiveSession> {
-  const nextIndex = session.current_index + 1;
-  if (nextIndex >= session.questions.length) {
-    return updateQuizLiveSession(session.id, { status: 'finished', round_phase: 'reveal' });
-  }
-  return updateQuizLiveSession(session.id, {
-    current_index: nextIndex,
-    round_phase: 'answer',
-  });
-}
-
-export async function endQuizLiveSession(sessionId: string): Promise<QuizLiveSession> {
-  return updateQuizLiveSession(sessionId, { status: 'finished', round_phase: 'reveal' });
-}

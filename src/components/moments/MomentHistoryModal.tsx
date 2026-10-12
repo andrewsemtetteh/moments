@@ -406,7 +406,7 @@ export function MomentHistoryModal() {
         text: 'Delete album',
         style: 'destructive',
         onPress: () =>
-          Alert.alert('Delete album?', 'The moments stay in your history — only the album goes.', [
+          Alert.alert('Delete album?', 'The moments stay in your history. Only the album goes.', [
             { text: 'Cancel', style: 'cancel' },
             {
               text: 'Delete',

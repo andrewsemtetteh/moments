@@ -4,6 +4,7 @@ import Svg, { Circle, Defs, Path, Stop, LinearGradient as SvgGradient } from 're
 
 import { Icon, type IconName } from '@/components/ui/Icon';
 import { colorWithAlpha } from '@/components/ui/primitives';
+import { StreakFlame } from '@/components/home/StreakFlame';
 import type { IntroSlideId } from '@/constants/intro-slides';
 import { useTheme } from '@/hooks/useTheme';
 
@@ -69,7 +70,7 @@ function SlideScene({ slideId, icons }: Props) {
           </LinearGradient>
         </View>
         <View style={[styles.streakPill, { backgroundColor: colors.accentSoft, borderColor: colors.border }]}>
-          <Icon name="fire" size={16} color={colors.accent} />
+          <StreakFlame size={18} tone="active" />
           <View style={[styles.streakDot, { backgroundColor: colors.accent }]} />
         </View>
         <View style={[styles.moodOrbit, cardStyle]}>

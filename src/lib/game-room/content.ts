@@ -177,7 +177,7 @@ const DARES: Record<Vibe, string[]> = {
     'Describe our best kiss in vivid detail',
     'Send me the flirtiest text you can in 60 seconds',
     'Give me your best sultry “good night” voice',
-    'Tell me what you’d do if we were together right now (PG-13)',
+    'Tell me what you’d do if we were together right now (keep it tasteful)',
     'Tell me something irresistible about me in a low voice',
   ],
   deep: [

@@ -68,7 +68,7 @@ export function CardsDeckScreen() {
       <LinearGradient colors={colors.gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.promptCard}>
         <Text style={s.quoteMark}>&ldquo;</Text>
         <Text style={s.promptText}>{prompt}</Text>
-        <Text style={s.promptHint}>Take turns — answer honestly</Text>
+        <Text style={s.promptHint}>Take turns and answer honestly</Text>
       </LinearGradient>
 
       <PrimaryButton label="Another card" onPress={() => shuffle()} />
@@ -426,7 +426,7 @@ export function GratitudeSwapScreen() {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     Alert.alert(
       'Beautiful',
-      `Share these with ${partnerName} — say them out loud or drop them in chat.`,
+      `Share these with ${partnerName}. Say them out loud or drop them in chat.`,
     );
     setItems(['', '', '']);
   };
@@ -471,7 +471,7 @@ export function QuestionOfDayScreen() {
       <LinearGradient colors={colors.gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.dailyCard}>
         <Text style={s.dailyLabel}>Today&apos;s question</Text>
         <Text style={s.dailyQuestion}>{question}</Text>
-        <Text style={s.dailyHint}>Take turns — there&apos;s no wrong answer</Text>
+        <Text style={s.dailyHint}>Take turns, there&apos;s no wrong answer</Text>
       </LinearGradient>
       <PrimaryButton label="Another question" onPress={shuffle} />
     </View>
@@ -515,9 +515,9 @@ export function CouplesTriviaScreen() {
           </Text>
           <Text style={[s.resultDesc, { color: colorWithAlpha(colors.onAccent, 0.92) }]}>
             {pct >= 80
-              ? 'You two are in sync — relationship pros!'
+              ? 'You two are in sync. Relationship pros!'
               : pct >= 50
-                ? 'Solid team — keep learning about each other.'
+                ? 'Solid team. Keep learning about each other.'
                 : 'Great excuse for more date nights together.'}
           </Text>
         </LinearGradient>

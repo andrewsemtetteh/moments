@@ -5,6 +5,7 @@ import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-
 
 import { memoryPhotos } from '@/components/calendar/plan/MemorySheets';
 import { Icon } from '@/components/ui/Icon';
+import { StreakFlame } from '@/components/home/StreakFlame';
 import { useTheme } from '@/hooks/useTheme';
 import { MEMORY_TYPES, memoryTypeMeta, parsePlanMeta, type MemoryType } from '@/lib/plan-meta';
 import type { CalendarEvent, Moment } from '@/types/database';
@@ -221,7 +222,7 @@ function TimelineRow({
     return (
       <View style={styles.row}>
         <View style={[styles.smallDot, { backgroundColor: colors.textTertiary }]} />
-        <Icon name="fire" size={15} color={colors.accent} />
+        <StreakFlame size={16} tone="active" />
         <Text style={[styles.smallText, { color: colors.text }]}>
           {item.days}-day streak <Text style={{ color: colors.textTertiary }}>· {format(item.date, 'MMM d')}</Text>
         </Text>
@@ -234,7 +235,7 @@ function TimelineRow({
       <View style={styles.row}>
         <View style={[styles.bigDot, { backgroundColor: colors.accent, borderColor: colors.accentSoft }]} />
         <View style={[styles.card, { backgroundColor: colors.surface }]}>
-          <Text style={[styles.kicker, { color: colors.accent }]}>MILESTONE</Text>
+          <Text style={[styles.kicker, { color: colors.accent }]}>Milestone</Text>
           <View style={styles.titleRow}>
             <Icon name="heart" size={16} color={colors.accent} filled />
             <Text style={[styles.cardTitle, { color: colors.text }]}>Together since</Text>
@@ -303,7 +304,7 @@ function TimelineRow({
         <View style={[styles.card, styles.milestone, { backgroundColor: colors.surface }]}>
           {cover ? <Image source={{ uri: cover }} style={styles.banner} contentFit="cover" /> : null}
           <View style={styles.milestoneBody}>
-            <Text style={[styles.kicker, { color: colors.accent }]}>MILESTONE</Text>
+            <Text style={[styles.kicker, { color: colors.accent }]}>Milestone</Text>
             <View style={styles.titleRow}>
               <Icon name={type.icon} size={16} color={colors.accent} />
               <Text style={[styles.cardTitle, { color: colors.text }]} numberOfLines={1}>
@@ -366,7 +367,7 @@ const styles = StyleSheet.create({
   cardHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' },
   cardTitle: { fontSize: 15, fontWeight: '800' },
   cardSub: { fontSize: 13, fontWeight: '600' },
-  kicker: { fontSize: 12, fontWeight: '800', letterSpacing: 0.6 },
+  kicker: { fontSize: 13, fontWeight: '800' },
   suggestion: { borderWidth: 1, borderStyle: 'dashed', padding: 12, gap: 10 },
   thumbs: { flexDirection: 'row', gap: 6 },
   thumb: { width: 52, height: 52, borderRadius: 14 },

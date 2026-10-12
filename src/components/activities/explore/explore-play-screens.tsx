@@ -15,120 +15,14 @@ import {
     PERSONALITY_QUESTIONS,
     THIRTY_SIX_QUESTIONS,
     WEEK_CHALLENGE,
-    WHOS_MORE_LIKELY,
     pickFortune,
     pickRandomDateIdea,
-    type Game,
 } from '@/constants/activity-content';
 import { useTheme } from '@/hooks/useTheme';
 
 import { exploreStyles as s } from './explore-styles';
 
-function gameByName(name: string): Game {
-  return GAMES.find((g) => g.name === name) ?? GAMES[0];
-}
-
 /** Two-option choice rounds (This or That / Would You Rather). */
-export function ChoiceRoundsScreen({ gameName }: { gameName: 'This or That' | 'Would You Rather' }) {
-  const { colors } = useTheme();
-  const game = gameByName(gameName);
-  const [index, setIndex] = useState(0);
-  const [picked, setPicked] = useState<string | null>(null);
-  const round = game.rounds[index % game.rounds.length];
-  const total = game.rounds.length;
-
-  const next = () => {
-    void Haptics.selectionAsync();
-    setPicked(null);
-    setIndex((i) => i + 1);
-  };
-
-  return (
-    <View style={s.stack}>
-      <Text style={[styles.progress, { color: colors.textSecondary }]}>
-        {Math.min(index + 1, total)} / {total}
-      </Text>
-      <Text style={[styles.prompt, { color: colors.text }]}>{round.prompt}</Text>
-      <View style={styles.choiceCol}>
-        {(round.options ?? []).map((opt) => {
-          const active = picked === opt;
-          return (
-            <Pressable
-              key={opt}
-              onPress={() => {
-                void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                setPicked(opt);
-              }}
-              style={[
-                styles.choiceCard,
-                {
-                  backgroundColor: active ? colors.accentSoft : colors.surfaceElevated,
-                  borderColor: active ? colors.accent : colors.border,
-                },
-              ]}>
-              <Text style={[styles.choiceText, { color: colors.text }]}>{opt}</Text>
-            </Pressable>
-          );
-        })}
-      </View>
-      <Text style={[styles.hint, { color: colors.textSecondary }]}>
-        Both pick independently — then reveal and talk it through.
-      </Text>
-      <PrimaryButton label="Next" onPress={next} disabled={!picked} />
-    </View>
-  );
-}
-
-export function WhosLikelyScreen() {
-  const { colors } = useTheme();
-  const [index, setIndex] = useState(0);
-  const [pick, setPick] = useState<'me' | 'them' | null>(null);
-  const prompt = WHOS_MORE_LIKELY[index % WHOS_MORE_LIKELY.length];
-
-  return (
-    <View style={s.stack}>
-      <Text style={[styles.kicker, { color: colors.accent }]}>WHO&apos;S MORE LIKELY TO…</Text>
-      <Text style={[styles.prompt, { color: colors.text }]}>{prompt}</Text>
-      <View style={styles.choiceRow}>
-        {(
-          [
-            { id: 'me' as const, label: 'Me' },
-            { id: 'them' as const, label: 'Them' },
-          ] as const
-        ).map((opt) => {
-          const active = pick === opt.id;
-          return (
-            <Pressable
-              key={opt.id}
-              onPress={() => {
-                void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                setPick(opt.id);
-              }}
-              style={[
-                styles.halfCard,
-                {
-                  backgroundColor: active ? colors.accentSoft : colors.surfaceElevated,
-                  borderColor: active ? colors.accent : colors.border,
-                },
-              ]}>
-              <Text style={[styles.choiceText, { color: colors.text }]}>{opt.label}</Text>
-            </Pressable>
-          );
-        })}
-      </View>
-      <PrimaryButton
-        label="Reveal & next"
-        onPress={() => {
-          void Haptics.selectionAsync();
-          setPick(null);
-          setIndex((i) => i + 1);
-        }}
-        disabled={!pick}
-      />
-    </View>
-  );
-}
-
 export function LoveQuizScreen() {
   const { colors } = useTheme();
   const [index, setIndex] = useState(0);
@@ -197,7 +91,7 @@ export function EmojiStoryScreen() {
         <Text style={[styles.prompt, { color: colors.text }]}>{item.answer}</Text>
       ) : (
         <Text style={[styles.hint, { color: colors.textSecondary }]}>
-          One partner invents the story. The other guesses — then reveal.
+          One partner invents the story. The other guesses, then reveal.
         </Text>
       )}
       <PrimaryButton
@@ -226,7 +120,7 @@ export function FortuneWheelScreen() {
       <View style={[styles.wheelResult, { backgroundColor: colors.accentSoft, borderColor: colors.border }]}>
         <Text style={[styles.prompt, { color: colors.text }]}>{result}</Text>
       </View>
-      <Text style={[styles.hint, { color: colors.textSecondary }]}>Do it now — then spin again.</Text>
+      <Text style={[styles.hint, { color: colors.textSecondary }]}>Do it now, then spin again.</Text>
       <PrimaryButton
         label="Spin again"
         onPress={() => {
@@ -392,8 +286,8 @@ export function CompatibilityScreen() {
   return (
     <MultipleChoiceQuizScreen
       questions={COMPATIBILITY_QUESTIONS}
-      doneTitle="Nice — you both have a map now."
-      doneHint="Talk through where you matched and where you differ. Differences aren’t failures — they’re planning fuel."
+      doneTitle="Nice, you both have a map now."
+      doneHint="Talk through where you matched and where you differ. Differences aren’t failures. They’re planning fuel."
     />
   );
 }
@@ -403,7 +297,7 @@ export function PersonalityScreen() {
     <MultipleChoiceQuizScreen
       questions={PERSONALITY_QUESTIONS}
       doneTitle="That’s your vibe snapshot."
-      doneHint="Compare answers — notice what surprised you. Use it to plan dates and downtime that fit both of you."
+      doneHint="Compare answers and notice what surprised you. Use it to plan dates and downtime that fit both of you."
     />
   );
 }
@@ -413,7 +307,7 @@ export function AttachmentScreen() {
     <MultipleChoiceQuizScreen
       questions={ATTACHMENT_QUESTIONS}
       doneTitle="You’ve mapped how you connect."
-      doneHint="No style is “wrong.” Share what helps you feel safe — reassurance, space, or steady check-ins."
+      doneHint="No style is “wrong.” Share what helps you feel safe: reassurance, space, or steady check ins."
     />
   );
 }
@@ -429,7 +323,7 @@ export function DrawTogetherScreen() {
       <Text style={[styles.prompt, { color: colors.text }]}>Draw: {prompts[index % prompts.length]}</Text>
       <View style={[styles.canvas, { borderColor: colors.border, backgroundColor: colors.surfaceElevated }]}>
         <Text style={[styles.hint, { color: colors.textSecondary }]}>
-          Use paper (or any sketch app). Reveal at the same time — no peeking.
+          Use paper (or any sketch app). Reveal at the same time. No peeking.
         </Text>
       </View>
       <PrimaryButton
@@ -439,23 +333,6 @@ export function DrawTogetherScreen() {
           setIndex((i) => i + 1);
         }}
       />
-    </View>
-  );
-}
-
-export function GuessAnswerScreen() {
-  const { colors } = useTheme();
-  return (
-    <View style={s.stack}>
-      <Text style={[styles.prompt, { color: colors.text }]}>Partner types an answer. You guess.</Text>
-      <Text style={[styles.hint, { color: colors.textSecondary }]}>
-        Try: favorite dessert, dream city, or “what I want for dinner.” Hide the screen, then reveal.
-      </Text>
-      <View style={[styles.note, { backgroundColor: colors.accentSoft }]}>
-        <Text style={[styles.noteText, { color: colors.text }]}>
-          Tip: keep a running score for the night — loser plans the next date.
-        </Text>
-      </View>
     </View>
   );
 }

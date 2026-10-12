@@ -55,7 +55,7 @@ export const GAMES: Game[] = [
   {
     name: 'Would You Rather',
     emoji: '🤔',
-    desc: 'Pick one — then explain why',
+    desc: 'Pick one, then explain why',
     rounds: [
       { prompt: 'Would you rather…', options: ['Travel the world for a year', 'Own your dream home'] },
       { prompt: 'Would you rather…', options: ['Always be 10 min early', 'Always be 20 min late'] },
@@ -118,17 +118,6 @@ export const GAMES: Game[] = [
   },
 ];
 
-export const WHOS_MORE_LIKELY = [
-  'Forget their phone at home?',
-  'Cry during a movie?',
-  'Plan a surprise?',
-  'Sleep in on a day off?',
-  'Spend a little too much?',
-  'Start dancing in the kitchen?',
-  'Get lost even with GPS?',
-  'Send a paragraph-long text?',
-];
-
 export const FINISH_THE_SENTENCE = [
   'I knew I loved you when…',
   'Our funniest memory is…',
@@ -147,7 +136,7 @@ export const EMOJI_STORIES = [
 ];
 
 export const LOVE_QUIZ = [
-  { question: 'My favorite food?', hint: 'One partner answers — the other guesses' },
+  { question: 'My favorite food?', hint: 'One partner answers, the other guesses' },
   { question: 'My dream vacation?', hint: 'Be specific if you can' },
   { question: 'Coffee or tea?', hint: 'Or neither!' },
   { question: "What's my biggest fear?", hint: 'Go gentle' },
@@ -180,7 +169,7 @@ export const THIRTY_SIX_QUESTIONS = [
 ];
 
 export const WEEK_CHALLENGE = [
-  { day: 1, title: 'Hug every day', detail: 'At least one real hug — no phones.' },
+  { day: 1, title: 'Hug every day', detail: 'At least one real hug. No phones.' },
   { day: 2, title: 'Take one photo', detail: 'Capture a small moment together.' },
   { day: 3, title: 'Share your mood', detail: 'Send how you actually feel today.' },
   { day: 4, title: 'Send one compliment', detail: 'Specific beats generic.' },
@@ -213,7 +202,7 @@ export const COMPATIBILITY_QUESTIONS = [
     options: [
       { label: 'Stay in and recharge', value: 'home' },
       { label: 'Go out and explore', value: 'adventure' },
-      { label: 'A mix — short outing then couch', value: 'balance' },
+      { label: 'A mix: short outing, then couch', value: 'balance' },
     ],
   },
   {
@@ -285,9 +274,9 @@ export const ATTACHMENT_QUESTIONS = [
   {
     question: 'When your partner needs alone time you usually…',
     options: [
-      { label: 'Feel fine — I get it', value: 'secure' },
+      { label: 'Feel fine, I get it', value: 'secure' },
       { label: 'Worry they’re pulling away', value: 'anxious' },
-      { label: 'Feel relieved — I like space too', value: 'avoidant' },
+      { label: 'Feel relieved, I like space too', value: 'avoidant' },
     ],
   },
   {
@@ -390,7 +379,7 @@ export const LOVE_LANGUAGE_QUIZ = {
   results: {
     words: { title: 'Words of Affirmation', description: 'You thrive on heartfelt words, encouragement and verbal appreciation.' },
     time: { title: 'Quality Time', description: 'Undivided attention and shared experiences make you feel most loved.' },
-    gifts: { title: 'Receiving Gifts', description: 'Thoughtful tokens — big or small — speak straight to your heart.' },
+    gifts: { title: 'Receiving Gifts', description: 'Thoughtful tokens, big or small, speak straight to your heart.' },
     acts: { title: 'Acts of Service', description: 'Actions speak louder than words; helpful gestures mean everything.' },
     touch: { title: 'Physical Touch', description: 'Closeness and affectionate touch are your strongest connection.' },
   } as Record<string, { title: string; description: string }>,
@@ -457,27 +446,10 @@ export function pickRandomDateIdea() {
   return DATE_IDEAS[Math.floor(Math.random() * DATE_IDEAS.length)];
 }
 
-export const TRUTH_OR_DARE = {
-  truths: [
-    'What is something you have never told me but want to?',
-    'When did you first know you liked me?',
-    'What is your favorite memory of us?',
-    'What do you think our superpower as a couple is?',
-    'What is one thing I do that always makes you smile?',
-  ],
-  dares: [
-    'Send them a voice note saying three things you love about them',
-    'Plan a surprise snack or drink for them in the next hour',
-    'Do your best impression of them — lovingly',
-    'Pick a song that describes them and play the chorus',
-    'Give them a 30-second shoulder massage',
-  ],
-};
-
 export const MEMORY_QUIZ = [
   {
     question: 'Where was your first date together?',
-    hint: 'Compare answers — the story matters more than being exact',
+    hint: 'Compare answers. The story matters more than being exact',
   },
   {
     question: 'What food do you always order together?',
@@ -505,11 +477,6 @@ export const PLAYLIST_PROMPTS = [
   'A song that hypes you up for a date night',
   'The song you would dedicate to them right now',
 ];
-
-export function pickTruthOrDare(mode: 'truth' | 'dare') {
-  const pool = mode === 'truth' ? TRUTH_OR_DARE.truths : TRUTH_OR_DARE.dares;
-  return pool[Math.floor(Math.random() * pool.length)];
-}
 
 export function pickPlaylistPrompt() {
   return PLAYLIST_PROMPTS[Math.floor(Math.random() * PLAYLIST_PROMPTS.length)];

@@ -7,10 +7,10 @@ import {
 /** Source of truth — see src/docs/MONETIZATION.md §4 */
 export const MONTHLY_PRICE_USD = 9.99;
 export const WEEKLY_PRICE_USD = 4.99;
-export const YEARLY_DISCOUNT_PERCENT = 33;
-
 export const YEARLY_COMPARE_AT_USD = roundUsd(MONTHLY_PRICE_USD * 12);
-export const YEARLY_PRICE_USD = 79.99;
+export const YEARLY_PRICE_USD = 69.99;
+/** Saving vs paying monthly for a year (69.99 vs 119.88 → 42%). */
+export const YEARLY_DISCOUNT_PERCENT = Math.round((1 - YEARLY_PRICE_USD / YEARLY_COMPARE_AT_USD) * 100);
 export const WEEKLY_COMPARE_AT_USD = roundUsd(MONTHLY_PRICE_USD / 4);
 
 export const TRIAL_DAYS = 3;

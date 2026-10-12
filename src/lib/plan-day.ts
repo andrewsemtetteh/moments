@@ -86,5 +86,5 @@ export function freeTogetherWindow(
   const sameHalf = format(best.start, 'a') === format(best.end, 'a');
   const startLabel = format(best.start, best.start.getMinutes() ? 'h:mm' : 'h') + (sameHalf ? '' : ` ${format(best.start, 'a')}`);
   const endLabel = format(best.end, best.end.getMinutes() ? 'h:mm a' : 'h a');
-  return { ...best, label: `${startLabel}–${endLabel}` };
+  return { ...best, label: `${startLabel} to ${endLabel}` };
 }

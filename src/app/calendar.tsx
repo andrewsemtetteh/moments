@@ -133,7 +133,7 @@ function memoryTypeForPlan(kind: PlanKindKey | undefined): MemoryType {
 }
 
 export default function CalendarScreen() {
-  const { create } = useLocalSearchParams<{ create?: string }>();
+  const { create, tab: tabParam } = useLocalSearchParams<{ create?: string; tab?: string }>();
   const insets = useSafeAreaInsets();
   const closePlan = useCallback(() => closeStackScreen(router), []);
   const relationship = useRelationshipStore((s) => s.relationship);
@@ -143,7 +143,8 @@ export default function CalendarScreen() {
   const { colors } = useTheme();
   const partnerName = getFirstName(partner?.name) ?? 'Partner';
 
-  const [tab, setTab] = useState<'upcoming' | 'memories'>('upcoming');
+  // `?tab=memories` (e.g. Home's "years ago today" card) opens on Memories.
+  const [tab, setTab] = useState<'upcoming' | 'memories'>(() => (tabParam === 'memories' ? 'memories' : 'upcoming'));
   const [ownerFilter, setOwnerFilter] = useState<OwnerFilter>('all');
 
   const [mode, setMode] = useState<'week' | 'month'>('week');
@@ -870,7 +871,7 @@ export default function CalendarScreen() {
 
         {comingUp.length > 0 ? (
           <Animated.View layout={LinearTransition.duration(260)} style={styles.section}>
-            <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>COMING UP</Text>
+            <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>Coming up</Text>
             <View style={[styles.upcomingCard, cardBorder, { backgroundColor: colors.surface }]}>
               {comingUp.map((event, i) => {
                 const at = new Date(event.date_time);
@@ -1098,7 +1099,7 @@ const styles = StyleSheet.create({
   daySub: { fontSize: 13, fontWeight: '600', marginTop: 2 },
   countPill: { paddingHorizontal: 12, height: 28, borderRadius: 14, justifyContent: 'center' },
   countText: { fontSize: 13, fontWeight: '700' },
-  sectionLabel: { fontSize: 13, fontWeight: '700', letterSpacing: 0.6 },
+  sectionLabel: { fontSize: 14, fontWeight: '800' },
   upcomingCard: { borderRadius: Radius.lg, overflow: 'hidden' },
   upcomingRow: {
     flexDirection: 'row',

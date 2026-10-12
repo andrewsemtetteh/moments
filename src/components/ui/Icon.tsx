@@ -2,6 +2,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import type { ComponentProps } from 'react';
 
 export type IconName =
+  | 'filter'
   | 'home'
   | 'spark'
   | 'plus'
@@ -70,12 +71,17 @@ export type IconName =
   | 'balloon'
   | 'cafe'
   | 'walk'
+  | 'happy'
   | 'edit'
   | 'warning'
   | 'key'
   | 'mail'
   | 'search'
   | 'airplane'
+  | 'diamond'
+  | 'sunny'
+  | 'share'
+  | 'info'
   | 'cart'
   | 'bag';
 
@@ -152,12 +158,18 @@ const ICON_MAP: Record<IconName, { outline: IoniconName; filled: IoniconName }> 
   balloon: { outline: 'balloon-outline', filled: 'balloon' },
   cafe: { outline: 'cafe-outline', filled: 'cafe' },
   walk: { outline: 'walk-outline', filled: 'walk' },
+  happy: { outline: 'happy-outline', filled: 'happy' },
   edit: { outline: 'create-outline', filled: 'create' },
   warning: { outline: 'warning-outline', filled: 'warning' },
   key: { outline: 'key-outline', filled: 'key' },
   mail: { outline: 'mail-outline', filled: 'mail' },
   search: { outline: 'search-outline', filled: 'search' },
+  filter: { outline: 'options-outline', filled: 'options' },
   airplane: { outline: 'airplane-outline', filled: 'airplane' },
+  diamond: { outline: 'diamond-outline', filled: 'diamond' },
+  sunny: { outline: 'sunny-outline', filled: 'sunny' },
+  share: { outline: 'share-outline', filled: 'share' },
+  info: { outline: 'information-circle-outline', filled: 'information-circle' },
   cart: { outline: 'cart-outline', filled: 'cart' },
   bag: { outline: 'bag-handle-outline', filled: 'bag-handle' },
 };

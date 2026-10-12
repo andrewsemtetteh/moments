@@ -30,6 +30,7 @@ export const NOTIFICATION_TYPE_ICON: Record<string, IconName> = {
   activity: 'gamepad',
   calendar: 'calendar',
   game_invite: 'gamepad',
+  game_turn: 'gamepad',
 };
 
 export const NOTIFICATION_TYPE_LABEL: Record<string, string> = {
@@ -42,6 +43,7 @@ export const NOTIFICATION_TYPE_LABEL: Record<string, string> = {
   activity: 'Activity',
   calendar: 'Calendar',
   game_invite: 'Live game',
+  game_turn: 'Your move',
 };
 
 /**

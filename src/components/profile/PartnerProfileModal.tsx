@@ -5,48 +5,36 @@ import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import {
-    ActivityIndicator,
-    Modal,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    View,
-} from 'react-native';
-import { GestureHandlerRootView, Gesture, GestureDetector, Pressable } from 'react-native-gesture-handler';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Animated, {
-  Easing,
-  runOnJS,
-  useAnimatedStyle,
-  useSharedValue,
-  withSpring,
-  withTiming,
-} from 'react-native-reanimated';
 
 import { PartnerStatusLine } from '@/components/chat/PartnerStatusLine';
-import { SwipeBackSheet } from '@/components/layout/SwipeBackSheet';
+import { StreakFlame } from '@/components/home/StreakFlame';
+import { FullScreenPage } from '@/components/layout/FullScreenPage';
 import { LocationMapPreview } from '@/components/moments/LocationMapPreview';
 import { FullScreenImageModal } from '@/components/ui/FullScreenImageModal';
 import { Icon, type IconName } from '@/components/ui/Icon';
-import { Avatar, colorWithAlpha } from '@/components/ui/primitives';
-import { MOOD_COLORS, MOOD_EMOJI, MOOD_LABELS } from '@/constants/design-system';
+import { Avatar } from '@/components/ui/primitives';
+import { MOOD_COLORS, MOOD_EMOJI, MOOD_LABELS, type ThemeColors } from '@/constants/design-system';
 import { useMoods, useStreak } from '@/hooks/queries';
 import { usePartnerActiveMoments } from '@/hooks/usePartnerActiveMoments';
 import { usePartnerPresence } from '@/hooks/usePartnerPresence';
 import { buildSharedLocationMarkers, usePartnerLocationRealtime } from '@/hooks/useSharedLocationMap';
 import { useStartCall } from '@/hooks/useStartCall';
 import { useTheme } from '@/hooks/useTheme';
+import { getAnniversaryCountdown, getRelationshipAnniversaryDate, getRelationshipAnniversaryIso } from '@/lib/anniversary';
 import { getFirstName } from '@/lib/avatar-initial';
+import { formatDistanceApart, haversineDistanceKm } from '@/lib/distance';
+import { hasValidCoords } from '@/lib/location';
+import { formatPartnerClock } from '@/lib/partner-header-line';
 import { filterMomentsForHome, momentHasVisual } from '@/lib/moment-display';
 import * as api from '@/services/api';
 import { useAuthStore, useRelationshipStore, useUIStore } from '@/stores';
-import type { MoodType, UserProfile } from '@/types/database';
+import type { UserProfile } from '@/types/database';
 
-const SCREEN_PAD = 20;
-const DRAG_DISMISS_DISTANCE = 100;
-const DRAG_DISMISS_VELOCITY = 800;
+/** Let this page finish sliding away before the next full-screen thing opens. */
+const HANDOFF_MS = 260;
 
 export function PartnerProfileModal() {
   const router = useRouter();
@@ -102,19 +90,14 @@ export function PartnerProfileModal() {
 
   const [showAvatar, setShowAvatar] = useState(false);
 
-  const dragY = useSharedValue(0);
-
-  useEffect(() => {
-    if (visible) dragY.value = 0;
-  }, [visible, dragY]);
-
   const partnerTyping = profile?.id ? typingUsers.includes(profile.id) : false;
   const partnerMood = profile?.id ? moods?.[profile.id]?.mood ?? null : null;
 
   const sinceLabel = useMemo(() => {
     if (!relationship?.created_at) return null;
-    return { long: format(new Date(relationship.created_at), 'MMMM d, yyyy') };
-  }, [relationship?.created_at]);
+    const since = getRelationshipAnniversaryDate(relationship);
+    return { long: format(since, 'MMMM d, yyyy'), short: format(since, 'd MMM yyyy') };
+  }, [relationship]);
 
   const close = () => {
     setShowAvatar(false);
@@ -124,35 +107,13 @@ export function PartnerProfileModal() {
   const leaveProfile = (next?: () => void) => {
     close();
     if (next) {
-      setTimeout(next, 0);
+      setTimeout(next, HANDOFF_MS);
     }
   };
 
   const goToChat = () => {
     leaveProfile(() => router.push('/chat'));
   };
-
-  const dragHandlePan = Gesture.Pan()
-    .onUpdate((event) => {
-      dragY.value = event.translationY > 0 ? event.translationY : event.translationY * 0.2;
-    })
-    .onEnd((event) => {
-      const shouldDismiss =
-        event.translationY > DRAG_DISMISS_DISTANCE || event.velocityY > DRAG_DISMISS_VELOCITY;
-
-      if (shouldDismiss) {
-        dragY.value = withTiming(900, { duration: 220, easing: Easing.in(Easing.cubic) }, (finished) => {
-          if (finished) runOnJS(close)();
-        });
-        return;
-      }
-
-      dragY.value = withSpring(0, { damping: 24, stiffness: 280 });
-    });
-
-  const dragSheetStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: dragY.value }],
-  }));
 
   const openMomentsHistory = () => {
     leaveProfile(() => {
@@ -167,9 +128,8 @@ export function PartnerProfileModal() {
 
   const openFullMap = () => {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    // Close this pageSheet first, same as every other full-screen flow launched from the
-    // profile (call, moment creator, history) — the map then opens as its own independent,
-    // true full-screen Modal instead of being confined to the sheet's smaller frame.
+    // Close this page first, same as every other full-screen flow launched from the
+    // profile (call, moment creator, history) — the map then opens as its own page.
     leaveProfile(() => openPartnerLocationMap(locationMarkers, mapTitle));
   };
 
@@ -204,14 +164,6 @@ export function PartnerProfileModal() {
   };
 
   const onAvatarPress = () => {
-    viewProfilePhoto();
-  };
-
-  const onAvatarLongPress = () => {
-    if (hasPartnerMoment) {
-      viewPartnerMoment();
-      return;
-    }
     viewProfilePhoto();
   };
 
@@ -250,233 +202,249 @@ export function PartnerProfileModal() {
       ? latestPartnerMoment.media_url
       : profile?.avatar_url;
 
+  const latestMomentAgo = latestPartnerMoment
+    ? formatDistanceToNow(new Date(latestPartnerMoment.created_at), { addSuffix: true })
+    : null;
+  const moodLog = profile?.id ? moods?.[profile.id] : undefined;
+  const moodAgo = moodLog?.created_at ? formatDistanceToNow(new Date(moodLog.created_at), { addSuffix: true }) : null;
+
+  const sharesLocation = Boolean(user?.location_sharing_enabled && profile?.location_sharing_enabled);
+  const distanceApart = useMemo(() => {
+    if (!sharesLocation) return null;
+    if (!hasValidCoords(user?.location_latitude, user?.location_longitude)) return null;
+    if (!hasValidCoords(profile?.location_latitude, profile?.location_longitude)) return null;
+    return formatDistanceApart(
+      haversineDistanceKm(
+        { latitude: user!.location_latitude!, longitude: user!.location_longitude! },
+        { latitude: profile!.location_latitude!, longitude: profile!.location_longitude! },
+      ),
+    );
+  }, [sharesLocation, user, profile]);
+  const clock = formatPartnerClock(profile?.timezone);
+
+  const anniversary = relationship?.created_at
+    ? getAnniversaryCountdown(getRelationshipAnniversaryIso(relationship))
+    : null;
+  const { data: momentCount } = useQuery({
+    queryKey: ['momentCount', relationship?.id],
+    queryFn: () => api.countMoments(relationship!.id),
+    enabled: visible && !!relationship?.id,
+  });
+  const firstName = getFirstName(partnerName) ?? 'Partner';
+  const surface = cardSurface(colors);
+  const tileBg = colors.boldBorder ? colors.backgroundElevated : colors.surfaceElevated;
+
   return (
     <>
-      <Modal
-        visible={visible}
-        animationType="slide"
-        presentationStyle={Platform.OS === 'ios' ? 'pageSheet' : 'fullScreen'}
-        onRequestClose={close}
-        onDismiss={close}>
-        <GestureHandlerRootView style={[styles.root, { backgroundColor: colors.background }]}>
-        <Animated.View style={[styles.root, { backgroundColor: colors.background }, dragSheetStyle]}>
-          {!profile && isLoadingPartner ? (
-            <View style={[styles.loadingState, { paddingTop: insets.top + 24 }]}>
-              <ActivityIndicator size="large" color={colors.accent} />
-            </View>
-          ) : !profile ? (
-            <View style={[styles.loadingState, { paddingTop: insets.top + 24 }]}>
-              <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
-                {isPartnerError
-                  ? 'Could not load partner profile.'
-                  : partnerId
-                    ? 'Loading partner profile…'
-                    : 'Your partner has not joined yet.'}
-              </Text>
-            </View>
-          ) : (
-          <SwipeBackSheet onDismiss={close}>
-            <GestureDetector gesture={dragHandlePan}>
-              <LinearGradient
-                colors={colors.gradient}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.dragHandleTouchTarget}
-                hitSlop={{ top: 10, bottom: 10, left: 30, right: 30 }}>
-                <View style={[styles.dragHandle, { backgroundColor: colorWithAlpha(colors.onAccent, 0.45) }]} />
-              </LinearGradient>
-            </GestureDetector>
-
-            <ScrollView
-              style={styles.scroll}
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={{ paddingBottom: insets.bottom + 28 }}>
-              <LinearGradient
-                colors={colors.gradient}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.heroBleed}>
-                <View style={[styles.screenInset, styles.heroInner]}>
+      {/* A full page, like Chat itself: slides in from the right, back arrow at
+          the top, swipe right anywhere (or Android back) to close. */}
+      <FullScreenPage visible={visible} title="" onBack={close}>
+        {!profile && isLoadingPartner ? (
+          <View style={styles.loadingState}>
+            <ActivityIndicator size="large" color={colors.accent} />
+          </View>
+        ) : !profile ? (
+          <View style={styles.loadingState}>
+            <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
+              {isPartnerError
+                ? 'Could not load your partner’s profile.'
+                : partnerId
+                  ? 'Loading…'
+                  : 'Your partner hasn’t joined yet.'}
+            </Text>
+          </View>
+        ) : (
+          <ScrollView
+            style={styles.flex}
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 16 }]}>
+            {/* Who: photo (story ring when they've posted today), name, status, their time + distance. */}
+            <View style={styles.hero}>
               <Pressable
-                onPress={onAvatarPress}
-                onLongPress={onAvatarLongPress}
-                delayLongPress={400}
-                disabled={!hasPartnerMoment && !profile.avatar_url?.trim() && !profile.name?.trim()}
-                style={styles.avatarPress}
+                onPress={hasPartnerMoment ? viewPartnerMoment : onAvatarPress}
+                onLongPress={viewProfilePhoto}
+                delayLongPress={350}
                 accessibilityRole="button"
-                accessibilityHint={
-                  hasPartnerMoment ? 'Long press to view moment' : 'View profile photo'
-                }
-                accessibilityLabel={
-                  profile.avatar_url ? 'View profile photo' : 'Profile photo'
-                }>
+                accessibilityLabel={hasPartnerMoment ? `View ${firstName}’s moment` : 'View profile photo'}
+                accessibilityHint={hasPartnerMoment ? 'Hold to see the profile photo' : undefined}>
                 {hasPartnerMoment ? (
                   <LinearGradient
                     colors={['#5b8def', '#9b6bff', '#e85d75']}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 1 }}
-                    style={styles.avatarStoryRing}>
-                    <View style={styles.avatarStoryInner}>
-                      <View style={styles.avatarStoryClip}>
-                        {storyPreviewUrl ? (
-                          <Image
-                            source={{ uri: storyPreviewUrl }}
-                            style={styles.avatarStoryImage}
-                            contentFit="cover"
-                          />
-                        ) : (
-                          <Avatar
-                            name={profile.name}
-                            imageUrl={profile.avatar_url}
-                            size={104}
-                            colorsOverride={['#ffffff', '#ffffff']}
-                          />
-                        )}
-                      </View>
+                    style={styles.storyRing}>
+                    <View style={[styles.storyGap, { backgroundColor: colors.background }]}>
+                      {storyPreviewUrl ? (
+                        <Image source={{ uri: storyPreviewUrl }} style={styles.storyImage} contentFit="cover" />
+                      ) : (
+                        <Avatar name={profile.name} imageUrl={profile.avatar_url} size={112} />
+                      )}
                     </View>
-                    {isOnline && (
-                      <View
-                        style={[
-                          styles.onlineDot,
-                          { backgroundColor: colors.success, borderColor: colors.onAccent },
-                        ]}
-                      />
-                    )}
                   </LinearGradient>
                 ) : (
-                  <View style={[styles.avatarRing, { borderColor: colorWithAlpha(colors.onAccent, 0.35) }]}>
-                    <Avatar
-                      name={profile.name}
-                      imageUrl={profile.avatar_url}
-                      size={108}
-                      colorsOverride={['#ffffff', '#ffffff']}
-                    />
-                    {isOnline && (
-                      <View
-                        style={[
-                          styles.onlineDot,
-                          { backgroundColor: colors.success, borderColor: colors.onAccent },
-                        ]}
-                      />
-                    )}
-                  </View>
+                  <Avatar name={profile.name} imageUrl={profile.avatar_url} size={120} />
                 )}
+                {isOnline ? (
+                  <View style={[styles.onlineDot, { backgroundColor: colors.success, borderColor: colors.background }]} />
+                ) : null}
               </Pressable>
-
               {hasPartnerMoment ? (
-                <Text style={[styles.avatarHint, { color: colorWithAlpha(colors.onAccent, 0.78) }]}>
-                  Tap for moment · Hold for photo
-                </Text>
+                <Text style={[styles.hint, { color: colors.textTertiary }]}>Tap for today’s moment · hold for photo</Text>
               ) : null}
 
-              <Text style={[styles.heroName, { color: colors.onAccent }]}>{partnerName}</Text>
+              <Text style={[styles.name, { color: colors.text }]} numberOfLines={1}>
+                {partnerName}
+              </Text>
+              <PartnerStatusLine
+                isTyping={partnerTyping}
+                isOnline={isOnline}
+                lastSeenAt={lastSeenAt}
+                statusHidden={statusHidden}
+                textStyle={{ fontSize: 14, fontWeight: '700', color: isOnline ? colors.success : colors.textSecondary }}
+              />
 
-              <View style={[styles.heroStatus, { backgroundColor: colorWithAlpha(colors.onAccent, 0.16) }]}>
-                <PartnerStatusLine
-                  isTyping={partnerTyping}
-                  isOnline={isOnline}
-                  lastSeenAt={lastSeenAt}
-                  statusHidden={statusHidden}
-                  textStyle={{ fontSize: 13, fontWeight: '600', color: colors.onAccent }}
-                />
-              </View>
+              {clock || distanceApart ? (
+                <View style={styles.chips}>
+                  {clock ? (
+                    <View style={[styles.chip, surface]}>
+                      <Icon name={clock.isOvernight ? 'moon' : 'time'} size={15} color={colors.textSecondary} />
+                      <Text style={[styles.chipText, { color: colors.textSecondary }]}>{clock.time} their time</Text>
+                    </View>
+                  ) : null}
+                  {distanceApart ? (
+                    <View style={[styles.chip, surface]}>
+                      <Icon name="location" size={15} color={colors.textSecondary} />
+                      <Text style={[styles.chipText, { color: colors.textSecondary }]}>{distanceApart}</Text>
+                    </View>
+                  ) : null}
                 </View>
-              </LinearGradient>
+              ) : null}
+            </View>
 
-            <View style={[styles.screenInset, styles.body]}>
-              <View style={styles.actions}>
-                <ActionTile icon="messages" label="Message" onPress={goToChat} colors={colors} />
-                <ActionTile icon="call" label="Call" onPress={startVoiceCall} colors={colors} />
-                <ActionTile icon="videocam" label="Video" onPress={startVideoCall} colors={colors} />
-                <ActionTile icon="camera" label="Moment" onPress={sendMoment} colors={colors} />
+            {/* Do: message (the main one), call, video, send a moment. */}
+            <View style={styles.actions}>
+              <RoundAction icon="messages" label="Message" onPress={goToChat} primary />
+              <RoundAction icon="call" label="Call" onPress={startVoiceCall} />
+              <RoundAction icon="videocam" label="Video" onPress={startVideoCall} />
+              <RoundAction icon="camera" label="Moment" onPress={sendMoment} />
+            </View>
+
+            <Section title="Right now">
+              <View style={[styles.card, styles.row, styles.rowPad, surface]}>
+                {partnerMood ? (
+                  <>
+                    <View style={[styles.moodBadge, { backgroundColor: (MOOD_COLORS[partnerMood] ?? colors.accent) + '26' }]}>
+                      <Text style={styles.moodEmoji}>{MOOD_EMOJI[partnerMood] ?? '✨'}</Text>
+                    </View>
+                    <View style={styles.flex}>
+                      <Text style={[styles.kicker, { color: colors.textSecondary }]}>Feeling</Text>
+                      <Text style={[styles.bigLabel, { color: colors.text }]}>{MOOD_LABELS[partnerMood] ?? partnerMood}</Text>
+                    </View>
+                    {moodAgo ? <Text style={[styles.meta, { color: colors.textTertiary }]}>{moodAgo}</Text> : null}
+                  </>
+                ) : (
+                  <>
+                    <View style={[styles.moodBadge, { backgroundColor: tileBg }]}>
+                      <Icon name="happy" size={24} color={colors.textSecondary} />
+                    </View>
+                    <Text style={[styles.flex, styles.muted, { color: colors.textSecondary }]}>
+                      {firstName} hasn’t shared a mood yet today.
+                    </Text>
+                  </>
+                )}
               </View>
 
-              <InfoCard title="Today's mood" colors={colors}>
-                {partnerMood ? (
-                  <MoodRow mood={partnerMood as MoodType} colors={colors} />
-                ) : (
-                  <Text style={[styles.muted, { color: colors.textSecondary }]}>
-                    {getFirstName(partnerName)} hasn&apos;t shared a mood yet today.
-                  </Text>
-                )}
-              </InfoCard>
-
-              {showLocation ? (
-                <InfoCard title="Location" colors={colors}>
-                  {locationMarkers.length > 0 ? (
-                    <>
-                      <LocationMapPreview
-                        markers={locationMarkers}
-                        height={168}
-                        onPress={openFullMap}
-                      />
-                    </>
-                  ) : null}
-                  {locationLabel ? (
-                    locationMarkers.length > 0 ? (
-                      <Pressable onPress={openFullMap} style={[styles.locationRow, styles.locationRowSpaced]}>
-                        <View style={[styles.locationIcon, { backgroundColor: colors.accentSoft }]}>
-                          <Icon name="location" size={18} color={colors.accent} />
-                        </View>
-                        <View style={{ flex: 1 }}>
-                          <Text style={[styles.locationText, { color: colors.text }]}>{locationLabel}</Text>
-                          {locationFreshness ? (
-                            <Text style={[styles.locationMeta, { color: colors.textTertiary }]}>
-                              {locationFreshness}
-                            </Text>
-                          ) : null}
-                        </View>
-                      </Pressable>
+              {latestPartnerMoment ? (
+                <Pressable
+                  onPress={viewPartnerMoment}
+                  accessibilityRole="button"
+                  style={({ pressed }) => [styles.card, styles.row, styles.momentRow, surface, pressed && styles.pressed]}>
+                  {momentHasVisual(latestPartnerMoment) && latestPartnerMoment.media_url ? (
+                    <Image source={{ uri: latestPartnerMoment.media_url }} style={styles.momentThumb} contentFit="cover" />
+                  ) : (
+                    <View style={[styles.momentThumb, styles.center, { backgroundColor: tileBg }]}>
+                      <Icon name="camera" size={22} color={colors.textSecondary} />
+                    </View>
+                  )}
+                  <View style={styles.flex}>
+                    <Text style={[styles.kicker, { color: colors.textSecondary }]}>Today’s moment</Text>
+                    {latestPartnerMoment.content?.trim() ? (
+                      <Text style={[styles.rowTitle, { color: colors.text }]} numberOfLines={2}>
+                        “{latestPartnerMoment.content.trim()}”
+                      </Text>
                     ) : (
-                      <View style={styles.locationRow}>
-                        <View style={[styles.locationIcon, { backgroundColor: colors.accentSoft }]}>
-                          <Icon name="location" size={18} color={colors.accent} />
-                        </View>
-                        <View style={{ flex: 1 }}>
-                          <Text style={[styles.locationText, { color: colors.text }]}>{locationLabel}</Text>
-                          {locationFreshness ? (
-                            <Text style={[styles.locationMeta, { color: colors.textTertiary }]}>
-                              {locationFreshness}
-                            </Text>
-                          ) : null}
-                        </View>
-                      </View>
-                    )
-                  ) : null}
-                </InfoCard>
+                      <Text style={[styles.rowTitle, { color: colors.text }]}>Tap to view</Text>
+                    )}
+                    {latestMomentAgo ? <Text style={[styles.meta, { color: colors.textTertiary }]}>{latestMomentAgo}</Text> : null}
+                  </View>
+                  <Icon name="chevronRight" size={16} color={colors.textTertiary} />
+                </Pressable>
               ) : null}
+            </Section>
 
-              <InfoCard title="Your connection" colors={colors}>
-                <DetailRow
-                  icon="fire"
-                  label="Current streak"
-                  value={streakCount != null ? `${streakCount} days` : '—'}
-                  colors={colors}
+            {showLocation ? (
+              <Section title="Where they are">
+                <View style={[styles.card, styles.clip, surface]}>
+                  {locationMarkers.length > 0 ? (
+                    <LocationMapPreview markers={locationMarkers} height={150} onPress={openFullMap} />
+                  ) : null}
+                  <Pressable onPress={openFullMap} style={({ pressed }) => [styles.row, styles.rowPad, pressed && styles.pressed]}>
+                    <View style={[styles.smallTile, { backgroundColor: tileBg }]}>
+                      <Icon name="location" size={18} color={colors.text} />
+                    </View>
+                    <View style={styles.flex}>
+                      <Text style={[styles.rowTitle, { color: colors.text }]} numberOfLines={1}>
+                        {locationLabel || 'Open map'}
+                      </Text>
+                      {locationFreshness ? (
+                        <Text style={[styles.meta, { color: colors.textTertiary }]}>Updated {locationFreshness}</Text>
+                      ) : null}
+                    </View>
+                    <Icon name="chevronRight" size={16} color={colors.textTertiary} />
+                  </Pressable>
+                </View>
+              </Section>
+            ) : null}
+
+            <Section title="The two of you">
+              <View style={[styles.card, styles.list, surface]}>
+                <InfoRow
+                  icon={<StreakFlame size={20} tone={streakCount ? 'active' : 'idle'} />}
+                  label="Streak"
+                  value={`${streakCount ?? 0} day${streakCount === 1 ? '' : 's'}`}
                 />
                 {sinceLabel ? (
-                  <DetailRow
-                    icon="heart"
-                    label="Together since"
-                    value={sinceLabel.long}
-                    colors={colors}
+                  <InfoRow icon={<Icon name="heart" size={19} color={colors.text} />} label="Together since" value={sinceLabel.short} />
+                ) : null}
+                {anniversary ? (
+                  <InfoRow
+                    icon={<Icon name="calendar" size={19} color={colors.text} />}
+                    label={anniversary.daysUntil === 0 ? 'Anniversary' : 'Anniversary in'}
+                    value={anniversary.daysUntil === 0 ? 'Today 🎉' : `${anniversary.daysUntil} days`}
                   />
                 ) : null}
-              </InfoCard>
+                <InfoRow
+                  icon={<Icon name="camera" size={19} color={colors.text} />}
+                  label="Moments shared"
+                  value={momentCount != null ? momentCount.toLocaleString() : '…'}
+                  last
+                />
+              </View>
+            </Section>
 
-              <Pressable
-                onPress={openMomentsHistory}
-                style={[styles.secondaryBtn, { borderColor: colors.border, backgroundColor: colors.surface }]}>
-                <Icon name="camera" size={18} color={colors.accent} />
-                <Text style={[styles.secondaryBtnText, { color: colors.text }]}>Moments history</Text>
-                <Icon name="chevronRight" size={18} color={colors.textTertiary} />
-              </Pressable>
-            </View>
-            </ScrollView>
-          </SwipeBackSheet>
-          )}
-        </Animated.View>
-        </GestureHandlerRootView>
-      </Modal>
+            <Pressable
+              onPress={openMomentsHistory}
+              accessibilityRole="button"
+              style={({ pressed }) => [styles.card, styles.row, styles.rowPad, surface, pressed && styles.pressed]}>
+              <View style={[styles.smallTile, { backgroundColor: tileBg }]}>
+                <Icon name="albums" size={19} color={colors.text} />
+              </View>
+              <Text style={[styles.flex, styles.rowLabel, { color: colors.text }]}>Moments history</Text>
+              <Icon name="chevronRight" size={16} color={colors.textTertiary} />
+            </Pressable>
+          </ScrollView>
+        )}
+      </FullScreenPage>
 
       <FullScreenImageModal
         visible={showAvatar}
@@ -489,260 +457,114 @@ export function PartnerProfileModal() {
   );
 }
 
-function ActionTile({
-  icon,
-  label,
-  onPress,
-  colors,
-}: {
-  icon: IconName;
-  label: string;
-  onPress: () => void;
-  colors: { accent: string; surface: string; border: string; text: string };
-}) {
+/** A card's fill, plus the theme's border where cards need one (Paper). */
+function cardSurface(colors: ThemeColors) {
+  return { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: colors.boldBorder ? 2 : 0 };
+}
+
+function Section({ title, children }: { title: string; children: ReactNode }) {
+  const { colors } = useTheme();
+  return (
+    <View style={styles.section}>
+      <Text style={[styles.sectionTitle, { color: colors.text }]}>{title}</Text>
+      {children}
+    </View>
+  );
+}
+
+/** Round action button with its label underneath (like Contacts). */
+function RoundAction({ icon, label, onPress, primary }: { icon: IconName; label: string; onPress: () => void; primary?: boolean }) {
+  const { colors } = useTheme();
   return (
     <Pressable
       onPress={() => {
         void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
         onPress();
       }}
-      style={[styles.actionTile, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-      <View style={[styles.actionIcon, { backgroundColor: colors.accent + '18' }]}>
-        <Icon name={icon} size={20} color={colors.accent} />
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      style={({ pressed }) => [styles.action, pressed && styles.pressed]}>
+      <View
+        style={[
+          styles.actionCircle,
+          primary
+            ? { backgroundColor: colors.accent }
+            : cardSurface(colors),
+        ]}>
+        <Icon name={icon} size={24} color={primary ? colors.onAccent : colors.text} />
       </View>
       <Text style={[styles.actionLabel, { color: colors.text }]}>{label}</Text>
     </Pressable>
   );
 }
 
-function InfoCard({
-  title,
-  children,
-  colors,
-}: {
-  title: string;
-  children: ReactNode;
-  colors: { text: string; surface: string; border: string };
-}) {
+function InfoRow({ icon, label, value, last }: { icon: ReactNode; label: string; value: string; last?: boolean }) {
+  const { colors } = useTheme();
   return (
-    <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-      <Text style={[styles.cardTitle, { color: colors.text }]}>{title}</Text>
-      {children}
-    </View>
-  );
-}
-
-function MoodRow({ mood, colors }: { mood: MoodType; colors: { text: string } }) {
-  const tint = MOOD_COLORS[mood] ?? colors.text;
-  return (
-    <View style={styles.moodRow}>
-      <View style={[styles.moodBadge, { backgroundColor: tint + '22' }]}>
-        <Text style={styles.moodEmoji}>{MOOD_EMOJI[mood] ?? '✨'}</Text>
+    <View style={styles.infoRow}>
+      <View style={[styles.smallTile, { backgroundColor: colors.boldBorder ? colors.backgroundElevated : colors.surfaceElevated }]}>
+        {icon}
       </View>
-      <Text style={[styles.moodLabel, { color: colors.text }]}>{MOOD_LABELS[mood] ?? mood}</Text>
-    </View>
-  );
-}
-
-function DetailRow({
-  icon,
-  label,
-  value,
-  colors,
-}: {
-  icon: IconName;
-  label: string;
-  value: string;
-  colors: { text: string; textSecondary: string; accentSoft: string; accent: string };
-}) {
-  return (
-    <View style={styles.detailRow}>
-      <View style={[styles.detailIcon, { backgroundColor: colors.accentSoft }]}>
-        <Icon name={icon} size={16} color={colors.accent} />
+      <View
+        style={[
+          styles.infoBody,
+          !last && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
+        ]}>
+        <Text style={[styles.rowLabel, styles.flex, { color: colors.text }]}>{label}</Text>
+        <Text style={[styles.infoValue, { color: colors.textSecondary }]} numberOfLines={1}>
+          {value}
+        </Text>
       </View>
-      <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>{label}</Text>
-      <Text style={[styles.detailValue, { color: colors.text }]} numberOfLines={1}>
-        {value}
-      </Text>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1 },
-  scroll: { flex: 1 },
-  screenInset: {
-    paddingHorizontal: SCREEN_PAD,
-    width: '100%',
-  },
-  heroInner: {
-    alignItems: 'center',
-    paddingTop: 12,
-  },
-  heroBleed: {
-    width: '100%',
-    paddingBottom: 28,
-  },
-  dragHandleTouchTarget: {
-    width: '100%',
-    alignItems: 'center',
-    paddingVertical: 10,
-  },
-  dragHandle: {
-    width: 40,
-    height: 4,
-    borderRadius: 2,
-  },
-  avatarPress: { marginBottom: 14 },
-  avatarStoryRing: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    alignItems: 'center',
-    justifyContent: 'center',
-    position: 'relative',
-  },
-  avatarStoryInner: {
-    width: 112,
-    height: 112,
-    borderRadius: 56,
-    backgroundColor: 'rgba(0,0,0,0.2)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    position: 'relative',
-  },
-  avatarStoryClip: {
-    width: 112,
-    height: 112,
-    borderRadius: 56,
-    overflow: 'hidden',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarStoryImage: {
-    width: 112,
-    height: 112,
-    borderRadius: 56,
-  },
-  avatarHint: {
-    marginTop: -6,
-    marginBottom: 10,
-    fontSize: 12,
-    fontWeight: '600',
-    letterSpacing: 0.2,
-  },
-  avatarRing: {
-    padding: 4,
-    borderRadius: 999,
-    borderWidth: 2,
-    position: 'relative',
-  },
-  onlineDot: {
-    position: 'absolute',
-    right: 11,
-    bottom: 11,
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    borderWidth: 3,
-    zIndex: 2,
-    elevation: 2,
-  },
-  heroName: {
-    fontSize: 28,
-    fontWeight: '800',
-    letterSpacing: -0.5,
-    textAlign: 'center',
-  },
-  heroStatus: {
-    marginTop: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderRadius: 999,
-  },
-  body: { paddingTop: 20, gap: 14, alignSelf: 'stretch' },
-  actions: {
-    flexDirection: 'row',
-    gap: 10,
-    alignSelf: 'stretch',
-  },
-  actionTile: {
-    flex: 1,
-    alignItems: 'center',
-    gap: 8,
-    paddingVertical: 14,
-    borderRadius: 16,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
-  actionIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  actionLabel: { fontSize: 11, fontWeight: '700' },
-  card: {
-    alignSelf: 'stretch',
-    borderRadius: 18,
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: 16,
-    gap: 12,
-  },
-  cardTitle: { fontSize: 13, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.6 },
-  muted: { fontSize: 15, lineHeight: 22 },
-  moodRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  moodBadge: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  moodEmoji: { fontSize: 24 },
-  moodLabel: { fontSize: 18, fontWeight: '700' },
-  locationRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  locationRowSpaced: { marginTop: 12 },
-  locationIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  locationText: { fontSize: 16, fontWeight: '600' },
-  locationMeta: { fontSize: 12, marginTop: 2 },
-  detailRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  detailIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  detailLabel: { flex: 1, fontSize: 14, fontWeight: '500' },
-  detailValue: { fontSize: 14, fontWeight: '700', textAlign: 'right', flexShrink: 1, marginLeft: 12 },
-  secondaryBtn: {
-    alignSelf: 'stretch',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderRadius: 16,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
-  secondaryBtnText: { flex: 1, fontSize: 15, fontWeight: '600' },
-  loadingState: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 32,
-    gap: 16,
-  },
+  flex: { flex: 1, minWidth: 0 },
+  center: { alignItems: 'center', justifyContent: 'center' },
+  pressed: { opacity: 0.75 },
+  // Same rhythm as Home, You and Settings: 24 between sections, 10 inside.
+  scroll: { paddingHorizontal: 16, paddingTop: 4, gap: 24 },
+  section: { gap: 10 },
+  sectionTitle: { fontSize: 20, fontWeight: '800', letterSpacing: -0.3 },
+  card: { borderRadius: 22 },
+  clip: { overflow: 'hidden' },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  rowPad: { padding: 14 },
+  list: { overflow: 'hidden', paddingVertical: 2 },
+
+  hero: { alignItems: 'center', gap: 6 },
+  storyRing: { width: 128, height: 128, borderRadius: 64, alignItems: 'center', justifyContent: 'center' },
+  storyGap: { width: 120, height: 120, borderRadius: 60, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  storyImage: { width: 112, height: 112, borderRadius: 56 },
+  onlineDot: { position: 'absolute', right: 8, bottom: 8, width: 22, height: 22, borderRadius: 11, borderWidth: 4 },
+  hint: { fontSize: 13, fontWeight: '700', marginTop: 4 },
+  name: { fontSize: 30, fontWeight: '900', letterSpacing: -0.6, marginTop: 6 },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 8, marginTop: 8 },
+  chip: { height: 32, paddingHorizontal: 12, borderRadius: 16, flexDirection: 'row', alignItems: 'center', gap: 6 },
+  chipText: { fontSize: 13, fontWeight: '700' },
+
+  actions: { flexDirection: 'row', justifyContent: 'space-between' },
+  action: { flex: 1, alignItems: 'center', gap: 8 },
+  actionCircle: { width: 58, height: 58, borderRadius: 29, alignItems: 'center', justifyContent: 'center' },
+  actionLabel: { fontSize: 13, fontWeight: '700' },
+
+  moodBadge: { width: 52, height: 52, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+  moodEmoji: { fontSize: 28 },
+  kicker: { fontSize: 13, fontWeight: '800' },
+  bigLabel: { fontSize: 18, fontWeight: '800' },
+  meta: { fontSize: 13, fontWeight: '600' },
+  muted: { fontSize: 15, lineHeight: 21 },
+  momentRow: { padding: 10, paddingRight: 14 },
+  momentThumb: { width: 64, height: 80, borderRadius: 14 },
+  rowTitle: { fontSize: 16, fontWeight: '800' },
+  rowLabel: { fontSize: 16, fontWeight: '600' },
+  smallTile: { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+
+  infoRow: { flexDirection: 'row', alignItems: 'center', paddingLeft: 14 },
+  infoBody: { flex: 1, minHeight: 54, marginLeft: 12, paddingRight: 14, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  infoValue: { fontSize: 15, fontWeight: '700', maxWidth: '50%' },
+
+  loadingState: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32, gap: 16 },
   loadingText: { fontSize: 16, textAlign: 'center', lineHeight: 24 },
 });

@@ -6,7 +6,7 @@ import { Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { MilestoneHeroFlame } from '@/components/home/MilestoneHeroFlame';
-import { Icon } from '@/components/ui/Icon';
+import { StreakFlame } from '@/components/home/StreakFlame';
 import { Fonts } from '@/constants/theme';
 import { useStreak } from '@/hooks/queries';
 import {
@@ -23,7 +23,6 @@ const BG_BOTTOM = '#120404';
 const TRACK_RED = '#C62828';
 const TEXT_MUTED = 'rgba(255,255,255,0.55)';
 const FUTURE_FILL = 'rgba(255,255,255,0.1)';
-const FLAME_ORANGE = '#FF8C00';
 const DAY_FLAME = 25;
 
 const SERIF = Platform.select({
@@ -123,7 +122,7 @@ function MilestoneWeekTracker({
       <View style={styles.weekdayRow}>
         {days.map((day) => (
           <Text key={`label-${day.date.toISOString()}`} style={styles.weekday}>
-            {format(day.date, 'EEE').toUpperCase()}
+            {format(day.date, 'EEE')}
           </Text>
         ))}
       </View>
@@ -185,7 +184,7 @@ function MilestoneDayDot({ day }: { day: StreakDayCell }) {
   if (filled) {
     return (
       <View style={[styles.dayCircle, styles.dayCircleActive]}>
-        <Icon name="fire" size={DAY_FLAME} color={FLAME_ORANGE} filled />
+        <StreakFlame size={DAY_FLAME} tone="active" />
       </View>
     );
   }

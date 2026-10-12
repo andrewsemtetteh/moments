@@ -7,11 +7,15 @@ export const PRIMARY_MOOD_KEYS = ['happy', 'excited', 'calm', 'stressed', 'lonel
 
 export const MAX_QUICK_MOODS = 4;
 
-export function getQuickMoods(frequentMoods: string[], currentMood?: string): string[] {
+/**
+ * Quick moods for the home row. `limit` follows the screen: 4 on small phones,
+ * 5 from standard-width phones up (see MoodSnapshot).
+ */
+export function getQuickMoods(frequentMoods: string[], currentMood?: string, limit = MAX_QUICK_MOODS): string[] {
   const result: string[] = [];
 
   const push = (mood: string) => {
-    if (result.length >= MAX_QUICK_MOODS) return;
+    if (result.length >= limit) return;
     if (!ALL_MOOD_KEYS.includes(mood) || result.includes(mood)) return;
     result.push(mood);
   };
@@ -38,6 +42,6 @@ export function shouldShowMoodExpand(quickMoods: string[]): boolean {
 }
 
 /** Stable defaults for the quick row (loading + empty history). */
-export function getDefaultQuickMoods(): string[] {
-  return PRIMARY_MOOD_KEYS.slice(0, MAX_QUICK_MOODS);
+export function getDefaultQuickMoods(limit = MAX_QUICK_MOODS): string[] {
+  return PRIMARY_MOOD_KEYS.slice(0, limit);
 }

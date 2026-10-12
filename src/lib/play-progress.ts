@@ -4,6 +4,8 @@
  * (`couple_progress`) and the offline cache.
  */
 
+import type { IconName } from '@/components/ui/Icon';
+
 export interface QuestState {
   /** Local calendar date (YYYY-MM-DD) these counters belong to. */
   date: string;
@@ -83,20 +85,62 @@ export interface QuestDef {
   id: string;
   title: string;
   emoji: string;
+  /** Shown on the Daily quests card (the emoji is kept for celebrations). */
+  icon: IconName;
   event: string;
   target: number;
   reward: number;
 }
 
 export const QUEST_POOL: QuestDef[] = [
-  { id: 'play_any', title: 'Play a game together', emoji: '🎮', event: 'game_played', target: 1, reward: 25 },
-  { id: 'play_three', title: 'Play 3 games', emoji: '🎲', event: 'game_played', target: 3, reward: 45 },
-  { id: 'play_live', title: 'Start a live audio room', emoji: '🎧', event: 'live_played', target: 1, reward: 40 },
-  { id: 'sync_five', title: 'Match answers 5 times', emoji: '🧠', event: 'sync_match', target: 5, reward: 40 },
-  { id: 'dare_done', title: 'Complete a dare', emoji: '🔥', event: 'dare_done', target: 1, reward: 35 },
-  { id: 'quiz_win', title: 'Win a quiz showdown', emoji: '🏆', event: 'quiz_win', target: 1, reward: 45 },
-  { id: 'daily_q', title: 'Answer today’s question', emoji: '💬', event: 'daily_answered', target: 1, reward: 30 },
-  { id: 'send_moment', title: 'Send a moment', emoji: '📸', event: 'moment_sent', target: 1, reward: 30 },
+  {
+    id: 'play_any',
+    title: 'Play a game together',
+    emoji: '🎮',
+    icon: 'gamepad',
+    event: 'game_played',
+    target: 1,
+    reward: 25,
+  },
+  { id: 'play_three', title: 'Play 3 games', emoji: '🎲', icon: 'dice', event: 'game_played', target: 3, reward: 45 },
+  {
+    id: 'play_live',
+    title: 'Start a live audio room',
+    emoji: '🎧',
+    icon: 'mic',
+    event: 'live_played',
+    target: 1,
+    reward: 40,
+  },
+  {
+    id: 'sync_five',
+    title: 'Match answers 5 times',
+    emoji: '🧠',
+    icon: 'sparkles',
+    event: 'sync_match',
+    target: 5,
+    reward: 40,
+  },
+  { id: 'dare_done', title: 'Complete a dare', emoji: '🔥', icon: 'fire', event: 'dare_done', target: 1, reward: 35 },
+  { id: 'quiz_win', title: 'Win a quiz showdown', emoji: '🏆', icon: 'star', event: 'quiz_win', target: 1, reward: 45 },
+  {
+    id: 'daily_q',
+    title: 'Answer today’s question',
+    emoji: '💬',
+    icon: 'chat',
+    event: 'daily_answered',
+    target: 1,
+    reward: 30,
+  },
+  {
+    id: 'send_moment',
+    title: 'Send a moment',
+    emoji: '📸',
+    icon: 'camera',
+    event: 'moment_sent',
+    target: 1,
+    reward: 30,
+  },
 ];
 
 export const QUESTS_PER_DAY = 3;
@@ -134,6 +178,8 @@ export interface BadgeDef {
   id: string;
   title: string;
   emoji: string;
+  /** App icon, for places that draw icons instead of emoji (Wrapped). */
+  icon: IconName;
   hint: string;
   test: (p: CoupleProgress, level: number) => boolean;
 }
@@ -141,22 +187,134 @@ export interface BadgeDef {
 const stat = (p: CoupleProgress, key: string) => p.stats[key] ?? 0;
 
 export const BADGES: BadgeDef[] = [
-  { id: 'first_game', title: 'First Play', emoji: '🎮', hint: 'Play your first game', test: (p) => stat(p, 'games_played') >= 1 },
-  { id: 'live_first', title: 'Going Live', emoji: '🎧', hint: 'Finish a live audio room', test: (p) => stat(p, 'live_games') >= 1 },
-  { id: 'ten_games', title: 'Regulars', emoji: '🎲', hint: 'Play 10 games', test: (p) => stat(p, 'games_played') >= 10 },
-  { id: 'streak_3', title: 'On a Roll', emoji: '🔥', hint: '3-day play streak', test: (p) => p.bestStreak >= 3 },
-  { id: 'sync_10', title: 'Mind Melders', emoji: '🧠', hint: 'Match answers 10 times', test: (p) => stat(p, 'sync_matches') >= 10 },
-  { id: 'dares_5', title: 'Fearless', emoji: '😈', hint: 'Complete 5 dares', test: (p) => stat(p, 'dares_done') >= 5 },
-  { id: 'truths_10', title: 'Open Book', emoji: '📖', hint: 'Tell 10 truths', test: (p) => stat(p, 'truths_done') >= 10 },
-  { id: 'detective', title: 'Mind Reader', emoji: '🕵️', hint: 'Guess 10 answers right', test: (p) => stat(p, 'guesses_correct') >= 10 },
-  { id: 'live_ten', title: 'Voice & Vibes', emoji: '🎙️', hint: 'Finish 10 live rooms', test: (p) => stat(p, 'live_games') >= 10 },
-  { id: 'quiz_ace', title: 'Quiz Whiz', emoji: '🏆', hint: 'Get 25 quiz answers right', test: (p) => stat(p, 'quiz_correct') >= 25 },
-  { id: 'streak_7', title: 'Week of Play', emoji: '⚡', hint: '7-day play streak', test: (p) => p.bestStreak >= 7 },
-  { id: 'level_5', title: 'Power Couple', emoji: '💎', hint: 'Reach level 5', test: (_p, level) => level >= 5 },
-  { id: 'sync_50', title: 'One Brain', emoji: '🌀', hint: 'Match answers 50 times', test: (p) => stat(p, 'sync_matches') >= 50 },
-  { id: 'fifty_games', title: 'Game Night Legends', emoji: '🏅', hint: 'Play 50 games', test: (p) => stat(p, 'games_played') >= 50 },
-  { id: 'streak_30', title: 'Monthly Habit', emoji: '👑', hint: '30-day play streak', test: (p) => p.bestStreak >= 30 },
-  { id: 'level_10', title: 'Elite Duo', emoji: '🌟', hint: 'Reach level 10', test: (_p, level) => level >= 10 },
+  {
+    id: 'first_game',
+    title: 'First Play',
+    emoji: '🎮',
+    icon: 'gamepad',
+    hint: 'Play your first game',
+    test: (p) => stat(p, 'games_played') >= 1,
+  },
+  {
+    id: 'live_first',
+    title: 'Going Live',
+    emoji: '🎧',
+    icon: 'volumeHigh',
+    hint: 'Finish a live audio room',
+    test: (p) => stat(p, 'live_games') >= 1,
+  },
+  {
+    id: 'ten_games',
+    title: 'Regulars',
+    emoji: '🎲',
+    icon: 'dice',
+    hint: 'Play 10 games',
+    test: (p) => stat(p, 'games_played') >= 10,
+  },
+  {
+    id: 'streak_3',
+    title: 'On a Roll',
+    emoji: '🔥',
+    icon: 'fire',
+    hint: '3-day play streak',
+    test: (p) => p.bestStreak >= 3,
+  },
+  {
+    id: 'sync_10',
+    title: 'Mind Melders',
+    emoji: '🧠',
+    icon: 'sparkles',
+    hint: 'Match answers 10 times',
+    test: (p) => stat(p, 'sync_matches') >= 10,
+  },
+  {
+    id: 'dares_5',
+    title: 'Fearless',
+    emoji: '😈',
+    icon: 'flash',
+    hint: 'Complete 5 dares',
+    test: (p) => stat(p, 'dares_done') >= 5,
+  },
+  {
+    id: 'truths_10',
+    title: 'Open Book',
+    emoji: '📖',
+    icon: 'journal',
+    hint: 'Tell 10 truths',
+    test: (p) => stat(p, 'truths_done') >= 10,
+  },
+  {
+    id: 'detective',
+    title: 'Mind Reader',
+    emoji: '🕵️',
+    icon: 'search',
+    hint: 'Guess 10 answers right',
+    test: (p) => stat(p, 'guesses_correct') >= 10,
+  },
+  {
+    id: 'live_ten',
+    title: 'Voice & Vibes',
+    emoji: '🎙️',
+    icon: 'mic',
+    hint: 'Finish 10 live rooms',
+    test: (p) => stat(p, 'live_games') >= 10,
+  },
+  {
+    id: 'quiz_ace',
+    title: 'Quiz Whiz',
+    emoji: '🏆',
+    icon: 'star',
+    hint: 'Get 25 quiz answers right',
+    test: (p) => stat(p, 'quiz_correct') >= 25,
+  },
+  {
+    id: 'streak_7',
+    title: 'Week of Play',
+    emoji: '⚡',
+    icon: 'calendar',
+    hint: '7-day play streak',
+    test: (p) => p.bestStreak >= 7,
+  },
+  {
+    id: 'level_5',
+    title: 'Power Couple',
+    emoji: '💎',
+    icon: 'diamond',
+    hint: 'Reach level 5',
+    test: (_p, level) => level >= 5,
+  },
+  {
+    id: 'sync_50',
+    title: 'One Brain',
+    emoji: '🌀',
+    icon: 'heart',
+    hint: 'Match answers 50 times',
+    test: (p) => stat(p, 'sync_matches') >= 50,
+  },
+  {
+    id: 'fifty_games',
+    title: 'Game Night Legends',
+    emoji: '🏅',
+    icon: 'flag',
+    hint: 'Play 50 games',
+    test: (p) => stat(p, 'games_played') >= 50,
+  },
+  {
+    id: 'streak_30',
+    title: 'Monthly Habit',
+    emoji: '👑',
+    icon: 'gift',
+    hint: '30-day play streak',
+    test: (p) => p.bestStreak >= 30,
+  },
+  {
+    id: 'level_10',
+    title: 'Elite Duo',
+    emoji: '🌟',
+    icon: 'sparkles',
+    hint: 'Reach level 10',
+    test: (_p, level) => level >= 10,
+  },
 ];
 
 export function emptyProgress(date: string): CoupleProgress {
@@ -205,17 +363,18 @@ export interface AwardResult {
 }
 
 /** Fold a reward into the couple's progress: XP, stats, streak, quests, then badges. */
-export function applyAward(
-  prev: CoupleProgress,
-  input: AwardInput,
-  today: string = todayKey(),
-): AwardResult {
+export function applyAward(prev: CoupleProgress, input: AwardInput, today: string = todayKey()): AwardResult {
   const levelBefore = levelFromXp(prev.xp);
 
   // Reset quest counters on a new day.
   const quests: QuestState =
     prev.quests.date === today
-      ? { ...prev.quests, counts: { ...prev.quests.counts }, claimed: [...prev.quests.claimed], soloIds: [...prev.quests.soloIds] }
+      ? {
+          ...prev.quests,
+          counts: { ...prev.quests.counts },
+          claimed: [...prev.quests.claimed],
+          soloIds: [...prev.quests.soloIds],
+        }
       : { date: today, counts: {}, claimed: [], soloIds: [] };
 
   let xp = prev.xp;
@@ -317,10 +476,13 @@ export function normalizeProgress(raw: unknown, today: string = todayKey()): Cou
   const numMap = (v: unknown): Record<string, number> => {
     if (!v || typeof v !== 'object') return {};
     return Object.fromEntries(
-      Object.entries(v as Record<string, unknown>).filter(([, n]) => typeof n === 'number' && Number.isFinite(n as number)),
+      Object.entries(v as Record<string, unknown>).filter(
+        ([, n]) => typeof n === 'number' && Number.isFinite(n as number),
+      ),
     ) as Record<string, number>;
   };
-  const strList = (v: unknown): string[] => (Array.isArray(v) ? v.filter((s): s is string => typeof s === 'string') : []);
+  const strList = (v: unknown): string[] =>
+    Array.isArray(v) ? v.filter((s): s is string => typeof s === 'string') : [];
   const q = (r.quests && typeof r.quests === 'object' ? r.quests : {}) as Record<string, unknown>;
   return {
     xp: Math.max(0, Math.floor(num(r.xp))),
@@ -328,7 +490,8 @@ export function normalizeProgress(raw: unknown, today: string = todayKey()): Cou
     badges: strList(r.badges),
     playStreak: Math.max(0, Math.floor(num(r.play_streak ?? r.playStreak))),
     bestStreak: Math.max(0, Math.floor(num(r.best_streak ?? r.bestStreak))),
-    lastPlayDate: typeof (r.last_play_date ?? r.lastPlayDate) === 'string' ? String(r.last_play_date ?? r.lastPlayDate) : null,
+    lastPlayDate:
+      typeof (r.last_play_date ?? r.lastPlayDate) === 'string' ? String(r.last_play_date ?? r.lastPlayDate) : null,
     quests: {
       date: typeof q.date === 'string' ? q.date : today,
       counts: numMap(q.counts),

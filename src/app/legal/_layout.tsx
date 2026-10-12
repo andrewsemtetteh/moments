@@ -9,14 +9,14 @@ export default function LegalLayout() {
     <Stack
       screenOptions={{
         headerShown: false,
-        animation: 'fade',
+        animation: 'default',
         // Without this, screens fall back to React Navigation's generic
         // light/dark background instead of the app's actual theme color,
         // showing a brief mismatched flash during the transition.
         contentStyle: { backgroundColor: colors.background },
-        // Swipe-to-go-back is intentionally off app-wide — the back button is
-        // the only way back, here and everywhere else.
-        gestureEnabled: false,
+        // Same as Notifications: swipe back from anywhere on the page.
+        gestureEnabled: true,
+        fullScreenGestureEnabled: true,
       }}>
       <Stack.Screen name="terms" />
       <Stack.Screen name="privacy" />

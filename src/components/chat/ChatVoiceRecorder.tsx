@@ -1,5 +1,5 @@
-import { useEffect } from 'react';
-import { Pressable, StyleSheet, Text, View, type GestureResponderHandlers } from 'react-native';
+import { useEffect, useState } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, {
   Easing,
   useAnimatedStyle,
@@ -12,11 +12,17 @@ import Animated, {
 import { Icon } from '@/components/ui/Icon';
 import { useTheme } from '@/hooks/useTheme';
 
+const BAR_COUNT = 34;
+const REC_RED = '#FF3B30';
+
 interface Props {
   elapsedSec: number;
-  willCancel: boolean;
-  panHandlers?: GestureResponderHandlers;
+  /** Live input level in dB from the recorder (-160…0), if metering is on. */
+  metering?: number;
+  /** True while the mic is being held (walkie-talkie mode): release sends. */
+  holding: boolean;
   onCancel: () => void;
+  onSend: () => void;
 }
 
 function formatElapsed(seconds: number) {
@@ -25,214 +31,110 @@ function formatElapsed(seconds: number) {
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
-function WaveBar({
-  delayMs,
-  active,
-  color,
-  width = 4,
-  maxHeight = 100,
-}: {
-  delayMs: number;
-  active: boolean;
-  color: string;
-  width?: number;
-  maxHeight?: number;
-}) {
-  const height = useSharedValue(10);
-
-  useEffect(() => {
-    if (!active) {
-      height.value = withTiming(10, { duration: 150 });
-      return;
-    }
-    const timeout = setTimeout(() => {
-      height.value = withRepeat(
-        withSequence(
-          withTiming(maxHeight, { duration: 300, easing: Easing.inOut(Easing.sin) }),
-          withTiming(12, { duration: 300, easing: Easing.inOut(Easing.sin) }),
-        ),
-        -1,
-        true,
-      );
-    }, delayMs);
-    return () => clearTimeout(timeout);
-  }, [active, delayMs, height, maxHeight]);
-
-  const style = useAnimatedStyle(() => ({
-    height: height.value,
-  }));
-
-  return (
-    <Animated.View
-      style={[styles.waveBar, { backgroundColor: color, width, borderRadius: width / 2 }, style]}
-    />
-  );
+/** dB → 0.12…1 bar height. */
+function level(db: number | undefined) {
+  if (db == null || !Number.isFinite(db)) return 0.12;
+  return Math.min(1, Math.max(0.12, (db + 55) / 50));
 }
 
-/** Occupies the full chat message area while recording. */
-export function ChatVoiceRecorder({ elapsedSec, willCancel, panHandlers, onCancel }: Props) {
+/**
+ * The composer while a voice note records. It replaces the text row so the
+ * chat stays in view: delete on the left, a live waveform with the timer in the
+ * middle, and a big Send on the right. While the mic is held it just says
+ * "Release to send".
+ */
+export function ChatVoiceRecorder({ elapsedSec, metering, holding, onCancel, onSend }: Props) {
   const { colors } = useTheme();
-  const accent = willCancel ? colors.error : colors.accent;
-  const hint = willCancel ? 'Release to cancel' : 'Slide left to cancel';
+  const [levels, setLevels] = useState<number[]>(() => Array.from({ length: BAR_COUNT }, () => 0.12));
+
+  useEffect(() => {
+    setLevels((prev) => [...prev.slice(1), level(metering)]);
+  }, [metering, elapsedSec]);
+
+  const pulse = useSharedValue(1);
+  useEffect(() => {
+    pulse.value = withRepeat(
+      withSequence(
+        withTiming(0.25, { duration: 600, easing: Easing.inOut(Easing.sin) }),
+        withTiming(1, { duration: 600, easing: Easing.inOut(Easing.sin) }),
+      ),
+      -1,
+    );
+  }, [pulse]);
+  const dotStyle = useAnimatedStyle(() => ({ opacity: pulse.value }));
 
   return (
-    <View
-      style={[styles.root, { backgroundColor: colors.background }]}
-      {...panHandlers}>
-      <View style={styles.main}>
-        <View style={[styles.micRing, { borderColor: `${accent}55`, backgroundColor: `${accent}10` }]}>
-          <View style={[styles.micCore, { backgroundColor: accent }]}>
-            <Icon name="mic" size={44} color={colors.onAccent} filled />
-          </View>
-        </View>
-
-        <View style={styles.waveRow}>
-          {Array.from({ length: 24 }, (_, i) => (
-            <WaveBar key={i} delayMs={i * 40} active color={accent} />
-          ))}
-        </View>
-
-        <View style={[styles.timerPill, { backgroundColor: `${accent}14` }]}>
-          <View style={[styles.liveDot, { backgroundColor: accent }]} />
-          <Text style={[styles.timer, { color: accent }]}>{formatElapsed(elapsedSec)}</Text>
-        </View>
-
-        <Text style={[styles.hint, { color: willCancel ? colors.error : colors.textSecondary }]}>
-          {hint}
-        </Text>
-        <Text style={[styles.subHint, { color: colors.textTertiary }]}>
-          Release mic button to send
-        </Text>
-      </View>
-
-      <View style={[styles.footer, { borderTopColor: colors.border }]}>
+    <View style={styles.row}>
+      {holding ? null : (
         <Pressable
           onPress={onCancel}
-          style={[
-            styles.cancelBtn,
-            {
-              backgroundColor: willCancel ? `${colors.error}18` : colors.surface,
-              borderColor: willCancel ? colors.error : colors.border,
-            },
-          ]}
-          accessibilityLabel="Cancel recording">
-          <Icon name="trash" size={20} color={willCancel ? colors.error : colors.textSecondary} />
-          <Text style={[styles.cancelLabel, { color: willCancel ? colors.error : colors.text }]}>
-            Cancel
-          </Text>
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel="Delete recording"
+          style={({ pressed }) => [styles.sideBtn, pressed && styles.pressed]}>
+          <Icon name="trash" size={24} color={colors.error} />
         </Pressable>
+      )}
 
-        <View style={[styles.slideHint, { backgroundColor: colors.surface }]}>
-          <Icon name="chevronLeft" size={18} color={willCancel ? colors.error : colors.textTertiary} />
-          <Text style={[styles.slideHintText, { color: willCancel ? colors.error : colors.textTertiary }]}>
-            Slide left
-          </Text>
+      <View
+        style={[
+          styles.pill,
+          {
+            backgroundColor: colors.surface,
+            borderColor: colors.border,
+            borderWidth: colors.boldBorder ? 2 : StyleSheet.hairlineWidth,
+          },
+        ]}>
+        <Animated.View style={[styles.dot, dotStyle]} />
+        <Text style={[styles.timer, { color: colors.text }]}>{formatElapsed(elapsedSec)}</Text>
+        <View style={styles.wave}>
+          {levels.map((l, i) => (
+            <View
+              key={i}
+              style={[styles.bar, { height: `${Math.round(l * 100)}%`, backgroundColor: colors.accent }]}
+            />
+          ))}
         </View>
       </View>
+
+      {/* While held, the chat's own mic button (still under your finger) sits here. */}
+      {holding ? null : (
+        <Pressable
+          onPress={onSend}
+          hitSlop={6}
+          accessibilityRole="button"
+          accessibilityLabel="Send voice message"
+          style={({ pressed }) => [styles.sendBtn, { backgroundColor: colors.accent }, pressed && styles.pressed]}>
+          <Icon name="send" size={22} color={colors.onAccent} filled />
+        </Pressable>
+      )}
+
+      {holding ? (
+        <Text style={[styles.holdHint, { color: colors.textSecondary }]} pointerEvents="none">
+          Release to send
+        </Text>
+      ) : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  root: {
+  row: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 10 },
+  sideBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  pill: {
     flex: 1,
-    width: '100%',
-    minHeight: 0,
-  },
-  main: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 24,
-    gap: 28,
-  },
-  micRing: {
-    width: 128,
-    height: 128,
-    borderRadius: 64,
-    borderWidth: 2,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  micCore: {
-    width: 88,
-    height: 88,
-    borderRadius: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  waveRow: {
+    height: 48,
+    borderRadius: 24,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
-    height: 104,
-    width: '100%',
-    paddingHorizontal: 8,
-  },
-  waveBar: {
-    minHeight: 10,
-  },
-  timerPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    paddingHorizontal: 14,
     gap: 10,
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 24,
   },
-  liveDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-  },
-  timer: {
-    fontSize: 36,
-    fontWeight: '800',
-    fontVariant: ['tabular-nums'],
-  },
-  hint: {
-    fontSize: 16,
-    fontWeight: '700',
-    textAlign: 'center',
-  },
-  subHint: {
-    fontSize: 13,
-    fontWeight: '500',
-    textAlign: 'center',
-    marginTop: -16,
-  },
-  footer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderTopWidth: StyleSheet.hairlineWidth,
-  },
-  cancelBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 24,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
-  cancelLabel: {
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  slideHint: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 20,
-  },
-  slideHintText: {
-    fontSize: 13,
-    fontWeight: '600',
-  },
+  dot: { width: 10, height: 10, borderRadius: 5, backgroundColor: REC_RED },
+  timer: { fontSize: 16, fontWeight: '800', fontVariant: ['tabular-nums'], minWidth: 40 },
+  wave: { flex: 1, height: 26, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  bar: { width: 3, borderRadius: 1.5, minHeight: 3 },
+  sendBtn: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
+  pressed: { opacity: 0.75, transform: [{ scale: 0.96 }] },
+  holdHint: { position: 'absolute', top: -22, alignSelf: 'center', left: 0, right: 0, textAlign: 'center', fontSize: 12, fontWeight: '700' },
 });

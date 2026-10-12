@@ -1,148 +1,153 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { useEffect, useState } from 'react';
-import { Alert, StyleSheet } from 'react-native';
+import { useEffect, useState, type ReactNode } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { ActivitiesIntroSection } from '@/components/activities/ActivitiesIntroSection';
-import { CATALOG_TO_LIVE } from '@/components/activities/explore/explore-catalog';
-import { ExploreSection, type ExploreModalKey } from '@/components/activities/ExploreSection';
+import { PLAY_ACTIVITIES, type ExploreModalKey } from '@/components/activities/explore/explore-catalog';
 import { ExploreActivityModal } from '@/components/activities/explore/ExploreActivityModal';
-// Experiences marketplace paused — re-enable when backend is ready.
-// import { ExperiencesSection } from '@/components/activities/ExperiencesSection';
-import { BadgesShelf, LiveRoomSection, QuestsCard, startLiveRoom } from '@/components/games/PlayHub';
-import { PlayModeSheet } from '@/components/games/PlayModeSheet';
-import { PromptHistoryModal } from '@/components/home/PromptHistoryModal';
+import { BadgesShelf, PlayHero, QuestsCard } from '@/components/games/PlayHub';
 import { AppHeader } from '@/components/layout/AppHeader';
-import { TabSwipe } from '@/components/layout/TabSwipe';
 import { ScreenContainer } from '@/components/layout/ScreenContainer';
 import { TabScreenScroll } from '@/components/layout/TabScreenScroll';
+import { TabSwipe } from '@/components/layout/TabSwipe';
+import { AreaGrid } from '@/components/play/AreaGrid';
+import { BrowseRow } from '@/components/play/BrowseRow';
+import { GameGroups, GameRail, OwnTimeGames } from '@/components/play/GameList';
+import { FeaturedPackCard, HandpickedRail } from '@/components/play/HandpickedRail';
+import { LiveStrip } from '@/components/play/LiveStrip';
+import { PlayTabs, type PlayTab } from '@/components/play/PlayTabs';
 import { Spacing } from '@/constants/design-system';
 import { useDailyChallenge, useRealtimeSubscription } from '@/hooks/queries';
-import type { LiveGameKind } from '@/lib/game-room/types';
-import * as api from '@/services/api';
-import { useRelationshipStore } from '@/stores';
+import { useTheme } from '@/hooks/useTheme';
+import { LIVE_GAMES } from '@/lib/game-room/types';
 
-const EXPLORE_MODAL_KEYS = new Set<string>([
-  'cards',
-  'games',
-  'quiz',
-  'bucket',
-  'goals',
-  'gratitude',
-  'daily',
-  'trivia',
-  'quizLive',
-  'compliment',
-  'twoTruths',
-  'truth',
-  'memory',
-  'playlist',
-  'thisOrThat',
-  'wouldYouRather',
-  'whosLikely',
-  'loveQuiz',
-  'neverHaveI',
-  'finishSentence',
-  'emojiStory',
-  'appreciation',
-  'thirtySix',
-  'weekChallenge',
-  'dateNight',
-  'fortuneWheel',
-  'dateGenerator',
-  'drawTogether',
-  'compatibility',
-  'personality',
-  'attachment',
-  'guessAnswer',
-]);
+const EXPLORE_MODAL_KEYS = new Set<string>(PLAY_ACTIVITIES.map((a) => a.id));
+const LIVE_GAME_KINDS = new Set<string>(LIVE_GAMES.map((g) => g.kind));
 
 export default function ActivitiesScreen() {
-  const { open } = useLocalSearchParams<{ open?: string }>();
-  const relationship = useRelationshipStore((s) => s.relationship);
-  const partner = useRelationshipStore((s) => s.partner);
-  const { data: challenge } = useDailyChallenge();
+  const { open, tab: tabParam } = useLocalSearchParams<{ open?: string; tab?: string }>();
+  const {
+    data: challenge,
+    isLoading: challengeLoading,
+    isFetching: challengeFetching,
+    refetch: refetchChallenge,
+  } = useDailyChallenge();
+  const [tab, setTab] = useState<PlayTab>('all');
   const [activeModal, setActiveModal] = useState<ExploreModalKey | null>(null);
-  const [showPromptHistory, setShowPromptHistory] = useState(false);
-  const [modeChoice, setModeChoice] = useState<ExploreModalKey | null>(null);
-  const modeGame = modeChoice ? (CATALOG_TO_LIVE[modeChoice] ?? null) : null;
-
-  /** Cards with a live version ask how you want to play; the rest open straight away. */
-  const openActivity = (key: ExploreModalKey) => {
-    if (CATALOG_TO_LIVE[key]) setModeChoice(key);
-    else setActiveModal(key);
-  };
-
-  // Let the sheet finish sliding away before the next full-screen surface opens.
-  const afterSheet = (action: () => void) => {
-    setModeChoice(null);
-    setTimeout(action, 340);
-  };
+  const [seenParams, setSeenParams] = useState<{ open?: string; tab?: string }>({});
 
   useRealtimeSubscription('activities');
   useRealtimeSubscription('daily_challenges');
 
-  useEffect(() => {
-    if (!open || !EXPLORE_MODAL_KEYS.has(open)) return;
-    setActiveModal(open as ExploreModalKey);
-  }, [open]);
+  // Deep links (`?open=<activity>`, `?tab=<tab>`) apply once per new value; the tab stays mounted.
+  if (open !== seenParams.open || tabParam !== seenParams.tab) {
+    setSeenParams({ open, tab: tabParam });
+    if (open && open !== seenParams.open && EXPLORE_MODAL_KEYS.has(open)) setActiveModal(open as ExploreModalKey);
+    if (tabParam === 'all' || tabParam === 'handpicked' || tabParam === 'endless') setTab(tabParam);
+  }
 
-  const addToCalendar = async (title: string) => {
-    if (!relationship) return;
-    await api.createCalendarEvent(relationship.id, {
-      title,
-      date_time: new Date(Date.now() + 86400000).toISOString(),
-      type: 'date',
-      source: 'activity',
-      description: null,
-    });
-    Alert.alert('Added to calendar', `"${title}" is planned for tomorrow. Edit the time in Calendar.`);
-  };
+  // `?open=<game>` jumps to that game's setup screen.
+  useEffect(() => {
+    if (open && LIVE_GAME_KINDS.has(open)) {
+      router.push({ pathname: '/play/game/[kind]', params: { kind: open as (typeof LIVE_GAMES)[number]['kind'] } });
+    }
+  }, [open]);
 
   return (
     // Home ← Play → You (see TabSwipe).
     <TabSwipe
       onSwipeRight={() => router.navigate('/(tabs)/home')}
       onSwipeLeft={() => router.navigate('/(tabs)/profile')}>
-    <ScreenContainer padded={false}>
-      <AppHeader />
-      <TabScreenScroll showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
-        <ActivitiesIntroSection
-          challenge={challenge}
-          partnerName={partner?.name}
-          onOpenHistory={() => setShowPromptHistory(true)}
-        />
+      <ScreenContainer padded={false}>
+        <AppHeader />
+        <TabScreenScroll showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
+          <ActivitiesIntroSection
+            challenge={challenge}
+            loading={challengeLoading || challengeFetching}
+            onRetry={() => void refetchChallenge()}
+            onOpenHistory={() => router.push('/question-history')}
+          />
 
-        <LiveRoomSection />
-        <QuestsCard />
-        <BadgesShelf />
+          <View style={styles.browse}>
+            <BrowseRow />
+          </View>
 
-        <ExploreSection onOpen={openActivity} />
+          <View style={styles.tabs}>
+            <PlayTabs value={tab} onChange={setTab} />
+          </View>
 
-        {/* Experiences marketplace paused — re-enable when backend is ready.
-        <ExperiencesSection onAddToCalendar={addToCalendar} />
-        */}
-      </TabScreenScroll>
+          {tab === 'all' ? (
+            <View style={styles.stack}>
+              <Section title="Today’s pack">
+                <FeaturedPackCard />
+              </Section>
+              <Section title="Handpicked" onSeeAll={() => setTab('handpicked')}>
+                <AreaGrid />
+              </Section>
+              <Section title="Endless" onSeeAll={() => setTab('endless')}>
+                <LiveStrip />
+                <OwnTimeGames />
+                <GameRail />
+              </Section>
+              <Section title="Your progress">
+                <PlayHero />
+                <QuestsCard />
+                <BadgesShelf />
+              </Section>
+            </View>
+          ) : null}
 
-      <ExploreActivityModal
-        activeModal={activeModal}
-        onClose={() => setActiveModal(null)}
-        onAddToCalendar={addToCalendar}
-      />
+          {tab === 'handpicked' ? (
+            <View style={styles.stack}>
+              <Section title="Areas">
+                <AreaGrid />
+              </Section>
+              <Section title="Today’s pack">
+                <FeaturedPackCard />
+              </Section>
+              <Section title="Quizzes to take together">
+                <HandpickedRail format="quizzes" onOpen={setActiveModal} />
+              </Section>
+              <Section title="Prompts and cards">
+                <HandpickedRail format="prompts" onOpen={setActiveModal} />
+              </Section>
+              <Section title="Things to do together">
+                <HandpickedRail format="activities" onOpen={setActiveModal} />
+              </Section>
+            </View>
+          ) : null}
 
-      <PlayModeSheet
-        game={modeGame}
-        onClose={() => setModeChoice(null)}
-        onLive={(game: LiveGameKind) => afterSheet(() => startLiveRoom(game))}
-        onLocal={() => {
-          const key = modeChoice;
-          if (key) afterSheet(() => setActiveModal(key));
-        }}
-        localLabel={modeChoice === 'quizLive' ? '📱  Classic quiz (no voice)' : '📱  On this phone'}
-      />
+          {tab === 'endless' ? (
+            <View style={styles.stack}>
+              <LiveStrip />
+              <OwnTimeGames />
+              <GameGroups />
+            </View>
+          ) : null}
+        </TabScreenScroll>
 
-      <PromptHistoryModal visible={showPromptHistory} onClose={() => setShowPromptHistory(false)} />
-    </ScreenContainer>
+        <ExploreActivityModal activeModal={activeModal} onClose={() => setActiveModal(null)} />
+      </ScreenContainer>
     </TabSwipe>
+  );
+}
+
+function Section({ title, onSeeAll, children }: { title: string; onSeeAll?: () => void; children: ReactNode }) {
+  const { colors } = useTheme();
+  return (
+    <View style={styles.section}>
+      <View style={styles.sectionHead}>
+        <View style={{ flex: 1 }}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>{title}</Text>
+        </View>
+        {onSeeAll ? (
+          <Pressable onPress={onSeeAll} hitSlop={8} accessibilityRole="button">
+            <Text style={[styles.seeAll, { color: colors.accent }]}>See all</Text>
+          </Pressable>
+        ) : null}
+      </View>
+      {children}
+    </View>
   );
 }
 
@@ -150,6 +155,13 @@ const styles = StyleSheet.create({
   scroll: {
     paddingHorizontal: Spacing.lg,
     paddingTop: Spacing.xs,
-    paddingBottom: Spacing.lg,
+    paddingBottom: Spacing.xl,
   },
+  browse: { marginTop: 32 },
+  tabs: { marginTop: 32, marginBottom: 4 },
+  stack: { gap: 36, marginTop: 24 },
+  section: { gap: 14 },
+  sectionHead: { flexDirection: 'row', alignItems: 'flex-end', gap: 10 },
+  sectionTitle: { fontSize: 23, fontWeight: '900', letterSpacing: -0.4 },
+  seeAll: { fontSize: 14, fontWeight: '800' },
 });

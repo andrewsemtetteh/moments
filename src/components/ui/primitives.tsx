@@ -319,8 +319,6 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 13,
     fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.6,
   },
   sectionAction: { fontSize: 13, fontWeight: '600' },
   chip: {
@@ -347,5 +345,5 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
   },
   statValue: { fontSize: 20, fontWeight: '800' },
-  statLabel: { fontSize: 11, marginTop: 2, textTransform: 'uppercase', letterSpacing: 0.5 },
+  statLabel: { fontSize: 11, marginTop: 2, },
 });

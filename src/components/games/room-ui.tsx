@@ -1,5 +1,5 @@
 import * as Haptics from 'expo-haptics';
-import { useEffect, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, type ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import Animated, {
   Easing,
@@ -17,9 +17,18 @@ import { PLAY_TONES, type PlayTone } from '@/components/activities/explore/explo
 import { Icon } from '@/components/ui/Icon';
 import { Avatar } from '@/components/ui/primitives';
 import { useTheme } from '@/hooks/useTheme';
-import { getGameDefinition, type LiveGameKind, type RoomState } from '@/lib/game-room/types';
+import { gameRoom } from '@/lib/game-room/manager';
+import { getGameDefinition, type LiveGameKind, type RoomAction, type RoomState } from '@/lib/game-room/types';
 import { useAuthStore, useRelationshipStore } from '@/stores';
 import { useGameRoomStore } from '@/stores/game-room-store';
+
+/** Where a round panel sends its moves: the live room by default, or an own-time session. */
+const RoomDispatchContext = createContext<(action: RoomAction) => void>((action) => gameRoom.dispatch(action));
+export const RoomDispatchProvider = RoomDispatchContext.Provider;
+
+export function useRoomDispatch() {
+  return useContext(RoomDispatchContext);
+}
 
 /** Darken (negative) or lighten (positive) a #rrggbb color. */
 export function shade(hex: string, amount: number): string {

@@ -62,7 +62,7 @@ export function AlbumsShelf({
           <View style={styles.inviteText}>
             <Text style={[styles.inviteTitle, { color: chrome.text }]}>Make your first album</Text>
             <Text style={[styles.inviteSub, { color: chrome.textSecondary }]}>
-              Trips, date nights, your firsts — keep them together.
+              Trips, date nights, your firsts. Keep them together.
             </Text>
           </View>
           <Icon name="chevronRight" size={18} color={chrome.textTertiary} />

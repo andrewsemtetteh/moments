@@ -5,20 +5,26 @@ import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Dimensions,
   Modal,
   Pressable,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
+import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
+import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { MomentVideoPlayer } from '@/components/moments/MomentVideoPlayer';
+import { HEADER_ICON_SIZE } from '@/components/ui/HeaderIconButton';
 import { Icon } from '@/components/ui/Icon';
 import { useTheme } from '@/hooks/useTheme';
+import { saveLocalMomentMedia } from '@/lib/download-moment-media';
 
 const MAX_VIDEO_SEC = 60;
 const SHUTTER_HOLD_MS = 280;
+const SCREEN_H = Dimensions.get('window').height;
 
 interface Props {
   visible: boolean;
@@ -42,15 +48,20 @@ export function ChatCameraModal({ visible, onClose, onCapture }: Props) {
   const [recording, setRecording] = useState(false);
   const [cameraReady, setCameraReady] = useState(false);
   const [sending, setSending] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const dragY = useSharedValue(0);
+  const dragStyle = useAnimatedStyle(() => ({ transform: [{ translateY: dragY.value }] }));
 
   useEffect(() => {
     if (visible) return;
+    // A swipe-close leaves the page off-screen; start the next open in place.
+    dragY.value = 0;
     setPreviewUri(null);
     setPreviewIsVideo(false);
     setRecording(false);
     setSending(false);
     setCameraReady(false);
-  }, [visible]);
+  }, [visible, dragY]);
 
   const close = () => {
     if (holdTimerRef.current) clearTimeout(holdTimerRef.current);
@@ -125,6 +136,17 @@ export function ChatCameraModal({ visible, onClose, onCapture }: Props) {
     setPreviewIsVideo(false);
   };
 
+  const savePreview = async () => {
+    if (!previewUri || saving) return;
+    setSaving(true);
+    try {
+      const saved = await saveLocalMomentMedia(previewUri, previewIsVideo);
+      if (saved) void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleSend = async () => {
     if (!previewUri) return;
     setSending(true);
@@ -163,130 +185,216 @@ export function ChatCameraModal({ visible, onClose, onCapture }: Props) {
 
   const showCamera = !previewUri;
 
+  // Swipe down to close, like the moments camera. Off in preview (a stray drag
+  // shouldn't throw away the shot) and while recording.
+  const swipeDown = Gesture.Pan()
+    .enabled(!previewUri && !recording)
+    .activeOffsetY(14)
+    .failOffsetY(-10)
+    .failOffsetX([-18, 18])
+    .onUpdate((e) => {
+      dragY.value = Math.max(0, e.translationY);
+    })
+    .onEnd((e) => {
+      if (e.translationY > 120 || e.velocityY > 800) {
+        dragY.value = withTiming(SCREEN_H, { duration: 180 }, (done) => {
+          if (done) runOnJS(onClose)();
+        });
+        return;
+      }
+      dragY.value = withSpring(0, { damping: 30, stiffness: 260, velocity: e.velocityY });
+    });
   return (
-    <Modal visible animationType="slide" presentationStyle="fullScreen" onRequestClose={close}>
-      <View style={[styles.root, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
-        <View style={styles.topBar}>
-          <Pressable onPress={close} style={styles.topCircle} accessibilityLabel="Close camera">
-            <Icon name="close" size={20} color="#fff" />
-          </Pressable>
-          <Text style={styles.title}>Camera</Text>
-          <Pressable
-            onPress={() => setFacing((f) => (f === 'back' ? 'front' : 'back'))}
-            style={styles.topCircle}
-            accessibilityLabel="Flip camera">
-            <Icon name="flipCamera" size={20} color="#fff" />
-          </Pressable>
-        </View>
-
-        <View style={styles.viewfinder}>
-          {previewUri ? (
-            previewIsVideo ? (
-              <MomentVideoPlayer uri={previewUri} fill autoPlay />
-            ) : (
-              <Image source={{ uri: previewUri }} style={StyleSheet.absoluteFill} contentFit="cover" />
-            )
-          ) : cameraPermission?.granted ? (
-            <CameraView
-              ref={cameraRef}
-              style={StyleSheet.absoluteFill}
-              facing={facing}
-              flash={flash}
-              mode="video"
-              videoQuality="720p"
-              onCameraReady={() => setCameraReady(true)}
-            />
-          ) : (
-            <View style={styles.permissionBox}>
-              <Text style={styles.permissionText}>
-                Take photos and videos to send in chat. Camera access is required.
-              </Text>
-              <Pressable onPress={() => void requestCameraPermission()} style={[styles.permissionBtn, { backgroundColor: colors.accent }]}>
-                <Text style={[styles.permissionBtnText, { color: colors.onAccent }]}>Allow camera</Text>
-              </Pressable>
+    // No system slide: opens and closes instantly, like the moments camera
+    // (the only motion is your own swipe down). Transparent (over full screen)
+    // so a swipe reveals the chat underneath, never a blank white window.
+    <Modal
+      visible
+      transparent
+      animationType="none"
+      presentationStyle="overFullScreen"
+      statusBarTranslucent
+      onRequestClose={close}>
+      <GestureHandlerRootView style={styles.flex}>
+        <GestureDetector gesture={swipeDown}>
+          <Animated.View
+            style={[
+              styles.root,
+              { backgroundColor: colors.background, paddingTop: insets.top, paddingBottom: insets.bottom },
+              dragStyle,
+            ]}>
+            <View style={styles.topBar}>
+              {previewUri ? (
+                <Pressable
+                  onPress={resetPreview}
+                  disabled={sending}
+                  hitSlop={6}
+                  style={styles.topIcon}
+                  accessibilityRole="button"
+                  accessibilityLabel="Discard and go back to camera">
+                  <Icon name="close" size={HEADER_ICON_SIZE} color={colors.text} />
+                </Pressable>
+              ) : (
+                <Pressable onPress={close} hitSlop={6} style={styles.topIcon} accessibilityRole="button" accessibilityLabel="Close camera">
+                  <Icon name="close" size={HEADER_ICON_SIZE} color={colors.text} />
+                </Pressable>
+              )}
+              <Text style={[styles.title, { color: colors.text }]}>{previewUri ? 'Preview' : 'Camera'}</Text>
+              {previewUri ? (
+                <Pressable
+                  onPress={() => void savePreview()}
+                  disabled={saving || sending}
+                  hitSlop={6}
+                  style={styles.topIcon}
+                  accessibilityRole="button"
+                  accessibilityLabel="Save to your photos">
+                  {saving ? (
+                    <ActivityIndicator color={colors.text} />
+                  ) : (
+                    <Icon name="download" size={HEADER_ICON_SIZE} color={colors.text} />
+                  )}
+                </Pressable>
+              ) : (
+                <Pressable
+                  onPress={() => setFacing((f) => (f === 'back' ? 'front' : 'back'))}
+                  hitSlop={6}
+                  style={styles.topIcon}
+                  accessibilityRole="button"
+                  accessibilityLabel="Flip camera">
+                  <Icon name="flipCamera" size={HEADER_ICON_SIZE} color={colors.text} />
+                </Pressable>
+              )}
             </View>
-          )}
 
-          {showCamera && cameraPermission?.granted && (
-            <>
-              <Pressable onPress={() => setFlash((f) => (f === 'off' ? 'on' : 'off'))} style={styles.chipLeft}>
-                <Icon name="flash" size={16} color="#fff" filled={flash === 'on'} />
-              </Pressable>
-              {recording && (
-                <View style={styles.recordingBadge}>
-                  <View style={styles.recDot} />
-                  <Text style={styles.recText}>REC</Text>
+            <View style={[styles.viewfinder, { backgroundColor: colors.surface }]}>
+              {previewUri ? (
+                previewIsVideo ? (
+                  <MomentVideoPlayer uri={previewUri} fill autoPlay />
+                ) : (
+                  <Image source={{ uri: previewUri }} style={StyleSheet.absoluteFill} contentFit="cover" />
+                )
+              ) : cameraPermission?.granted ? (
+                <CameraView
+                  ref={cameraRef}
+                  style={StyleSheet.absoluteFill}
+                  facing={facing}
+                  flash={flash}
+                  mode="video"
+                  videoQuality="720p"
+                  onCameraReady={() => setCameraReady(true)}
+                />
+              ) : (
+                <View style={styles.permissionBox}>
+                  <Text style={[styles.permissionText, { color: colors.text }]}>
+                    Take photos and videos to send in chat. Camera access is required.
+                  </Text>
+                  <Pressable
+                    onPress={() => void requestCameraPermission()}
+                    style={[styles.permissionBtn, { backgroundColor: colors.accent }]}>
+                    <Text style={[styles.permissionBtnText, { color: colors.onAccent }]}>Allow camera</Text>
+                  </Pressable>
                 </View>
               )}
-            </>
-          )}
 
-          {previewUri && (
-            <Pressable onPress={resetPreview} style={styles.retakeBtn}>
-              <Text style={styles.retakeText}>Retake</Text>
-            </Pressable>
-          )}
-        </View>
-
-        <View style={styles.controls}>
-          <View style={styles.sideControl} />
-
-          {previewUri ? (
-            <Pressable
-              onPress={() => void handleSend()}
-              disabled={sending}
-              style={[styles.sendBtn, { backgroundColor: colors.accent }]}>
-              {sending ? (
-                <ActivityIndicator color={colors.onAccent} />
-              ) : (
-                <Icon name="send" size={24} color={colors.onAccent} filled />
+              {showCamera && cameraPermission?.granted && (
+                <>
+                  <Pressable
+                    onPress={() => setFlash((f) => (f === 'off' ? 'on' : 'off'))}
+                    style={styles.chipLeft}
+                    accessibilityLabel={flash === 'on' ? 'Turn flash off' : 'Turn flash on'}>
+                    <Icon name="flash" size={18} color="#fff" filled={flash === 'on'} />
+                  </Pressable>
+                  {recording && (
+                    <View style={styles.recordingBadge}>
+                      <View style={styles.recDot} />
+                      <Text style={styles.recText}>REC</Text>
+                    </View>
+                  )}
+                </>
               )}
-            </Pressable>
-          ) : (
-            <Pressable
-              onPressIn={onShutterPressIn}
-              onPressOut={onShutterPressOut}
-              disabled={sending || (showCamera && !cameraReady && !!cameraPermission?.granted)}
-              style={[styles.shutterOuter, recording && styles.shutterRecording]}>
-              <View style={[styles.shutterInner, recording && styles.shutterInnerRecording]} />
-            </Pressable>
-          )}
+            </View>
 
-          <View style={styles.sideControl} />
-        </View>
-
-        <Text style={styles.hint}>
-          {previewUri ? 'Tap send to share' : 'Tap for photo · hold for video'}
-        </Text>
-      </View>
+            {/* Fixed-height footer so the viewfinder keeps its size between camera and preview. */}
+            <View style={previewUri ? styles.previewFooter : styles.footer}>
+              {previewUri ? (
+                <View style={styles.previewActions}>
+                  <Pressable
+                    onPress={resetPreview}
+                    disabled={sending}
+                    accessibilityRole="button"
+                    style={({ pressed }) => [styles.retakeBtn, { backgroundColor: colors.surface }, pressed && styles.pressed]}>
+                    <Text style={[styles.retakeText, { color: colors.text }]}>Retake</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => void handleSend()}
+                    disabled={sending}
+                    accessibilityRole="button"
+                    accessibilityLabel={previewIsVideo ? 'Send video' : 'Send photo'}
+                    style={({ pressed }) => [
+                      styles.sendBtn,
+                      { backgroundColor: colors.accent },
+                      pressed && styles.pressed,
+                    ]}>
+                    {sending ? (
+                      <ActivityIndicator color={colors.onAccent} />
+                    ) : (
+                      <>
+                        <Text style={[styles.sendText, { color: colors.onAccent }]}>Send</Text>
+                        <Icon name="send" size={20} color={colors.onAccent} filled />
+                      </>
+                    )}
+                  </Pressable>
+                </View>
+              ) : (
+                <>
+                  <View style={styles.controls}>
+                    <Pressable
+                      onPressIn={onShutterPressIn}
+                      onPressOut={onShutterPressOut}
+                      disabled={sending || (showCamera && !cameraReady && !!cameraPermission?.granted)}
+                      accessibilityRole="button"
+                      accessibilityLabel="Take photo, hold for video"
+                      style={[styles.shutterOuter, { borderColor: recording ? '#ef4444' : colors.accent }]}>
+                      <View
+                        style={[
+                          styles.shutterInner,
+                          { backgroundColor: colors.accent },
+                          recording && styles.shutterInnerRecording,
+                        ]}
+                      />
+                    </Pressable>
+                  </View>
+                  <Text style={[styles.hint, { color: colors.textSecondary }]}>
+                    {recording ? 'Release to finish video' : 'Tap for photo · hold for video'}
+                  </Text>
+                </>
+              )}
+            </View>
+          </Animated.View>
+        </GestureDetector>
+      </GestureHandlerRootView>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#000' },
+  flex: { flex: 1 },
+  root: { flex: 1 },
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingBottom: 12,
+    paddingHorizontal: 10,
+    paddingTop: 6,
+    paddingBottom: 14,
   },
-  topCircle: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.14)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  title: { color: '#fff', fontSize: 17, fontWeight: '700' },
+  topIcon: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  title: { fontSize: 24, fontWeight: '800', letterSpacing: -0.5 },
   viewfinder: {
     flex: 1,
     marginHorizontal: 16,
-    borderRadius: 24,
+    borderRadius: 28,
     overflow: 'hidden',
-    backgroundColor: '#111',
   },
   permissionBox: {
     flex: 1,
@@ -295,7 +403,7 @@ const styles = StyleSheet.create({
     padding: 28,
     gap: 16,
   },
-  permissionText: { color: '#fff', textAlign: 'center', fontSize: 15, lineHeight: 22 },
+  permissionText: { textAlign: 'center', fontSize: 15, lineHeight: 22 },
   permissionBtn: { paddingHorizontal: 20, paddingVertical: 12, borderRadius: 20 },
   permissionBtnText: { fontWeight: '700', fontSize: 15 },
   chipLeft: {
@@ -323,39 +431,38 @@ const styles = StyleSheet.create({
   },
   recDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#fff' },
   recText: { color: '#fff', fontSize: 12, fontWeight: '800' },
-  retakeBtn: {
-    position: 'absolute',
-    top: 14,
-    right: 14,
-    backgroundColor: 'rgba(0,0,0,0.55)',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 16,
-  },
-  retakeText: { color: '#fff', fontWeight: '700', fontSize: 13 },
-  controls: {
+  footer: { minHeight: 150, justifyContent: 'center', paddingTop: 18, paddingBottom: 8 },
+  // Preview: an even 20pt above the buttons and below them (plus the home bar).
+  previewFooter: { paddingTop: 20, paddingBottom: 12 },
+  previewActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 40,
-    paddingTop: 28,
+    gap: 12,
+    paddingHorizontal: 20,
   },
+  retakeBtn: {
+    height: 56,
+    paddingHorizontal: 24,
+    borderRadius: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  retakeText: { fontWeight: '700', fontSize: 16 },
+  pressed: { opacity: 0.85 },
+  controls: { alignItems: 'center' },
   sideControl: { width: 52, height: 52 },
   shutterOuter: {
     width: 78,
     height: 78,
     borderRadius: 39,
     borderWidth: 4,
-    borderColor: '#fff',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  shutterRecording: { borderColor: '#ef4444' },
   shutterInner: {
     width: 62,
     height: 62,
     borderRadius: 31,
-    backgroundColor: '#fff',
   },
   shutterInnerRecording: {
     width: 32,
@@ -363,15 +470,18 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     backgroundColor: '#ef4444',
   },
+  // Big and filled with the theme's accent, so it reads as THE action on every theme.
   sendBtn: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
+    flex: 1,
+    height: 56,
+    borderRadius: 28,
+    flexDirection: 'row',
+    gap: 10,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  sendText: { fontSize: 17, fontWeight: '800' },
   hint: {
-    color: 'rgba(255,255,255,0.72)',
     textAlign: 'center',
     fontSize: 13,
     fontWeight: '600',

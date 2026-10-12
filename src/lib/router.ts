@@ -1,4 +1,4 @@
-import type { ExploreModalKey } from '@/components/activities/ExploreSection';
+import type { ExploreModalKey } from '@/components/activities/explore/explore-catalog';
 import { useUIStore } from '@/stores';
 import type { Href } from 'expo-router';
 import { router, useRouter } from 'expo-router';

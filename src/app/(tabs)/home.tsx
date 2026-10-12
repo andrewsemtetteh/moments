@@ -1,55 +1,57 @@
 import { useQueryClient, type InfiniteData } from '@tanstack/react-query';
-import { format } from 'date-fns';
-import { LinearGradient } from 'expo-linear-gradient';
+import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Platform, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { Platform, RefreshControl, StyleSheet, Text, View } from 'react-native';
 
-import { AnimatedStreakFire } from '@/components/home/AnimatedStreakFire';
 import { ContinueChatCard } from '@/components/home/ContinueChatCard';
+import {
+  InviteCard,
+  NextUpCard,
+  NoMomentCard,
+  OnThisDayCard,
+  useOnThisDay,
+} from '@/components/home/HomeCards';
 import { MoodSnapshot } from '@/components/home/MoodSnapshot';
-import { PromptHistoryModal } from '@/components/home/PromptHistoryModal';
-import { StreakDayTracker } from '@/components/home/StreakDayTracker';
-import { StreakEndCard } from '@/components/home/StreakEndCard';
 import { StreakRestoreBanner } from '@/components/home/StreakRestoreBanner';
 import { TodaysPromptCard } from '@/components/home/TodaysPromptCard';
+import { WelcomeCard } from '@/components/home/WelcomeCard';
 import { PlayPulseCard } from '@/components/games/PlayPulse';
 import { AppHeader } from '@/components/layout/AppHeader';
-import { TabSwipe } from '@/components/layout/TabSwipe';
 import { ScreenContainer } from '@/components/layout/ScreenContainer';
 import { TabScreenScroll } from '@/components/layout/TabScreenScroll';
-import { MomentsStrip } from '@/components/moments/MomentsStrip';
+import { TabSwipe } from '@/components/layout/TabSwipe';
 import { PartnerMomentHome } from '@/components/moments/PartnerMomentHome';
-import { Icon, type IconName } from '@/components/ui/Icon';
-import { Avatar, Card, SectionTitle, colorWithAlpha } from '@/components/ui/primitives';
-import { Radius, Spacing } from '@/constants/design-system';
+import { Spacing } from '@/constants/design-system';
 import {
-    useCalendarEvents,
-    useDailyChallenge,
-    useMoments,
-    useMoods,
-    useRealtimeSubscription,
-    useStreak,
-    useUpdateMood,
+  useDailyChallenge,
+  useMemoryEntries,
+  useMoments,
+  useMoods,
+  useRealtimeSubscription,
+  useStreak,
+  useUpcomingCalendarEvents,
+  useUpdateMood,
 } from '@/hooks/queries';
 import { useOpenPartnerProfile } from '@/hooks/useOpenPartnerProfile';
 import { useSubscription } from '@/hooks/useSubscription';
 import { useTheme } from '@/hooks/useTheme';
-import { getFirstName } from '@/lib/avatar-initial';
+import { isHiddenFrom } from '@/lib/plan-day';
 import { enrichMomentsWithAuthors, filterMediaMoments, filterMomentsForHome } from '@/lib/moment-display';
 import { shouldShowEntryPaywall } from '@/lib/paywall-storage';
-import { displayTitle } from '@/lib/plan-day';
-import { openActivities, openCalendar, openChat } from '@/lib/router';
-import {
-    emptyStreakStatus,
-    getStreakEndVariant,
-    isStreakRestoreAvailable,
-} from '@/lib/streak';
-import { isStreakVisuallyAtRisk } from '@/lib/streak-reminder-timing';
+import { openActivities, openCalendar } from '@/lib/router';
+import { emptyStreakStatus, isStreakRestoreAvailable } from '@/lib/streak';
 import { useAuthStore, useRelationshipStore, useUIStore } from '@/stores';
 import type { Moment } from '@/types/database';
 
 const HOME_REFRESH_TIMEOUT_MS = 8_000;
 
+/**
+ * Home, top to bottom:
+ *   welcome card (greeting · space name · both of you · streak + this week)
+ *   → your partner's latest moment (or a nudge / the invite)
+ *   → Today: how you're feeling · today's question · next plan · unread chat
+ *   → a memory from this day in an earlier year · Play
+ */
 export default function HomeScreen() {
   const { colors } = useTheme();
   const relationship = useRelationshipStore((s) => s.relationship);
@@ -62,14 +64,14 @@ export default function HomeScreen() {
   const paywallShownThisSession = useUIStore((s) => s.paywallShownThisSession);
   const markPaywallShownThisSession = useUIStore((s) => s.markPaywallShownThisSession);
   const [refreshing, setRefreshing] = useState(false);
-  const [showPromptHistory, setShowPromptHistory] = useState(false);
   const queryClient = useQueryClient();
   const refreshInFlightRef = useRef(false);
 
   const { data: moods } = useMoods();
   const { data: streak } = useStreak();
   const { data: challenge } = useDailyChallenge();
-  const { data: events } = useCalendarEvents();
+  const { data: upcoming = [] } = useUpcomingCalendarEvents();
+  const { data: memories = [] } = useMemoryEntries();
   const { data: momentsData } = useMoments();
   const updateMood = useUpdateMood();
 
@@ -110,40 +112,42 @@ export default function HomeScreen() {
     return filterMomentsForHome(partnerOnly);
   }, [momentsData, partner, user]);
 
-  const stripMoments = useMemo(() => {
-    const enriched = enrichMomentsWithAuthors(
-      filterMediaMoments(momentsData?.pages.flat() ?? []),
-      user,
-      partner,
-    );
-    return filterMomentsForHome(enriched);
-  }, [momentsData, user, partner]);
-  const upcomingEvents = events?.slice(0, 3) ?? [];
+  const momentsById = useMemo(
+    () => new Map(filterMediaMoments(momentsData?.pages.flat() ?? []).map((m) => [m.id, m])),
+    [momentsData],
+  );
 
   const relationshipId = relationship?.id;
-
   const streakStatus = useMemo(
     () => streak ?? emptyStreakStatus(relationshipId ?? 'pending'),
     [streak, relationshipId],
   );
+  const restoreStatus = streak && isStreakRestoreAvailable(streak) ? streak : null;
 
-  const restoreStatus = useMemo(() => {
-    if (streak && isStreakRestoreAvailable(streak)) return streak;
-    return null;
-  }, [streak]);
-
-  const endCardStatus = useMemo(() => {
-    if (!streak) return null;
-    // Restore uses the dedicated banner; EndCard covers at-risk / ended.
-    if (getStreakEndVariant(streak) === 'restore') return null;
-    return streak;
-  }, [streak]);
+  // "Next up" is re-checked whenever Home comes back into view (and on pull
+  // to refresh), so a plan that's already started drops off. Partner's
+  // private plans are skipped — "Busy" isn't worth a card here.
+  const [now, setNow] = useState(() => Date.now());
+  useFocusEffect(
+    useCallback(() => {
+      setNow(Date.now());
+    }, []),
+  );
+  const nextUp = useMemo(
+    () =>
+      upcoming.find(
+        (e) => new Date(e.date_time).getTime() >= now && !isHiddenFrom(e, user?.id),
+      ) ?? null,
+    [upcoming, now, user?.id],
+  );
+  const onThisDay = useOnThisDay(memories);
 
   const onRefresh = useCallback(() => {
     if (!relationshipId || refreshInFlightRef.current) return;
 
     refreshInFlightRef.current = true;
     setRefreshing(true);
+    setNow(Date.now());
 
     let finished = false;
     const finishRefresh = () => {
@@ -173,6 +177,7 @@ export default function HomeScreen() {
           queryClient.refetchQueries({ queryKey: ['streak', relationshipId], type: 'active' }),
           queryClient.refetchQueries({ queryKey: ['daily-challenge', relationshipId], type: 'active' }),
           queryClient.refetchQueries({ queryKey: ['calendar', relationshipId], type: 'active' }),
+          queryClient.refetchQueries({ queryKey: ['calendarUpcoming', relationshipId], type: 'active' }),
           queryClient.refetchQueries({ queryKey: ['moments', relationshipId], type: 'active' }),
           queryClient.refetchQueries({
             queryKey: ['moodFrequency', relationshipId, user?.id],
@@ -207,191 +212,66 @@ export default function HomeScreen() {
     [colors.accent, onRefresh, refreshing],
   );
 
-  const smartSuggestion = getSmartSuggestion(moods ?? {}, upcomingEvents.length, partner?.name);
-
   return (
     // Together ← Home → Play (see TabSwipe).
     <TabSwipe onSwipeRight={() => openCalendar()} onSwipeLeft={() => openActivities()}>
-    <ScreenContainer padded={false}>
-      <AppHeader />
-      <TabScreenScroll
-        showsVerticalScrollIndicator={false}
-        refreshControl={refreshControl}
-        contentContainerStyle={styles.scroll}>
-        {/* Hero */}
-        <LinearGradient
-          colors={colors.gradient}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.hero}>
-          <Text style={[styles.greeting, { color: colorWithAlpha(colors.onAccent, 0.85) }]}>{greeting(user?.name)}</Text>
-          <Text style={[styles.heroName, { color: colors.onAccent }]}>{relationship?.relationship_name ?? 'Moments'}</Text>
-          <View style={styles.heroFooter}>
-            <View style={styles.avatars}>
-              <Avatar name={user?.name} imageUrl={user?.avatar_url} size={38} colorsOverride={['#ffffff', '#ffffff']} />
-              <Pressable
-                style={styles.avatarOverlap}
-                onPress={() => openPartnerProfile()}
-                disabled={!partner}
-                accessibilityRole="button"
-                accessibilityLabel={partner ? `View ${partner.name ?? 'partner'} profile` : 'Partner profile'}>
-                <Avatar name={partner?.name} imageUrl={partner?.avatar_url} size={38} colorsOverride={['#ffffff', '#ffffff']} />
-              </Pressable>
-            </View>
-            {session ? (
-              <View
-                style={[
-                  styles.heroStreak,
-                  { backgroundColor: colorWithAlpha(colors.onAccent, 0.2) },
-                  streakStatus &&
-                    isStreakVisuallyAtRisk(streakStatus) && { backgroundColor: colorWithAlpha(colors.error, 0.55) },
-                ]}>
-                <AnimatedStreakFire
-                  color={colors.onAccent}
-                  size={18}
-                  animate={false}
-                />
-                <Text style={[styles.heroStreakText, { color: colors.onAccent }]}>
-                  {streakStatus.current_streak > 0
-                    ? `${streakStatus.current_streak} day${streakStatus.current_streak === 1 ? '' : 's'}`
-                    : 'Start streak'}
-                </Text>
-              </View>
-            ) : null}
-          </View>
-        </LinearGradient>
-
-        {session ? (
-          <View style={styles.stack}>
-            <StreakDayTracker status={streakStatus} joinedAt={relationship?.created_at} />
-            {restoreStatus ? <StreakRestoreBanner status={restoreStatus} /> : null}
-            {endCardStatus ? <StreakEndCard status={endCardStatus} /> : null}
-          </View>
-        ) : null}
-
-        {homePartnerMoments.length > 0 && (
-          <View style={styles.stack}>
-            <SectionTitle style={styles.sectionLabel}>Moments</SectionTitle>
-            <MomentsStrip moments={stripMoments} partnerOnly />
-            <PartnerMomentHome partnerMoments={homePartnerMoments} />
-          </View>
-        )}
-
-        <MoodSnapshot
-          moods={moods ?? {}}
-          onSelectMood={(m) => updateMood.mutate(m)}
-          onViewHistory={() => setShowMoodHistory(true)}
-        />
-
-        {challenge ? (
-          <TodaysPromptCard
-            challenge={challenge}
-            onOpenHistory={() => setShowPromptHistory(true)}
+      <ScreenContainer padded={false}>
+        <AppHeader />
+        <TabScreenScroll
+          showsVerticalScrollIndicator={false}
+          refreshControl={refreshControl}
+          contentContainerStyle={styles.scroll}>
+          <WelcomeCard
+            user={user ?? null}
+            partner={partner}
+            spaceName={relationship?.relationship_name}
+            status={session ? streakStatus : null}
+            joinedAt={relationship?.created_at}
+            onPressPartner={() => openPartnerProfile()}
           />
-        ) : null}
 
-        {session && partner ? <ContinueChatCard /> : null}
-        {session && partner ? <PlayPulseCard /> : null}
+          {restoreStatus ? <StreakRestoreBanner status={restoreStatus} /> : null}
 
-        {upcomingEvents.length > 0 && (
-          <View style={styles.stack}>
-            <SectionTitle style={styles.sectionLabel} action="Calendar" onAction={() => openCalendar()}>
-              Coming Up
-            </SectionTitle>
-            {upcomingEvents.map((e) => (
-              <Pressable key={e.id} onPress={() => openCalendar({ dateISO: e.date_time })}>
-                <Card style={styles.eventRow}>
-                  <View style={[styles.eventDateBox, { backgroundColor: colors.accentSoft }]}>
-                    <Text style={[styles.eventDay, { color: colors.accent }]}>
-                      {format(new Date(e.date_time), 'd')}
-                    </Text>
-                    <Text style={[styles.eventMonth, { color: colors.accent }]}>
-                      {format(new Date(e.date_time), 'MMM')}
-                    </Text>
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.eventTitle, { color: colors.text }]}>{displayTitle(e, user?.id)}</Text>
-                    <Text style={[styles.eventTime, { color: colors.textSecondary }]}>
-                      {format(new Date(e.date_time), 'EEEE · h:mm a')}
-                    </Text>
-                  </View>
-                </Card>
-              </Pressable>
-            ))}
+          {!partner ? (
+            relationship ? <InviteCard /> : null
+          ) : homePartnerMoments.length > 0 ? (
+            <PartnerMomentHome partnerMoments={homePartnerMoments} />
+          ) : (
+            <NoMomentCard partnerName={partner.name} />
+          )}
+
+          <View style={styles.section}>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>Today</Text>
+
+            <MoodSnapshot
+              moods={moods ?? {}}
+              onSelectMood={(m) => updateMood.mutate(m)}
+              onViewHistory={() => setShowMoodHistory(true)}
+            />
+
+            {challenge ? (
+              <TodaysPromptCard challenge={challenge} onOpenHistory={() => router.push('/question-history')} />
+            ) : null}
+
+            {nextUp ? <NextUpCard event={nextUp} viewerId={user?.id} /> : null}
+
+            {/* Shows itself only when there's something to continue. */}
+            {session && partner ? <ContinueChatCard /> : null}
           </View>
-        )}
 
-        <Pressable onPress={smartSuggestion.onPress}>
-          <View
-            style={[
-              styles.suggestion,
-              {
-                backgroundColor: colors.surface,
-                borderColor: colors.border,
-                borderWidth: colors.boldBorder ? 2 : StyleSheet.hairlineWidth,
-              },
-            ]}>
-            <View style={styles.suggestionIcon}>
-              <Icon name={smartSuggestion.icon} size={22} color={colors.accent} />
+          {onThisDay ? <OnThisDayCard entry={onThisDay} momentsById={momentsById} /> : null}
+
+          {session && partner ? (
+            <View style={styles.section}>
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>Play</Text>
+              <PlayPulseCard />
             </View>
-            <Text style={[styles.suggestionText, { color: colors.text }]}>{smartSuggestion.text}</Text>
-            <View style={styles.suggestionIcon}>
-              <Icon name="chevronRight" size={20} color={colors.textSecondary} />
-            </View>
-          </View>
-        </Pressable>
-      </TabScreenScroll>
-      <PromptHistoryModal visible={showPromptHistory} onClose={() => setShowPromptHistory(false)} />
-    </ScreenContainer>
+          ) : null}
+
+        </TabScreenScroll>
+      </ScreenContainer>
     </TabSwipe>
   );
-}
-
-function greeting(name?: string | null) {
-  const h = new Date().getHours();
-  const firstName = getFirstName(name);
-  const salutation = h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
-  return firstName ? `${salutation}, ${firstName}` : salutation;
-}
-
-function getSmartSuggestion(
-  moods: Record<string, { mood: string }>,
-  eventCount: number,
-  partnerName?: string | null,
-): { text: string; icon: IconName; onPress: () => void } {
-  const partnerFirst = getFirstName(partnerName) ?? 'your partner';
-  const moodValues = Object.values(moods).map((m) => m.mood);
-
-  if (moodValues.includes('stressed') || moodValues.includes('lonely')) {
-    return {
-      text: `${partnerFirst} might love a check-in message today`,
-      icon: 'messages',
-      onPress: () => openChat('Hey, thinking of you 💛'),
-    };
-  }
-
-  const day = new Date().getDay();
-  if (day === 0 || day === 6) {
-    return {
-      text: `It's the weekend. Pick a bucket list idea with ${partnerFirst}`,
-      icon: 'list',
-      onPress: () => openActivities('bucket'),
-    };
-  }
-
-  if (eventCount === 0) {
-    return {
-      text: 'No plans yet. Schedule something special',
-      icon: 'calendar',
-      onPress: () => openCalendar({ create: true }),
-    };
-  }
-
-  return {
-    text: 'Play a quick game together to keep your streak',
-    icon: 'gamepad',
-    onPress: () => openActivities('games'),
-  };
 }
 
 const styles = StyleSheet.create({
@@ -399,59 +279,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.lg,
     paddingTop: Spacing.xs,
     paddingBottom: Spacing.xl,
-    gap: Spacing.lg,
+    gap: Spacing.xl,
   },
-  stack: {
-    gap: Spacing.lg,
-  },
-  sectionLabel: {
-    marginBottom: 0,
-  },
-  hero: { borderRadius: Radius.xl, padding: Spacing.xl - 4 },
-  greeting: { fontSize: 14, fontWeight: '600' },
-  heroName: { fontSize: 26, fontWeight: '800', marginTop: 2, letterSpacing: -0.5 },
-  heroFooter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: Spacing.lg,
-  },
-  avatars: { flexDirection: 'row', alignItems: 'center' },
-  avatarOverlap: { marginLeft: -14 },
-  heroStreak: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 999,
-  },
-  heroStreakText: { fontWeight: '700', fontSize: 13 },
-  eventRow: { flexDirection: 'row', alignItems: 'center', gap: 14 },
-  eventDateBox: {
-    width: 48,
-    height: 48,
-    borderRadius: Radius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  eventDay: { fontSize: 18, fontWeight: '800', lineHeight: 20 },
-  eventMonth: { fontSize: 10, fontWeight: '700', textTransform: 'uppercase' },
-  eventTitle: { fontSize: 15, fontWeight: '700' },
-  eventTime: { fontSize: 13, marginTop: 2 },
-  suggestion: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: Spacing.md,
-    padding: Spacing.lg,
-    borderRadius: Radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
-  suggestionIcon: {
-    height: 21,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 0,
-  },
-  suggestionText: { flex: 1, fontSize: 15, lineHeight: 21, fontWeight: '600' },
+  section: { gap: Spacing.md },
+  sectionTitle: { fontSize: 20, fontWeight: '800', letterSpacing: -0.3 },
 });

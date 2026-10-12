@@ -1,3 +1,4 @@
+import { isSameDay } from 'date-fns';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
@@ -8,7 +9,7 @@ import { Icon, type IconName } from '@/components/ui/Icon';
 // Partner avatar + name are hidden in the header for now (see below).
 // import { Avatar } from '@/components/ui/primitives';
 import { useMinuteTick } from '@/hooks/useMinuteTick';
-import { useNotifications, useUnreadNotificationCount } from '@/hooks/queries';
+import { useCalendarEvents, useNotifications, useUnreadNotificationCount } from '@/hooks/queries';
 import { useOpenPartnerProfile } from '@/hooks/useOpenPartnerProfile';
 import { usePartnerPresence } from '@/hooks/usePartnerPresence';
 import { useTheme } from '@/hooks/useTheme';
@@ -16,6 +17,8 @@ import { formatBadgeCount } from '@/lib/format-badge';
 // import { getFirstName } from '@/lib/avatar-initial';
 import { formatDistanceApart, haversineDistanceKm } from '@/lib/distance';
 import { hasValidCoords } from '@/lib/location';
+import { isHiddenFrom } from '@/lib/plan-day';
+import { isPlanCompleted } from '@/lib/plan-meta';
 import { openCalendar } from '@/lib/router';
 import { filterInboxNotifications } from '@/lib/notification-display';
 import { buildPartnerHeaderLine, formatPartnerClock } from '@/lib/partner-header-line';
@@ -59,6 +62,14 @@ export function AppHeader({ showPlan = true }: AppHeaderProps) {
   // local clock and "X minutes ago" status stay live instead of freezing at mount time.
   useMinuteTick();
 
+  // Today's plans still to do, same "done" rule as the Together agenda.
+  // A partner's private plans ("Busy") aren't yours to finish, so they don't count.
+  const { data: monthPlans } = useCalendarEvents();
+  const now = new Date();
+  const openPlansToday = (monthPlans ?? []).filter(
+    (e) => isSameDay(new Date(e.date_time), now) && !isHiddenFrom(e, user?.id) && !isPlanCompleted(e, now),
+  ).length;
+
   const sharesLocation = Boolean(user?.location_sharing_enabled && partner?.location_sharing_enabled);
   const distanceApart = useMemo(() => {
     if (!sharesLocation) return null;
@@ -81,7 +92,17 @@ export function AppHeader({ showPlan = true }: AppHeaderProps) {
     <View style={[styles.header, { paddingTop: insets.top + 6, backgroundColor: colors.background }]}>
       <View style={[styles.side, styles.left]}>
         {showPlan ? (
-          <HeaderIconButton icon="calendar" label="Open Together" onPress={() => openCalendar()} />
+          <HeaderIconButton
+            icon="calendar"
+            label={
+              openPlansToday > 0
+                ? `Open Together, ${openPlansToday} ${openPlansToday === 1 ? 'plan' : 'plans'} left today`
+                : 'Open Together'
+            }
+            onPress={() => openCalendar()}
+            badge={openPlansToday}
+            filledWhenActive={false}
+          />
         ) : (
           <View style={styles.iconSlot} />
         )}

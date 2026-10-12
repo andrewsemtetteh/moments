@@ -3,6 +3,7 @@ import {
   requestRecordingPermissionsAsync,
   setAudioModeAsync,
   useAudioRecorder,
+  useAudioRecorderState,
 } from 'expo-audio';
 import * as Contacts from 'expo-contacts';
 import * as DocumentPicker from 'expo-document-picker';
@@ -15,7 +16,6 @@ import {
   Alert,
   Dimensions,
   Keyboard,
-  PanResponder,
   Platform,
   Pressable,
   StyleSheet,
@@ -24,6 +24,7 @@ import {
   View,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
+  type GestureResponderEvent,
 } from 'react-native';
 import { FlatList } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -45,11 +46,7 @@ import { HeaderIconButton } from '@/components/ui/HeaderIconButton';
 import { Icon } from '@/components/ui/Icon';
 import { Avatar } from '@/components/ui/primitives';
 import { FullScreenImageModal } from '@/components/ui/FullScreenImageModal';
-import {
-  useInfiniteMessages,
-  useMessageActions,
-  useSendMessage,
-} from '@/hooks/queries';
+import { useInfiniteMessages, useMessageActions, useSendMessage } from '@/hooks/queries';
 import { useChatUnreadBanner } from '@/hooks/useChatUnreadBanner';
 import { useOpenPartnerProfile } from '@/hooks/useOpenPartnerProfile';
 import { usePartnerPresence } from '@/hooks/usePartnerPresence';
@@ -67,6 +64,16 @@ import { backend } from '@/lib/backend';
 import * as api from '@/services/api';
 import { useAuthStore, useOfflineStore, useRelationshipStore, useUIStore } from '@/stores';
 import type { Message } from '@/types/database';
+
+/** Voice notes: high quality with live levels for the recording waveform. */
+const VOICE_PRESET = { ...RecordingPresets.HIGH_QUALITY, isMeteringEnabled: true };
+/** Shorter than this is a tap (hands-free); longer is a hold (release sends). */
+const MIC_HOLD_MS = 350;
+/** A hold shorter than this is treated as a slip and discarded. */
+const MIN_HOLD_RECORD_MS = 1000;
+
+/** What was open (keyboard or emoji panel) when you last left Chat; it reopens next time. */
+let resumePanel: 'keyboard' | 'emoji' | null = null;
 
 export default function ChatScreen() {
   const router = useRouter();
@@ -92,25 +99,31 @@ export default function ChatScreen() {
   // UI
   const [optimisticMessages, setOptimisticMessages] = useState<Message[]>([]);
   const [selected, setSelected] = useState<Message | null>(null);
-  const [replyTo, setReplyTo] = useState<Message | null>(
-    () => getCachedChatDraft(relationship?.id)?.replyTo ?? null,
-  );
+  const [replyTo, setReplyTo] = useState<Message | null>(() => getCachedChatDraft(relationship?.id)?.replyTo ?? null);
   const [partnerTyping, setPartnerTyping] = useState(false);
-  const [showEmoji, setShowEmoji] = useState(false);
+  const [showEmoji, setShowEmoji] = useState(() => resumePanel === 'emoji');
   const [showAttachment, setShowAttachment] = useState(false);
   const [showCamera, setShowCamera] = useState(false);
   // Recording
-  const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+  const audioRecorder = useAudioRecorder(VOICE_PRESET);
+  const recorderState = useAudioRecorderState(audioRecorder, 90);
   const [isRecording, setIsRecording] = useState(false);
-  const [willCancelRecording, setWillCancelRecording] = useState(false);
+  /** True while the mic is held down (walkie-talkie): letting go sends. */
+  const [holdingMic, setHoldingMic] = useState(false);
   const [recordingElapsed, setRecordingElapsed] = useState(0);
   const isRecordingRef = useRef(false);
-  const willCancelRecordingRef = useRef(false);
+  const micPressedAt = useRef(0);
+  const recordingStart = useRef<Promise<boolean> | null>(null);
   const [isSendingMedia, setIsSendingMedia] = useState(false);
   const [flushingOffline, setFlushingOffline] = useState(false);
   const [pendingScrollMessageId, setPendingScrollMessageId] = useState<string | null>(null);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
+  // Mirrors for the unmount cleanup below (state is stale there).
+  const panelRef = useRef({ emoji: false, keyboard: false });
+  useEffect(() => {
+    panelRef.current = { emoji: showEmoji, keyboard: keyboardVisible };
+  }, [showEmoji, keyboardVisible]);
 
   const listRef = useRef<FlatList>(null);
   const typingChannel = useRef<ReturnType<typeof backend.channel> | null>(null);
@@ -123,23 +136,10 @@ export default function ChatScreen() {
   const nearBottomRef = useRef(true);
   const initialScrollDoneRef = useRef(false);
 
-  const {
-    messages,
-    isFetching,
-    isPending,
-    isError,
-    fetchNextPage,
-    hasNextPage,
-    isFetchingNextPage,
-    refetch,
-  } = useInfiniteMessages();
-  const {
-    unreadBannerIds,
-    unreadBannerCount,
-    onComposerActivity,
-    onViewableItemsChanged,
-    viewabilityConfig,
-  } = useChatUnreadBanner(messages);
+  const { messages, isFetching, isPending, isError, fetchNextPage, hasNextPage, isFetchingNextPage, refetch } =
+    useInfiniteMessages();
+  const { unreadBannerIds, unreadBannerCount, onComposerActivity, onViewableItemsChanged, viewabilityConfig } =
+    useChatUnreadBanner(messages);
   const {
     isOnline: partnerOnline,
     lastSeenAt: partnerLastSeenAt,
@@ -150,8 +150,7 @@ export default function ChatScreen() {
 
   useEffect(() => {
     if (!relationship?.id || !user?.id || partner?.id) return;
-    const partnerId =
-      relationship.user_1_id === user.id ? relationship.user_2_id : relationship.user_1_id;
+    const partnerId = relationship.user_1_id === user.id ? relationship.user_2_id : relationship.user_1_id;
     if (!partnerId) return;
 
     let cancelled = false;
@@ -210,7 +209,6 @@ export default function ChatScreen() {
       initialScrollDoneRef.current = true;
     }, 60);
     return () => clearTimeout(t);
-     
   }, [messages.length, unreadBannerIds, scrollToLatestOrUnread]);
 
   // Chat is a stack screen that remounts on every open, but it can also regain focus without
@@ -251,10 +249,7 @@ export default function ChatScreen() {
       Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
       applyKeyboardFrame,
     );
-    const hideSub = Keyboard.addListener(
-      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
-      onHide,
-    );
+    const hideSub = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide', onHide);
     const changeSub = Keyboard.addListener(
       Platform.OS === 'ios' ? 'keyboardWillChangeFrame' : 'keyboardDidChangeFrame',
       applyKeyboardFrame,
@@ -265,6 +260,36 @@ export default function ChatScreen() {
       changeSub.remove();
     };
   }, [scrollToLatest]);
+
+  // Reopen what was open when you last left Chat (keyboard or emoji), and remember it on the way out.
+  useEffect(() => {
+    const resume = resumePanel;
+    resumePanel = null;
+    const timer = resume === 'keyboard' ? setTimeout(() => inputRef.current?.focus(), 350) : null;
+    return () => {
+      if (timer) clearTimeout(timer);
+      const open = panelRef.current;
+      resumePanel = open.emoji ? 'emoji' : open.keyboard ? 'keyboard' : null;
+    };
+  }, []);
+
+  /** A tap (not a scroll) anywhere in the messages or header puts the keyboard / emoji panel away. */
+  const tapStart = useRef<{ x: number; y: number; t: number } | null>(null);
+  const closeOnTap = {
+    onTouchStart: (e: GestureResponderEvent) => {
+      tapStart.current = { x: e.nativeEvent.pageX, y: e.nativeEvent.pageY, t: Date.now() };
+    },
+    onTouchEnd: (e: GestureResponderEvent) => {
+      const s = tapStart.current;
+      tapStart.current = null;
+      if (!s || Date.now() - s.t > 500) return;
+      if (Math.abs(e.nativeEvent.pageX - s.x) > 10 || Math.abs(e.nativeEvent.pageY - s.y) > 10) return;
+      if (!panelRef.current.emoji && !panelRef.current.keyboard) return;
+      inputRef.current?.blur();
+      Keyboard.dismiss();
+      setShowEmoji(false);
+    },
+  };
 
   // After an app restart the memory copy is gone: bring the draft back from storage.
   useEffect(() => {
@@ -398,19 +423,12 @@ export default function ChatScreen() {
     );
     return [...messages, ...pending];
   }, [messages, queuedMessages, optimisticMessages]);
-  const messageById = useMemo(
-    () => new Map(allMessages.map((message) => [message.id, message])),
-    [allMessages],
-  );
-  const pinned = useMemo(
-    () => messages.filter((m) => m.is_pinned && !m.deleted_for_all),
-    [messages],
-  );
+  const messageById = useMemo(() => new Map(allMessages.map((message) => [message.id, message])), [allMessages]);
+  const pinned = useMemo(() => messages.filter((m) => m.is_pinned && !m.deleted_for_all), [messages]);
   const latestPinned = pinned[pinned.length - 1] ?? null;
   const listItems = useMemo(() => {
     if (!user) return [];
-    const bannerIds =
-      unreadBannerIds && unreadBannerIds.size > 0 ? unreadBannerIds : new Set<string>();
+    const bannerIds = unreadBannerIds && unreadBannerIds.size > 0 ? unreadBannerIds : new Set<string>();
     return buildChatListItems(allMessages, user.id, bannerIds);
   }, [allMessages, user, unreadBannerIds]);
 
@@ -515,6 +533,11 @@ export default function ChatScreen() {
     setText((prev) => prev + emoji);
   };
 
+  /** ⌫ on the emoji keyboard: drop the last character (a whole emoji, not half of one). */
+  const handleEmojiBackspace = () => {
+    setText((prev) => Array.from(prev).slice(0, -1).join(''));
+  };
+
   const toggleEmoji = () => {
     if (!showEmoji) {
       inputRef.current?.blur();
@@ -530,11 +553,7 @@ export default function ChatScreen() {
    * on failure it moves into the offline queue under the same id, keeping the
    * local file so the queue can retry the upload later.
    */
-  const sendLocalMedia = async (
-    uri: string,
-    mediaType: 'image' | 'video' | 'voice',
-    content = '',
-  ) => {
+  const sendLocalMedia = async (uri: string, mediaType: 'image' | 'video' | 'voice', content = '') => {
     if (!user || !relationship) return;
     const id = `temp-${Date.now()}`;
     const queuePayload: ChatOfflinePayload = { content, mediaLocalUri: uri, mediaType };
@@ -545,16 +564,11 @@ export default function ChatScreen() {
       return;
     }
 
-    setOptimisticMessages((prev) => [
-      ...prev,
-      pendingMessage(id, { content, media_url: uri, media_type: mediaType }),
-    ]);
+    setOptimisticMessages((prev) => [...prev, pendingMessage(id, { content, media_url: uri, media_type: mediaType })]);
     setIsSendingMedia(true);
     try {
-      const ext =
-        mediaType === 'voice' ? 'm4a' : mediaType === 'video' ? 'mp4' : (uri.split('.').pop() ?? 'jpg');
-      const contentType =
-        mediaType === 'voice' ? 'audio/mp4' : mediaType === 'video' ? 'video/mp4' : 'image/jpeg';
+      const ext = mediaType === 'voice' ? 'm4a' : mediaType === 'video' ? 'mp4' : (uri.split('.').pop() ?? 'jpg');
+      const contentType = mediaType === 'voice' ? 'audio/mp4' : mediaType === 'video' ? 'video/mp4' : 'image/jpeg';
       const path = `${relationship.id}/${user.id}-${mediaType}-${Date.now()}.${ext}`;
       const mediaUrl = await api.uploadChatMedia(path, uri, contentType);
       await sendMessage.mutateAsync({ content, mediaUrl, mediaType });
@@ -566,8 +580,7 @@ export default function ChatScreen() {
     }
   };
 
-  const sendImageMessage = (uri: string, mediaType: 'image' | 'video') =>
-    sendLocalMedia(uri, mediaType);
+  const sendImageMessage = (uri: string, mediaType: 'image' | 'video') => sendLocalMedia(uri, mediaType);
 
   const handlePickGallery = async () => {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -608,10 +621,7 @@ export default function ChatScreen() {
       return;
     }
 
-    setOptimisticMessages((prev) => [
-      ...prev,
-      pendingMessage(id, { content, reply_to_id: replyToId ?? null }),
-    ]);
+    setOptimisticMessages((prev) => [...prev, pendingMessage(id, { content, reply_to_id: replyToId ?? null })]);
     try {
       await sendMessage.mutateAsync({ content, replyToId });
       setOptimisticMessages((prev) => prev.filter((m) => m.id !== id));
@@ -661,9 +671,7 @@ export default function ChatScreen() {
       if (!contact) return;
 
       const displayName =
-        [contact.firstName, contact.lastName].filter(Boolean).join(' ').trim() ||
-        contact.name ||
-        'Contact';
+        [contact.firstName, contact.lastName].filter(Boolean).join(' ').trim() || contact.name || 'Contact';
       const phone = contact.phoneNumbers?.[0]?.number?.trim();
       const email = contact.emails?.[0]?.email?.trim();
 
@@ -713,10 +721,6 @@ export default function ChatScreen() {
   }, [isRecording]);
 
   useEffect(() => {
-    willCancelRecordingRef.current = willCancelRecording;
-  }, [willCancelRecording]);
-
-  useEffect(() => {
     return () => {
       if (!isRecordingRef.current) return;
       try {
@@ -741,93 +745,94 @@ export default function ChatScreen() {
     return () => clearInterval(timer);
   }, [isRecording]);
 
-  const recordPanResponder = useMemo(
-    () =>
-      PanResponder.create({
-        onMoveShouldSetPanResponder: () => isRecordingRef.current,
-        onPanResponderMove: (_, gesture) => {
-          setWillCancelRecording(gesture.dx < -60);
-        },
-      }),
-    [],
-  );
-
-  const startRecording = async () => {
+  /** Starts recording; resolves true once the mic is live. */
+  const startRecording = async (): Promise<boolean> => {
+    if (isRecordingRef.current) return true;
     try {
-      if (isRecording) {
-        try {
-          await audioRecorder.stop();
-        } catch {
-          /* ignore */
-        }
-        setIsRecording(false);
-      }
-
       const { granted } = await requestRecordingPermissionsAsync();
       if (!granted) {
         Alert.alert(
           'Microphone access required',
           'Go to Settings and enable microphone access for Moments to send voice messages.',
         );
-        return;
+        return false;
       }
 
-      await setAudioModeAsync({
-        allowsRecording: true,
-        playsInSilentMode: true,
-      });
-
+      await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
       await audioRecorder.prepareToRecordAsync();
       audioRecorder.record();
-      setWillCancelRecording(false);
+      isRecordingRef.current = true;
       setRecordingElapsed(0);
       setShowAttachment(false);
       setShowEmoji(false);
       inputRef.current?.blur();
       setIsRecording(true);
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      return true;
     } catch (e) {
-      setAudioModeAsync({ allowsRecording: false }).catch(() => null);
+      setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true }).catch(() => null);
       Alert.alert('Recording failed', e instanceof Error ? e.message : 'Please try again');
+      return false;
+    }
+  };
+
+  /** Stops the recorder and returns the file (null if nothing usable). */
+  const finishRecording = async (): Promise<string | null> => {
+    if (!isRecordingRef.current) return null;
+    isRecordingRef.current = false;
+    setIsRecording(false);
+    setHoldingMic(false);
+    setRecordingElapsed(0);
+    try {
+      await audioRecorder.stop();
+      // Back to playback mode, still audible with the silent switch on.
+      await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true });
+      return audioRecorder.uri;
+    } catch {
+      return null;
     }
   };
 
   const stopAndSendRecording = async () => {
-    if (!isRecording || !user || !relationship) return;
-    setIsRecording(false);
-    setWillCancelRecording(false);
-    setRecordingElapsed(0);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    let uri: string | null = null;
-    try {
-      await audioRecorder.stop();
-      await setAudioModeAsync({ allowsRecording: false });
-      uri = audioRecorder.uri;
-    } catch (e) {
-      Alert.alert('Recording failed', e instanceof Error ? e.message : 'Please try again');
+    if (!user || !relationship) return;
+    const uri = await finishRecording();
+    if (!uri) {
+      Alert.alert('Recording failed', 'Nothing was recorded. Please try again.');
       return;
     }
-    if (!uri) return;
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     await sendLocalMedia(uri, 'voice', '🎙 Voice message');
   };
 
   const cancelRecording = async () => {
-    if (!isRecording) return;
-    setIsRecording(false);
-    setWillCancelRecording(false);
-    setRecordingElapsed(0);
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-    try {
-      await audioRecorder.stop();
-      await setAudioModeAsync({ allowsRecording: false });
-    } catch {/* ignore */}
+    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+    await finishRecording();
   };
 
-  const handleMicRelease = () => {
-    if (!isRecording) return;
-    if (willCancelRecordingRef.current) void cancelRecording();
-    else void stopAndSendRecording();
-    setWillCancelRecording(false);
+  /**
+   * Mic: press starts recording straight away. A quick tap leaves it running
+   * hands-free (delete or Send in the bar); holding it is walkie-talkie —
+   * let go to send (a hold under a second is discarded as a slip).
+   */
+  const onMicPressIn = () => {
+    if (isRecordingRef.current) return;
+    micPressedAt.current = Date.now();
+    setHoldingMic(true);
+    recordingStart.current = startRecording();
+  };
+
+  const onMicPressOut = async () => {
+    const heldMs = Date.now() - micPressedAt.current;
+    const started = (await recordingStart.current) ?? false;
+    recordingStart.current = null;
+    setHoldingMic(false);
+    if (!started) return;
+    if (heldMs < MIC_HOLD_MS) return; // tapped: keep recording hands-free
+    if (heldMs < MIN_HOLD_RECORD_MS) {
+      void cancelRecording();
+      return;
+    }
+    void stopAndSendRecording();
   };
 
   const startCall = useStartCall();
@@ -865,15 +870,9 @@ export default function ChatScreen() {
       if (isPending) return;
 
       const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
-      nearBottomRef.current =
-        contentOffset.y + layoutMeasurement.height >= contentSize.height - 120;
+      nearBottomRef.current = contentOffset.y + layoutMeasurement.height >= contentSize.height - 120;
 
-      if (
-        contentOffset.y < 80 &&
-        hasNextPage &&
-        !isFetchingNextPage &&
-        !loadingOlderRef.current
-      ) {
+      if (contentOffset.y < 80 && hasNextPage && !isFetchingNextPage && !loadingOlderRef.current) {
         loadingOlderRef.current = true;
         void fetchNextPage().finally(() => {
           loadingOlderRef.current = false;
@@ -889,8 +888,7 @@ export default function ChatScreen() {
 
   const hasText = text.trim().length > 0;
   const canLoadMessages = !!relationship?.id && !!user?.id;
-  const showMessagesLoader =
-    canLoadMessages && messages.length === 0 && (isPending || isFetching) && !isOffline;
+  const showMessagesLoader = canLoadMessages && messages.length === 0 && (isPending || isFetching) && !isOffline;
   const showMessagesError = (isError || isOffline) && messages.length === 0;
   const messagesErrorText = isOffline
     ? 'You appear to be offline. Messages will load when you reconnect.'
@@ -930,9 +928,7 @@ export default function ChatScreen() {
     if (item.type === 'unread') {
       return <ChatUnreadDivider count={unreadBannerCount > 0 ? unreadBannerCount : item.count} />;
     }
-    const replyToMessage = item.message.reply_to_id
-      ? messageById.get(item.message.reply_to_id) ?? null
-      : null;
+    const replyToMessage = item.message.reply_to_id ? (messageById.get(item.message.reply_to_id) ?? null) : null;
     return (
       <ChatBubble
         message={item.message}
@@ -948,6 +944,7 @@ export default function ChatScreen() {
     <View style={[styles.root, { backgroundColor: colors.background }]}>
       <View style={styles.flex}>
         <View
+          {...closeOnTap}
           style={[
             styles.header,
             {
@@ -1003,47 +1000,37 @@ export default function ChatScreen() {
           </View>
         </View>
 
-      {/* ── Pinned bar ── */}
-      {latestPinned && (
-        <Pressable
-          onPress={() => scrollToMessage(latestPinned.id)}
-          style={[styles.pinnedBar, { backgroundColor: colors.accentSoft, borderBottomColor: colors.border }]}>
-          <Icon name="pin" size={14} color={colors.accent} filled />
-          <Text style={[styles.pinnedText, { color: colors.text }]} numberOfLines={1}>
-            {messagePreviewLabel(latestPinned)}
-          </Text>
-          {pinned.length > 1 ? (
-            <Text style={[styles.pinnedCount, { color: colors.textSecondary }]}>{pinned.length}</Text>
-          ) : null}
-        </Pressable>
-      )}
+        {/* ── Pinned bar ── */}
+        {latestPinned && (
+          <Pressable
+            onPress={() => scrollToMessage(latestPinned.id)}
+            style={[styles.pinnedBar, { backgroundColor: colors.accentSoft, borderBottomColor: colors.border }]}>
+            <Icon name="pin" size={14} color={colors.accent} filled />
+            <Text style={[styles.pinnedText, { color: colors.text }]} numberOfLines={1}>
+              {messagePreviewLabel(latestPinned)}
+            </Text>
+            {pinned.length > 1 ? (
+              <Text style={[styles.pinnedCount, { color: colors.textSecondary }]}>{pinned.length}</Text>
+            ) : null}
+          </Pressable>
+        )}
 
-      {flushingOffline && (
-        <View style={[styles.offlineBar, { backgroundColor: colors.accentSoft }]}>
-          <Text style={[styles.offlineText, { color: colors.accent }]}>Sending queued messages…</Text>
-        </View>
-      )}
+        {flushingOffline && (
+          <View style={[styles.offlineBar, { backgroundColor: colors.accentSoft }]}>
+            <Text style={[styles.offlineText, { color: colors.accent }]}>Sending queued messages…</Text>
+          </View>
+        )}
 
-      {/* ── Messages + input (lifted above keyboard) ── */}
-      <View style={[styles.flex, { paddingBottom: keyboardLift }]}>
-        {/* ── Message area (recorder replaces list while recording) ── */}
-        <View style={styles.messageArea}>
-          {isRecording ? (
-            <ChatVoiceRecorder
-              elapsedSec={recordingElapsed}
-              willCancel={willCancelRecording}
-              panHandlers={recordPanResponder.panHandlers}
-              onCancel={() => void cancelRecording()}
-            />
-          ) : (
+        {/* ── Messages + input (lifted above keyboard) ── */}
+        <View style={[styles.flex, { paddingBottom: keyboardLift }]}>
+          {/* ── Message area (recorder replaces list while recording) ── */}
+          <View style={styles.messageArea} {...closeOnTap}>
             <ChatWallpaper style={styles.flex}>
               {showMessagesLoader ? (
                 <LoadingState />
               ) : showMessagesError ? (
                 <View style={styles.messagesError}>
-                  <Text style={[styles.messagesErrorText, { color: colors.textSecondary }]}>
-                    {messagesErrorText}
-                  </Text>
+                  <Text style={[styles.messagesErrorText, { color: colors.textSecondary }]}>{messagesErrorText}</Text>
                   <Pressable onPress={() => void refetch()} hitSlop={8}>
                     <Text style={[styles.messagesRetry, { color: colors.accent }]}>Tap to retry</Text>
                   </Pressable>
@@ -1093,173 +1080,185 @@ export default function ChatScreen() {
                 </View>
               )}
             </ChatWallpaper>
-          )}
-        </View>
-
-        {/* ── Media sending indicator ── */}
-        {isSendingMedia && (
-          <View style={[styles.offlineBar, { backgroundColor: colors.accentSoft }]}>
-            <Text style={[styles.offlineText, { color: colors.accent }]}>Sending…</Text>
           </View>
-        )}
 
-        {/* ── Moment reply composer chip ── */}
-        {chatMomentReply && (
-          <View style={[styles.momentReplyBar, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
-            {chatMomentReply.mediaUrl ? (
-              <Image source={{ uri: chatMomentReply.mediaUrl }} style={styles.momentReplyThumb} contentFit="cover" />
-            ) : (
-              <View style={[styles.momentReplyThumb, { backgroundColor: colors.surfaceElevated }]} />
-            )}
-            <View style={styles.momentReplyMeta}>
-              <Text style={[styles.momentReplyTitle, { color: colors.text }]}>Replying to moment</Text>
-              <Text style={[styles.momentReplySub, { color: colors.textSecondary }]}>Attached to your message</Text>
+          {/* ── Media sending indicator ── */}
+          {isSendingMedia && (
+            <View style={[styles.offlineBar, { backgroundColor: colors.accentSoft }]}>
+              <Text style={[styles.offlineText, { color: colors.accent }]}>Sending…</Text>
             </View>
-            <Pressable
-              hitSlop={8}
-              onPress={() => setChatMomentReply(null)}
-              accessibilityLabel="Remove moment attachment">
-              <Icon name="close" size={20} color={colors.textSecondary} />
-            </Pressable>
-          </View>
-        )}
-
-        {replyTo && user && (
-          <ChatReplyBar
-            message={replyTo}
-            partner={partner}
-            userId={user.id}
-            onClose={() => setReplyTo(null)}
-          />
-        )}
-
-        {/* ── Composer (attachment tray + input + emoji) ── */}
-        <View
-          style={[
-            styles.composer,
-            {
-              paddingBottom: composerBottomPad,
-              borderTopColor: colors.border,
-              backgroundColor: colors.background,
-            },
-          ]}>
-          {showAttachment && !isRecording && (
-            <ChatAttachmentSheet
-              onClose={() => setShowAttachment(false)}
-              onPickGallery={handlePickGallery}
-              onPickFile={handlePickFile}
-              onPickContact={handlePickContact}
-              onPickLocation={handlePickLocation}
-            />
           )}
 
+          {/* ── Moment reply composer chip ── */}
+          {chatMomentReply && (
+            <View style={[styles.momentReplyBar, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
+              {chatMomentReply.mediaUrl ? (
+                <Image source={{ uri: chatMomentReply.mediaUrl }} style={styles.momentReplyThumb} contentFit="cover" />
+              ) : (
+                <View style={[styles.momentReplyThumb, { backgroundColor: colors.surfaceElevated }]} />
+              )}
+              <View style={styles.momentReplyMeta}>
+                <Text style={[styles.momentReplyTitle, { color: colors.text }]}>Replying to moment</Text>
+                <Text style={[styles.momentReplySub, { color: colors.textSecondary }]}>Attached to your message</Text>
+              </View>
+              <Pressable
+                hitSlop={8}
+                onPress={() => setChatMomentReply(null)}
+                accessibilityLabel="Remove moment attachment">
+                <Icon name="close" size={20} color={colors.textSecondary} />
+              </Pressable>
+            </View>
+          )}
+
+          {replyTo && user && (
+            <ChatReplyBar message={replyTo} partner={partner} userId={user.id} onClose={() => setReplyTo(null)} />
+          )}
+
+          {/* ── Composer (attachment tray + input + emoji) ── */}
           <View
             style={[
-              styles.inputBar,
+              styles.composer,
               {
+                paddingBottom: composerBottomPad,
+                borderTopColor: colors.border,
                 backgroundColor: colors.background,
-                paddingTop: inputBarPad,
-                paddingBottom: inputBarPad,
               },
             ]}>
-          {/* Gallery — tap to pick a photo/video directly; long-press for the
-              full attachment sheet (file, contact, location). */}
-          <Pressable
-            hitSlop={8}
-            style={styles.inputSideBtn}
-            disabled={isRecording}
-            delayLongPress={350}
-            accessibilityLabel={showAttachment ? 'Close attachments' : 'Add photo or video'}
-            accessibilityHint={showAttachment ? undefined : 'Long press for more attachment options'}
-            onPress={() => {
-              if (showAttachment) {
-                setShowAttachment(false);
-                return;
-              }
-              void handlePickGallery();
-            }}
-            onLongPress={() => {
-              if (showAttachment) return;
-              inputRef.current?.blur();
-              setShowEmoji(false);
-              setShowAttachment(true);
-              scrollToLatest(true);
-            }}>
-            <Icon
-              name={showAttachment ? 'close' : 'image'}
-              size={showAttachment ? 22 : 24}
-              color={showAttachment ? colors.accent : colors.textSecondary}
-            />
-          </Pressable>
-
-          {/* Pill: text input + emoji toggle */}
-          <View style={[styles.inputPill, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <TextInput
-              ref={inputRef}
-              style={[styles.input, { color: colors.text }]}
-              placeholder="Message"
-              placeholderTextColor={colors.textTertiary}
-              value={text}
-              onChangeText={onChangeText}
-              editable={!isRecording}
-              multiline
-              maxLength={2000}
-              onFocus={() => {
-                setShowEmoji(false);
-                setShowAttachment(false);
-                scrollToLatest(true);
-              }}
-            />
-            <Pressable
-              hitSlop={8}
-              style={styles.emojiBtn}
-              accessibilityLabel="Emoji picker"
-              onPress={toggleEmoji}>
-              <Icon
-                name="sticker"
-                size={22}
-                color={showEmoji ? colors.accent : colors.textSecondary}
-                filled={showEmoji}
+            {showAttachment && !isRecording && (
+              <ChatAttachmentSheet
+                onClose={() => setShowAttachment(false)}
+                onPickGallery={handlePickGallery}
+                onPickFile={handlePickFile}
+                onPickContact={handlePickContact}
+                onPickLocation={handlePickLocation}
               />
-            </Pressable>
+            )}
+
+            <View
+              style={[
+                styles.inputBar,
+                {
+                  backgroundColor: colors.background,
+                  paddingTop: inputBarPad,
+                  paddingBottom: inputBarPad,
+                },
+              ]}>
+              {isRecording ? (
+                <View style={styles.flex}>
+                  <ChatVoiceRecorder
+                    elapsedSec={recordingElapsed}
+                    metering={recorderState.metering}
+                    holding={holdingMic}
+                    onCancel={() => void cancelRecording()}
+                    onSend={() => void stopAndSendRecording()}
+                  />
+                </View>
+              ) : (
+                <>
+                  {/* Gallery — tap to pick a photo/video directly; long-press for the
+                full attachment sheet (file, contact, location). */}
+                  <Pressable
+                    hitSlop={8}
+                    style={styles.inputSideBtn}
+                    disabled={isRecording}
+                    delayLongPress={350}
+                    accessibilityLabel={showAttachment ? 'Close attachments' : 'Add photo or video'}
+                    accessibilityHint={showAttachment ? undefined : 'Long press for more attachment options'}
+                    onPress={() => {
+                      if (showAttachment) {
+                        setShowAttachment(false);
+                        return;
+                      }
+                      void handlePickGallery();
+                    }}
+                    onLongPress={() => {
+                      if (showAttachment) return;
+                      inputRef.current?.blur();
+                      setShowEmoji(false);
+                      setShowAttachment(true);
+                      scrollToLatest(true);
+                    }}>
+                    <Icon
+                      name={showAttachment ? 'close' : 'image'}
+                      size={showAttachment ? 26 : 28}
+                      color={showAttachment ? colors.accent : colors.text}
+                    />
+                  </Pressable>
+
+                  {/* Pill: text input + emoji toggle */}
+                  <View style={[styles.inputPill, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                    <TextInput
+                      ref={inputRef}
+                      style={[styles.input, { color: colors.text }]}
+                      placeholder="Message"
+                      placeholderTextColor={colors.textTertiary}
+                      value={text}
+                      onChangeText={onChangeText}
+                      editable={!isRecording}
+                      multiline
+                      maxLength={2000}
+                      onFocus={() => {
+                        setShowEmoji(false);
+                        setShowAttachment(false);
+                        scrollToLatest(true);
+                      }}
+                    />
+                    <Pressable
+                      hitSlop={8}
+                      style={styles.emojiBtn}
+                      accessibilityLabel="Emoji picker"
+                      onPress={toggleEmoji}>
+                      <Icon
+                        name="sticker"
+                        size={26}
+                        color={showEmoji ? colors.accent : colors.text}
+                        filled={showEmoji}
+                      />
+                    </Pressable>
+                  </View>
+
+                  {!hasText && !isRecording && (
+                    <Pressable
+                      hitSlop={8}
+                      style={styles.inputSideBtn}
+                      accessibilityLabel="Open camera"
+                      onPress={openCamera}>
+                      <Icon name="camera" size={28} color={colors.text} />
+                    </Pressable>
+                  )}
+                </>
+              )}
+
+              {/* Send / Mic. Mic: tap to record hands-free, or hold and let go to
+              send. It stays mounted while held so letting go always registers;
+              in hands-free mode the recorder bar has its own Send. */}
+              {!isRecording || holdingMic ? (
+                <Pressable
+                  onPress={hasText ? handleSend : undefined}
+                  onPressIn={!hasText ? onMicPressIn : undefined}
+                  onPressOut={!hasText ? () => void onMicPressOut() : undefined}
+                  hitSlop={8}
+                  style={[
+                    styles.sendBtn,
+                    {
+                      backgroundColor: hasText || isRecording ? colors.accent : 'transparent',
+                    },
+                  ]}
+                  accessibilityLabel={hasText ? 'Send' : 'Record a voice message'}
+                  accessibilityHint={hasText ? undefined : 'Tap to record, or hold and release to send'}>
+                  <Icon
+                    name={hasText ? 'send' : 'mic'}
+                    size={hasText ? 22 : 27}
+                    color={hasText || isRecording ? colors.onAccent : colors.text}
+                    filled={hasText || isRecording}
+                  />
+                </Pressable>
+              ) : null}
+            </View>
+
+            {showEmoji && <ChatEmojiPicker onSelect={handleEmojiSelect} onBackspace={handleEmojiBackspace} />}
           </View>
-
-          {!hasText && !isRecording && (
-            <Pressable
-              hitSlop={8}
-              style={styles.inputSideBtn}
-              accessibilityLabel="Open camera"
-              onPress={openCamera}>
-              <Icon name="camera" size={24} color={colors.textSecondary} />
-            </Pressable>
-          )}
-
-          {/* Send / Mic (hold for voice, tap to send) */}
-          <Pressable
-            onPress={hasText ? handleSend : undefined}
-            onLongPress={!hasText ? () => void startRecording() : undefined}
-            onPressOut={!hasText ? handleMicRelease : undefined}
-            delayLongPress={300}
-            hitSlop={8}
-            style={[
-              styles.sendBtn,
-              {
-                backgroundColor: hasText || isRecording ? colors.accent : 'transparent',
-              },
-            ]}
-            accessibilityLabel={hasText ? 'Send' : 'Hold to record voice note'}>
-            <Icon
-              name={hasText ? 'send' : 'mic'}
-              size={22}
-              color={hasText || isRecording ? colors.onAccent : colors.textSecondary}
-              filled={hasText || isRecording}
-            />
-          </Pressable>
-          </View>
-
-          {showEmoji && <ChatEmojiPicker onSelect={handleEmojiSelect} />}
         </View>
-      </View>
       </View>
 
       <ChatMessageActionSheet
@@ -1272,11 +1271,7 @@ export default function ChatScreen() {
         onDeleteForAll={(messageId) => deleteForAll.mutate(messageId)}
       />
 
-      <ChatCameraModal
-        visible={showCamera}
-        onClose={() => setShowCamera(false)}
-        onCapture={handleCameraCapture}
-      />
+      <ChatCameraModal visible={showCamera} onClose={() => setShowCamera(false)} onCapture={handleCameraCapture} />
 
       <FullScreenImageModal
         visible={showPartnerPhoto}
@@ -1375,8 +1370,8 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   inputSideBtn: {
-    width: 40,
-    height: 40,
+    width: 44,
+    height: 44,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 2,
@@ -1388,17 +1383,17 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     paddingLeft: 14,
     paddingRight: 6,
-    minHeight: 40,
+    minHeight: 44,
     maxHeight: 130,
     marginBottom: 2,
     borderWidth: StyleSheet.hairlineWidth,
   },
-  input: { flex: 1, fontSize: 16, maxHeight: 120, paddingVertical: 10, paddingRight: 4 },
-  emojiBtn: { width: 34, height: 40, alignItems: 'center', justifyContent: 'center' },
+  input: { flex: 1, fontSize: 16, maxHeight: 120, paddingVertical: 12, paddingRight: 4 },
+  emojiBtn: { width: 40, height: 44, alignItems: 'center', justifyContent: 'center' },
   sendBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 2,

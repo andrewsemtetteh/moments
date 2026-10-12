@@ -193,7 +193,7 @@ function NotificationsScreenNative() {
               style={styles.flex}
               contentContainerStyle={[
                 styles.listContent,
-                { paddingBottom: insets.bottom + 24 },
+                { paddingBottom: insets.bottom + 16 },
                 !hasItems && styles.listContentEmpty,
               ]}
               stickySectionHeadersEnabled={false}
@@ -477,8 +477,6 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 13,
     fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.6,
     marginTop: 14,
     marginBottom: 2,
   },
@@ -545,7 +543,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: 8,
   },
-  itemType: { fontSize: 12, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.4 },
+  itemType: { fontSize: 12, fontWeight: '800', },
   itemContent: { fontSize: 15, lineHeight: 21 },
   itemContentUnread: { fontWeight: '600' },
   itemTime: { fontSize: 12, fontWeight: '600', flexShrink: 0 },

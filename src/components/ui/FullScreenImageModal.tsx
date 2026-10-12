@@ -18,9 +18,7 @@ export function FullScreenImageModal({ visible, imageUrl, title, fallbackName, o
   const insets = useSafeAreaInsets();
   const { width: windowW, height: windowH } = useWindowDimensions();
   const uri = imageUrl?.trim() || null;
-  const showFallback = visible && !uri && !!fallbackName?.trim();
-
-  if (!visible || (!uri && !showFallback)) return null;
+  if (!visible) return null;
 
   const topBarH = insets.top + 56;
   const bottomPad = insets.bottom + 12;
@@ -58,7 +56,7 @@ export function FullScreenImageModal({ visible, imageUrl, title, fallbackName, o
           ) : (
             <Pressable onPress={() => {}}>
               <View style={[styles.fallback, { width: Math.min(side, 280) }]}>
-                <Text style={styles.fallbackInitial}>{getAvatarInitial(fallbackName)}</Text>
+                <Text style={styles.fallbackInitial}>{getAvatarInitial(fallbackName?.trim() || title)}</Text>
               </View>
             </Pressable>
           )}

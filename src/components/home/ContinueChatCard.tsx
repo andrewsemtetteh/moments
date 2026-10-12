@@ -2,11 +2,12 @@ import { useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { LocationMapPreview } from '@/components/moments/LocationMapPreview';
+import { Icon } from '@/components/ui/Icon';
 import { Avatar } from '@/components/ui/primitives';
-import { Radius } from '@/constants/design-system';
 import { useLatestMessage, useUnreadMessageCount } from '@/hooks/queries';
 import { useTheme } from '@/hooks/useTheme';
 import { getFirstName } from '@/lib/avatar-initial';
+import { formatBadgeCount } from '@/lib/format-badge';
 import {
   continueChatAttachment,
   continueChatPreview,
@@ -71,35 +72,21 @@ export function ContinueChatCard() {
 
   const { attachment } = copy;
 
+  const unread = unreadCount > 0;
+
+  // A slim row, like a chat list entry: their photo (with the unread count),
+  // their name and when, and the last message.
   return (
     <Pressable
       onPress={() => openChat()}
       accessibilityRole="button"
       accessibilityLabel={`${copy.title}. ${copy.preview}`}
-      style={({ pressed }) => [
-        styles.card,
-        {
-          backgroundColor: colors.surface,
-          borderColor: colors.border,
-          borderWidth: colors.boldBorder ? 2 : StyleSheet.hairlineWidth,
-          opacity: pressed ? 0.92 : 1,
-          transform: [{ scale: pressed ? 0.99 : 1 }],
-        },
-      ]}>
-      <View style={styles.topRow}>
-        <Text style={[styles.title, { color: colors.text }]} numberOfLines={1}>
-          {copy.title}
-        </Text>
-        {copy.ago ? (
-          <Text style={[styles.ago, { color: colors.textTertiary }]}>{copy.ago}</Text>
-        ) : null}
-      </View>
-
-      <View style={styles.bottomRow}>
+      style={({ pressed }) => [styles.card, { backgroundColor: colors.surface }, pressed && styles.pressed]}>
+      <View>
         {attachment?.type === 'location' ? (
           <LocationMapPreview
             markers={[{ latitude: attachment.latitude, longitude: attachment.longitude, color: colors.accent }]}
-            height={36}
+            height={44}
             style={styles.attachmentThumb}
           />
         ) : attachment?.type === 'contact' ? (
@@ -109,63 +96,61 @@ export function ContinueChatCard() {
             </Text>
           </View>
         ) : (
-          <Avatar name={partner.name} imageUrl={partner.avatar_url} size={36} />
+          <Avatar name={partner.name} imageUrl={partner.avatar_url} size={44} />
         )}
-        <Text style={[styles.preview, { color: colors.textSecondary }]} numberOfLines={2}>
+        {unread ? (
+          <View style={[styles.badge, { borderColor: colors.surface, backgroundColor: colors.error }]}>
+            <Text style={styles.badgeText}>{formatBadgeCount(unreadCount)}</Text>
+          </View>
+        ) : null}
+      </View>
+      <View style={styles.body}>
+        <View style={styles.topRow}>
+          <Text style={[styles.title, { color: colors.text }]} numberOfLines={1}>
+            {getFirstName(partner.name) ?? copy.title}
+          </Text>
+          {copy.ago ? <Text style={[styles.ago, { color: colors.textTertiary }]}>{copy.ago}</Text> : null}
+        </View>
+        <Text
+          style={[styles.preview, { color: unread ? colors.text : colors.textSecondary, fontWeight: unread ? '700' : '500' }]}
+          numberOfLines={1}>
           {copy.preview}
         </Text>
       </View>
+      <Icon name="chevronRight" size={18} color={colors.textTertiary} />
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
   card: {
-    borderRadius: Radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: 16,
-    gap: 12,
-  },
-  topRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     gap: 12,
+    borderRadius: 22,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
   },
-  title: {
-    flex: 1,
-    fontSize: 17,
-    fontWeight: '700',
-    letterSpacing: -0.3,
-  },
-  ago: {
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  bottomRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  preview: {
-    flex: 1,
-    fontSize: 14,
-    fontWeight: '500',
-    lineHeight: 19,
-  },
-  attachmentThumb: {
-    width: 36,
+  pressed: { opacity: 0.85 },
+  body: { flex: 1, minWidth: 0, gap: 2 },
+  topRow: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 },
+  title: { flex: 1, fontSize: 15, fontWeight: '800' },
+  ago: { fontSize: 12, fontWeight: '600' },
+  preview: { fontSize: 14 },
+  badge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    minWidth: 20,
+    height: 20,
+    paddingHorizontal: 5,
     borderRadius: 10,
-  },
-  contactThumb: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    borderWidth: 2,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  contactThumbText: {
-    fontSize: 15,
-    fontWeight: '800',
-  },
+  badgeText: { color: '#fff', fontSize: 11, fontWeight: '800' },
+  attachmentThumb: { width: 44, borderRadius: 12 },
+  contactThumb: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
+  contactThumbText: { fontSize: 16, fontWeight: '800' },
 });

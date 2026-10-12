@@ -1,8 +1,10 @@
 import type { Href } from 'expo-router';
 
+import { PACKS } from '@/lib/handpicked';
 import { openActivities, openCalendar, openChat } from '@/lib/router';
 import * as api from '@/services/api';
-import { useUIStore } from '@/stores';
+import { useAuthStore, useUIStore } from '@/stores';
+import { useGameRoomStore } from '@/stores/game-room-store';
 import type { Notification } from '@/types/database';
 
 export type NotificationNavTarget = {
@@ -48,12 +50,34 @@ async function openMomentFromNotification(relatedId?: string | null) {
 }
 
 /**
+ * A live invite: bring back the Join / Join muted / Not now sheet for the room that's still open,
+ * rather than joining straight in (that would turn on your mic without you choosing to).
+ * If the room has ended, say so and land on Play.
+ */
+function reopenLiveInvite() {
+  const room = useGameRoomStore.getState();
+  if (room.open) return;
+  const state = room.state;
+  const myId = useAuthStore.getState().user?.id;
+  if (state && state.phase !== 'finished' && state.hostId !== myId) {
+    const fromName = state.players.find((p) => p.id === state.hostId)?.name ?? 'Your partner';
+    useGameRoomStore.setState({ invite: { roomId: state.id, game: state.game, fromName } });
+    return;
+  }
+  openActivities();
+  void import('@/lib/in-app-notify').then(({ notifyIsland }) =>
+    notifyIsland({
+      title: 'Session ended',
+      message: 'That live game has finished. Start a new one anytime.',
+      icon: 'gamepad',
+    }),
+  );
+}
+
+/**
  * Deep-link from an in-app or push notification to the relevant screen / overlay.
  */
-export async function openFromNotification(
-  target: NotificationNavTarget,
-  router: RouterLike,
-): Promise<void> {
+export async function openFromNotification(target: NotificationNavTarget, router: RouterLike): Promise<void> {
   const type = target.type ?? undefined;
 
   switch (type) {
@@ -89,9 +113,38 @@ export async function openFromNotification(
       openCalendar();
       return;
 
+    // Local reminders (see relationship-reminders): anniversary and milestones
+    // land on You (where days together can be shared); Wrapped opens itself.
+    case 'anniversary':
+    case 'milestone':
+      router.navigate('/(tabs)/profile');
+      return;
+
+    case 'wrapped':
+      router.navigate('/(tabs)/profile');
+      afterNavigate(() => {
+        useUIStore.getState().setShowWrapped(true);
+      });
+      return;
+
     case 'activity':
+      if (target.relatedId && PACKS.some((p) => p.id === target.relatedId)) {
+        router.navigate({ pathname: '/play/pack/[id]', params: { id: target.relatedId } });
+      } else {
+        openActivities();
+      }
+      return;
+
     case 'game_invite':
-      openActivities();
+      reopenLiveInvite();
+      return;
+
+    case 'game_turn':
+      if (target.relatedId) {
+        router.navigate({ pathname: '/play/session/[id]', params: { id: target.relatedId } });
+      } else {
+        openActivities();
+      }
       return;
 
     default:

@@ -93,5 +93,5 @@ export function promptHistoryStatus(
 
 export function chatDraftForPrompt(prompt: string): string {
   const clipped = prompt.length > 80 ? `${prompt.slice(0, 77)}…` : prompt;
-  return `About today's question — "${clipped}"\n\n`;
+  return `About today's question: "${clipped}"\n\n`;
 }

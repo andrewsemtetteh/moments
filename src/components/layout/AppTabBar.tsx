@@ -89,9 +89,7 @@ export function AppTabBar({ state, navigation }: TabBarLikeProps) {
     const focused = activeName === tab.name;
     const isProfile = tab.name === 'profile';
     const badge =
-      tab.name === 'chat' && Number.isFinite(unreadMessages) && unreadMessages >= 1
-        ? Math.floor(unreadMessages)
-        : 0;
+      tab.name === 'chat' && Number.isFinite(unreadMessages) && unreadMessages >= 1 ? Math.floor(unreadMessages) : 0;
 
     return (
       <Pressable
@@ -106,11 +104,7 @@ export function AppTabBar({ state, navigation }: TabBarLikeProps) {
           // The ring is always there (just transparent when unselected), so the
           // avatar never shifts or shrinks when the tab is selected — previously
           // the border was added on focus and squeezed the avatar inside it.
-          <View
-            style={[
-              styles.profileAvatar,
-              { borderColor: focused ? colors.accent : 'transparent' },
-            ]}>
+          <View style={[styles.profileAvatar, { borderColor: focused ? colors.accent : 'transparent' }]}>
             <Avatar name={user?.name} imageUrl={user?.avatar_url} size={TAB_ICON_SIZE - 6} />
           </View>
         ) : (
@@ -140,16 +134,9 @@ export function AppTabBar({ state, navigation }: TabBarLikeProps) {
       style={[styles.wrap, { paddingBottom: bottomPad, paddingTop: TAB_BAR_FAB_OVERFLOW }]}
       pointerEvents="box-none"
       onLayout={(e) => setTabBarOverlayHeight(Math.ceil(e.nativeEvent.layout.height))}>
-      <View
-        style={styles.bar}
-        onLayout={onBarLayout}
-        pointerEvents="box-none">
+      <View style={styles.bar} onLayout={onBarLayout} pointerEvents="box-none">
         {barWidth > 0 && (
-          <Svg
-            width={barWidth}
-            height={TAB_BAR_HEIGHT}
-            style={StyleSheet.absoluteFill}
-            pointerEvents="none">
+          <Svg width={barWidth} height={TAB_BAR_HEIGHT} style={StyleSheet.absoluteFill} pointerEvents="none">
             <Path
               d={tabBarNotchPath(barWidth, TAB_BAR_HEIGHT, CUTOUT_RADIUS)}
               fill={fill}
@@ -169,11 +156,7 @@ export function AppTabBar({ state, navigation }: TabBarLikeProps) {
             }}
             accessibilityLabel="Create a Moment"
             style={({ pressed }) => [styles.fabPressable, pressed && { transform: [{ scale: 0.92 }] }]}>
-            <LinearGradient
-              colors={colors.gradient}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.fab}>
+            <LinearGradient colors={colors.gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.fab}>
               <Icon name="plus" size={TAB_ICON_SIZE} color={colors.onAccent} />
             </LinearGradient>
           </Pressable>

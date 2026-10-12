@@ -452,8 +452,8 @@ export function MomentCreatorModal() {
                   <ActivityIndicator color={colors.onAccent} />
                 ) : (
                   <>
-                    <Icon name="send" size={20} color={colors.onAccent} filled />
                     <Text style={[styles.previewSendText, { color: colors.onAccent }]}>Send moment</Text>
+                    <Icon name="send" size={20} color={colors.onAccent} filled />
                   </>
                 )}
               </Pressable>
@@ -584,7 +584,7 @@ export function MomentCreatorModal() {
               </Pressable>
             </View>
 
-            <Text style={[styles.hint, { color: chrome.textTertiary }]}>
+            <Text style={[styles.hint, { color: chrome.textSecondary }]}>
               {recording ? 'Release to finish video' : 'Tap for photo · hold for video'}
             </Text>
 

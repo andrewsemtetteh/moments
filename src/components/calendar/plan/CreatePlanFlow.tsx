@@ -220,6 +220,7 @@ export function CreatePlanFlow({
       <FullScreenPage
         visible={visible}
         title="New plan"
+        avoidKeyboard={false}
         onBack={onClose}
         right={
           saving ? (
@@ -236,7 +237,8 @@ export function CreatePlanFlow({
               <ScrollView
                 showsVerticalScrollIndicator={false}
                 keyboardShouldPersistTaps="handled"
-                keyboardDismissMode="on-drag"
+                keyboardDismissMode="none"
+                automaticallyAdjustKeyboardInsets
                 contentContainerStyle={[styles.formScroll, styles.formFill]}>
                 {/* No autoFocus: the keyboard waits until you tap the title. */}
                 <TextInput
@@ -506,7 +508,7 @@ export function CreatePlanFlow({
               </ScrollView>
 
               {/* Pinned under the form like New memory's — always in reach. */}
-              <PageFooter>
+              <PageFooter hideWhileTyping>
                 <PrimaryButton label="Save plan" onPress={handleSave} disabled={!title.trim()} loading={saving} />
               </PageFooter>
       </FullScreenPage>

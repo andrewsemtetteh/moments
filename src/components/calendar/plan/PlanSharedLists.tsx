@@ -51,7 +51,7 @@ export function PlanSharedLists({
       {lists.length === 0 ? (
         <View style={styles.empty}>
           <Text style={[styles.emptyBody, { color: colors.textSecondary }]}>
-            Lists appear when you plan a trip, celebration, or add a checklist — or create one anytime.
+            Lists appear when you plan a trip, celebration, or add a checklist. You can also create one anytime.
           </Text>
           {onCreateList ? (
             <Pressable onPress={onCreateList} style={[styles.createBtn, { backgroundColor: colors.accentSoft }]}>

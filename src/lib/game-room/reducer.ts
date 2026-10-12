@@ -26,6 +26,7 @@ const BLANK_ROUND = {
   roundPoints: {},
   message: null,
   deadline: null,
+  ready: {},
 } satisfies Partial<RoomState>;
 
 export function createRoom(input: {
@@ -34,11 +35,13 @@ export function createRoom(input: {
   players: RoomPlayer[];
   game?: LiveGameKind;
   vibe?: Vibe;
+  mode?: 'live' | 'async';
 }): RoomState {
   const game = input.game ?? 'wouldYouRather';
   return {
     v: 1,
     id: input.id,
+    mode: input.mode ?? 'live',
     game,
     vibe: input.vibe ?? 'playful',
     topic: '',
@@ -102,7 +105,12 @@ function startRound(state: RoomState, round: number, now: number): RoomState {
   const base = { ...state, ...BLANK_ROUND, round };
   switch (state.game) {
     case 'quiz':
-      return bump(base, { step: 'answer', turnId: null, deadline: now + QUIZ_ANSWER_MS });
+      // No clock when each person answers on their own time.
+      return bump(base, {
+        step: 'answer',
+        turnId: null,
+        deadline: state.mode === 'async' ? null : now + QUIZ_ANSWER_MS,
+      });
     case 'truthDare':
       return bump(base, { step: 'choose', turnId: turnFor(state, round) });
     case 'guessAnswer':
@@ -243,7 +251,7 @@ function finish(state: RoomState): RoomState {
 
 function ensurePool(state: RoomState, kind: 'truth' | 'dare'): string {
   const list = state.pool?.[kind] ?? [];
-  if (list.length === 0) return kind === 'truth' ? 'Tell your partner something you never told them.' : 'Give your partner a 20-second compliment.';
+  if (list.length === 0) return kind === 'truth' ? 'Tell your partner something you never told them.' : 'Give your partner a 20 second compliment.';
   const used = state.tally[`td_${kind}`] ?? 0;
   return list[used % list.length];
 }
@@ -325,7 +333,7 @@ export function reduceRoom(
     case 'perform': {
       if (state.game !== 'truthDare' || state.step !== 'perform' || from !== state.turnId) return state;
       if (!action.done) {
-        return bump(state, { performed: 'skipped', step: 'reveal', message: 'Skipped — no points, no shame 😌' });
+        return bump(state, { performed: 'skipped', step: 'reveal', message: 'Skipped. No points, no shame 😌' });
       }
       const kind = state.current?.kind ?? 'truth';
       return bump(state, {
@@ -412,12 +420,29 @@ export function reduceRoom(
 
     case 'next': {
       if (state.phase !== 'playing' || state.step !== 'reveal') return state;
+      // On your own time, each person sees the reveal before the round moves on.
+      if (state.mode === 'async') {
+        const ready = { ...state.ready, [from]: true };
+        if (!state.players.every((p) => ready[p.id])) return bump(state, { ready });
+      }
       const nextRound = state.round + 1;
       return nextRound >= state.totalRounds ? finish(state) : startRound(state, nextRound, now);
     }
 
+    case 'suggest': {
+      if (state.phase !== 'lobby') return state;
+      const suggestions = { ...state.suggestions, [from]: action.game };
+      const agreed = state.players.every((p) => suggestions[p.id] === action.game);
+      if (!agreed) return bump(state, { suggestions });
+      return bump(state, {
+        suggestions: {},
+        game: action.game,
+        totalRounds: getGameDefinition(action.game).defaultRounds,
+      });
+    }
+
     case 'end':
-      if (!isHost || state.phase === 'lobby') return state;
+      if ((!isHost && state.mode !== 'async') || state.phase === 'lobby') return state;
       return finish(state);
 
     case 'rematch':

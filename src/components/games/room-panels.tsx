@@ -12,12 +12,11 @@ import Animated, {
 import type { PlayTone } from '@/components/activities/explore/explore-catalog';
 import { Avatar } from '@/components/ui/primitives';
 import { useTheme } from '@/hooks/useTheme';
-import { gameRoom } from '@/lib/game-room/manager';
 import { QUIZ_ANSWER_MS, type ChoiceItem, type PromptItem, type QuizItem, type RoomState } from '@/lib/game-room/types';
 import { BOOL_TILE_COLORS, QUIZ_TILE_COLORS } from '@/lib/quiz-live';
 import { useGameRoomStore } from '@/stores/game-room-store';
 
-import { ChunkyButton, RoundEnter, firstName, shade, useRoomPlayers } from './room-ui';
+import { ChunkyButton, RoundEnter, firstName, shade, useRoomDispatch, useRoomPlayers } from './room-ui';
 
 interface PanelProps {
   state: RoomState;
@@ -69,17 +68,24 @@ function PromptCard({ tone, eyebrow, children }: { tone: PlayTone; eyebrow?: str
 }
 
 function RevealFooter({ state, tone }: PanelProps) {
+  const dispatch = useRoomDispatch();
   const { colors } = useTheme();
+  const { meId, partner } = useRoomPlayers();
   const last = state.round + 1 >= state.totalRounds;
+  const waitingOnPartner = state.mode === 'async' && !!state.ready?.[meId];
   return (
     <RoundEnter delay={150}>
       <View style={styles.footer}>
         {state.message ? <Text style={[styles.message, { color: colors.text }]}>{state.message}</Text> : null}
-        <ChunkyButton
-          label={last ? 'See results' : 'Next round'}
-          color={tone.accent}
-          onPress={() => gameRoom.dispatch({ t: 'next' })}
-        />
+        {waitingOnPartner ? (
+          <Waiting text={`Waiting for ${firstName(partner.name)} to see this round`} />
+        ) : (
+          <ChunkyButton
+            label={last ? 'See results' : 'Next round'}
+            color={tone.accent}
+            onPress={() => dispatch({ t: 'next' })}
+          />
+        )}
       </View>
     </RoundEnter>
   );
@@ -132,6 +138,7 @@ function AnswerInput({
 /* -------------------------------------------------------------------------- */
 
 export function ChoicePanel({ state, tone }: PanelProps) {
+  const dispatch = useRoomDispatch();
   const { colors } = useTheme();
   const { meId, me, partner, partnerId, myAnswer, partnerAnswered } = useMe(state);
   const item = state.items[state.round] as ChoiceItem | undefined;
@@ -147,7 +154,7 @@ export function ChoicePanel({ state, tone }: PanelProps) {
     <View style={styles.panel}>
       <RoundEnter>
         <Text style={[styles.hint, { color: colors.textSecondary }]}>
-          {isThisOrThat ? 'Quick — pick one!' : 'Would you rather…'}
+          {isThisOrThat ? 'Quick, pick one!' : 'Would you rather…'}
         </Text>
       </RoundEnter>
       <View style={[styles.choiceStack, isThisOrThat && styles.choiceRow]}>
@@ -161,7 +168,7 @@ export function ChoicePanel({ state, tone }: PanelProps) {
             <RoundEnter key={opt.key} delay={i * 90}>
               <Pressable
                 disabled={myAnswer !== undefined || revealed}
-                onPress={() => gameRoom.dispatch({ t: 'answer', value: opt.key })}
+                onPress={() => dispatch({ t: 'answer', value: opt.key })}
                 accessibilityRole="button"
                 accessibilityLabel={opt.text}
                 style={({ pressed }) => [
@@ -207,13 +214,14 @@ export function ChoicePanel({ state, tone }: PanelProps) {
 /* -------------------------------------------------------------------------- */
 
 export function LikelyPanel({ state, tone }: PanelProps) {
+  const dispatch = useRoomDispatch();
   const { colors } = useTheme();
   const { meId, me, partner, partnerId, myAnswer, partnerAnswered } = useMe(state);
   const item = state.items[state.round] as PromptItem | undefined;
   if (!item) return null;
   const revealed = state.step === 'reveal';
   const nameFor = (id: string | undefined) =>
-    id === meId ? 'themselves' : id === partnerId ? firstName(partner.name) : '—';
+    id === meId ? 'themselves' : id === partnerId ? firstName(partner.name) : 'nobody';
   const targets = [
     { id: meId, label: 'Me', avatar: me.avatar, name: me.name },
     { id: partnerId, label: firstName(partner.name), avatar: partner.avatar, name: partner.name },
@@ -235,7 +243,7 @@ export function LikelyPanel({ state, tone }: PanelProps) {
             <RoundEnter key={t.id} delay={120 + i * 80}>
               <Pressable
                 disabled={myAnswer !== undefined || revealed}
-                onPress={() => gameRoom.dispatch({ t: 'answer', value: t.id })}
+                onPress={() => dispatch({ t: 'answer', value: t.id })}
                 accessibilityRole="button"
                 accessibilityLabel={`Point at ${t.label}`}
                 style={({ pressed }) => [
@@ -281,6 +289,7 @@ export function LikelyPanel({ state, tone }: PanelProps) {
 /* -------------------------------------------------------------------------- */
 
 export function TruthDarePanel({ state, tone }: PanelProps) {
+  const dispatch = useRoomDispatch();
   const { colors } = useTheme();
   const { partner, isMyTurn, turnName } = useMe(state);
   const turnLabel = isMyTurn ? 'Your turn' : `${firstName(partner.name)}’s turn`;
@@ -297,8 +306,8 @@ export function TruthDarePanel({ state, tone }: PanelProps) {
       {state.step === 'choose' ? (
         isMyTurn ? (
           <View style={styles.tdChoose}>
-            <ChunkyButton label="🤫  Truth" color="#5B8DEF" onPress={() => gameRoom.dispatch({ t: 'pickKind', kind: 'truth' })} />
-            <ChunkyButton label="🔥  Dare" color="#FF5A5F" onPress={() => gameRoom.dispatch({ t: 'pickKind', kind: 'dare' })} />
+            <ChunkyButton label="🤫  Truth" color="#5B8DEF" onPress={() => dispatch({ t: 'pickKind', kind: 'truth' })} />
+            <ChunkyButton label="🔥  Dare" color="#FF5A5F" onPress={() => dispatch({ t: 'pickKind', kind: 'dare' })} />
           </View>
         ) : (
           <Waiting text={`${turnName} is choosing truth or dare…`} />
@@ -316,11 +325,11 @@ export function TruthDarePanel({ state, tone }: PanelProps) {
       {state.step === 'perform' ? (
         isMyTurn ? (
           <View style={styles.tdChoose}>
-            <ChunkyButton label="✅  Done!" color="#3DBE7A" onPress={() => gameRoom.dispatch({ t: 'perform', done: true })} />
-            <ChunkyButton label="Skip" compact color={colors.textTertiary} onPress={() => gameRoom.dispatch({ t: 'perform', done: false })} />
+            <ChunkyButton label="✅  Done!" color="#3DBE7A" onPress={() => dispatch({ t: 'perform', done: true })} />
+            <ChunkyButton label="Skip" compact color={colors.textTertiary} onPress={() => dispatch({ t: 'perform', done: false })} />
           </View>
         ) : (
-          <Waiting text={`${turnName} is on it — listen up! 🎧`} />
+          <Waiting text={`${turnName} is on it. Listen up! 🎧`} />
         )
       ) : null}
 
@@ -329,8 +338,8 @@ export function TruthDarePanel({ state, tone }: PanelProps) {
           <View style={styles.tdChoose}>
             <Text style={[styles.hint, { color: colors.textSecondary }]}>How did they do?</Text>
             <View style={styles.rateRow}>
-              <ChunkyButton label="👍  Loved it" style={{ flex: 1 }} color="#3DBE7A" onPress={() => gameRoom.dispatch({ t: 'rate', up: true })} />
-              <ChunkyButton label="👎  Meh" style={{ flex: 1 }} color="#8A8F98" onPress={() => gameRoom.dispatch({ t: 'rate', up: false })} />
+              <ChunkyButton label="👍  Loved it" style={{ flex: 1 }} color="#3DBE7A" onPress={() => dispatch({ t: 'rate', up: true })} />
+              <ChunkyButton label="👎  Meh" style={{ flex: 1 }} color="#8A8F98" onPress={() => dispatch({ t: 'rate', up: false })} />
             </View>
           </View>
         ) : (
@@ -348,6 +357,7 @@ export function TruthDarePanel({ state, tone }: PanelProps) {
 /* -------------------------------------------------------------------------- */
 
 export function GuessPanel({ state, tone }: PanelProps) {
+  const dispatch = useRoomDispatch();
   const { colors } = useTheme();
   const { partner, meId, isMyTurn, turnName } = useMe(state);
   const [text, setText] = useState('');
@@ -376,7 +386,7 @@ export function GuessPanel({ state, tone }: PanelProps) {
               label="Lock it in 🔒"
               color={tone.accent}
               disabled={!text.trim()}
-              onPress={() => gameRoom.dispatch({ t: 'write', text })}
+              onPress={() => dispatch({ t: 'write', text })}
             />
           </View>
         ) : (
@@ -392,7 +402,7 @@ export function GuessPanel({ state, tone }: PanelProps) {
               label="Submit guess"
               color={tone.accent}
               disabled={!text.trim()}
-              onPress={() => gameRoom.dispatch({ t: 'guess', value: text })}
+              onPress={() => dispatch({ t: 'guess', value: text })}
             />
           </View>
         ) : (
@@ -419,10 +429,10 @@ export function GuessPanel({ state, tone }: PanelProps) {
         isMyTurn ? (
           <View style={styles.tdChoose}>
             <Text style={[styles.hint, { color: colors.textSecondary }]}>Was that right?</Text>
-            <ChunkyButton label="✅  Nailed it" color="#3DBE7A" onPress={() => gameRoom.dispatch({ t: 'judge', verdict: 'yes' })} />
+            <ChunkyButton label="✅  Nailed it" color="#3DBE7A" onPress={() => dispatch({ t: 'judge', verdict: 'yes' })} />
             <View style={styles.rateRow}>
-              <ChunkyButton label="🤏  Close" compact style={{ flex: 1 }} color="#E5A83A" onPress={() => gameRoom.dispatch({ t: 'judge', verdict: 'close' })} />
-              <ChunkyButton label="❌  Nope" compact style={{ flex: 1 }} color="#FF5A5F" onPress={() => gameRoom.dispatch({ t: 'judge', verdict: 'no' })} />
+              <ChunkyButton label="🤏  Close" compact style={{ flex: 1 }} color="#E5A83A" onPress={() => dispatch({ t: 'judge', verdict: 'close' })} />
+              <ChunkyButton label="❌  Nope" compact style={{ flex: 1 }} color="#FF5A5F" onPress={() => dispatch({ t: 'judge', verdict: 'no' })} />
             </View>
           </View>
         ) : (
@@ -440,6 +450,7 @@ export function GuessPanel({ state, tone }: PanelProps) {
 /* -------------------------------------------------------------------------- */
 
 export function TwoTruthsPanel({ state, tone }: PanelProps) {
+  const dispatch = useRoomDispatch();
   const { colors } = useTheme();
   const { partner, isMyTurn, turnName } = useMe(state);
   const [lines, setLines] = useState(['', '', '']);
@@ -498,7 +509,7 @@ export function TwoTruthsPanel({ state, tone }: PanelProps) {
               label="Lock it in 🔒"
               color={tone.accent}
               disabled={lie === null || lines.some((l) => !l.trim())}
-              onPress={() => gameRoom.dispatch({ t: 'write', statements: lines, lie: lie ?? 0 })}
+              onPress={() => dispatch({ t: 'write', statements: lines, lie: lie ?? 0 })}
             />
           </View>
         ) : (
@@ -518,7 +529,7 @@ export function TwoTruthsPanel({ state, tone }: PanelProps) {
               <RoundEnter key={i} delay={i * 80}>
                 <Pressable
                   disabled={isMyTurn || revealed}
-                  onPress={() => gameRoom.dispatch({ t: 'guess', value: String(i) })}
+                  onPress={() => dispatch({ t: 'guess', value: String(i) })}
                   accessibilityRole="button"
                   style={({ pressed }) => [
                     styles.statement,
@@ -568,6 +579,7 @@ function useCountdown(deadline: number | null) {
 }
 
 export function QuizPanel({ state, tone }: PanelProps) {
+  const dispatch = useRoomDispatch();
   const { colors } = useTheme();
   const { meId, me, partner, partnerId, myAnswer } = useMe(state);
   const item = state.items[state.round] as QuizItem | undefined;
@@ -581,7 +593,7 @@ export function QuizPanel({ state, tone }: PanelProps) {
 
   return (
     <View style={styles.panel}>
-      {state.step === 'answer' ? (
+      {state.step === 'answer' && state.deadline ? (
         <View style={[styles.timerTrack, { backgroundColor: colors.border }]}>
           <View style={[styles.timerFill, { width: `${Math.round(pct * 100)}%`, backgroundColor: hot ? '#FF5A5F' : tone.accent }]} />
           <Text style={[styles.timerText, { color: colors.text }]}>{seconds}s</Text>
@@ -605,7 +617,7 @@ export function QuizPanel({ state, tone }: PanelProps) {
             <RoundEnter key={i} delay={i * 60}>
               <Pressable
                 disabled={myAnswer !== undefined || revealed}
-                onPress={() => gameRoom.dispatch({ t: 'answer', value: String(i) })}
+                onPress={() => dispatch({ t: 'answer', value: String(i) })}
                 accessibilityRole="button"
                 accessibilityLabel={opt}
                 style={({ pressed }) => [

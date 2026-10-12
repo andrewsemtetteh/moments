@@ -8,14 +8,17 @@ import { StyleSheet } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { AppModals } from '@/components/layout/AppModals';
+import { DynamicIslandHost } from '@/components/layout/DynamicIslandHost';
 import { resolveThemeColors } from '@/constants/design-system';
 import { AppProviders } from '@/providers/AppProviders';
 import { useUIStore } from '@/stores';
 
-const publishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY ?? "";
+const publishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY ?? '';
 
 if (!publishableKey) {
-  throw new Error("Missing EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY. Add your key to .env.local.\nRun: 1) clerk auth login  2) clerk link  3) clerk env pull — then restart the dev server.");
+  throw new Error(
+    'Missing EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY. Add your key to .env.local.\nRun: 1) clerk auth login  2) clerk link  3) clerk env pull, then restart the dev server.',
+  );
 }
 
 // Hold the native splash until the first screen (src/app/index.tsx) is ready
@@ -33,57 +36,81 @@ function RootStack() {
   return (
     <ThemeProvider value={colors.isDark ? DarkTheme : DefaultTheme}>
       <StatusBar style={colors.isDark ? 'light' : 'dark'} />
-      <Stack
-        screenOptions={{
-          headerShown: false,
-          contentStyle: { backgroundColor: colors.background },
-          animation: 'fade',
-        }}>
-        <Stack.Screen name="index" />
-        {/* Belt-and-suspenders alongside the (auth) group's own stack-level
+      <DynamicIslandHost>
+        <Stack
+          screenOptions={{
+            headerShown: false,
+            contentStyle: { backgroundColor: colors.background },
+            animation: 'fade',
+          }}>
+          <Stack.Screen name="index" />
+          {/* Belt-and-suspenders alongside the (auth) group's own stack-level
             setting — this is the top-level entry a swipe-back gesture would
             otherwise reveal (the splash/index screen) if anything upstream
             ever reaches here via push instead of replace. */}
-        <Stack.Screen
-          name="(auth)"
-          options={{ gestureEnabled: false, fullScreenGestureEnabled: false }}
-        />
-        <Stack.Screen name="(onboarding)" />
-        <Stack.Screen name="(tabs)" />
-        {/* Chat, Notifications and Settings: the platform's own push
+          <Stack.Screen name="(auth)" options={{ gestureEnabled: false, fullScreenGestureEnabled: false }} />
+          <Stack.Screen name="(onboarding)" />
+          <Stack.Screen name="(tabs)" />
+          {/* Chat, Notifications and Settings: the platform's own push
             (`default` = the real UIKit transition on iOS, not a JS/custom
             animator), closed by swiping right from anywhere on the screen —
             the swipe tracks your finger and can be cancelled midway.
             Chat's reply gesture is a LEFT swipe so it never fights this. */}
-        <Stack.Screen
-          name="chat"
-          options={{ animation: 'default', gestureEnabled: true, fullScreenGestureEnabled: true }}
-        />
-        <Stack.Screen
-          name="notifications"
-          options={{ animation: 'default', gestureEnabled: true, fullScreenGestureEnabled: true }}
-        />
-        <Stack.Screen
-          name="settings"
-          options={{ animation: 'default', gestureEnabled: true, fullScreenGestureEnabled: true }}
-        />
-        {/* Plan opens from its top-left icon, so it slides in from the left and
+          <Stack.Screen
+            name="chat"
+            options={{ animation: 'default', gestureEnabled: true, fullScreenGestureEnabled: true }}
+          />
+          <Stack.Screen
+            name="notifications"
+            options={{ animation: 'default', gestureEnabled: true, fullScreenGestureEnabled: true }}
+          />
+          <Stack.Screen
+            name="settings"
+            options={{ animation: 'default', gestureEnabled: true, fullScreenGestureEnabled: true }}
+          />
+          {/* Streak: opened from Home's streak pill; same push + swipe back as Settings. */}
+          <Stack.Screen
+            name="streak"
+            options={{ animation: 'default', gestureEnabled: true, fullScreenGestureEnabled: true }}
+          />
+          {/* Plan opens from its top-left icon, so it slides in from the left and
             closes by swiping LEFT from anywhere. `animationMatchesGesture`
             makes the native swipe follow that inverted direction instead of
             the usual right-swipe. */}
-        <Stack.Screen
-          name="calendar"
-          options={{
-            animation: 'slide_from_left',
-            animationMatchesGesture: true,
-            gestureEnabled: true,
-            fullScreenGestureEnabled: true,
-          }}
-        />
-        <Stack.Screen name="legal" />
-        <Stack.Screen name="pro" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
-      </Stack>
-      <AppModals />
+          <Stack.Screen
+            name="calendar"
+            options={{
+              animation: 'slide_from_left',
+              animationMatchesGesture: true,
+              gestureEnabled: true,
+              fullScreenGestureEnabled: true,
+            }}
+          />
+          <Stack.Screen
+            name="question-history"
+            options={{ animation: 'default', gestureEnabled: true, fullScreenGestureEnabled: true }}
+          />
+          <Stack.Screen
+            name="question-history/[id]"
+            options={{ animation: 'default', gestureEnabled: true, fullScreenGestureEnabled: true }}
+          />
+          <Stack.Screen
+            name="play"
+            options={{ animation: 'default', gestureEnabled: true, fullScreenGestureEnabled: true }}
+          />
+          {/* Opens like Notifications: slides in from the right, swipe back from anywhere. */}
+          <Stack.Screen
+            name="legal"
+            options={{ animation: 'default', gestureEnabled: true, fullScreenGestureEnabled: true }}
+          />
+          {/* The sign-up Plus step (in the app, Plus opens as an overlay — see
+            PaywallModal). A plain screen, not a modal: finishing onboarding
+            replaces it with Home, and inside a modal that left Home stuck in a
+            card with a curved top that dragged down. */}
+          <Stack.Screen name="pro" options={{ animation: 'fade', gestureEnabled: false }} />
+        </Stack>
+        <AppModals />
+      </DynamicIslandHost>
     </ThemeProvider>
   );
 }

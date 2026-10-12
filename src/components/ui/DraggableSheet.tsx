@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
   Dimensions,
   KeyboardAvoidingView,
@@ -9,14 +9,17 @@ import {
   StyleSheet,
   View,
   ViewStyle,
+  type ScrollViewProps,
 } from 'react-native';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { Gesture, GestureDetector, type NativeGesture } from 'react-native-gesture-handler';
 import Animated, {
   Easing,
   runOnJS,
+  useAnimatedScrollHandler,
   useAnimatedStyle,
   useSharedValue,
   withSpring,
+  type SharedValue,
   withTiming,
 } from 'react-native-reanimated';
 
@@ -28,6 +31,46 @@ const DISMISS_VELOCITY = 800;
 const OPEN_SPRING = { damping: 26, stiffness: 260, mass: 0.9 };
 const SNAP_BACK_SPRING = { damping: 26, stiffness: 300 };
 
+type SheetScrollContext = {
+  native: NativeGesture;
+  scrollY: SharedValue<number>;
+  hasScroll: SharedValue<boolean>;
+};
+const SheetScroll = createContext<SheetScrollContext | null>(null);
+
+/**
+ * A scroll area inside a `dragAnywhere` DraggableSheet: the content scrolls,
+ * and a drag that starts with the list at the top moves the sheet instead.
+ */
+export function SheetScrollView({ children, style, ...rest }: ScrollViewProps & { children: ReactNode }) {
+  const ctx = useContext(SheetScroll);
+  const fallbackY = useSharedValue(0);
+  const scrollY = ctx?.scrollY ?? fallbackY;
+  const hasScroll = ctx?.hasScroll;
+  useEffect(() => {
+    if (!hasScroll) return;
+    hasScroll.value = true;
+    return () => {
+      hasScroll.value = false;
+    };
+  }, [hasScroll]);
+  const onScroll = useAnimatedScrollHandler((e) => {
+    scrollY.value = e.contentOffset.y;
+  });
+  const list = (
+    <Animated.ScrollView
+      {...rest}
+      style={[{ flexShrink: 1 }, style]}
+      bounces={false}
+      showsVerticalScrollIndicator={false}
+      scrollEventThrottle={16}
+      onScroll={onScroll}>
+      {children}
+    </Animated.ScrollView>
+  );
+  return ctx ? <GestureDetector gesture={ctx.native}>{list}</GestureDetector> : list;
+}
+
 interface DraggableSheetProps {
   visible: boolean;
   onClose: () => void;
@@ -38,6 +81,11 @@ interface DraggableSheetProps {
   dragEnabled?: boolean;
   /** Pad the sheet above the keyboard, for sheets with a text input. */
   avoidKeyboard?: boolean;
+  /**
+   * Drag down from anywhere on the sheet, not just the handle. For sheets
+   * whose content doesn't scroll (a grid of choices) — easier to dismiss.
+   */
+  dragAnywhere?: boolean;
 }
 
 /**
@@ -54,11 +102,20 @@ export function DraggableSheet({
   closeOnBackdropPress = true,
   dragEnabled = true,
   avoidKeyboard = false,
+  dragAnywhere = false,
 }: DraggableSheetProps) {
   const { colors } = useTheme();
   const [mounted, setMounted] = useState(visible);
   const translateY = useSharedValue(SCREEN_HEIGHT);
   const backdropOpacity = useSharedValue(0);
+  // For a SheetScrollView inside: its scroll offset, whether one is mounted,
+  // and whether the current drag moves the sheet (decided once, on touch
+  // down — a drag that starts mid-list only ever scrolls the list).
+  const scrollY = useSharedValue(0);
+  const hasScroll = useSharedValue(false);
+  const dragsSheet = useSharedValue(true);
+  const native = useMemo(() => Gesture.Native(), []);
+  const scrollCtx = useMemo(() => ({ native, scrollY, hasScroll }), [native, scrollY, hasScroll]);
 
   const finishClose = useCallback(() => {
     setMounted(false);
@@ -96,13 +153,28 @@ export function DraggableSheet({
     .enabled(dragEnabled)
     .activeOffsetY([-6, 6])
     .failOffsetX([-14, 14])
+    .simultaneousWithExternalGesture(native)
+    .onBegin(() => {
+      dragsSheet.value = scrollY.value <= 0;
+    })
     .onUpdate((event) => {
+      if (!dragsSheet.value) return;
+      // Started at the top but went up into the list: it's a scroll now.
+      if (hasScroll.value && scrollY.value > 0 && translateY.value <= 0) {
+        dragsSheet.value = false;
+        return;
+      }
       const dy = event.translationY;
-      translateY.value = dy > 0 ? dy : dy * 0.2;
+      translateY.value = dy > 0 ? dy : hasScroll.value ? 0 : dy * 0.2;
     })
     .onEnd((event) => {
+      if (!dragsSheet.value) {
+        if (translateY.value !== 0) translateY.value = withSpring(0, SNAP_BACK_SPRING);
+        return;
+      }
       const shouldClose =
-        event.translationY > DISMISS_DISTANCE || event.velocityY > DISMISS_VELOCITY;
+        translateY.value > 0 &&
+        (event.translationY > DISMISS_DISTANCE || event.velocityY > DISMISS_VELOCITY);
 
       if (shouldClose) {
         runOnJS(animateOut)(event.velocityY);
@@ -141,12 +213,27 @@ export function DraggableSheet({
             sheetStyle,
             style,
           ]}>
-          <GestureDetector gesture={pan}>
-            <View style={styles.handleTouchTarget} hitSlop={{ top: 8, bottom: 8, left: 24, right: 24 }}>
-              <View style={[styles.handle, { backgroundColor: colors.borderStrong }]} />
-            </View>
-          </GestureDetector>
-          {children}
+          {dragAnywhere ? (
+            <SheetScroll.Provider value={scrollCtx}>
+              <GestureDetector gesture={pan}>
+                <View style={styles.dragArea}>
+                  <View style={styles.handleTouchTarget}>
+                    <View style={[styles.handle, { backgroundColor: colors.borderStrong }]} />
+                  </View>
+                  {children}
+                </View>
+              </GestureDetector>
+            </SheetScroll.Provider>
+          ) : (
+            <>
+              <GestureDetector gesture={pan}>
+                <View style={styles.handleTouchTarget} hitSlop={{ top: 8, bottom: 8, left: 24, right: 24 }}>
+                  <View style={[styles.handle, { backgroundColor: colors.borderStrong }]} />
+                </View>
+              </GestureDetector>
+              {children}
+            </>
+          )}
         </Animated.View>
       </Container>
     </Modal>
@@ -162,6 +249,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingBottom: 32,
   },
+  dragArea: { flexShrink: 1 },
   handleTouchTarget: {
     alignSelf: 'center',
     paddingVertical: 10,

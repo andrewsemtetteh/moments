@@ -1,47 +1,51 @@
-import {
-    addMonths,
-    format,
-    isAfter,
-    isBefore,
-    startOfMonth,
-} from 'date-fns';
+import { addMonths, format, isAfter, isBefore, isSameMonth, isSameYear, startOfMonth } from 'date-fns';
 import * as Haptics from 'expo-haptics';
-import { useEffect, useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { Pressable, StyleSheet, Text, View, type ViewStyle } from 'react-native';
 
 import { AnimatedStreakFire } from '@/components/home/AnimatedStreakFire';
-import { StreakDayCircle } from '@/components/home/StreakDayCircle';
+import { DashedRing } from '@/components/ui/DashedRing';
 import { Icon } from '@/components/ui/Icon';
 import { Radius } from '@/constants/design-system';
 import { useTheme } from '@/hooks/useTheme';
 import { getFirstName } from '@/lib/avatar-initial';
 import { streakSubtitle } from '@/lib/streak';
+import { STREAK_COLORS, streakToneFromStatus, streakWellColors } from '@/lib/streak-colors';
 import {
-    STREAK_COLORS,
-    streakToneFromStatus,
-    streakWellColors,
-} from '@/lib/streak-colors';
-import {
-    buildStreakMonth,
-    buildStreakWeek,
-    streakMonthNavBounds,
-    streakWeekLineSpan,
-    type StreakDayCell,
-    type StreakView,
+  buildStreakMonth,
+  buildStreakWeek,
+  streakMonthNavBounds,
+  type StreakDayCell,
+  type StreakView,
 } from '@/lib/streak-days';
 import { isStreakVisuallyAtRisk } from '@/lib/streak-reminder-timing';
 import { useRelationshipStore } from '@/stores';
 import type { StreakStatus } from '@/types/database';
 
-const WEEK_DAYS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'] as const;
+/** Monday first, the same as the week view. */
+const WEEK_DAYS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'] as const;
 
 interface StreakDayTrackerProps {
   status: StreakStatus;
   joinedAt?: string | Date | null;
+  /**
+   * Streak page: just the Week / Month switch and calendar. The page already shows the
+   * count, today's check-ins and best streak above it.
+   */
+  calendarOnly?: boolean;
 }
 
-export function StreakDayTracker({ status, joinedAt }: StreakDayTrackerProps) {
+export function StreakDayTracker({ status, joinedAt: joinedAtProp, calendarOnly = false }: StreakDayTrackerProps) {
   const { colors } = useTheme();
+  // History starts at the earlier of joining and the first day you were both active,
+  // so older streak days are reachable with the month arrows.
+  const joinedAt = useMemo(() => {
+    const first = [...(status.active_days ?? []), ...(status.activity_days ?? [])].sort()[0];
+    const firstDay = first ? new Date(`${first}T00:00:00`) : null;
+    const joined = joinedAtProp ? new Date(joinedAtProp) : null;
+    if (!firstDay) return joinedAtProp;
+    return !joined || firstDay < joined ? firstDay : joined;
+  }, [joinedAtProp, status.active_days, status.activity_days]);
   const partner = useRelationshipStore((s) => s.partner);
   const partnerFirst = getFirstName(partner?.name) ?? 'Partner';
   const [view, setView] = useState<StreakView>('week');
@@ -57,10 +61,7 @@ export function StreakDayTracker({ status, joinedAt }: StreakDayTrackerProps) {
   }, [status.at_risk, status.current_streak]);
 
   const week = useMemo(() => buildStreakWeek(status, joinedAt, now), [status, joinedAt, now]);
-  const monthGrid = useMemo(
-    () => buildStreakMonth(status, month, joinedAt, now),
-    [status, month, joinedAt, now],
-  );
+  const monthGrid = useMemo(() => buildStreakMonth(status, month, joinedAt, now), [status, month, joinedAt, now]);
 
   const count = status.current_streak;
   const active = count > 0;
@@ -79,103 +80,97 @@ export function StreakDayTracker({ status, joinedAt }: StreakDayTrackerProps) {
     <View
       style={[
         styles.card,
-        {
-          backgroundColor: colors.surface,
-          borderColor: colors.border,
-          borderWidth: colors.boldBorder ? 2 : StyleSheet.hairlineWidth,
-        },
+        calendarOnly
+          ? { backgroundColor: colors.surface, borderWidth: 0, borderRadius: 22 }
+          : {
+              backgroundColor: colors.surface,
+              borderColor: colors.border,
+              borderWidth: colors.boldBorder ? 2 : StyleSheet.hairlineWidth,
+            },
       ]}>
       <View style={styles.header}>
-        <View style={styles.heroRow}>
-          <AnimatedStreakFire
-            color={well.fire}
-            size={56}
-            layered
-            animate={false}
-            pulse={false}
-          />
+        {calendarOnly ? null : (
+          <View style={styles.heroRow}>
+            <AnimatedStreakFire color={well.fire} size={56} layered animate={false} pulse={false} />
 
-          <View style={styles.heroCopy}>
-            <View style={styles.countRow}>
-              <Text style={[styles.count, { color: colors.text }]}>{count}</Text>
-              <Text style={[styles.countUnit, { color: well.label }]}>day streak</Text>
+            <View style={styles.heroCopy}>
+              <View style={styles.countRow}>
+                <Text style={[styles.count, { color: colors.text }]}>{count}</Text>
+                <Text style={[styles.countUnit, { color: well.label }]}>day streak</Text>
+              </View>
+              <Text style={[styles.statusLine, { color: colors.textSecondary }]} numberOfLines={2}>
+                {statusLine}
+              </Text>
             </View>
-            <Text
-              style={[
-                styles.statusLine,
-                { color: colors.textSecondary },
-              ]}
-              numberOfLines={2}>
-              {statusLine}
-            </Text>
           </View>
-        </View>
+        )}
 
         <View style={[styles.segment, { backgroundColor: colors.surfaceElevated }]}>
           <SegmentTab
             label="Week"
             selected={view === 'week'}
             onPress={() => setTab('week')}
-            selectedColor={colors.surface}
-            textColor={colors.text}
-            mutedColor={colors.textTertiary}
+            selectedColor={colors.accent}
+            textColor={colors.onAccent}
+            mutedColor={colors.textSecondary}
           />
           <SegmentTab
             label="Month"
             selected={view === 'month'}
             onPress={() => setTab('month')}
-            selectedColor={colors.surface}
-            textColor={colors.text}
-            mutedColor={colors.textTertiary}
+            selectedColor={colors.accent}
+            textColor={colors.onAccent}
+            mutedColor={colors.textSecondary}
           />
         </View>
       </View>
 
-      <View style={styles.checkRow}>
-        <CheckInChip
-          label="You"
-          done={status.user_active_today}
-          waiting={active && !status.user_active_today}
-          atRisk={atRisk && !status.user_active_today}
-          isDark={colors.isDark}
-          colors={{
-            text: colors.text,
-            muted: colors.textTertiary,
-            surface: colors.surfaceElevated,
-            border: colors.border,
-          }}
-        />
-        <CheckInChip
-          label={partnerFirst}
-          done={status.partner_active_today}
-          waiting={active && !status.partner_active_today}
-          atRisk={atRisk && !status.partner_active_today}
-          isDark={colors.isDark}
-          colors={{
-            text: colors.text,
-            muted: colors.textTertiary,
-            surface: colors.surfaceElevated,
-            border: colors.border,
-          }}
-        />
-        {status.longest_streak > 0 ? (
-          <View style={styles.bestWrap}>
-            <Text style={[styles.bestLabel, { color: colors.textTertiary }]}>Best</Text>
-            <Text style={[styles.bestValue, { color: colors.textSecondary }]}>
-              {status.longest_streak}d
-            </Text>
-          </View>
-        ) : null}
-      </View>
+      {calendarOnly ? null : (
+        <View style={styles.checkRow}>
+          <CheckInChip
+            label="You"
+            done={status.user_active_today}
+            waiting={active && !status.user_active_today}
+            atRisk={atRisk && !status.user_active_today}
+            isDark={colors.isDark}
+            colors={{
+              text: colors.text,
+              muted: colors.textTertiary,
+              surface: colors.surfaceElevated,
+              border: colors.border,
+            }}
+          />
+          <CheckInChip
+            label={partnerFirst}
+            done={status.partner_active_today}
+            waiting={active && !status.partner_active_today}
+            atRisk={atRisk && !status.partner_active_today}
+            isDark={colors.isDark}
+            colors={{
+              text: colors.text,
+              muted: colors.textTertiary,
+              surface: colors.surfaceElevated,
+              border: colors.border,
+            }}
+          />
+          {status.longest_streak > 0 ? (
+            <View style={styles.bestWrap}>
+              <Text style={[styles.bestLabel, { color: colors.textTertiary }]}>Best</Text>
+              <Text style={[styles.bestValue, { color: colors.textSecondary }]}>{status.longest_streak}d</Text>
+            </View>
+          ) : null}
+        </View>
+      )}
 
       {view === 'week' ? (
-        <WeekStreakRow days={week} labelColor={colors.textTertiary} todayColor={colors.text} />
+        <WeekStreakRow days={week} />
       ) : (
         <StreakMonthCalendar
           month={month}
           onMonthChange={setMonth}
           days={monthGrid.days}
-          leadingBlanks={monthGrid.leadingBlanks}
+          // buildStreakMonth counts from Sunday; the grid starts on Monday.
+          leadingBlanks={(monthGrid.leadingBlanks + 6) % 7}
           joinedAt={joinedAt}
         />
       )}
@@ -204,9 +199,7 @@ function SegmentTab({
       style={[styles.segmentTab, selected && { backgroundColor: selectedColor }]}
       accessibilityRole="tab"
       accessibilityState={{ selected }}>
-      <Text style={[styles.segmentLabel, { color: selected ? textColor : mutedColor }]}>
-        {label}
-      </Text>
+      <Text style={[styles.segmentLabel, { color: selected ? textColor : mutedColor }]}>{label}</Text>
     </Pressable>
   );
 }
@@ -235,18 +228,8 @@ function CheckInChip({
         ? STREAK_COLORS.atRiskSoftDark
         : STREAK_COLORS.atRiskSoftLight
       : c.surface;
-  const border = done
-    ? STREAK_COLORS.active
-    : atRisk
-      ? STREAK_COLORS.atRisk
-      : c.border;
-  const dot = done
-    ? STREAK_COLORS.active
-    : atRisk
-      ? STREAK_COLORS.atRisk
-      : waiting
-        ? STREAK_COLORS.pending
-        : c.border;
+  const border = done ? STREAK_COLORS.active : atRisk ? STREAK_COLORS.atRisk : c.border;
+  const dot = done ? STREAK_COLORS.active : atRisk ? STREAK_COLORS.atRisk : waiting ? STREAK_COLORS.pending : c.border;
 
   return (
     <View style={[styles.chip, { backgroundColor: fill, borderColor: border }]}>
@@ -259,58 +242,194 @@ function CheckInChip({
   );
 }
 
-function WeekStreakRow({
-  days,
-  labelColor,
-  todayColor,
+const TODAY_AMBER_DARK = '#FFC23D';
+
+const isActiveDay = (day: StreakDayCell | null | undefined) =>
+  !!day && (day.state === 'completed' || day.state === 'today-done');
+
+/** "5 active days" — orange when there's something to count. */
+function ActiveCount({ n, of }: { n: number; of?: number }) {
+  const { colors } = useTheme();
+  return (
+    <View style={calStyles.countRow}>
+      <Icon name="fire" size={14} color={n > 0 ? STREAK_COLORS.active : colors.textTertiary} filled />
+      <Text style={[calStyles.countText, { color: n > 0 ? STREAK_COLORS.active : colors.textTertiary }]}>
+        {n}
+        {of ? ` of ${of}` : ''} active day{n === 1 && !of ? '' : 's'}
+      </Text>
+    </View>
+  );
+}
+
+/**
+ * One day. Days you both showed up are solid orange; back-to-back ones merge
+ * into one orange capsule so a run reads as one streak.
+ */
+function DayCell({
+  day,
+  prevActive,
+  nextActive,
+  size,
+  flame = false,
 }: {
-  days: StreakDayCell[];
-  labelColor: string;
-  todayColor: string;
+  day: StreakDayCell;
+  prevActive: boolean;
+  nextActive: boolean;
+  size: number;
+  /** Week view: a flame in the circle instead of the date. */
+  flame?: boolean;
 }) {
-  const lineSpan = streakWeekLineSpan(days);
+  const { colors } = useTheme();
+  const dark = colors.isDark;
+  const active = isActiveDay(day);
+  const iconSize = Math.round(size * 0.5);
+  const number = String(day.dayOfMonth);
+
+  let circle: ViewStyle = { backgroundColor: 'transparent' };
+  let content: ReactNode = null;
+  let ring: ReactNode = null;
+  let badge: ReactNode = null;
+
+  if (active) {
+    circle = { backgroundColor: STREAK_COLORS.active };
+    // Every streak day is just the flame, in Week and Month alike (as on Home's intro card).
+    content = <Icon name="fire" size={iconSize} color={STREAK_COLORS.onActive} filled />;
+  } else if (day.state === 'today-at-risk') {
+    circle = {
+      backgroundColor: dark ? STREAK_COLORS.atRiskSoftDark : STREAK_COLORS.atRiskSoftLight,
+      borderWidth: 2,
+      borderColor: STREAK_COLORS.atRisk,
+    };
+    content = flame ? (
+      <Icon name="fire" size={iconSize} color={STREAK_COLORS.atRisk} filled />
+    ) : (
+      <Text style={[calStyles.num, calStyles.numActive, { color: STREAK_COLORS.atRisk }]}>{number}</Text>
+    );
+  } else if (day.state === 'today-pending') {
+    // Brighter amber in dark mode, where the soft tint and thin dashes got lost.
+    const amber = dark ? TODAY_AMBER_DARK : STREAK_COLORS.pending;
+    circle = { backgroundColor: dark ? 'rgba(255, 194, 61, 0.26)' : STREAK_COLORS.pendingSoftLight };
+    ring = <DashedRing size={size} width={dark ? 2.5 : 2} color={amber} />;
+    content = flame ? (
+      <Icon name="fire" size={iconSize} color={amber} />
+    ) : (
+      <Text style={[calStyles.num, calStyles.numActive, { color: dark ? amber : colors.text }]}>{number}</Text>
+    );
+  } else if (day.state === 'missed') {
+    // The original missed look: soft red circle with a red rim, the date, and a small ✕ badge.
+    circle = {
+      backgroundColor: dark ? STREAK_COLORS.lostSoftDark : STREAK_COLORS.lostSoftLight,
+      borderWidth: 1.5,
+      borderColor: STREAK_COLORS.lost,
+    };
+    content = <Text style={[calStyles.num, calStyles.numActive, { color: STREAK_COLORS.lostDeep }]}>{number}</Text>;
+    badge = (
+      <View style={[calStyles.missedBadge, { backgroundColor: STREAK_COLORS.lost, borderColor: colors.surface }]}>
+        <Icon name="close" size={9} color={STREAK_COLORS.onLost} />
+      </View>
+    );
+  } else if (day.state === 'future') {
+    // Upcoming: a faint short-dash circle, as on Home's intro card.
+    circle = { opacity: 0.45 };
+    ring = <DashedRing size={size} color={colors.borderStrong} />;
+    content = flame ? null : <Text style={[calStyles.num, { color: colors.textTertiary }]}>{number}</Text>;
+  } else {
+    const faded = day.state === 'inactive';
+    circle = { backgroundColor: flame ? colors.surfaceElevated : 'transparent', opacity: faded ? 0.45 : 1 };
+    content = flame ? null : (
+      <Text style={[calStyles.num, { color: faded ? colors.textTertiary : colors.textSecondary }]}>{number}</Text>
+    );
+  }
 
   return (
-    <View style={styles.weekWrap}>
-      <View style={styles.weekLabels}>
-        {days.map((day) => (
-          <Text
-            key={`label-${day.date.toISOString()}`}
-            style={[
-              styles.weekLabel,
-              { color: day.isToday ? todayColor : labelColor },
-              day.isToday && styles.weekLabelToday,
-            ]}>
-            {format(day.date, 'EEEEE')}
-          </Text>
-        ))}
-      </View>
-      <View style={styles.weekTrack}>
-        {lineSpan ? (
+    <View style={calStyles.cell}>
+      <View style={[calStyles.slot, { height: size }]}>
+        {active && (prevActive || nextActive) ? (
           <View
             style={[
-              styles.streakLine,
+              calStyles.band,
               {
                 backgroundColor: STREAK_COLORS.active,
-                left: `${((lineSpan.start + 0.5) / days.length) * 100}%`,
-                width: `${((lineSpan.end - lineSpan.start) / days.length) * 100}%`,
+                left: prevActive ? 0 : '50%',
+                right: nextActive ? 0 : '50%',
               },
             ]}
           />
         ) : null}
-        <View style={styles.weekRow}>
-          {days.map((day) => (
-            <View key={day.date.toISOString()} style={styles.weekDay}>
-              <StreakDayCircle
-                state={day.state}
-                tone={day.tone}
-                isToday={day.isToday}
-                dayOfMonth={day.dayOfMonth}
-                size="md"
-              />
-            </View>
-          ))}
+        <View style={[calStyles.circle, { width: size, height: size, borderRadius: size / 2 }, circle]}>
+          {ring}
+          {content}
+          {badge}
         </View>
+      </View>
+    </View>
+  );
+}
+
+/** A row of seven slots (null = blank) with runs joined inside the row. */
+function DayRow({ cells, size, flame }: { cells: (StreakDayCell | null)[]; size: number; flame?: boolean }) {
+  return (
+    <View style={calStyles.row}>
+      {cells.map((day, i) =>
+        day ? (
+          <DayCell
+            key={day.date.toISOString()}
+            day={day}
+            prevActive={isActiveDay(cells[i - 1])}
+            nextActive={isActiveDay(cells[i + 1])}
+            size={size}
+            flame={flame}
+          />
+        ) : (
+          <View key={`blank-${i}`} style={calStyles.cell} />
+        ),
+      )}
+    </View>
+  );
+}
+
+function WeekdayLabels({ labels, todayIndex }: { labels: readonly string[]; todayIndex?: number }) {
+  const { colors } = useTheme();
+  return (
+    <View style={calStyles.row}>
+      {labels.map((label, i) => (
+        <Text
+          key={`${label}-${i}`}
+          style={[
+            calStyles.weekday,
+            { color: i === todayIndex ? colors.text : colors.textTertiary },
+            i === todayIndex && calStyles.weekdayToday,
+          ]}>
+          {label}
+        </Text>
+      ))}
+    </View>
+  );
+}
+
+function WeekStreakRow({ days }: { days: StreakDayCell[] }) {
+  const { colors } = useTheme();
+  const active = days.filter(isActiveDay).length;
+  return (
+    <View style={calStyles.block}>
+      <View style={calStyles.head}>
+        <Text style={[calStyles.title, { color: colors.text }]}>This week</Text>
+        <ActiveCount n={active} of={days.length} />
+      </View>
+      <WeekdayLabels labels={WEEK_DAYS} todayIndex={days.findIndex((d) => d.isToday)} />
+      <DayRow cells={days} size={42} flame />
+      <View style={calStyles.row}>
+        {days.map((day) => (
+          <Text
+            key={`date-${day.date.toISOString()}`}
+            style={[
+              calStyles.weekDate,
+              { color: day.isToday ? colors.text : colors.textTertiary },
+              day.isToday && calStyles.weekdayToday,
+            ]}>
+            {day.dayOfMonth}
+          </Text>
+        ))}
       </View>
     </View>
   );
@@ -326,6 +445,7 @@ function StreakMonthCalendar({
   month: Date;
   onMonthChange: (month: Date) => void;
   days: StreakDayCell[];
+  /** Blank slots before day 1, Monday first. */
   leadingBlanks: number;
   joinedAt?: string | Date | null;
 }) {
@@ -342,84 +462,90 @@ function StreakMonthCalendar({
     onMonthChange(addMonths(month, delta));
   };
 
+  const rows = useMemo(() => {
+    const slots: (StreakDayCell | null)[] = [...Array.from({ length: leadingBlanks }, () => null), ...days];
+    while (slots.length % 7) slots.push(null);
+    const out: (StreakDayCell | null)[][] = [];
+    for (let i = 0; i < slots.length; i += 7) out.push(slots.slice(i, i + 7));
+    return out;
+  }, [days, leadingBlanks]);
+
+  const isThisMonth = isSameMonth(month, new Date());
+  const todayIndex = isThisMonth ? (new Date().getDay() + 6) % 7 : undefined;
+
   return (
-    <View>
-      <View style={monthStyles.monthHeader}>
+    <View style={calStyles.block}>
+      <View style={calStyles.monthHeader}>
         <Pressable
           onPress={() => shiftMonth(-1)}
           disabled={!canGoPrev}
-          style={[
-            monthStyles.navBtn,
-            { backgroundColor: colors.surfaceElevated, opacity: canGoPrev ? 1 : 0.3 },
-          ]}>
+          hitSlop={6}
+          accessibilityRole="button"
+          accessibilityLabel="Previous month"
+          style={[calStyles.navBtn, { backgroundColor: colors.surfaceElevated, opacity: canGoPrev ? 1 : 0.3 }]}>
           <Icon name="chevronLeft" size={18} color={colors.text} />
         </Pressable>
-        <Text style={[monthStyles.monthTitle, { color: colors.text }]}>
-          {format(month, 'MMMM yyyy')}
-        </Text>
+        <View style={calStyles.monthTitleWrap}>
+          <Text style={[calStyles.title, { color: colors.text }]}>
+            {format(month, isSameYear(month, new Date()) ? 'MMMM' : 'MMMM yyyy')}
+          </Text>
+        </View>
         <Pressable
           onPress={() => shiftMonth(1)}
           disabled={!canGoNext}
-          style={[
-            monthStyles.navBtn,
-            { backgroundColor: colors.surfaceElevated, opacity: canGoNext ? 1 : 0.3 },
-          ]}>
+          hitSlop={6}
+          accessibilityRole="button"
+          accessibilityLabel="Next month"
+          style={[calStyles.navBtn, { backgroundColor: colors.surfaceElevated, opacity: canGoNext ? 1 : 0.3 }]}>
           <Icon name="chevronRight" size={18} color={colors.text} />
         </Pressable>
       </View>
 
-      <View style={monthStyles.weekDays}>
-        {WEEK_DAYS.map((label, index) => (
-          <Text key={`${label}-${index}`} style={[monthStyles.weekDay, { color: colors.textTertiary }]}>
-            {label}
-          </Text>
-        ))}
-      </View>
-
-      <View style={monthStyles.grid}>
-        {Array.from({ length: leadingBlanks }).map((_, index) => (
-          <View key={`blank-${index}`} style={monthStyles.dayCell} />
-        ))}
-        {days.map((day) => (
-          <View key={day.date.toISOString()} style={monthStyles.dayCell}>
-            <StreakDayCircle
-              state={day.state}
-              tone={day.tone}
-              isToday={day.isToday}
-              dayOfMonth={day.dayOfMonth}
-              size="sm"
-            />
-          </View>
+      <WeekdayLabels labels={WEEK_DAYS} todayIndex={todayIndex} />
+      <View style={calStyles.rows}>
+        {rows.map((cells, i) => (
+          <DayRow key={i} cells={cells} size={38} />
         ))}
       </View>
     </View>
   );
 }
 
-const monthStyles = StyleSheet.create({
-  monthHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  navBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+const calStyles = StyleSheet.create({
+  block: { gap: 10 },
+  head: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  title: { fontSize: 16, fontWeight: '800', letterSpacing: -0.2 },
+  countRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  countText: { fontSize: 13, fontWeight: '800' },
+
+  monthHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  monthTitleWrap: { alignItems: 'center', gap: 2 },
+  navBtn: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
+
+  // Seven equal columns, shared by labels, days and dates, so everything lines up.
+  row: { flexDirection: 'row' },
+  rows: { gap: 8 },
+  cell: { flex: 1, alignItems: 'center', minWidth: 0 },
+  slot: { alignSelf: 'stretch', alignItems: 'center', justifyContent: 'center' },
+  band: { position: 'absolute', top: 0, bottom: 0 },
+  circle: { alignItems: 'center', justifyContent: 'center' },
+  num: { fontSize: 14, fontWeight: '600', letterSpacing: -0.2 },
+  numActive: { fontWeight: '900' },
+  missedBadge: {
+    position: 'absolute',
+    right: -2,
+    bottom: -2,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    borderWidth: 1.5,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  monthTitle: { fontSize: 16, fontWeight: '800' },
-  weekDays: { flexDirection: 'row', marginBottom: 4 },
-  weekDay: { flex: 1, textAlign: 'center', fontSize: 11, fontWeight: '700', letterSpacing: 0.3 },
-  grid: { flexDirection: 'row', flexWrap: 'wrap' },
-  dayCell: {
-    width: `${100 / 7}%` as `${number}%`,
-    minHeight: 44,
-    alignItems: 'center',
-    paddingTop: 2,
-  },
+
+  weekday: { flex: 1, textAlign: 'center', fontSize: 12, fontWeight: '700' },
+  weekdayToday: { fontWeight: '900' },
+  weekDate: { flex: 1, textAlign: 'center', fontSize: 12, fontWeight: '700' },
 });
 
 const styles = StyleSheet.create({
@@ -468,20 +594,20 @@ const styles = StyleSheet.create({
   segment: {
     flexDirection: 'row',
     alignSelf: 'stretch',
-    borderRadius: 12,
-    padding: 3,
-    gap: 2,
+    borderRadius: 999,
+    padding: 4,
+    gap: 4,
   },
   segmentTab: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 8,
-    borderRadius: 10,
+    paddingVertical: 9,
+    borderRadius: 999,
   },
   segmentLabel: {
-    fontSize: 13,
-    fontWeight: '700',
+    fontSize: 14,
+    fontWeight: '800',
   },
   checkRow: {
     flexDirection: 'row',
@@ -516,49 +642,10 @@ const styles = StyleSheet.create({
   bestLabel: {
     fontSize: 11,
     fontWeight: '600',
-    letterSpacing: 0.3,
-    textTransform: 'uppercase',
   },
   bestValue: {
     fontSize: 14,
     fontWeight: '800',
     letterSpacing: -0.2,
-  },
-  weekWrap: {
-    gap: 10,
-    paddingTop: 2,
-  },
-  weekLabels: {
-    flexDirection: 'row',
-  },
-  weekLabel: {
-    flex: 1,
-    textAlign: 'center',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  weekLabelToday: {
-    fontWeight: '800',
-  },
-  weekTrack: {
-    position: 'relative',
-    paddingBottom: 2,
-  },
-  streakLine: {
-    position: 'absolute',
-    top: 18,
-    height: 3,
-    borderRadius: 2,
-    opacity: 0.35,
-    zIndex: 0,
-  },
-  weekRow: {
-    flexDirection: 'row',
-    zIndex: 1,
-  },
-  weekDay: {
-    flex: 1,
-    alignItems: 'center',
-    minWidth: 0,
   },
 });

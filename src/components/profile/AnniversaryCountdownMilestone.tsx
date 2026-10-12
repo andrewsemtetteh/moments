@@ -80,8 +80,6 @@ const styles = StyleSheet.create({
   countdownEyebrow: {
     fontSize: 11,
     fontWeight: '800',
-    letterSpacing: 1.1,
-    textTransform: 'uppercase',
   },
   editChip: {
     position: 'absolute',

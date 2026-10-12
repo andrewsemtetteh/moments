@@ -68,6 +68,7 @@ const POLICIES: Record<string, Policy> = {
   wrapped_stats: relAll,
   saved_experiences: relAll,
   game_sessions: relAll,
+  pack_answers: { scope: 'rel', ops: ['select', 'insert'], forceMe: 'user_id' },
   quiz_live_sessions: relAll,
   couple_progress: relAll,
   daily_challenges: relAll,

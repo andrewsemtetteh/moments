@@ -235,28 +235,4 @@ export interface WrappedStats {
   created_at: string;
 }
 
-export type QuizLiveSessionStatus = 'lobby' | 'generating' | 'active' | 'finished';
-export type QuizLiveRoundPhase = 'answer' | 'reveal';
-
-export interface QuizLiveQuestion {
-  question: string;
-  type: 'choice' | 'boolean';
-  options: string[];
-  correctIndex?: number;
-}
-
-export interface QuizLiveSession {
-  id: string;
-  relationship_id: string;
-  host_user_id: string;
-  topic: string;
-  status: QuizLiveSessionStatus;
-  round_phase: QuizLiveRoundPhase;
-  questions: QuizLiveQuestion[];
-  current_index: number;
-  responses: Record<string, Record<string, number>>;
-  scores: Record<string, number>;
-  created_at: string;
-  updated_at: string;
-}
 

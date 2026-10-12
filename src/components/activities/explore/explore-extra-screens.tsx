@@ -8,7 +8,6 @@ import { PrimaryButton } from '@/components/ui/primitives';
 import {
   MEMORY_QUIZ,
   pickPlaylistPrompt,
-  pickTruthOrDare,
 } from '@/constants/activity-content';
 import { useTheme } from '@/hooks/useTheme';
 import { getFirstName } from '@/lib/avatar-initial';
@@ -85,118 +84,6 @@ export function ComplimentJarScreen() {
   );
 }
 
-export function TwoTruthsScreen() {
-  const { colors } = useTheme();
-  const partner = useRelationshipStore((s) => s.partner);
-  const partnerName = getFirstName(partner?.name) ?? 'your partner';
-  const [statements, setStatements] = useState(['', '', '']);
-  const [lieIndex, setLieIndex] = useState<number | null>(null);
-  const [revealed, setRevealed] = useState(false);
-
-  const update = (i: number, v: string) => {
-    setStatements((prev) => prev.map((s, idx) => (idx === i ? v : s)));
-  };
-
-  const startRound = () => {
-    const filled = statements.every((t) => t.trim());
-    if (lieIndex === null || !filled) {
-      Alert.alert('Almost there', 'Write three statements and mark which one is the lie.');
-      return;
-    }
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    setRevealed(true);
-  };
-
-  const reset = () => {
-    setStatements(['', '', '']);
-    setLieIndex(null);
-    setRevealed(false);
-  };
-
-  return (
-    <View style={s.stack}>
-      <Text style={[s.hintText, { color: colors.textSecondary }]}>
-        Write 2 truths and 1 lie — {partnerName} guesses which is false.
-      </Text>
-      {[0, 1, 2].map((i) => (
-        <Pressable
-          key={i}
-          onPress={() => !revealed && setLieIndex(i)}
-          style={[
-            s.gratitudeRow,
-            {
-              backgroundColor:
-                lieIndex === i ? colors.accentSoft : colors.surfaceElevated,
-              borderColor: lieIndex === i ? colors.accent : colors.border,
-            },
-          ]}>
-          <Text style={[s.gratitudeNum, { color: colors.accent }]}>{i + 1}</Text>
-          {revealed ? (
-            <Text style={[s.listText, { color: colors.text }]}>
-              {statements[i]}
-              {lieIndex === i ? '  (the lie)' : ''}
-            </Text>
-          ) : (
-            <TextInput
-              style={[s.gratitudeInput, { color: colors.text }]}
-              placeholder="A statement…"
-              placeholderTextColor={colors.textTertiary}
-              value={statements[i]}
-              onChangeText={(v) => update(i, v)}
-            />
-          )}
-        </Pressable>
-      ))}
-      {!revealed ? (
-        <PrimaryButton label="Reveal to partner" onPress={startRound} />
-      ) : (
-        <PrimaryButton label="Play again" onPress={reset} />
-      )}
-    </View>
-  );
-}
-
-export function TruthOrDareScreen() {
-  const { colors } = useTheme();
-  const [mode, setMode] = useState<'truth' | 'dare'>('truth');
-  const [card, setCard] = useState(() => pickTruthOrDare('truth'));
-
-  const pull = (next: 'truth' | 'dare') => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setMode(next);
-    setCard(pickTruthOrDare(next));
-  };
-
-  return (
-    <View style={s.stack}>
-      <View style={{ flexDirection: 'row', gap: 10 }}>
-        {(['truth', 'dare'] as const).map((m) => (
-          <Pressable
-            key={m}
-            onPress={() => pull(m)}
-            style={[
-              s.tab,
-              {
-                flex: 1,
-                backgroundColor: mode === m ? colors.text : colors.surfaceElevated,
-                borderColor: mode === m ? colors.text : colors.border,
-              },
-            ]}>
-            <Text style={[s.tabText, { color: mode === m ? colors.background : colors.textSecondary, textAlign: 'center' }]}>
-              {m === 'truth' ? 'Truth' : 'Dare'}
-            </Text>
-          </Pressable>
-        ))}
-      </View>
-      <LinearGradient colors={colors.gradient} style={s.promptCard}>
-        <Text style={s.dailyLabel}>{mode === 'truth' ? 'Truth' : 'Dare'}</Text>
-        <Text style={s.promptText}>{card}</Text>
-      </LinearGradient>
-      <PrimaryButton label="Another card" onPress={() => pull(mode)} />
-    </View>
-  );
-}
-
 export function MemoryQuizScreen() {
   const { colors } = useTheme();
   const [index, setIndex] = useState(0);
@@ -254,7 +141,7 @@ export function PlaylistForTwoScreen() {
             return;
           }
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          Alert.alert('Nice pick', `Tell ${partnerName}: “${song.trim()}” — ${prompt}`);
+          Alert.alert('Nice pick', `Tell ${partnerName}: “${song.trim()}”. ${prompt}`);
           setSong('');
         }}
       />

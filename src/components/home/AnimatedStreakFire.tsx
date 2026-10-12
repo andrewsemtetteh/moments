@@ -12,7 +12,8 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 
-import { Icon } from '@/components/ui/Icon';
+import { StreakFlame, type StreakFlameTone } from '@/components/home/StreakFlame';
+import { STREAK_COLORS } from '@/lib/streak-colors';
 
 type Props = {
   color: string;
@@ -28,13 +29,20 @@ type Props = {
 const SPRING_POP = { damping: 7, stiffness: 220, mass: 0.72 };
 const SPRING_SETTLE = { damping: 14, stiffness: 250 };
 const SPRING_IDLE = { damping: 17, stiffness: 130 };
-/** Ionicons flame is tall — stretch slightly for the card hero. */
-const LAYERED_WIDTH = 1.28;
-const LAYERED_WIDTH_COMPACT = 1.12;
-/** Real fire streak palette (not theme / status tinted). */
-const FIRE_OUTER = '#FF6B00';
-const FIRE_MID = '#FF9500';
-const FIRE_INNER = '#FFD600';
+const RISK_COLORS = new Set<string>([STREAK_COLORS.atRisk, STREAK_COLORS.atRiskBright, STREAK_COLORS.atRiskDeep]);
+const LIVE_COLORS = new Set<string>([
+  STREAK_COLORS.active,
+  STREAK_COLORS.activeBright,
+  STREAK_COLORS.pending,
+  STREAK_COLORS.pendingBright,
+]);
+
+/** Callers pass the old single colour; map it onto the flame's three looks. */
+function flameTone(color: string): StreakFlameTone {
+  if (RISK_COLORS.has(color)) return 'risk';
+  if (LIVE_COLORS.has(color)) return 'active';
+  return 'idle';
+}
 
 export function AnimatedStreakFire({
   color,
@@ -158,7 +166,8 @@ export function AnimatedStreakFire({
     return reset;
   }, [animate, periodic, pulse, translateY, rotate, scaleX, scaleY]);
 
-  const widthScale = layered ? (size >= 40 ? LAYERED_WIDTH : LAYERED_WIDTH_COMPACT) : 1;
+  // The new flame is drawn at its own proportions; `layered` is kept for callers.
+  const widthScale = 1;
 
   const iconStyle = useAnimatedStyle(() => ({
     transform: [
@@ -169,26 +178,12 @@ export function AnimatedStreakFire({
     ],
   }));
 
-  const mid = Math.round(size * 0.76);
-  const inner = Math.round(size * 0.48);
   const rootW = Math.round(size * widthScale);
 
   return (
     <View style={[styles.root, { width: rootW, height: size }]}>
       <Animated.View style={[layered ? [styles.layered, { width: rootW, height: size }] : null, iconStyle]}>
-        {layered ? (
-          <>
-            <Icon name="fire" size={size} color={FIRE_OUTER} filled strokeWidth={1.2} />
-            <View style={[styles.layer, { bottom: Math.round(size * 0.07) }]}>
-              <Icon name="fire" size={mid} color={FIRE_MID} filled strokeWidth={1.1} />
-            </View>
-            <View style={[styles.layer, { bottom: Math.round(size * 0.12) }]}>
-              <Icon name="fire" size={inner} color={FIRE_INNER} filled strokeWidth={1} />
-            </View>
-          </>
-        ) : (
-          <Icon name="fire" size={size} color={color} filled strokeWidth={1.6} />
-        )}
+        <StreakFlame size={size} tone={flameTone(color)} />
       </Animated.View>
     </View>
   );

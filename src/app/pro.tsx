@@ -6,7 +6,7 @@ import { PaywallScreen } from '@/components/subscription/PaywallScreen';
 import { useSubscription } from '@/hooks/useSubscription';
 import { markOnboardingPaywallDone } from '@/lib/onboarding-storage';
 import { markPaywallDismissed } from '@/lib/paywall-storage';
-import { goBackOrReplace } from '@/lib/router';
+import { closeStackScreen } from '@/lib/router';
 import { useAuthStore, useUIStore } from '@/stores';
 
 export default function ProScreen() {
@@ -42,12 +42,13 @@ export default function ProScreen() {
   return (
     <PaywallScreen
       showClose
+      swipeToClose={false}
       onClose={() => {
         if (isOnboarding) {
           void finishOnboarding();
           return;
         }
-        goBackOrReplace(router, '/(tabs)/home');
+        closeStackScreen(router);
       }}
     />
   );

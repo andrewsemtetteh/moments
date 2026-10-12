@@ -1,6 +1,5 @@
 import type { ActivityArtId } from '@/components/activities/explore/ActivityArt';
 import type { IconName } from '@/components/ui/Icon';
-import type { LiveGameKind } from '@/lib/game-room/types';
 
 export type ExploreModalKey =
   | 'cards'
@@ -11,15 +10,9 @@ export type ExploreModalKey =
   | 'gratitude'
   | 'daily'
   | 'trivia'
-  | 'quizLive'
   | 'compliment'
-  | 'twoTruths'
-  | 'truth'
   | 'memory'
   | 'playlist'
-  | 'thisOrThat'
-  | 'wouldYouRather'
-  | 'whosLikely'
   | 'loveQuiz'
   | 'neverHaveI'
   | 'finishSentence'
@@ -33,26 +26,13 @@ export type ExploreModalKey =
   | 'drawTogether'
   | 'compatibility'
   | 'personality'
-  | 'attachment'
-  | 'guessAnswer';
-
-/** Catalog cards that also have a live, two-phone version with voice (see LiveRoomModal). */
-export const CATALOG_TO_LIVE: Partial<Record<ExploreModalKey, LiveGameKind>> = {
-  wouldYouRather: 'wouldYouRather',
-  thisOrThat: 'thisOrThat',
-  whosLikely: 'whosLikely',
-  truth: 'truthDare',
-  guessAnswer: 'guessAnswer',
-  twoTruths: 'twoTruths',
-  quizLive: 'quiz',
-};
+  | 'attachment';
 
 /** XP for a first play of a solo / pass-the-phone activity each day. */
 export const SOLO_XP = 12;
 
 export type PlayGroupId = 'play' | 'quizzes' | 'talk' | 'challenges' | 'create';
 
-export type HomeFilterId = 'all' | PlayGroupId;
 
 /** Soft card palette — unique per activity so the feed doesn’t feel monotone. */
 export type PlayToneId =
@@ -148,76 +128,8 @@ export interface PlayActivity {
   cta?: string;
 }
 
-export interface PlayGroup {
-  id: PlayGroupId;
-  label: string;
-  chip: string;
-}
-
-export const HOME_FILTERS: { id: HomeFilterId; label: string }[] = [
-  { id: 'all', label: 'All' },
-  { id: 'play', label: 'Games' },
-  { id: 'quizzes', label: 'Quizzes' },
-  { id: 'talk', label: 'Prompts' },
-  { id: 'challenges', label: 'Challenges' },
-  { id: 'create', label: 'More' },
-];
-
-export const PLAY_GROUPS: PlayGroup[] = [
-  { id: 'play', label: 'Play a game', chip: 'Games' },
-  { id: 'quizzes', label: 'Quizzes', chip: 'Quizzes' },
-  { id: 'talk', label: 'Conversation prompts', chip: 'Prompts' },
-  { id: 'challenges', label: 'Challenges', chip: 'Challenges' },
-  { id: 'create', label: 'Create & go out', chip: 'More' },
-];
-
 /** Games, quizzes, prompts, challenges, and more. */
 export const PLAY_ACTIVITIES: PlayActivity[] = [
-  {
-    id: 'wouldYouRather',
-    title: 'Would You Rather?',
-    tagline: 'Hard choices. Soft laughs.',
-    icon: 'question',
-    art: 'wouldYouRather',
-    group: 'play',
-    tone: 'sky',
-  },
-  {
-    id: 'thisOrThat',
-    title: 'This or That',
-    tagline: 'Quick picks. Instant reveals.',
-    icon: 'sparkles',
-    art: 'thisOrThat',
-    group: 'play',
-    tone: 'coral',
-  },
-  {
-    id: 'whosLikely',
-    title: "Who's More Likely?",
-    tagline: 'Point fingers. Then compare.',
-    icon: 'eye',
-    art: 'whosLikely',
-    group: 'play',
-    tone: 'plum',
-  },
-  {
-    id: 'truth',
-    title: 'Truth or Dare',
-    tagline: 'Couples safe rounds.',
-    icon: 'fire',
-    art: 'truthDare',
-    group: 'play',
-    tone: 'berry',
-  },
-  {
-    id: 'twoTruths',
-    title: 'Two Truths & a Lie',
-    tagline: 'Spot the fib.',
-    icon: 'eye',
-    art: 'whosLikely',
-    group: 'play',
-    tone: 'slate',
-  },
   {
     id: 'neverHaveI',
     title: 'Never Have I Ever',
@@ -235,15 +147,6 @@ export const PLAY_ACTIVITIES: PlayActivity[] = [
     art: 'emojiStory',
     group: 'play',
     tone: 'teal',
-  },
-  {
-    id: 'guessAnswer',
-    title: 'Guess My Answer',
-    tagline: 'They type. You guess.',
-    icon: 'chat',
-    art: 'guessAnswer',
-    group: 'play',
-    tone: 'sage',
   },
   {
     id: 'fortuneWheel',
@@ -275,7 +178,7 @@ export const PLAY_ACTIVITIES: PlayActivity[] = [
   {
     id: 'loveQuiz',
     title: 'How well do you know me?',
-    tagline: 'One answers — the other guesses.',
+    tagline: 'One answers. The other guesses.',
     icon: 'heart',
     art: 'loveQuiz',
     group: 'quizzes',
@@ -289,15 +192,6 @@ export const PLAY_ACTIVITIES: PlayActivity[] = [
     art: 'compatibility',
     group: 'quizzes',
     tone: 'berry',
-  },
-  {
-    id: 'quizLive',
-    title: 'Quiz Live',
-    tagline: 'Compete from your phones.',
-    icon: 'globe',
-    art: 'quizLive',
-    group: 'quizzes',
-    tone: 'sky',
   },
   {
     id: 'memory',
@@ -480,21 +374,3 @@ export function getPlayTone(tone: PlayToneId): PlayTone {
   return PLAY_TONES[tone];
 }
 
-export function sectionsForFilter(
-  filter: HomeFilterId,
-  query: string,
-): { group: PlayGroup; items: PlayActivity[] }[] {
-  const q = query.trim().toLowerCase();
-  const match = (a: PlayActivity) =>
-    !q || a.title.toLowerCase().includes(q) || a.tagline.toLowerCase().includes(q);
-
-  const groups =
-    filter === 'all' ? PLAY_GROUPS : PLAY_GROUPS.filter((g) => g.id === filter);
-
-  return groups
-    .map((group) => ({
-      group,
-      items: PLAY_ACTIVITIES.filter((a) => a.group === group.id && match(a)),
-    }))
-    .filter((s) => s.items.length > 0);
-}

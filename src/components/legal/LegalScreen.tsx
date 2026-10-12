@@ -52,7 +52,7 @@ export function LegalScreen({ title, children }: LegalScreenProps) {
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <ScreenHeader title={title} onBack={goBack} />
-      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 48 }]}>
+      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 16 }]}>
         {sections.map((section, i) => (
           <View key={i} style={styles.section}>
             {section.title ? (

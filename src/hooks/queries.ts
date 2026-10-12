@@ -6,7 +6,7 @@ import { Alert } from 'react-native';
 
 import type { MoodHistoryFilter } from '@/lib/mood-history';
 import { resolveMoodFilterUserId as resolveMoodHistoryUserId } from '@/lib/mood-history';
-import { getErrorMessage, isMissingTableError, toUserFacingNetworkError } from '@/lib/network-error';
+import { getErrorMessage, toUserFacingNetworkError } from '@/lib/network-error';
 import { filterInboxNotifications } from '@/lib/notification-display';
 import { emptyStreakStatus } from '@/lib/streak';
 import { getCachedStreakStatus, setCachedStreakStatus } from '@/lib/streak-cache';
@@ -17,7 +17,7 @@ import {
 import { localCalendarDate } from '@/lib/db-time';
 import { backend } from '@/lib/backend';
 import * as api from '@/services/api';
-import { useAuthStore, useRelationshipStore, useUIStore } from '@/stores';
+import { useAuthStore, useRelationshipStore } from '@/stores';
 import { usePlayProgressStore } from '@/stores/play-progress-store';
 import type { Message, MoodLog, Notification } from '@/types/database';
 
@@ -826,7 +826,8 @@ export function useRealtimeSubscription(
     | 'activities'
     | 'notifications'
     | 'calendar_events'
-    | 'quiz_live_sessions'
+    | 'game_sessions'
+    | 'pack_answers'
     | 'streaks'
     | 'daily_challenges',
 ) {
@@ -872,6 +873,11 @@ export function useRealtimeSubscription(
 
             if (isInsert && userId && row?.id) {
               patchNewMessage(qc, relationship.id, userId, row as Partial<Message> & { id: string });
+              if (row.sender_id && row.sender_id !== userId) {
+                void import('@/lib/in-app-notify').then(({ islandFromMessage, notifyIsland }) =>
+                  notifyIsland(islandFromMessage(row)),
+                );
+              }
             } else if (isReadReceipt && userId && row.id && row.read_at) {
               patchMessageReadReceipt(qc, relationship.id, userId, row.id, row.read_at);
             }
@@ -883,8 +889,13 @@ export function useRealtimeSubscription(
               isReadReceipt ? 'READ_RECEIPT' : eventType,
             );
           }
-          if (table === 'quiz_live_sessions') {
-            qc.invalidateQueries({ queryKey: ['quizLiveSession', relationship.id] });
+          if (table === 'game_sessions') {
+            qc.invalidateQueries({ queryKey: ['gameSessions', relationship.id] });
+            const id = (payload as { new?: { id?: string } } | null)?.new?.id;
+            if (id) qc.invalidateQueries({ queryKey: ['gameSession', id] });
+          }
+          if (table === 'pack_answers') {
+            qc.invalidateQueries({ queryKey: ['packAnswers', relationship.id] });
           }
           if (table === 'moments') qc.invalidateQueries({ queryKey: ['moments', relationship.id] });
           if (table === 'mood_logs') {
@@ -1118,57 +1129,4 @@ export function useMomentReaction() {
       api.toggleMomentReaction(p.momentId, user!.id, p.emoji),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['moments', relationship?.id] }),
   });
-}
-
-export function useActiveQuizLiveSession() {
-  const relationship = useRelationshipStore((s) => s.relationship);
-  const isOffline = useUIStore((s) => s.isOffline);
-  return useQuery({
-    queryKey: ['quizLiveSession', relationship?.id],
-    queryFn: () => (relationship ? api.fetchActiveQuizLiveSession(relationship.id) : null),
-    enabled: !!relationship?.id && !isOffline,
-    // Realtime pushes session changes; this is only a safety net for a dropped socket.
-    refetchInterval: isOffline ? false : 30_000,
-    retry: (count, error) => !isMissingTableError(error) && count < 1,
-  });
-}
-
-export function useQuizLiveMutations() {
-  const queryClient = useQueryClient();
-  const relationship = useRelationshipStore((s) => s.relationship);
-  const user = useAuthStore((s) => s.user);
-
-  const invalidate = () => {
-    queryClient.invalidateQueries({ queryKey: ['quizLiveSession', relationship?.id] });
-  };
-
-  const start = useMutation({
-    mutationFn: (topic: string) => api.startQuizLiveSession(relationship!.id, user!.id, topic),
-    onSuccess: invalidate,
-  });
-
-  const submitAnswer = useMutation({
-    mutationFn: ({
-      session,
-      answerIndex,
-      memberIds,
-    }: {
-      session: import('@/types/database').QuizLiveSession;
-      answerIndex: number;
-      memberIds: string[];
-    }) => api.submitQuizLiveAnswer(session, user!.id, answerIndex, memberIds),
-    onSuccess: invalidate,
-  });
-
-  const advance = useMutation({
-    mutationFn: (session: import('@/types/database').QuizLiveSession) => api.advanceQuizLiveRound(session),
-    onSuccess: invalidate,
-  });
-
-  const end = useMutation({
-    mutationFn: (sessionId: string) => api.endQuizLiveSession(sessionId),
-    onSuccess: invalidate,
-  });
-
-  return { start, submitAnswer, advance, end };
 }

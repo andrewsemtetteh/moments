@@ -296,7 +296,7 @@ class GameRoomManager {
       this.relationshipId,
       this.partner.id,
       'game_invite',
-      `${this.me.name} opened a live game room 🎧 Come play!`,
+      `${this.me.name} opened a live game room. Come play!`,
     ).catch(() => undefined);
   }
 

@@ -182,10 +182,11 @@ export function MoodHistoryOverview({
 const styles = StyleSheet.create({
   wrap: { gap: 14 },
   summaryRow: { flexDirection: 'row', gap: 10 },
+  // Same card language as Home: soft surface, no outline, 22pt corners.
   summaryCard: {
     flex: 1,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 16,
+    borderWidth: 0,
+    borderRadius: 22,
     padding: 14,
     gap: 4,
     minHeight: 84,
@@ -195,8 +196,8 @@ const styles = StyleSheet.create({
   summaryEmoji: { fontSize: 28, lineHeight: 32 },
   summaryLabel: { fontSize: 13, fontWeight: '600', lineHeight: 18 },
   panel: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 18,
+    borderWidth: 0,
+    borderRadius: 22,
     padding: 16,
     gap: 10,
   },

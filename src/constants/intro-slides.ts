@@ -36,7 +36,7 @@ export const INTRO_SLIDES: IntroSlide[] = [
     id: 'private',
     title: 'A space',
     highlight: 'just for two',
-    body: 'No feeds, no followers — only you and your partner in a private home built for love.',
+    body: 'No feeds, no followers. Only you and your partner in a private home built for love.',
     icons: ['lock', 'heart', 'sparkles'],
   },
 ];

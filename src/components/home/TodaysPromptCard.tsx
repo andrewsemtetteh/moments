@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 
 import { Icon } from '@/components/ui/Icon';
-import { Avatar, Card, PrimaryButton } from '@/components/ui/primitives';
+import { Avatar, PrimaryButton } from '@/components/ui/primitives';
 import { dailyChallengeQueryKey } from '@/hooks/queries';
 import { useTheme } from '@/hooks/useTheme';
 import { getFirstName } from '@/lib/avatar-initial';
@@ -25,6 +25,7 @@ import {
   promptPhase,
 } from '@/lib/daily-prompt';
 import { getErrorMessage } from '@/lib/network-error';
+import { openChat } from '@/lib/router';
 import * as api from '@/services/api';
 import { useAuthStore, useRelationshipStore } from '@/stores';
 import type { DailyChallenge } from '@/types/database';
@@ -103,42 +104,59 @@ export function TodaysPromptCard({ challenge, onOpenHistory }: Props) {
     }
   };
 
+  const answerStatus = (line: string, action?: { label: string; onPress: () => void }) => (
+    <View style={styles.status}>
+      <View style={styles.statusAvatars}>
+        <AnsweredAvatar done={!!mine} name={user?.name} url={user?.avatar_url} ring={colors.surface} colors={colors} />
+        <View style={styles.statusOverlap}>
+          <AnsweredAvatar done={!!theirs} name={partner?.name} url={partner?.avatar_url} ring={colors.surface} colors={colors} />
+        </View>
+      </View>
+      <Text style={[styles.statusText, { color: colors.textSecondary }]} numberOfLines={2}>
+        {line}
+      </Text>
+      {action ? (
+        <Pressable
+          onPress={action.onPress}
+          accessibilityRole="button"
+          style={({ pressed }) => [styles.nudge, { backgroundColor: colors.accentSoft }, pressed && { opacity: 0.8 }]}>
+          <Text style={[styles.nudgeText, { color: colors.accent }]}>{action.label}</Text>
+        </Pressable>
+      ) : null}
+    </View>
+  );
+
   const header = (
     <View style={styles.topRow}>
-      <Text style={[styles.kicker, { color: colors.textSecondary }]}>Today&apos;s question</Text>
-      <Pressable onPress={onOpenHistory} hitSlop={8} accessibilityRole="button">
-        <Text style={[styles.historyLink, { color: colors.accent }]}>History</Text>
+      <Text style={[styles.kicker, { color: colors.accent }]}>Today&apos;s question</Text>
+      <Pressable onPress={onOpenHistory} hitSlop={10} style={styles.historyBtn} accessibilityRole="button" accessibilityLabel="Past questions">
+        <Icon name="time" size={22} color={colors.text} />
       </Pressable>
     </View>
   );
 
   if (expired && phase !== 'reveal') {
     return (
-      <Card style={styles.card}>
+      <View style={[styles.card, { backgroundColor: colors.surface }]}>
         {header}
         <Text style={[styles.prompt, { color: colors.text }]}>{challenge.prompt}</Text>
-      </Card>
+      </View>
     );
   }
 
   if (phase === 'waiting') {
     return (
-      <Card style={styles.card}>
+      <View style={[styles.card, { backgroundColor: colors.surface }]}>
         {header}
-        <View style={styles.waitCenter}>
-          <View style={[styles.clockRing, { backgroundColor: colors.accentSoft }]}>
-            <Icon name="time" size={28} color={colors.accent} />
-          </View>
-          <Text style={[styles.waitTitle, { color: colors.text }]}>Your answer is locked in</Text>
-          <Text style={[styles.waitSub, { color: colors.textSecondary }]}>
-            Waiting for {partnerFirst}&apos;s answer — you&apos;ll both see them together.
-          </Text>
-          <View style={styles.statusRow}>
-            <StatusChip done label="You" colors={colors} />
-            <StatusChip done={false} label={partnerFirst} colors={colors} />
-          </View>
-        </View>
-      </Card>
+        <Text style={[styles.prompt, { color: colors.text }]}>{challenge.prompt}</Text>
+        {answerStatus(`You answered · waiting for ${partnerFirst}`, {
+          label: 'Nudge',
+          onPress: () => {
+            void Haptics.selectionAsync();
+            openChat(`Answer today’s question when you get a sec 💞`);
+          },
+        })}
+      </View>
     );
   }
 
@@ -148,7 +166,7 @@ export function TodaysPromptCard({ challenge, onOpenHistory }: Props) {
 
   if (phase === 'reveal' && mine && theirs) {
     return (
-      <Card style={styles.card}>
+      <View style={[styles.card, { backgroundColor: colors.surface }]}>
         {header}
         <Text style={[styles.prompt, { color: colors.text }]}>{challenge.prompt}</Text>
         <Animated.View
@@ -182,30 +200,28 @@ export function TodaysPromptCard({ challenge, onOpenHistory }: Props) {
             avatarUrl={partner?.avatar_url}
           />
         </Animated.View>
-      </Card>
+      </View>
     );
   }
 
   return (
-    <Card style={styles.card}>
+    <View style={[styles.card, { backgroundColor: colors.surface }]}>
       {header}
       <Text style={[styles.prompt, { color: colors.text }]}>{challenge.prompt}</Text>
-      {!!theirs && (
-        <Text style={[styles.partnerWaiting, { color: colors.textSecondary }]}>
-          {partnerFirst} is waiting for your answer
-        </Text>
+      {answerStatus(
+        theirs ? `${partnerFirst} answered · your turn` : 'Answer to see each other’s',
       )}
       <TextInput
         style={[
           styles.input,
           {
             color: colors.text,
-            backgroundColor: colors.surfaceElevated,
+            backgroundColor: colors.background,
             borderColor: colors.border,
-            borderWidth: colors.boldBorder ? 2 : 1.5,
+            borderWidth: colors.boldBorder ? 2 : 1,
           },
         ]}
-        placeholder="Type your answer..."
+        placeholder="Your answer…"
         placeholderTextColor={colors.textTertiary}
         value={draft}
         onChangeText={setDraft}
@@ -222,29 +238,33 @@ export function TodaysPromptCard({ challenge, onOpenHistory }: Props) {
         loading={busy}
         style={styles.submitBtn}
       />
-    </Card>
+    </View>
   );
 }
 
-function StatusChip({
+function AnsweredAvatar({
   done,
-  label,
+  name,
+  url,
+  ring,
   colors,
 }: {
   done: boolean;
-  label: string;
+  name?: string | null;
+  url?: string | null;
+  ring: string;
   colors: ReturnType<typeof useTheme>['colors'];
 }) {
   return (
-    <View style={styles.chip}>
+    <View style={[styles.answeredAvatar, { borderColor: ring }]}>
+      <Avatar name={name} imageUrl={url} size={26} />
       <View
         style={[
-          styles.chipIcon,
-          { backgroundColor: done ? colors.success : colors.surfaceElevated },
+          styles.answeredBadge,
+          { borderColor: ring, backgroundColor: done ? colors.success : colors.surfaceElevated },
         ]}>
-        <Icon name={done ? 'check' : 'time'} size={14} color={done ? '#fff' : colors.textTertiary} />
+        {done ? <Icon name="check" size={9} color="#fff" /> : null}
       </View>
-      <Text style={[styles.chipLabel, { color: colors.text }]}>{label}</Text>
     </View>
   );
 }
@@ -286,47 +306,43 @@ function AnswerBubble({
 }
 
 const styles = StyleSheet.create({
-  card: { gap: 14 },
+  card: { borderRadius: 22, padding: 16, gap: 12 },
   topRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  kicker: { fontSize: 13, fontWeight: '600' },
-  historyLink: { fontSize: 13, fontWeight: '700' },
-  prompt: { fontSize: 22, fontWeight: '800', lineHeight: 30, letterSpacing: -0.4, textAlign: 'center' },
-  partnerWaiting: { fontSize: 14, fontWeight: '600', textAlign: 'center', lineHeight: 20 },
+  kicker: { fontSize: 14, fontWeight: '800' },
+  historyBtn: { width: 36, height: 36, marginRight: -8, marginVertical: -8, alignItems: 'center', justifyContent: 'center' },
+  prompt: { fontSize: 19, fontWeight: '800', lineHeight: 25, letterSpacing: -0.3 },
+  status: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  statusAvatars: { flexDirection: 'row' },
+  statusOverlap: { marginLeft: -8 },
+  statusText: { flex: 1, fontSize: 13, fontWeight: '600' },
+  nudge: { height: 34, paddingHorizontal: 14, borderRadius: 17, justifyContent: 'center' },
+  nudgeText: { fontSize: 13, fontWeight: '800' },
+  answeredAvatar: { borderWidth: 2, borderRadius: 15 },
+  answeredBadge: {
+    position: 'absolute',
+    right: -3,
+    bottom: -3,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   input: {
-    minHeight: 110,
+    minHeight: 96,
     borderRadius: 16,
-    borderWidth: 1.5,
+    borderWidth: 1,
     paddingHorizontal: 14,
     paddingVertical: 14,
     fontSize: 16,
     lineHeight: 22,
   },
   submitBtn: { marginTop: 2 },
-  waitCenter: { alignItems: 'center', paddingVertical: 12, gap: 10 },
-  clockRing: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 4,
-  },
-  waitTitle: { fontSize: 20, fontWeight: '800', textAlign: 'center', letterSpacing: -0.3 },
-  waitSub: { fontSize: 14, lineHeight: 20, textAlign: 'center', paddingHorizontal: 12 },
-  statusRow: { flexDirection: 'row', alignItems: 'center', gap: 20, marginTop: 10 },
-  chip: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  chipIcon: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  chipLabel: { fontSize: 15, fontWeight: '700' },
   reveal: { gap: 12 },
   bubble: {
     borderRadius: 16,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 0,
     padding: 14,
     gap: 8,
   },

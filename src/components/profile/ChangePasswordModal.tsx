@@ -1,8 +1,7 @@
-import { Pressable, StyleSheet, Text } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 
 import { PasswordInput } from '@/components/auth/PasswordInput';
-import { DraggableSheet } from '@/components/ui/DraggableSheet';
-import { PrimaryButton } from '@/components/ui/primitives';
+import { SettingsEditPage } from '@/components/profile/SettingsEditPage';
 import { useTheme } from '@/hooks/useTheme';
 
 type Props = {
@@ -18,6 +17,7 @@ type Props = {
   onSave: () => void;
 };
 
+/** Change password on its own page: current, new, confirm. */
 export function ChangePasswordModal({
   visible,
   saving = false,
@@ -37,68 +37,53 @@ export function ChangePasswordModal({
     confirmPassword.length >= 6 &&
     newPassword === confirmPassword &&
     newPassword !== currentPassword;
+  const sameAsOld = newPassword.length > 0 && newPassword === currentPassword;
+  const mismatch = confirmPassword.length > 0 && newPassword !== confirmPassword;
 
   return (
-    <DraggableSheet visible={visible} onClose={onClose} avoidKeyboard style={styles.sheet}>
-      <Text style={[styles.title, { color: colors.text }]}>Change password</Text>
-      <Text style={[styles.label, { color: colors.textSecondary }]}>
-        Enter your current password, then choose a new one with at least 6 characters.
-      </Text>
-      <PasswordInput
-        label="Current password"
-        autoComplete="current-password"
-        value={currentPassword}
-        onChangeText={onChangeCurrent}
-        fieldBackgroundColor={colors.surfaceElevated}
-        containerStyle={styles.input}
-      />
-      <PasswordInput
-        label="New password"
-        minLength={6}
-        autoComplete="new-password"
-        value={newPassword}
-        onChangeText={onChangeNew}
-        fieldBackgroundColor={colors.surfaceElevated}
-        containerStyle={styles.input}
-      />
-      <PasswordInput
-        label="Confirm new password"
-        autoComplete="new-password"
-        value={confirmPassword}
-        onChangeText={onChangeConfirm}
-        fieldBackgroundColor={colors.surfaceElevated}
-        containerStyle={styles.input}
-      />
-      {newPassword.length > 0 && newPassword === currentPassword && (
-        <Text style={[styles.error, { color: colors.error }]}>New password must be different</Text>
-      )}
-      {confirmPassword.length > 0 && newPassword !== confirmPassword && (
-        <Text style={[styles.error, { color: colors.error }]}>New passwords do not match</Text>
-      )}
-      <PrimaryButton
-        label={saving ? 'Saving…' : 'Update password'}
-        onPress={onSave}
-        loading={saving}
-        disabled={!canSave || saving}
-      />
-      <Pressable onPress={onClose} style={styles.cancel} hitSlop={8}>
-        <Text style={{ color: colors.textSecondary, fontWeight: '600' }}>Cancel</Text>
-      </Pressable>
-    </DraggableSheet>
+    <SettingsEditPage
+      visible={visible}
+      title="Password"
+      hint="Enter your current password, then choose a new one with at least 6 characters."
+      buttonLabel="Update password"
+      canSave={canSave}
+      saving={saving}
+      onSave={onSave}
+      onClose={onClose}>
+      <View style={styles.fields}>
+        <PasswordInput
+          label="Current password"
+          autoComplete="current-password"
+          value={currentPassword}
+          onChangeText={onChangeCurrent}
+          fieldBackgroundColor={colors.surface}
+        />
+        <PasswordInput
+          label="New password"
+          minLength={6}
+          autoComplete="new-password"
+          value={newPassword}
+          onChangeText={onChangeNew}
+          fieldBackgroundColor={colors.surface}
+        />
+        <PasswordInput
+          label="Confirm new password"
+          autoComplete="new-password"
+          value={confirmPassword}
+          onChangeText={onChangeConfirm}
+          fieldBackgroundColor={colors.surface}
+        />
+      </View>
+      {sameAsOld ? (
+        <Text style={[styles.error, { color: colors.error }]}>Your new password must be different.</Text>
+      ) : mismatch ? (
+        <Text style={[styles.error, { color: colors.error }]}>The new passwords don’t match.</Text>
+      ) : null}
+    </SettingsEditPage>
   );
 }
 
 const styles = StyleSheet.create({
-  sheet: {
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingHorizontal: 24,
-    paddingBottom: 32,
-    paddingTop: 12,
-  },
-  title: { fontSize: 20, fontWeight: '800', marginBottom: 6 },
-  label: { fontSize: 14, marginBottom: 16, lineHeight: 20 },
-  input: { marginBottom: 12 },
-  error: { fontSize: 13, marginBottom: 12, marginTop: -4 },
-  cancel: { alignItems: 'center', marginTop: 14 },
+  fields: { gap: 12 },
+  error: { fontSize: 14, fontWeight: '600' },
 });

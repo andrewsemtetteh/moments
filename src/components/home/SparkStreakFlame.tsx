@@ -11,13 +11,9 @@ import Animated, {
     withTiming,
 } from 'react-native-reanimated';
 
-import { Icon } from '@/components/ui/Icon';
-import { useTheme } from '@/hooks/useTheme';
+import { StreakFlame } from '@/components/home/StreakFlame';
 
 const SIZE = 168;
-const ORANGE = '#FF8A00';
-const AMBER = '#FFB020';
-const YELLOW = '#FFCC33';
 const COUNT_FILL = '#FFFFFF';
 const COUNT_BORDER = '#1A1008';
 const SPRING_PEAK = { damping: 8, stiffness: 170, mass: 0.8 };
@@ -55,8 +51,6 @@ type Props = {
  * high-contrast bordered digit.
  */
 export function SparkStreakFlame({ count, fromCount, onSettled }: Props) {
-  const { colors } = useTheme();
-  const grey = colors.isDark ? '#5A5A62' : '#C5C5C8';
 
   const progress = useSharedValue(0);
   const scale = useSharedValue(1);
@@ -125,16 +119,10 @@ export function SparkStreakFlame({ count, fromCount, onSettled }: Props) {
       <Animated.View style={[styles.stack, stackStyle]}>
         <View style={styles.flameBox}>
           <Animated.View style={[styles.layer, greyOpacity]}>
-            <Icon name="fire" size={SIZE} color={grey} filled strokeWidth={1.2} />
+            <StreakFlame size={SIZE} tone="idle" />
           </Animated.View>
           <Animated.View style={[styles.layer, colorOpacity]}>
-            <Icon name="fire" size={SIZE} color={ORANGE} filled strokeWidth={1.4} />
-            <View style={styles.mid}>
-              <Icon name="fire" size={SIZE * 0.72} color={AMBER} filled strokeWidth={1.2} />
-            </View>
-            <View style={styles.inner}>
-              <Icon name="fire" size={SIZE * 0.42} color={YELLOW} filled strokeWidth={1.1} />
-            </View>
+            <StreakFlame size={SIZE} tone="active" />
           </Animated.View>
         </View>
         <View style={styles.countWrap} pointerEvents="none">

@@ -3,7 +3,7 @@ export const TAB_BAR_HEIGHT = 64;
 export const TAB_BAR_FLOAT_GAP = 0;
 export const TAB_BAR_FAB_OVERFLOW = 40;
 /** Extra visible gap between last content and the tab bar. */
-export const TAB_BAR_CONTENT_GAP = 40;
+export const TAB_BAR_CONTENT_GAP = 24;
 export const TAB_BAR_SCROLL_BUFFER = 24;
 
 export function getTabBarBottomPadding(safeAreaBottom: number): number {

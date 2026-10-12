@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet } from 'react-native';
 import Animated, {
   cancelAnimation,
   Easing,
@@ -12,11 +12,9 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 
-import { Icon } from '@/components/ui/Icon';
+import { StreakFlame } from '@/components/home/StreakFlame';
 
 const SIZE = 112;
-const FLAME_OUTER = '#FF8C00';
-const FLAME_INNER = '#FFCC00';
 const SPRING_IDLE = { damping: 17, stiffness: 130 };
 
 export function MilestoneHeroFlame() {
@@ -84,10 +82,7 @@ export function MilestoneHeroFlame() {
 
   return (
     <Animated.View style={[styles.stack, motionStyle]}>
-      <Icon name="fire" size={SIZE} color={FLAME_OUTER} filled strokeWidth={1.4} />
-      <View style={styles.inner}>
-        <Icon name="fire" size={SIZE * 0.52} color={FLAME_INNER} filled strokeWidth={1.2} />
-      </View>
+      <StreakFlame size={SIZE} tone="active" />
     </Animated.View>
   );
 }

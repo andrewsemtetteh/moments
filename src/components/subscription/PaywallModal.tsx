@@ -1,4 +1,5 @@
-import { Modal, Platform } from 'react-native';
+import { Modal, Platform, StyleSheet } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { PaywallScreen } from '@/components/subscription/PaywallScreen';
 import { markPaywallDismissed } from '@/lib/paywall-storage';
@@ -16,8 +17,11 @@ export function PaywallModal() {
   if (!visible || Platform.OS === 'web') return null;
 
   return (
-    <Modal visible animationType="slide" presentationStyle="fullScreen" onRequestClose={handleClose}>
-      <PaywallScreen onClose={handleClose} showClose />
+    // Transparent so swiping it down reveals the app behind, like Moments.
+    <Modal visible transparent animationType="slide" presentationStyle="overFullScreen" onRequestClose={handleClose}>
+      <GestureHandlerRootView style={StyleSheet.absoluteFill}>
+        <PaywallScreen onClose={handleClose} showClose />
+      </GestureHandlerRootView>
     </Modal>
   );
 }

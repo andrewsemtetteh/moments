@@ -12,6 +12,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { SparkStreakFlame } from '@/components/home/SparkStreakFlame';
 import { Icon } from '@/components/ui/Icon';
+import { StreakFlame } from '@/components/home/StreakFlame';
 import { useStreak } from '@/hooks/queries';
 import { useTheme } from '@/hooks/useTheme';
 import { getFirstName } from '@/lib/avatar-initial';
@@ -203,7 +204,7 @@ function SparkDayDot({
   if (filled) {
     return (
       <Animated.View style={[styles.dayCircle, styles.dayCircleActive, anim]}>
-        <Icon name="fire" size={18} color="#FFFFFF" filled />
+        <StreakFlame size={20} tone="active" />
         {day.isToday ? (
           <View style={[styles.checkBadge, { backgroundColor: surfaceColor, borderColor: FLAME_ORANGE }]}>
             <Icon name="check" size={10} color={FLAME_ORANGE} />
@@ -279,7 +280,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   dayCircleActive: {
-    backgroundColor: FLAME_ORANGE,
+    backgroundColor: '#FFF4E8',
+    borderWidth: 2,
+    borderColor: FLAME_ORANGE,
   },
   dayCircleOutline: {
     borderWidth: 2,

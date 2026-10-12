@@ -104,6 +104,12 @@ export interface RoomState {
   result: RoomResult | null;
   /** Host wall-clock at broadcast time — lets the guest correct for clock skew on deadlines. */
   hostNow?: number;
+  /** `async` = played on each person's own time and persisted, no timers; absent = live room. */
+  mode?: 'live' | 'async';
+  /** Async only: who has moved past the current reveal (the round advances once both have). */
+  ready?: Record<string, boolean>;
+  /** Lobby game votes; when both players suggest the same game it's selected. */
+  suggestions?: Record<string, LiveGameKind>;
 }
 
 export type RoomAction =
@@ -121,7 +127,8 @@ export type RoomAction =
   | { t: 'judge'; verdict: Verdict }
   | { t: 'timeout' }
   | { t: 'end' }
-  | { t: 'rematch' };
+  | { t: 'rematch' }
+  | { t: 'suggest'; game: LiveGameKind };
 
 /** Wire protocol on the shared realtime channel. */
 export type WireMessage =
@@ -187,7 +194,7 @@ export const LIVE_GAMES: GameDefinition[] = [
     kind: 'truthDare',
     title: 'Truth or Dare',
     emoji: '🔥',
-    tagline: 'Take turns. AI writes the heat.',
+    tagline: 'Take turns. Bring the heat.',
     team: false,
     defaultRounds: 6,
     roundOptions: [4, 6, 10],
@@ -217,7 +224,7 @@ export const LIVE_GAMES: GameDefinition[] = [
     kind: 'quiz',
     title: 'Quiz Showdown',
     emoji: '🏆',
-    tagline: 'AI questions on any topic. Beat the clock.',
+    tagline: 'Pick any topic. Beat the clock.',
     team: false,
     defaultRounds: 8,
     roundOptions: [5, 8, 12],
@@ -229,7 +236,7 @@ export const LIVE_GAMES: GameDefinition[] = [
 export const VIBES: { id: Vibe; label: string; emoji: string; hint: string }[] = [
   { id: 'sweet', label: 'Sweet', emoji: '🥰', hint: 'Warm & wholesome' },
   { id: 'playful', label: 'Playful', emoji: '😜', hint: 'Silly & light' },
-  { id: 'spicy', label: 'Spicy', emoji: '🌶️', hint: 'Flirty, PG-13' },
+  { id: 'spicy', label: 'Spicy', emoji: '🌶️', hint: 'Flirty but tasteful' },
   { id: 'deep', label: 'Deep', emoji: '🌊', hint: 'Meaningful & honest' },
 ];
 

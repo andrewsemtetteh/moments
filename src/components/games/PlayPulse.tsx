@@ -3,6 +3,7 @@ import { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { PLAY_TONES } from '@/components/activities/explore/explore-catalog';
+import { StreakFlame } from '@/components/home/StreakFlame';
 import { useTheme } from '@/hooks/useTheme';
 import { getGameDefinition } from '@/lib/game-room/types';
 import { BADGES, activeStreak, emptyProgress, levelInfo, questView, todayKey } from '@/lib/play-progress';
@@ -57,7 +58,7 @@ export function PlayPulseCard() {
         </Text>
         <Text style={[styles.sub, { color: colors.textSecondary }]} numberOfLines={1}>
           {joinable
-            ? 'Your partner is waiting — jump in with voice 🎧'
+            ? 'Your partner is waiting. Jump in with voice 🎧'
             : next
               ? `Quest: ${next.title} · ${done}/${quests.length} done`
               : `All quests done today 🎉 · ${activeStreak(progress)} day streak`}
@@ -112,7 +113,7 @@ export function CoupleLevelCard() {
       <View style={styles.tiles}>
         {tiles.map((t) => (
           <View key={t.label} style={[styles.tile, { backgroundColor: colors.surfaceElevated }]}>
-            <Text style={styles.tileEmoji}>{t.emoji}</Text>
+            {t.emoji === '🔥' ? <StreakFlame size={18} tone="active" /> : <Text style={styles.tileEmoji}>{t.emoji}</Text>}
             <Text style={[styles.tileValue, { color: colors.text }]}>{t.value}</Text>
             <Text style={[styles.tileLabel, { color: colors.textTertiary }]}>{t.label}</Text>
           </View>

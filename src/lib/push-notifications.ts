@@ -105,7 +105,8 @@ export function configureNotificationPresentation(): void {
 
     Notifications.setNotificationHandler({
       handleNotification: async () => ({
-        shouldShowBanner: true,
+        // In the foreground the Dynamic Island shows it instead (see NotificationSync).
+        shouldShowBanner: false,
         shouldShowList: true,
         shouldPlaySound: true,
         shouldSetBadge: true,
@@ -184,6 +185,8 @@ export function titleForType(type: string): string {
       return 'Streak update';
     case 'game_invite':
       return 'Live game invite';
+    case 'game_turn':
+      return 'Your move';
     default:
       return 'Moments';
   }

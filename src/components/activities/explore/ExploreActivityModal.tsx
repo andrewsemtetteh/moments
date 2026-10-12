@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 
-import type { ExploreModalKey } from '@/components/activities/ExploreSection';
+import type { ExploreModalKey } from '@/components/activities/explore/explore-catalog';
 import { useRelationshipStore } from '@/stores';
 import { usePlayProgressStore } from '@/stores/play-progress-store';
 
@@ -8,13 +8,10 @@ import {
   ComplimentJarScreen,
   MemoryQuizScreen,
   PlaylistForTwoScreen,
-  TruthOrDareScreen,
-  TwoTruthsScreen,
 } from './explore-extra-screens';
 import {
   AppreciationScreen,
   AttachmentScreen,
-  ChoiceRoundsScreen,
   CompatibilityScreen,
   DateGeneratorScreen,
   DateNightChallengeScreen,
@@ -22,15 +19,12 @@ import {
   EmojiStoryScreen,
   FinishSentenceScreen,
   FortuneWheelScreen,
-  GuessAnswerScreen,
   LoveQuizScreen,
   NeverHaveIScreen,
   PersonalityScreen,
   ThirtySixScreen,
   WeekChallengeScreen,
-  WhosLikelyScreen,
 } from './explore-play-screens';
-import { QuizLiveScreen } from './QuizLiveScreen';
 import { SOLO_XP } from './explore-catalog';
 import { EXPLORE_META } from './explore-meta';
 import { ExploreModalShell } from './ExploreModalShell';
@@ -48,7 +42,6 @@ import {
 interface ExploreActivityModalProps {
   activeModal: ExploreModalKey | null;
   onClose: () => void;
-  onAddToCalendar: (title: string) => void;
 }
 
 /** How long an activity has to stay open before it counts as "played" (stops tap-and-close XP farming). */
@@ -79,20 +72,14 @@ export function ExploreActivityModal({ activeModal, onClose }: ExploreActivityMo
       {activeModal === 'cards' && <CardsDeckScreen />}
       {activeModal === 'games' && <GamesPlayerScreen />}
       {activeModal === 'quiz' && <QuizScreen />}
-      {activeModal === 'quizLive' && <QuizLiveScreen />}
       {activeModal === 'bucket' && <BucketListScreen />}
       {activeModal === 'goals' && <GoalsScreen />}
       {activeModal === 'gratitude' && <GratitudeSwapScreen />}
       {activeModal === 'daily' && <QuestionOfDayScreen />}
       {activeModal === 'trivia' && <CouplesTriviaScreen />}
       {activeModal === 'compliment' && <ComplimentJarScreen />}
-      {activeModal === 'twoTruths' && <TwoTruthsScreen />}
-      {activeModal === 'truth' && <TruthOrDareScreen />}
       {activeModal === 'memory' && <MemoryQuizScreen />}
       {activeModal === 'playlist' && <PlaylistForTwoScreen />}
-      {activeModal === 'thisOrThat' && <ChoiceRoundsScreen gameName="This or That" />}
-      {activeModal === 'wouldYouRather' && <ChoiceRoundsScreen gameName="Would You Rather" />}
-      {activeModal === 'whosLikely' && <WhosLikelyScreen />}
       {activeModal === 'loveQuiz' && <LoveQuizScreen />}
       {activeModal === 'neverHaveI' && <NeverHaveIScreen />}
       {activeModal === 'finishSentence' && <FinishSentenceScreen />}
@@ -107,7 +94,6 @@ export function ExploreActivityModal({ activeModal, onClose }: ExploreActivityMo
       {activeModal === 'compatibility' && <CompatibilityScreen />}
       {activeModal === 'personality' && <PersonalityScreen />}
       {activeModal === 'attachment' && <AttachmentScreen />}
-      {activeModal === 'guessAnswer' && <GuessAnswerScreen />}
     </ExploreModalShell>
   );
 }

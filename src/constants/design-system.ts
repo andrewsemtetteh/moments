@@ -152,8 +152,8 @@ export function resolveThemeColors(theme: AppTheme): ThemeColors {
 }
 
 export const THEME_META: { key: AppTheme; label: string; swatch: string }[] = [
-  { key: 'black', label: 'Black', swatch: Themes.black.background },
   { key: 'paper', label: 'Paper', swatch: Themes.paper.background },
+  { key: 'black', label: 'Black', swatch: Themes.black.background },
   { key: 'crimson', label: 'Crimson', swatch: Themes.crimson.accent },
 ];
 

@@ -1,6 +1,6 @@
-import { ScrollView, StyleSheet, Pressable, Text } from 'react-native';
+import { Pressable, StyleSheet, Text } from 'react-native';
 
-import { DraggableSheet } from '@/components/ui/DraggableSheet';
+import { DraggableSheet, SheetScrollView } from '@/components/ui/DraggableSheet';
 import { MOOD_COLORS, MOOD_EMOJI, MOOD_LABELS } from '@/constants/design-system';
 import { useTheme } from '@/hooks/useTheme';
 
@@ -16,11 +16,11 @@ export function MoodPickerModal({ visible, moods, selected, onSelect, onClose }:
   const { colors } = useTheme();
 
   return (
-    <DraggableSheet visible={visible} onClose={onClose} style={styles.sheet}>
+    <DraggableSheet visible={visible} onClose={onClose} style={styles.sheet} dragAnywhere>
       <Text style={[styles.title, { color: colors.text }]}>More moods</Text>
       <Text style={[styles.subtitle, { color: colors.textSecondary }]}>Pick the mood that fits best right now</Text>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.grid}>
+      <SheetScrollView contentContainerStyle={styles.grid}>
         {moods.map((m) => {
           const active = selected === m;
           return (
@@ -42,7 +42,7 @@ export function MoodPickerModal({ visible, moods, selected, onSelect, onClose }:
             </Pressable>
           );
         })}
-      </ScrollView>
+      </SheetScrollView>
 
       <Pressable onPress={onClose} style={styles.cancel} hitSlop={8}>
         <Text style={{ color: colors.textSecondary, fontWeight: '600' }}>Cancel</Text>

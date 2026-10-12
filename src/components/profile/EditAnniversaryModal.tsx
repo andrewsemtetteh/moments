@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Pressable, StyleSheet, Text } from 'react-native';
+import { StyleSheet } from 'react-native';
 
 import { AnniversaryDatePicker } from '@/components/onboarding/AnniversaryDatePicker';
 import { DraggableSheet } from '@/components/ui/DraggableSheet';
@@ -41,21 +41,13 @@ export function EditAnniversaryModal({ visible, value, saving = false, onClose, 
         loading={saving}
         style={styles.saveBtn}
       />
-      <Pressable onPress={onClose} style={styles.cancel} hitSlop={8}>
-        <Text style={{ color: colors.textSecondary, fontWeight: '600' }}>Cancel</Text>
-      </Pressable>
     </DraggableSheet>
   );
 }
 
 const styles = StyleSheet.create({
-  sheet: {
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingHorizontal: 24,
-    paddingBottom: 32,
-    paddingTop: 12,
-  },
+  // Close by dragging the handle down or tapping outside (the date wheel
+  // needs the vertical drags, so it isn't drag-anywhere).
+  sheet: { paddingTop: 4 },
   saveBtn: { marginTop: 20 },
-  cancel: { alignItems: 'center', marginTop: 14 },
 });

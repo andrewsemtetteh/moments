@@ -154,3 +154,48 @@ describe('game room reducer', () => {
     expect(s.message).toBe('nope');
   });
 });
+
+describe('own-time (async) rooms', () => {
+  function asyncRoom(game: LiveGameKind, items: GameItem[], rounds = 2) {
+    let s = createRoom({ id: 'r2', hostId: A.id, players: [A, B], game, mode: 'async' });
+    s = reduceRoom(s, { t: 'configure', game, vibe: 'playful', rounds }, A.id, 0);
+    s = reduceRoom(s, { t: 'begin' }, A.id, 0);
+    return reduceRoom(s, { t: 'loaded', items }, A.id, 1_000);
+  }
+
+  it('has no quiz clock', () => {
+    const s = asyncRoom('quiz', [{ kind: 'quiz', question: 'q', options: ['x', 'y'], correctIndex: 1 }]);
+    expect(s.deadline).toBeNull();
+  });
+
+  it('waits for both players before leaving a reveal', () => {
+    let s = asyncRoom('thisOrThat', [choice('1', '2'), choice('3', '4')]);
+    s = reduceRoom(s, { t: 'answer', value: 'a' }, A.id);
+    s = reduceRoom(s, { t: 'answer', value: 'b' }, B.id);
+    expect(s.step).toBe('reveal');
+    s = reduceRoom(s, { t: 'next' }, A.id);
+    expect(s.round).toBe(0);
+    expect(s.ready).toEqual({ a: true });
+    s = reduceRoom(s, { t: 'next' }, B.id);
+    expect(s.round).toBe(1);
+    expect(s.step).toBe('answer');
+    expect(s.ready).toEqual({});
+  });
+
+  it('lets either player end the game', () => {
+    const s = asyncRoom('thisOrThat', [choice('1', '2')]);
+    expect(reduceRoom(s, { t: 'end' }, B.id).phase).toBe('finished');
+  });
+});
+
+describe('lobby suggestions', () => {
+  it('selects a game once both players suggest it', () => {
+    let s = createRoom({ id: 'r3', hostId: A.id, players: [A, B] });
+    s = reduceRoom(s, { t: 'suggest', game: 'truthDare' }, B.id);
+    expect(s.game).toBe('wouldYouRather');
+    expect(s.suggestions).toEqual({ b: 'truthDare' });
+    s = reduceRoom(s, { t: 'suggest', game: 'truthDare' }, A.id);
+    expect(s.game).toBe('truthDare');
+    expect(s.suggestions).toEqual({});
+  });
+});

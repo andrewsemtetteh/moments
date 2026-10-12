@@ -241,8 +241,6 @@ const styles = StyleSheet.create({
   historyTitle: {
     fontSize: 11,
     fontWeight: '800',
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
   },
   historyEmpty: { fontSize: 13, fontWeight: '600' },
   historyRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },

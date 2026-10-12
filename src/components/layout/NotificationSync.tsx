@@ -1,8 +1,9 @@
 import { useRouter, type Href } from 'expo-router';
 import { useEffect, useRef } from 'react';
-import { Platform } from 'react-native';
+import { AppState, Platform } from 'react-native';
 
 import { useNotifications, useRealtimeSubscription } from '@/hooks/queries';
+import { islandFromNotification, notifyIsland } from '@/lib/in-app-notify';
 import { isInboxNotification } from '@/lib/notification-display';
 import { openFromNotification } from '@/lib/notification-navigation';
 import {
@@ -69,6 +70,11 @@ export function NotificationSync() {
       if (!isInboxNotification(notification)) continue;
 
       void presentLocalNotification(notification);
+      // Foreground: the Dynamic Island takes the place of the OS banner.
+      if (AppState.currentState === 'active') {
+        const island = islandFromNotification(notification);
+        if (island) notifyIsland(island);
+      }
     }
   }, [notifications, user?.id]);
 
