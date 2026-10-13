@@ -1,64 +1,64 @@
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 
 import { useStreak } from '@/hooks/queries';
+import { getLastCelebratedStreak, setLastCelebratedStreak } from '@/lib/streak-celebration-storage';
 import { isStreakMilestone } from '@/lib/streak-milestones';
 import { useRelationshipStore, useUIStore } from '@/stores';
 
 const OPEN_DELAY_MS = 650;
 
 /**
- * Opens the spark streak celebration whenever current_streak increases.
- * Skips milestone days (those use StreakMilestoneModal) and the first hydrate.
+ * Opens the streak celebration whenever the streak has gone up since the
+ * last one we celebrated on this phone, including when it went up while the
+ * app was closed (your partner finished the day after you left). It waits,
+ * rather than skipping, while the paywall or another celebration is open.
+ * Milestone days are left to StreakMilestoneModal. The very first time on
+ * a phone just records the count, without celebrating.
  */
 export function StreakSparkSync() {
   const relationshipId = useRelationshipStore((s) => s.relationship?.id);
   const { data: streak } = useStreak();
   const openStreakSpark = useUIStore((s) => s.openStreakSpark);
-  const streakSpark = useUIStore((s) => s.streakSpark);
-  const streakMilestoneCount = useUIStore((s) => s.streakMilestoneCount);
-  const showPaywall = useUIStore((s) => s.showPaywall);
-  const prevCountRef = useRef<number | null>(null);
-  const primedRef = useRef(false);
+  const busy = useUIStore((s) => s.showPaywall || s.streakSpark != null || s.streakMilestoneCount != null);
+  const count = streak?.current_streak;
 
   useEffect(() => {
-    prevCountRef.current = null;
-    primedRef.current = false;
-  }, [relationshipId]);
+    if (!relationshipId || count == null) return;
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
 
-  useEffect(() => {
-    if (!relationshipId || !streak) return;
+    void (async () => {
+      const last = await getLastCelebratedStreak(relationshipId);
+      if (cancelled) return;
+      // First time on this phone (or for this couple): just remember it.
+      if (last == null) {
+        await setLastCelebratedStreak(relationshipId, count);
+        return;
+      }
+      // Same, or the streak ended and restarted lower: remember, no party.
+      if (count <= last) {
+        if (count < last) await setLastCelebratedStreak(relationshipId, count);
+        return;
+      }
+      // Something else is on screen: try again when it closes (this effect re-runs).
+      if (busy) return;
+      // Milestones have their own celebration.
+      if (isStreakMilestone(count)) {
+        await setLastCelebratedStreak(relationshipId, count);
+        return;
+      }
+      timer = setTimeout(() => {
+        if (cancelled) return;
+        void setLastCelebratedStreak(relationshipId, count);
+        openStreakSpark(count, last);
+      }, OPEN_DELAY_MS);
+    })();
 
-    const count = streak.current_streak;
-
-    // First load for this relationship — remember without celebrating.
-    if (!primedRef.current) {
-      primedRef.current = true;
-      prevCountRef.current = count;
-      return;
-    }
-
-    const prev = prevCountRef.current ?? 0;
-    prevCountRef.current = count;
-
-    if (count <= prev) return;
-    if (showPaywall || streakSpark != null || streakMilestoneCount != null) return;
-    // Milestone modal owns those celebrations.
-    if (isStreakMilestone(count)) return;
-
-    const fromCount = prev;
-    const timer = setTimeout(() => {
-      openStreakSpark(count, fromCount);
-    }, OPEN_DELAY_MS);
-
-    return () => clearTimeout(timer);
-  }, [
-    relationshipId,
-    streak,
-    openStreakSpark,
-    streakSpark,
-    streakMilestoneCount,
-    showPaywall,
-  ]);
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, [relationshipId, count, busy, openStreakSpark]);
 
   return null;
 }

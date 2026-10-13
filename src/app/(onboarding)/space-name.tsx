@@ -3,7 +3,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
-import { CoupleCharacters, FloatingArt } from '@/components/onboarding/Characters';
+import { CoupleCharacters } from '@/components/onboarding/Characters';
 import { OnboardingStepScreen } from '@/components/onboarding/OnboardingStepScreen';
 import { useTheme } from '@/hooks/useTheme';
 import { goNext, previewAnswers, saveOnboardingDraft } from '@/lib/onboarding-v2';
@@ -32,11 +32,7 @@ export default function SpaceNameScreen() {
   return (
     <OnboardingStepScreen
       step="space-name"
-      art={
-        <FloatingArt>
-          <CoupleCharacters width={170} />
-        </FloatingArt>
-      }
+      art={<CoupleCharacters width={170} />}
       title="Name your space"
       subtitle="It’s the title on Home for both of you. Something that feels like the two of you."
       primaryLabel="Continue"

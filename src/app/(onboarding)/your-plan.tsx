@@ -2,7 +2,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
-import { CoupleCharacters, FloatingArt } from '@/components/onboarding/Characters';
+import { CoupleCharacters } from '@/components/onboarding/Characters';
 import { OnboardingStepScreen } from '@/components/onboarding/OnboardingStepScreen';
 import { Icon, type IconName } from '@/components/ui/Icon';
 import { useTheme } from '@/hooks/useTheme';
@@ -66,11 +66,7 @@ export default function YourPlanScreen() {
   return (
     <OnboardingStepScreen
       step="your-plan"
-      art={
-        <FloatingArt>
-          <CoupleCharacters width={150} />
-        </FloatingArt>
-      }
+      art={<CoupleCharacters width={150} />}
       title={draft.relationshipType === 'long_distance' ? 'Your plan to feel close, miles apart' : 'Your plan to feel even closer'}
       subtitle={space ? `Made for ${space}` : `Made for ${me} and your person`}
       primaryLabel="Let’s set it up"

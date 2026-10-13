@@ -1,14 +1,7 @@
 import { useRouter, type Href } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
-import Animated, {
-  Easing,
-  runOnJS,
-  useAnimatedStyle,
-  useSharedValue,
-  withTiming,
-} from 'react-native-reanimated';
 
 import { Wordmark } from '@/components/ui/Wordmark';
 import { useTheme } from '@/hooks/useTheme';
@@ -20,13 +13,9 @@ import { needsProfileSetup } from '@/lib/profile-setup';
 import { useAuthStore, useRelationshipStore } from '@/stores';
 
 const WORDMARK_SIZE = 42;
-/** How long this screen actually stays up — a deliberate, visible beat like a
- * normal app's splash, not an instant flash-past. */
-const MIN_VISIBLE_MS = 2600;
-/** The mark's own closing beat — a quick confident scale-up-and-fade before the
- * route change, the way most polished splash screens exit (Spotify, Instagram,
- * Airbnb) rather than just being flatly swapped for the next screen. */
-const EXIT_DURATION_MS = 360;
+/** The launch screen: the logo, still (no animation), for 5 seconds from when
+ * it's actually on screen, then straight on to the next screen (no fade). */
+const MIN_VISIBLE_MS = 5000;
 
 export default function IndexScreen() {
   const router = useRouter();
@@ -40,57 +29,40 @@ export default function IndexScreen() {
   const { colors } = useTheme();
 
   const [minVisibleDone, setMinVisibleDone] = useState(false);
-  const exitedRef = useRef(false);
-  const exitOpacity = useSharedValue(1);
-  const exitScale = useSharedValue(1);
-
-  const exitStyle = useAnimatedStyle(() => ({
-    opacity: exitOpacity.value,
-    transform: [{ scale: exitScale.value }],
-  }));
-
+  // When this screen is actually on screen: after the native splash has gone,
+  // a frame has painted, and app start-up work (sign-in check, fonts, data)
+  // has settled. The hold below counts from here, not from when the code
+  // loaded; otherwise a slow start (Expo Go, dev mode) used up the whole hold
+  // before anyone saw it, and it flashed past.
+  const [visible, setVisible] = useState(false);
   useEffect(() => {
-    // Hand off from the native splash right away — this screen has no motion
-    // of its own, so there's nothing to wait for before showing it.
-    void SplashScreen.hideAsync();
+    let alive = true;
+    void SplashScreen.hideAsync()
+      .catch(() => undefined)
+      .finally(() => {
+        // Two frames: the first paints this screen, the second confirms it's up.
+        requestAnimationFrame(() =>
+          requestAnimationFrame(() => {
+            if (alive) setVisible(true);
+          }),
+        );
+      });
+    return () => {
+      alive = false;
+    };
   }, []);
 
-  /** Plays the mark's exit beat, then swaps the route — so leaving this screen
-   * is always this intentional close, never a flat cut mid-animation. */
-  const replaceWithExit = useCallback(
-    (href: Href) =>
-      new Promise<void>((resolve) => {
-        // Only the mark itself needs this once — a second in-flight route()
-        // call (e.g. a dependency change while still exiting) would otherwise
-        // restart it from a partway state.
-        if (exitedRef.current) {
-          router.replace(href);
-          resolve();
-          return;
-        }
-        exitedRef.current = true;
-        const finish = () => {
-          router.replace(href);
-          resolve();
-        };
-        exitOpacity.value = withTiming(0, { duration: EXIT_DURATION_MS, easing: Easing.in(Easing.cubic) });
-        exitScale.value = withTiming(
-          1.08,
-          { duration: EXIT_DURATION_MS, easing: Easing.in(Easing.cubic) },
-          (finished) => {
-            if (finished) runOnJS(finish)();
-          },
-        );
-      }),
-    // exitedRef, exitOpacity, exitScale are stable refs/shared values.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [router],
-  );
+  /** Straight on to the next screen: no exit animation. */
+  const replaceWithExit = useCallback((href: Href) => {
+    router.replace(href);
+    return Promise.resolve();
+  }, [router]);
 
   useEffect(() => {
+    if (!visible) return;
     const timer = setTimeout(() => setMinVisibleDone(true), MIN_VISIBLE_MS);
     return () => clearTimeout(timer);
-  }, []);
+  }, [visible]);
 
   useEffect(() => {
     // Gate navigation on the minimum hold — otherwise a fast auth check can
@@ -154,9 +126,7 @@ export default function IndexScreen() {
   return (
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
       <View style={styles.center}>
-        <Animated.View style={exitStyle}>
-          <Wordmark size={WORDMARK_SIZE} animated />
-        </Animated.View>
+        <Wordmark size={WORDMARK_SIZE} />
       </View>
     </View>
   );

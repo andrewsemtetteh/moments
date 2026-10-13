@@ -6,21 +6,23 @@ import { Pressable, Share, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { FloatingArt, TwoCouplesCharacters } from '@/components/onboarding/Characters';
+import { TwoCouplesCharacters } from '@/components/onboarding/Characters';
 import { Icon } from '@/components/ui/Icon';
+import { REFERRAL_DAYS } from '@/constants/subscription';
 import { useTheme } from '@/hooks/useTheme';
 import { useAuthStore } from '@/stores';
 
 const STEPS = [
   'Share your link with a couple you know',
   'They sign up and pair with each other',
-  'You both get 7 days of Plus, automatically',
+  `You both get ${REFERRAL_DAYS} days of Plus, automatically`,
 ];
 
 /**
- * "Not ready? Get a week free": invite another couple. Both couples get a
- * week of Plus once the invited couple pairs (granted server-side with
- * billing; see BILLING_CONNECTED). Swipe back or the arrow to return.
+ * Invite another couple: both couples get REFERRAL_DAYS (14) days of Plus once
+ * the invited couple pairs (granted server-side with billing). Reached from
+ * the paywall, Settings and the You page, so people who skip the trial can
+ * still earn Plus. Swipe back or the arrow to return.
  */
 export default function ReferScreen() {
   const router = useRouter();
@@ -46,7 +48,7 @@ export default function ReferScreen() {
   const share = async () => {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const result = await Share.share({
-      message: `We use Moments to stay close every day. Join with our link and we both get a free week of Plus: https://${link}`,
+      message: `We use Moments to stay close every day. Join with our link and we both get ${REFERRAL_DAYS} days of Plus free: https://${link}`,
     });
     if (result.action === Share.sharedAction) setSent(true);
   };
@@ -60,13 +62,11 @@ export default function ReferScreen() {
       </View>
       <View style={styles.body}>
         <View style={styles.art}>
-          <FloatingArt>
-            <TwoCouplesCharacters width={290} />
-          </FloatingArt>
+          <TwoCouplesCharacters width={290} />
         </View>
-        <Text style={[styles.title, { color: colors.text }]}>Share the love, get a week free</Text>
+        <Text style={[styles.title, { color: colors.text }]}>Share the love, get {REFERRAL_DAYS} days free</Text>
         <Text style={[styles.sub, { color: colors.textSecondary }]}>
-          Know a couple who’d love Moments? When they sign up and pair, you both get 7 days of Plus.
+          Know a couple who’d love Moments? When they sign up and pair, you both get {REFERRAL_DAYS} days of Plus.
         </Text>
 
         <View style={[styles.list, { borderColor: colors.text, backgroundColor: colors.surface }]}>
@@ -114,7 +114,7 @@ export default function ReferScreen() {
           {ready ? null : <Icon name="share" size={18} color={colors.onAccent} />}
           <Text style={[styles.ctaText, { color: colors.onAccent }]}>{ready ? 'Continue' : 'Share my link'}</Text>
         </Pressable>
-        <Text style={[styles.note, { color: colors.textTertiary }]}>Your free week starts when they join.</Text>
+        <Text style={[styles.note, { color: colors.textTertiary }]}>Your {REFERRAL_DAYS} free days start when they join.</Text>
       </View>
     </SafeAreaView>
   );

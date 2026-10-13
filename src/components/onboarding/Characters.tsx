@@ -75,7 +75,7 @@ export function CoupleCharacters({ width = 220, waiting = false }: { width?: num
   const ghost = useSharedValue(1);
   useEffect(() => {
     if (!waiting || reduceMotion) return;
-    ghost.value = withRepeat(withSequence(withTiming(0.4, { duration: 900 }), withTiming(1, { duration: 900 })), -1);
+    ghost.value = withRepeat(withSequence(withTiming(0.7, { duration: 1600 }), withTiming(1, { duration: 1600 })), -1);
   }, [waiting, reduceMotion, ghost]);
   const ghostStyle = useAnimatedStyle(() => ({ opacity: ghost.value }));
 
@@ -134,6 +134,7 @@ export function CoupleCharacters({ width = 220, waiting = false }: { width?: num
 }
 
 const AnimatedEllipse = Animated.createAnimatedComponent(Ellipse);
+const AnimatedPath = Animated.createAnimatedComponent(Path);
 
 /* ── Shared motion for the cast ─────────────────────────────────────────── */
 
@@ -393,39 +394,22 @@ export function PeekCharacter({
   );
 }
 
-/** A calendar with a face: it blinks, gives a little wiggle, and its heart beats. */
+/** A calendar with a face: it blinks and its heart beats. */
 export function CalendarCharacter({ size = 76 }: { size?: number }) {
   const k = size / 76;
-  const reduceMotion = useReducedMotion();
   const blink = useBlink(2);
   const heart = useHeartbeat(0);
-  const tilt = useSharedValue(0);
-  useEffect(() => {
-    if (reduceMotion) return;
-    tilt.value = withRepeat(
-      withSequence(
-        withDelay(1800, withTiming(-5, { duration: 120 })),
-        withTiming(5, { duration: 140 }),
-        withTiming(-3, { duration: 120 }),
-        withTiming(0, { duration: 140 }),
-      ),
-      -1,
-    );
-  }, [reduceMotion, tilt]);
-  const wiggle = useAnimatedStyle(() => ({ transform: [{ rotate: `${tilt.value}deg` }] }));
 
   return (
     <View style={{ width: size, height: (size * 70) / 76 }}>
-      <Animated.View style={[{ transformOrigin: '50% 90%' }, wiggle]}>
-        <Svg width={size} height={(size * 70) / 76} viewBox="0 0 76 70">
-          <Rect x={8} y={14} width={56} height={50} rx={12} fill="#FFD25E" stroke={INK} strokeWidth={2.5} />
-          <Path d="M8 28h56" stroke={INK} strokeWidth={2.5} />
-          <Path d="M22 8v12M50 8v12" stroke={INK} strokeWidth={3} strokeLinecap="round" />
-          <BlinkEye cx={28} cy={42} r={3.5} blink={blink} />
-          <BlinkEye cx={44} cy={42} r={3.5} blink={blink} />
-          <Path d="M30 51 Q36 56 42 51" fill="none" stroke={INK} strokeWidth={2.5} strokeLinecap="round" />
-        </Svg>
-      </Animated.View>
+      <Svg width={size} height={(size * 70) / 76} viewBox="0 0 76 70">
+        <Rect x={8} y={14} width={56} height={50} rx={12} fill="#FFD25E" stroke={INK} strokeWidth={2.5} />
+        <Path d="M8 28h56" stroke={INK} strokeWidth={2.5} />
+        <Path d="M22 8v12M50 8v12" stroke={INK} strokeWidth={3} strokeLinecap="round" />
+        <BlinkEye cx={28} cy={42} r={3.5} blink={blink} />
+        <BlinkEye cx={44} cy={42} r={3.5} blink={blink} />
+        <Path d="M30 51 Q36 56 42 51" fill="none" stroke={INK} strokeWidth={2.5} strokeLinecap="round" />
+      </Svg>
       <Part scale={k} box={[57, 0, 19, 16]} style={heart}>
         <Path d="M60 4 c0-4 6-6 7-1 c1-5 7-3 7 1 c0 5-7 8-7 8 s-7-3-7-8z" fill="#FF5A6E" stroke={INK} strokeWidth={2} />
       </Part>
@@ -626,26 +610,70 @@ export function PhotosCharacter({ size = 130 }: { size?: number }) {
   );
 }
 
-/** A group of four, for "invite another couple". */
+/** A smile that moves: it widens and relaxes as if chatting. */
+function ChatMouth({ x, y, w = 12, seed = 0 }: { x: number; y: number; w?: number; seed?: number }) {
+  const reduceMotion = useReducedMotion();
+  const open = useSharedValue(0);
+  useEffect(() => {
+    if (reduceMotion) return;
+    const ease = Easing.inOut(Easing.quad);
+    open.value = withDelay(
+      (seed * 450) % 1600,
+      withRepeat(
+        withSequence(
+          withTiming(1, { duration: 220, easing: ease }),
+          withTiming(0.3, { duration: 200, easing: ease }),
+          withTiming(0.9, { duration: 220, easing: ease }),
+          withTiming(0, { duration: 260, easing: ease }),
+          withDelay(1400 + ((seed * 330) % 900), withTiming(0, { duration: 0 })),
+        ),
+        -1,
+      ),
+    );
+  }, [reduceMotion, seed, open]);
+  const props = useAnimatedProps(() => {
+    const depth = 3 + open.value * 4;
+    return { d: `M${x - w / 2} ${y} Q${x} ${y + depth} ${x + w / 2} ${y}` };
+  });
+  return (
+    <AnimatedPath
+      d={`M${x - w / 2} ${y} Q${x} ${y + 3} ${x + w / 2} ${y}`}
+      animatedProps={props}
+      fill="none"
+      stroke={INK}
+      strokeWidth={3}
+      strokeLinecap="round"
+    />
+  );
+}
+
+/** One of the four: blinking, looking around and chatting, each on its own rhythm. */
+function Chatter({ x1, x2, y, seed }: { x1: number; x2: number; y: number; seed: number }) {
+  const blink = useBlink(seed);
+  const look = useWander(seed, 2);
+  return (
+    <>
+      <BlinkEye cx={x1} cy={y} r={5} blink={blink} lookX={look} />
+      <BlinkEye cx={x2} cy={y} r={5} blink={blink} lookX={look} />
+      <ChatMouth x={(x1 + x2) / 2} y={y + 13} seed={seed} />
+    </>
+  );
+}
+
+/** A group of four, for "invite another couple": they blink, look around and chat. */
 export function TwoCouplesCharacters({ width = 300 }: { width?: number }) {
   const h = (width * 130) / 300;
   const blob = (d: string, fill: string) => <Path d={d} fill={fill} stroke={INK} strokeWidth={3} />;
-  const eyes = (x1: number, x2: number, y: number) => (
-    <>
-      <Circle cx={x1} cy={y} r={5} fill={INK} />
-      <Circle cx={x2} cy={y} r={5} fill={INK} />
-    </>
-  );
   return (
     <Svg width={width} height={h} viewBox="0 0 300 130">
       {blob('M14 120 C8 90 18 58 46 56 C74 54 84 86 78 120 Z', '#FF8A65')}
-      {eyes(38, 56, 86)}
+      <Chatter x1={38} x2={56} y={86} seed={0} />
       {blob('M80 120 C76 84 92 60 116 62 C140 64 148 92 140 120 Z', '#8C7CF0')}
-      {eyes(104, 122, 90)}
+      <Chatter x1={104} x2={122} y={90} seed={3} />
       {blob('M160 120 C154 88 166 60 192 60 C218 60 228 90 222 120 Z', '#7FD3A8')}
-      {eyes(184, 202, 90)}
+      <Chatter x1={184} x2={202} y={90} seed={1} />
       {blob('M224 120 C220 86 236 56 262 58 C288 60 296 92 288 120 Z', '#FFD25E')}
-      {eyes(250, 268, 88)}
+      <Chatter x1={250} x2={268} y={88} seed={4} />
       <Path
         d="M144 18 c0-6 8-8 10-2 c2-6 10-4 10 2 c0 7-10 12-10 12 s-10-5-10-12z"
         fill="#FF5A6E"

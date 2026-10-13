@@ -3,7 +3,7 @@ import { useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
+import Animated, { Easing, runOnJS, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import LottieView from 'lottie-react-native';
@@ -12,8 +12,9 @@ import Svg, { Path } from 'react-native-svg';
 import { colorWithAlpha } from '@/components/ui/primitives';
 import { Radius, Spacing } from '@/constants/design-system';
 import { useTheme } from '@/hooks/useTheme';
-import { useAuthStore } from '@/stores';
-import { designPass } from '@/lib/onboarding-v2';
+// Used by the commented-out dev previews:
+// import { useAuthStore } from '@/stores';
+// import { designPass } from '@/lib/onboarding-v2';
 
 // All three free under the Lottie Simple License (commercial use permitted,
 // attribution optional) via LottieFiles: "Couple sharing and caring love" by
@@ -25,9 +26,8 @@ const SLIDES = [
   {
     kind: 'lottie' as const,
     animation: require('@/assets/lottie/couple-together.json'),
-    kicker: 'Welcome to moments',
-    title: 'Grow closer, every day',
-    body: 'Turn small everyday moments into a bond that keeps getting stronger, together.',
+    title: ['Stay close on ', 'busy days', '.'],
+    body: 'Share a moment and stay part of each other’s day.',
     // Native 1:1 art fills the box edge-to-edge, unlike the others' framing
     // with breathing room — scaled down slightly so it doesn't read oversized.
     scale: 0.86,
@@ -35,17 +35,15 @@ const SLIDES = [
   {
     kind: 'lottie' as const,
     animation: require('@/assets/lottie/couple-daily.json'),
-    kicker: 'Everyday habits',
-    title: 'Show up for each other',
-    body: 'Check in, celebrate the wins, and keep your bond strong with simple habits made for busy, real-life couples.',
+    title: ['Go ', 'deeper', ' than small talk.'],
+    body: 'A question a day that sparks real conversations.',
     scale: 1,
   },
   {
     kind: 'lottie' as const,
     animation: require('@/assets/lottie/couple-hug.json'),
-    kicker: 'Built for two',
-    title: 'A love that lasts',
-    body: "From your first spark to forever after, keep growing together with tools made for real, lasting relationships.",
+    title: ['A space just for ', 'you two', '.'],
+    body: 'Photos, chats and memories, private and in one place.',
     scale: 1,
   },
 ];
@@ -57,6 +55,25 @@ const ARC_HEIGHT = 36;
 // Baseline width (standard iPhone portrait) that the type scale was tuned
 // against — smaller/larger devices scale proportionally from here.
 const BASE_WIDTH = 390;
+
+function StoryBars({ count, active, color }: { count: number; active: number; color: string }) {
+  const fill = useSharedValue(0);
+  useEffect(() => {
+    fill.value = 0;
+    fill.value = withTiming(1, { duration: SLIDE_DURATION_MS, easing: Easing.linear });
+  }, [active, fill]);
+  const fillStyle = useAnimatedStyle(() => ({ width: `${fill.value * 100}%` }));
+  return (
+    <View style={styles.bars} accessibilityRole="progressbar" accessibilityValue={{ min: 1, max: count, now: active + 1 }}>
+      {Array.from({ length: count }, (_, i) => (
+        <View key={i} style={[styles.bar, { backgroundColor: colorWithAlpha(color, 0.14) }]}>
+          {i < active ? <View style={[styles.barFill, { width: '100%', backgroundColor: color }]} /> : null}
+          {i === active ? <Animated.View style={[styles.barFill, { backgroundColor: color }, fillStyle]} /> : null}
+        </View>
+      ))}
+    </View>
+  );
+}
 
 export default function AuthWelcomeScreen() {
   const router = useRouter();
@@ -142,6 +159,7 @@ export default function AuthWelcomeScreen() {
     router.push('/(auth)/get-started');
   };
 
+  /* Dev-only previews (their buttons are commented out below):
   // Dev-only escape hatch to look at the tab screens without a real sign-in —
   // `__DEV__` is a compile-time constant, so this branch (and the button
   // below) is stripped out of release/production bundles entirely, not just
@@ -162,6 +180,7 @@ export default function AuthWelcomeScreen() {
     designPass.on = true;
     router.push('/(auth)/get-started');
   };
+  */
 
   const bottomInset = Math.max(insets.bottom, Spacing.lg);
 
@@ -245,32 +264,20 @@ export default function AuthWelcomeScreen() {
                     style={[StyleSheet.absoluteFill, styles.copyLayer, slideStyles[i]]}>
                     <Text
                       style={[
-                        styles.kicker,
-                        { color: colors.accent, fontSize: 12.5 * typeScale },
-                      ]}>
-                      {slide.kicker}
-                    </Text>
-                    <Text
-                      style={[
                         styles.title,
-                        {
-                          color: colors.text,
-                          fontSize: 23 * typeScale,
-                          lineHeight: 28 * typeScale,
-                        },
+                        { color: colors.text, fontSize: 34 * typeScale, lineHeight: 38 * typeScale },
                       ]}>
-                      {slide.title}
+                      {slide.title[0]}
+                      {/* One word in the logo's coral carries the slide's idea. */}
+                      <Text style={styles.titleAccent}>{slide.title[1]}</Text>
+                      {slide.title[2]}
                     </Text>
                     <Text
                       style={[
                         styles.body,
-                        {
-                          color: colors.textSecondary,
-                          fontSize: 15 * typeScale,
-                          lineHeight: 20 * typeScale,
-                        },
+                        { color: colors.textSecondary, fontSize: 16 * typeScale, lineHeight: 22 * typeScale },
                       ]}
-                      numberOfLines={3}>
+                      numberOfLines={2}>
                       {slide.body}
                     </Text>
                   </Animated.View>
@@ -278,29 +285,8 @@ export default function AuthWelcomeScreen() {
               </View>
 
               <View style={styles.bottomCluster}>
-                <View style={styles.dots}>
-                  {SLIDES.map((_, i) => {
-                    const isActive = i === activeIndex;
-                    return (
-                      <View
-                        key={i}
-                        style={[
-                          styles.dot,
-                          isActive ? styles.dotActive : null,
-                          {
-                            // Shape, not just color, carries which slide is active —
-                            // some themes give accent and border the same value
-                            // (e.g. paper's all-black palette), which made the two
-                            // states indistinguishable when color was the only cue.
-                            backgroundColor: isActive
-                              ? colors.accent
-                              : colorWithAlpha(colors.text, 0.18),
-                          },
-                        ]}
-                      />
-                    );
-                  })}
-                </View>
+                {/* Story-style bars: the current one fills over the slide's time. */}
+                <StoryBars count={SLIDES.length} active={activeIndex} color={colors.text} />
 
                 <View style={{ paddingBottom: bottomInset + Spacing.sm, gap: Spacing.sm }}>
                   <Pressable
@@ -318,6 +304,7 @@ export default function AuthWelcomeScreen() {
                     </Text>
                   </Pressable>
 
+                  {/* Dev-only previews, removed from the page (bring back for testing):
                   {__DEV__ && (
                     <Pressable
                       onPress={handleDevPreview}
@@ -338,6 +325,7 @@ export default function AuthWelcomeScreen() {
                       </Text>
                     </Pressable>
                   )}
+                  */}
                 </View>
               </View>
             </View>
@@ -402,29 +390,18 @@ const styles = StyleSheet.create({
   copyLayer: {
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 10,
+    gap: 12,
   },
-  // A small branded kicker above the title — uppercase, wide-tracked, tinted
-  // with the accent color — rather than competing with the title for size.
-  kicker: {
-    fontWeight: '700',
-    letterSpacing: 1.6,
-    textTransform: 'uppercase',
-    textAlign: 'center',
-  },
-  // Bold sans, not italic — reads as a clear heading rather than the
-  // "moments" wordmark's decorative signature treatment, and sized down so
-  // it doesn't compete with the body copy underneath for the eye.
+  // Big, heavy display type (Hinge / Headspace style), tight tracking.
   title: {
-    fontWeight: '800',
-    letterSpacing: -0.3,
+    fontWeight: '900',
+    letterSpacing: -1.2,
     textAlign: 'center',
   },
-  // The supporting line the kicker+title alone used to leave out — a plain,
-  // lighter-weight sentence of real context, the way a longer-copy onboarding
-  // screen earns its two-line title instead of just asserting it.
+  // The logo's coral, the same on every theme.
+  titleAccent: { color: '#FF4D6D' },
   body: {
-    fontWeight: '400',
+    fontWeight: '500',
     textAlign: 'center',
   },
   // Extra paddingTop (vs. the copy's own internal gaps) keeps a clear gap
@@ -434,25 +411,9 @@ const styles = StyleSheet.create({
     gap: Spacing.lg + 4,
     paddingTop: Spacing.xl,
   },
-  dots: {
-    flexDirection: 'row',
-    alignSelf: 'center',
-    alignItems: 'center',
-    gap: 8,
-  },
-  // Inactive: a small plain circle. Active: a wider pill. The size/shape
-  // change is the primary signal — color is secondary, since some themes
-  // can't tell accent and border apart (see the comment where this is used).
-  dot: {
-    width: 7,
-    height: 7,
-    borderRadius: 3.5,
-  },
-  dotActive: {
-    width: 22,
-    height: 7,
-    borderRadius: 3.5,
-  },
+  bars: { flexDirection: 'row', gap: 6, alignSelf: 'center', width: 120 },
+  bar: { flex: 1, height: 4, borderRadius: 2, overflow: 'hidden' },
+  barFill: { height: '100%', borderRadius: 2 },
   primaryCta: {
     minHeight: 56,
     borderRadius: Radius.pill,

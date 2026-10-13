@@ -6,7 +6,7 @@ import { useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, Share, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 
-import { CoupleCharacters, FloatingArt } from '@/components/onboarding/Characters';
+import { CoupleCharacters } from '@/components/onboarding/Characters';
 import { OnboardingStepScreen } from '@/components/onboarding/OnboardingStepScreen';
 import { Icon } from '@/components/ui/Icon';
 import { useTheme } from '@/hooks/useTheme';
@@ -96,11 +96,7 @@ export default function InviteScreen() {
   return (
     <OnboardingStepScreen
       step="invite"
-      art={
-        <FloatingArt>
-          <CoupleCharacters width={190} waiting />
-        </FloatingArt>
-      }
+      art={<CoupleCharacters width={190} waiting />}
       title="Moments is made for two. Invite your person."
       subtitle="Send them your code. They set up their own name and photo, and the moment they join you’re connected."
       primaryLabel="Continue"

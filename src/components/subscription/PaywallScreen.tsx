@@ -29,6 +29,7 @@ import {
   TRIAL_DAYS,
   TRIAL_REMINDER_DAY,
   type SubscriptionPlanId,
+  REFERRAL_DAYS,
 } from '@/constants/subscription';
 import { useTheme } from '@/hooks/useTheme';
 import { purchasePlan, restorePlus, usePurchasesStore, WINBACK_OFFERING } from '@/lib/purchases';
@@ -76,7 +77,7 @@ type Props = {
   offer?: 'winback' | null;
   /** Where it was shown, for analytics (onboarding, limit, partner_joined, milestone, reminder, winback). */
   placement?: string;
-  /** "Not ready? Get a week free" (invite a couple). */
+  /** "Not ready? Get 14 days free" (invite a couple). */
   onRefer?: () => void;
   /** Terms / Privacy links (required on a subscription screen). */
   onOpenLegal?: (doc: 'terms' | 'privacy') => void;
@@ -420,9 +421,9 @@ export function PaywallScreen({
                     <Icon name="gift" size={20} color={INK} />
                   </View>
                   <View style={styles.flex}>
-                    <Text style={[styles.referTitle, { color: colors.text }]}>Not ready? Get a week free</Text>
+                    <Text style={[styles.referTitle, { color: colors.text }]}>Not ready? Get {REFERRAL_DAYS} days free</Text>
                     <Text style={[styles.referSub, { color: colors.textSecondary }]}>
-                      Invite another couple. When they join, you both get 7 days of Plus.
+                      Invite another couple. When they join, you both get {REFERRAL_DAYS} days of Plus.
                     </Text>
                   </View>
                   <Icon name="chevronRight" size={16} color={colors.textTertiary} />

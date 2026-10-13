@@ -22,6 +22,7 @@ import { Icon, type IconName } from '@/components/ui/Icon';
 import { Avatar, colorWithAlpha } from '@/components/ui/primitives';
 import { THEME_META, Spacing, Themes, type AppTheme, type ThemeColors } from '@/constants/design-system';
 import { useSubscription } from '@/hooks/useSubscription';
+import { REFERRAL_DAYS } from '@/constants/subscription';
 import { useTheme } from '@/hooks/useTheme';
 import { getRelationshipAnniversaryIso, isValidAnniversaryIso } from '@/lib/anniversary';
 import { formatAuthError } from '@/lib/auth-errors';
@@ -456,6 +457,12 @@ export default function SettingsScreen() {
               onPress={openPaywall}
             />
             <Row
+              icon="gift"
+              label="Invite a couple"
+              value={`${REFERRAL_DAYS} days free`}
+              onPress={() => router.push('/refer')}
+            />
+            <Row
               icon="restore"
               label="Restore purchases"
               onPress={() =>
@@ -481,6 +488,16 @@ export default function SettingsScreen() {
                 icon="play"
                 label="Walk through onboarding"
                 onPress={() => router.push({ pathname: '/(onboarding)/about-you', params: { preview: '1' } })}
+              />
+              <Row
+                icon="fire"
+                label="Preview streak celebration"
+                onPress={() => useUIStore.getState().openStreakSpark(42, 41)}
+              />
+              <Row
+                icon="star"
+                label="Preview milestone celebration"
+                onPress={() => useUIStore.getState().openStreakMilestone(50)}
                 last
               />
             </Group>

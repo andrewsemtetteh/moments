@@ -15,6 +15,9 @@ export const TRIAL_DAYS = 7;
 /** The day before the trial ends, when we remind them. */
 export const TRIAL_REMINDER_DAY = 5;
 
+/** Invite another couple: once they pair, both couples get this many days of Plus. */
+export const REFERRAL_DAYS = 14;
+
 
 /** True once RevenueCat keys are configured; until then the paywall lets people carry on with Free. */
 export const BILLING_CONNECTED = !!(

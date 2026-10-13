@@ -12,19 +12,7 @@ import {
   View,
 } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import Animated, {
-  Easing,
-  FadeInDown,
-  FadeOut,
-  LinearTransition,
-  runOnJS,
-  useAnimatedStyle,
-  useReducedMotion,
-  useSharedValue,
-  withRepeat,
-  withSequence,
-  withTiming,
-} from 'react-native-reanimated';
+import Animated, { FadeInDown, FadeOut, LinearTransition, runOnJS } from 'react-native-reanimated';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Icon } from '@/components/ui/Icon';
@@ -42,26 +30,6 @@ function useKeyboardOpen() {
     };
   }, []);
   return open;
-}
-
-/** The illustration gently floats and sways, so the characters feel alive. */
-function FloatingArt({ children }: { children: ReactNode }) {
-  const reduce = useReducedMotion();
-  const t = useSharedValue(0);
-  useEffect(() => {
-    if (reduce) return;
-    t.value = withRepeat(
-      withSequence(
-        withTiming(1, { duration: 1600, easing: Easing.inOut(Easing.sin) }),
-        withTiming(0, { duration: 1600, easing: Easing.inOut(Easing.sin) }),
-      ),
-      -1,
-    );
-  }, [t, reduce]);
-  const style = useAnimatedStyle(() => ({
-    transform: [{ translateY: -6 * t.value }, { rotate: `${(t.value - 0.5) * 3}deg` }, { scale: 1 + 0.02 * t.value }],
-  }));
-  return <Animated.View style={style}>{children}</Animated.View>;
 }
 
 /** Same gap above the button as below it (to the keyboard, or the home bar). */
@@ -181,7 +149,8 @@ export function OnboardingStepScreen({
               showsVerticalScrollIndicator={false}>
               {art && !keyboardOpen ? (
                 <Animated.View entering={FadeInDown.duration(420)} exiting={FadeOut.duration(150)} style={styles.art}>
-                  <FloatingArt>{art}</FloatingArt>
+                  {/* Still: the characters bring their own life (eyes, hearts). */}
+                  {art}
                 </Animated.View>
               ) : null}
               <Animated.Text

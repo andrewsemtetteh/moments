@@ -1,7 +1,7 @@
 import { useSignUp } from '@clerk/expo';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Alert, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { AuthCheckbox } from '@/components/auth/AuthCheckbox';
 import { AuthLegalLinks } from '@/components/auth/AuthLegalLinks';
@@ -11,10 +11,9 @@ import { OnboardingStepScreen } from '@/components/onboarding/OnboardingStepScre
 import { Icon } from '@/components/ui/Icon';
 import { useTheme } from '@/hooks/useTheme';
 import { formatAuthError, normalizeAuthEmail } from '@/lib/auth-errors';
+import { emailProblem, emailSuggestion } from '@/lib/email-validation';
 import { sanitizeEmailInput, sanitizePasswordInput } from '@/lib/sanitize-input';
 import { designPass } from '@/lib/onboarding-v2';
-
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export default function SignupEmailScreen() {
   const router = useRouter();
@@ -23,23 +22,27 @@ export default function SignupEmailScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [agreedToTerms, setAgreedToTerms] = useState(false);
+  // Problems only show once they've tried (or left a filled-in email field),
+  // then update live as they fix them.
+  const [tried, setTried] = useState(false);
+  const [emailTouched, setEmailTouched] = useState(false);
 
   const loading = fetchStatus === 'fetching';
-  const emailValid = EMAIL_PATTERN.test(email);
-  const canSubmit = emailValid && agreedToTerms && !loading;
+  const emailError = emailProblem(email);
+  const suggestion = emailSuggestion(email);
+  const passOk = password.length >= 8;
+  const showEmailError = !!emailError && (tried || (emailTouched && email.trim().length > 0));
 
   const handleCreateAccount = async () => {
     if (__DEV__ && designPass.on) {
       router.push({ pathname: '/(auth)/check-email', params: { email: email || 'you@example.com', type: 'signup' } });
       return;
     }
-    if (!canSubmit) return;
+    if (loading) return;
+    setTried(true);
+    if (emailError || !passOk || !agreedToTerms) return;
     const cleanEmail = normalizeAuthEmail(sanitizeEmailInput(email));
     const cleanPassword = sanitizePasswordInput(password);
-    if (cleanPassword.length < 8) {
-      Alert.alert('Password too short', 'Use at least 8 characters.');
-      return;
-    }
 
     const { error } = await signUp.password({
       emailAddress: cleanEmail,
@@ -72,42 +75,52 @@ export default function SignupEmailScreen() {
   };
 
   const goBack = () => (router.canGoBack() ? router.back() : router.replace('/(auth)/get-started'));
-  const passOk = password.length >= 8;
 
   return (
     <OnboardingStepScreen
       title="Sign up with email"
-      subtitle="Use an email you actually check. It’s how you get back in if you ever switch phones."
+      subtitle="Your email and a password. That’s it."
       primaryLabel={loading ? 'Creating…' : 'Create account'}
       onPrimary={() => void handleCreateAccount()}
-      primaryDisabled={!canSubmit && !(__DEV__ && designPass.on)}
+      // Always tappable: a tap shows what still needs fixing.
       busy={loading}
       centered
       onBack={goBack}>
       <AuthTextField
+        variant="bold"
         label="Email"
         autoCapitalize="none"
         keyboardType="email-address"
         autoComplete="email"
         value={email}
         onChangeText={(text) => setEmail(sanitizeEmailInput(text))}
+        onBlur={() => setEmailTouched(true)}
         returnKeyType="next"
       />
-      {signUpErrors.fields.emailAddress ? (
+      {showEmailError ? (
+        <Text style={[styles.fieldError, { color: colors.error }]}>{emailError}</Text>
+      ) : suggestion ? (
+        <Pressable onPress={() => setEmail(suggestion)} hitSlop={6} accessibilityRole="button">
+          <Text style={[styles.fieldError, { color: colors.textSecondary }]}>
+            Did you mean <Text style={[styles.suggestion, { color: colors.text }]}>{suggestion}</Text>?
+          </Text>
+        </Pressable>
+      ) : signUpErrors.fields.emailAddress ? (
         <Text style={[styles.fieldError, { color: colors.error }]}>{signUpErrors.fields.emailAddress.message}</Text>
       ) : null}
 
       <PasswordInput
+        variant="bold"
         label="Password"
         autoComplete="new-password"
         value={password}
         onChangeText={(text) => setPassword(sanitizePasswordInput(text))}
       />
-      {/* Only while it's too short. */}
-      {!passOk ? (
+      {/* Only after they've tried, and only while it's still too short. */}
+      {tried && !passOk ? (
         <View style={styles.rule}>
-          <Icon name="close" size={14} color={colors.textSecondary} />
-          <Text style={[styles.ruleText, { color: colors.textSecondary }]}>At least 8 characters</Text>
+          <Icon name="close" size={14} color={colors.error} />
+          <Text style={[styles.ruleText, { color: colors.error }]}>Use at least 8 characters</Text>
         </View>
       ) : null}
 
@@ -115,14 +128,22 @@ export default function SignupEmailScreen() {
         <AuthCheckbox checked={agreedToTerms} onToggle={() => setAgreedToTerms((v) => !v)} hitSlop={8} />
         <AuthLegalLinks prefix="I agree to the" centered={false} style={styles.agreementText} />
       </View>
+      {tried && !agreedToTerms ? (
+        <Text style={[styles.fieldError, styles.center, { color: colors.error }]}>
+          Tick the box to agree before creating your account.
+        </Text>
+      ) : null}
     </OnboardingStepScreen>
   );
 }
 
 const styles = StyleSheet.create({
   fieldError: { fontSize: 13, marginTop: -6 },
+  suggestion: { fontWeight: '800', textDecorationLine: 'underline' },
+  center: { textAlign: 'center' },
   rule: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: -4 },
   ruleText: { fontSize: 13, fontWeight: '700' },
-  agreementRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginTop: 6 },
-  agreementText: { flex: 1, textAlign: 'left' },
+  // Centred under the fields, like the rest of the screen.
+  agreementRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, marginTop: 6 },
+  agreementText: { flexShrink: 1, textAlign: 'left' },
 });

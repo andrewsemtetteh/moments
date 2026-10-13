@@ -1,39 +1,37 @@
 import { useSignIn } from '@clerk/expo';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
-import {
-    Alert,
-    KeyboardAvoidingView,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    View,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Alert, Pressable, StyleSheet, Text } from 'react-native';
 
-import { AuthFooter } from '@/components/auth/AuthFooter';
-import { AuthScreenEnter } from '@/components/auth/AuthMotion';
 import { AuthTextField } from '@/components/auth/AuthTextField';
-import { AuthPrimaryButton } from '@/components/auth/AuthPrimaryButton';
+import { OnboardingStepScreen } from '@/components/onboarding/OnboardingStepScreen';
 import { useTheme } from '@/hooks/useTheme';
 import { formatAuthError, normalizeAuthEmail } from '@/lib/auth-errors';
+import { emailProblem, emailSuggestion } from '@/lib/email-validation';
+import { goBackOrReplace } from '@/lib/router';
 import { sanitizeEmailInput } from '@/lib/sanitize-input';
 
+/** Forgot password: same look as sign-in. Send a code to the email, then check-email. */
 export default function ForgotPasswordScreen() {
   const router = useRouter();
   const { colors } = useTheme();
   const { signIn, fetchStatus } = useSignIn();
   const params = useLocalSearchParams<{ email?: string }>();
-  const [email, setEmail] = useState(
-    typeof params.email === 'string' ? sanitizeEmailInput(params.email) : '',
-  );
+  const [email, setEmail] = useState(typeof params.email === 'string' ? sanitizeEmailInput(params.email) : '');
+  // Problems show once they've tried (or left a filled-in field), then update live.
+  const [tried, setTried] = useState(false);
+  const [touched, setTouched] = useState(false);
 
   const loading = fetchStatus === 'fetching';
+  const problem = emailProblem(email);
+  const suggestion = emailSuggestion(email);
+  const showProblem = !!problem && (tried || (touched && email.trim().length > 0));
 
   const handleSend = async () => {
+    if (loading) return;
+    setTried(true);
+    if (problem) return;
     const trimmed = normalizeAuthEmail(sanitizeEmailInput(email));
-    if (!trimmed) return;
 
     try {
       const { error: createError } = await signIn.create({ identifier: trimmed });
@@ -52,58 +50,42 @@ export default function ForgotPasswordScreen() {
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.inner}>
-        <ScrollView
-          contentContainerStyle={styles.scrollContent}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-          bounces={false}>
-          <AuthScreenEnter style={styles.content}>
-            <View style={styles.brand}>
-              <Text style={[styles.title, { color: colors.text }]}>Reset password</Text>
-              <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-                Enter your email and we&apos;ll send a 6-digit code to verify it&apos;s you.
-              </Text>
-            </View>
-
-            <View style={styles.form}>
-              <AuthTextField
-                label="Email"
-                autoCapitalize="none"
-                keyboardType="email-address"
-                autoComplete="email"
-                value={email}
-                onChangeText={(text) => setEmail(sanitizeEmailInput(text))}
-              />
-              <AuthPrimaryButton
-                label={loading ? 'Sending…' : 'Send code'}
-                onPress={handleSend}
-                loading={loading}
-                disabled={!email.trim() || loading}
-              />
-            </View>
-
-            <AuthFooter prompt="Remember your password?" linkLabel="Sign in" href="/(auth)/login" />
-          </AuthScreenEnter>
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+    <OnboardingStepScreen
+      title="Reset password"
+      subtitle="Enter your email and we’ll send a 6-digit code to verify it’s you."
+      centered
+      primaryLabel={loading ? 'Sending…' : 'Send code'}
+      onPrimary={() => void handleSend()}
+      busy={loading}
+      secondaryLabel="Remember it? Sign in"
+      onSecondary={() => router.replace('/(auth)/login')}
+      onBack={() => goBackOrReplace(router, '/(auth)/login')}>
+      <AuthTextField
+        variant="bold"
+        label="Email"
+        autoCapitalize="none"
+        keyboardType="email-address"
+        autoComplete="email"
+        value={email}
+        onChangeText={(text) => setEmail(sanitizeEmailInput(text))}
+        onBlur={() => setTouched(true)}
+        returnKeyType="send"
+        onSubmitEditing={() => void handleSend()}
+      />
+      {showProblem ? (
+        <Text style={[styles.fieldError, { color: colors.error }]}>{problem}</Text>
+      ) : suggestion ? (
+        <Pressable onPress={() => setEmail(suggestion)} hitSlop={6} accessibilityRole="button">
+          <Text style={[styles.fieldError, { color: colors.textSecondary }]}>
+            Did you mean <Text style={[styles.suggestion, { color: colors.text }]}>{suggestion}</Text>?
+          </Text>
+        </Pressable>
+      ) : null}
+    </OnboardingStepScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  inner: { flex: 1 },
-  scrollContent: {
-    flexGrow: 1,
-    paddingHorizontal: 24,
-    paddingVertical: 28,
-    justifyContent: 'center',
-  },
-  content: { width: '100%', maxWidth: 400, alignSelf: 'center' },
-  brand: { alignItems: 'center', marginBottom: 24, gap: 12 },
-  title: { fontSize: 26, fontWeight: '800', textAlign: 'center', letterSpacing: -0.5 },
-  subtitle: { fontSize: 15, textAlign: 'center', marginTop: 8, lineHeight: 21, maxWidth: 300 },
-  form: { gap: 10 },
+  fieldError: { fontSize: 13, marginTop: -6 },
+  suggestion: { fontWeight: '800', textDecorationLine: 'underline' },
 });

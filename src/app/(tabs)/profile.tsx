@@ -24,6 +24,7 @@ import { Avatar } from '@/components/ui/primitives';
 import { Spacing, type ThemeColors } from '@/constants/design-system';
 import { useStreak } from '@/hooks/queries';
 import { useOpenPartnerProfile } from '@/hooks/useOpenPartnerProfile';
+import { REFERRAL_DAYS } from '@/constants/subscription';
 import { useSubscription } from '@/hooks/useSubscription';
 import { useTheme } from '@/hooks/useTheme';
 import { getRelationshipAnniversaryDate } from '@/lib/anniversary';
@@ -415,6 +416,26 @@ export default function ProfileScreen() {
               )}
             </LinearGradient>
           </Pressable>
+
+          {/* Not on Plus? Earn it: invite another couple, both get 14 days. */}
+          {!isPlus ? (
+            <Pressable
+              onPress={() => router.push('/refer')}
+              accessibilityRole="button"
+              accessibilityLabel={`Invite a couple and get ${REFERRAL_DAYS} days of Plus free`}
+              style={({ pressed }) => [styles.card, styles.rowPad, styles.row, cardSurface(colors), pressed && styles.pressed]}>
+              <View style={[styles.tile, { backgroundColor: '#FFE7A0' }]}>
+                <Icon name="gift" size={22} color="#1A1A1A" />
+              </View>
+              <View style={styles.flex}>
+                <Text style={[styles.cardTitle, { color: colors.text }]}>Invite a couple, get {REFERRAL_DAYS} days free</Text>
+                <Text style={[styles.small, { color: colors.textSecondary }]} numberOfLines={2}>
+                  When they join, you both get {REFERRAL_DAYS} days of Plus.
+                </Text>
+              </View>
+              <Icon name="chevronRight" size={18} color={colors.textTertiary} />
+            </Pressable>
+          ) : null}
         </TabScreenScroll>
 
         {partner && since ? (

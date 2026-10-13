@@ -27,6 +27,11 @@ type Props = Omit<TextInputProps, 'placeholder'> & {
    * isn't the page background, e.g. `colors.surfaceElevated`.
    */
   fieldBackgroundColor?: string;
+  /**
+   * 'bold' matches the onboarding name field: a thick ink border, rounded,
+   * taller, with bold text. The label still floats up onto the border.
+   */
+  variant?: 'default' | 'bold';
 };
 
 export function AuthTextField({
@@ -40,12 +45,22 @@ export function AuthTextField({
   style,
   onFocus,
   onBlur,
+  variant = 'default',
   ...rest
 }: Props) {
   const { colors } = useTheme();
   const [focused, setFocused] = useState(false);
   const floated = focused || value.length > 0;
-  const fieldBg = fieldBackgroundColor ?? colors.background;
+  const bold = variant === 'bold';
+  const fieldBg = fieldBackgroundColor ?? (bold ? colors.surface : colors.background);
+  // Where the label rests (inside) and floats to (on the border line).
+  const restTop = bold ? 19 : 14;
+  const floatTop = bold ? -10 : -9;
+  const restSize = bold ? 16 : 15;
+  const floatSize = bold ? 12 : 11;
+  const restColor = colors.textSecondary;
+  const focusColor = bold ? colors.text : colors.accent;
+  const borderRest = bold ? colors.text : colors.border;
 
   const focusProgress = useSharedValue(0);
   const labelProgress = useSharedValue(floated ? 1 : 0);
@@ -59,20 +74,17 @@ export function AuthTextField({
   }, [floated, labelProgress]);
 
   const containerAnimStyle = useAnimatedStyle(() => ({
-    borderColor: interpolateColor(focusProgress.value, [0, 1], [colors.border, colors.accent]),
+    borderColor: interpolateColor(focusProgress.value, [0, 1], [borderRest, focusColor]),
   }));
 
   const labelAnimStyle = useAnimatedStyle(() => {
-    const accent = colors.accent;
-    const secondary = colors.textSecondary;
-
     return {
-      top: interpolate(labelProgress.value, [0, 1], [14, -9]),
-      fontSize: interpolate(labelProgress.value, [0, 1], [15, 11]),
+      top: interpolate(labelProgress.value, [0, 1], [restTop, floatTop]),
+      fontSize: interpolate(labelProgress.value, [0, 1], [restSize, floatSize]),
       color:
         labelProgress.value < 0.5
-          ? secondary
-          : interpolateColor(focusProgress.value, [0, 1], [secondary, accent]),
+          ? restColor
+          : interpolateColor(focusProgress.value, [0, 1], [restColor, focusColor]),
       // Matches the container's own fill exactly (fieldBg, not a guess), so the
       // notch blends in perfectly instead of masking with a mismatched patch —
       // that mismatch, not the masking itself, was what made the border look
@@ -85,11 +97,12 @@ export function AuthTextField({
     <Animated.View
       style={[
         styles.container,
+        bold && styles.containerBold,
         { backgroundColor: fieldBg },
         containerAnimStyle,
         containerStyle,
       ]}>
-      <AnimatedText pointerEvents="none" style={[styles.label, labelAnimStyle]}>
+      <AnimatedText pointerEvents="none" style={[styles.label, bold && styles.labelBold, labelAnimStyle]}>
         {label}
       </AnimatedText>
 
@@ -107,7 +120,7 @@ export function AuthTextField({
             setFocused(false);
             onBlur?.(event);
           }}
-          style={[styles.input, { color: colors.text }, style]}
+          style={[styles.input, bold && styles.inputBold, { color: colors.text }, style]}
           placeholder=""
           placeholderTextColor={colors.textTertiary}
         />
@@ -141,6 +154,10 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     paddingHorizontal: 4,
   },
+  // The onboarding name field's look.
+  containerBold: { borderWidth: 2, borderRadius: 16, minHeight: 58, paddingHorizontal: 16 },
+  labelBold: { left: 12, fontWeight: '800', lineHeight: 18 },
+  inputBold: { fontSize: 18, fontWeight: '700' },
   inputRow: {
     flexDirection: 'row',
     alignItems: 'center',

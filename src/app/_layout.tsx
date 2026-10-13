@@ -50,12 +50,13 @@ function RootStack() {
             setting — this is the top-level entry a swipe-back gesture would
             otherwise reveal (the splash/index screen) if anything upstream
             ever reaches here via push instead of replace. */}
-          <Stack.Screen name="(auth)" options={{ gestureEnabled: false, fullScreenGestureEnabled: false }} />
+          {/* Leaving the launch screen is an instant switch (no fade), into any of these three. */}
+          <Stack.Screen name="(auth)" options={{ gestureEnabled: false, fullScreenGestureEnabled: false, animation: 'none' }} />
           {/* Onboarding can never be swiped away back to sign-up, however it was
               reached (email, Apple, Google, login). Steps still swipe between
               themselves inside the group's own stack. */}
-          <Stack.Screen name="(onboarding)" options={{ gestureEnabled: false, fullScreenGestureEnabled: false }} />
-          <Stack.Screen name="(tabs)" />
+          <Stack.Screen name="(onboarding)" options={{ gestureEnabled: false, fullScreenGestureEnabled: false, animation: 'none' }} />
+          <Stack.Screen name="(tabs)" options={{ animation: 'none' }} />
           {/* Chat, Notifications and Settings: the platform's own push
             (`default` = the real UIKit transition on iOS, not a JS/custom
             animator), closed by swiping right from anywhere on the screen —
@@ -113,7 +114,7 @@ function RootStack() {
             replaces it with Home, and inside a modal that left Home stuck in a
             card with a curved top that dragged down. */}
           <Stack.Screen name="pro" options={{ animation: 'fade', gestureEnabled: false }} />
-          {/* Invite a couple for a free week (from the paywall). */}
+          {/* Invite a couple: both get 14 days of Plus (paywall, Settings, You page). */}
           <Stack.Screen
             name="refer"
             options={{ animation: 'default', gestureEnabled: true, fullScreenGestureEnabled: true }}
