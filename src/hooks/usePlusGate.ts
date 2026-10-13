@@ -5,12 +5,13 @@ export function usePlusGate() {
   const { isPlus } = useSubscription();
   const openPaywall = useUIStore((s) => s.openPaywall);
 
-  const requirePlus = (_featureLabel?: string, onAllowed?: () => void): boolean => {
+  /** Runs `onAllowed` on Plus; otherwise opens the paywall headed with the feature that was hit. */
+  const requirePlus = (featureLabel?: string, onAllowed?: () => void): boolean => {
     if (isPlus) {
       onAllowed?.();
       return true;
     }
-    openPaywall();
+    openPaywall(featureLabel);
     return false;
   };
 

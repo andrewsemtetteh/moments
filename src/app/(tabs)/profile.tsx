@@ -35,6 +35,7 @@ import * as api from '@/services/api';
 import { useAuthStore, useRelationshipStore, useUIStore } from '@/stores';
 import { usePlayProgressStore } from '@/stores/play-progress-store';
 import type { Relationship, UserProfile } from '@/types/database';
+import { ensurePermission } from '@/lib/permissions';
 
 /**
  * DEV "Preview UI" mode has no partner or space, so the page would only ever
@@ -154,11 +155,7 @@ export default function ProfileScreen() {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars -- kept for the quick actions commented out below
   const changePhoto = async () => {
     if (!user || previewMode) return;
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('Permission needed', 'Allow photo access to update your profile picture.');
-      return;
-    }
+    if (!(await ensurePermission('photos'))) return;
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
       allowsEditing: true,

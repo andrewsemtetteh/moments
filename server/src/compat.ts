@@ -19,6 +19,7 @@ import {
   updateStreak,
 } from './core';
 import { generateId, isRelationshipMember, nowIso, parseJson, relationshipIdsForUser } from './db';
+import { stripProtected } from './billing';
 import { runFunction } from './functions';
 import './env';
 
@@ -217,7 +218,9 @@ compat.post('/db', async (c) => {
       const list = Array.isArray(req.values) ? req.values : req.values ? [req.values] : [];
       const inserted: Record<string, unknown>[] = [];
       for (const raw of list) {
-        const values: Record<string, unknown> = { ...raw };
+        // Plus is granted only by the RevenueCat webhook.
+        const values: Record<string, unknown> =
+          req.table === 'users' || req.table === 'relationships' ? stripProtected({ ...raw }) : { ...raw };
         if (policy.forceMe) values[policy.forceMe] = userId;
         if (cols.has('id') && !values.id) values.id = generateId();
         if (cols.has('relationship_id') && typeof values.relationship_id === 'string' && policy.scope === 'rel') {
@@ -297,7 +300,10 @@ compat.post('/db', async (c) => {
     }
 
     if (op === 'update') {
-      const patch = { ...(req.values as Record<string, unknown>) };
+      const patch =
+        req.table === 'users' || req.table === 'relationships'
+          ? stripProtected({ ...(req.values as Record<string, unknown>) })
+          : { ...(req.values as Record<string, unknown>) };
       delete patch.id;
       const keys = Object.keys(patch).filter((k) => IDENT.test(k) && cols.has(k));
       if (keys.length === 0) throw new ApiError('No columns to update', 400);

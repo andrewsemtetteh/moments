@@ -1,23 +1,14 @@
 import { useSignIn, useSignUp } from '@clerk/expo';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import {
-    Alert,
-    KeyboardAvoidingView,
-    Platform,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Alert, Pressable, StyleSheet, Text } from 'react-native';
 
-import { authLinkColors, authLinkStyles } from '@/components/auth/auth-link-styles';
-import { AuthScreenEnter } from '@/components/auth/AuthMotion';
-import { AuthPrimaryButton } from '@/components/auth/AuthPrimaryButton';
 import { OtpCodeInput } from '@/components/auth/OtpCodeInput';
+import { EnvelopeCharacter } from '@/components/onboarding/Characters';
+import { OnboardingStepScreen } from '@/components/onboarding/OnboardingStepScreen';
 import { useTheme } from '@/hooks/useTheme';
 import { formatAuthError, normalizeAuthEmail } from '@/lib/auth-errors';
+import { designPass } from '@/lib/onboarding-v2';
 
 const RESEND_COOLDOWN_SECONDS = 60;
 type Flow = 'signup' | 'recovery';
@@ -25,7 +16,6 @@ type Flow = 'signup' | 'recovery';
 export default function CheckEmailScreen() {
   const router = useRouter();
   const { colors } = useTheme();
-  const linkColors = authLinkColors(colors);
   const params = useLocalSearchParams<{ email?: string; type?: string }>();
   const email = typeof params.email === 'string' ? normalizeAuthEmail(params.email) : '';
   const flow: Flow = params.type === 'recovery' ? 'recovery' : 'signup';
@@ -67,6 +57,10 @@ export default function CheckEmailScreen() {
   };
 
   const handleVerify = async () => {
+    if (__DEV__ && designPass.on) {
+      router.replace({ pathname: '/(onboarding)/about-you', params: { preview: '1' } });
+      return;
+    }
     if (code.length !== 6 || verifying) return;
     setVerifying(true);
     try {
@@ -82,7 +76,7 @@ export default function CheckEmailScreen() {
       const { error } = await signUp.verifications.verifyEmailCode({ code });
       if (error) throw error;
       if (signUp.status === 'complete') {
-        await signUp.finalize({ navigate: () => router.replace('/(onboarding)/profile-name') });
+        await signUp.finalize({ navigate: () => router.replace('/(onboarding)/about-you') });
       }
     } catch (e: unknown) {
       Alert.alert('Invalid code', formatAuthError(e));
@@ -91,72 +85,41 @@ export default function CheckEmailScreen() {
     }
   };
 
-  const title = flow === 'recovery' ? 'Check your email' : 'Verify your email';
-  const subtitle = `We sent a 6-digit code to ${email}. Enter it below${
-    flow === 'recovery' ? ' to reset your password' : ' to activate your account'
-  }. Check spam if you don't see it.`;
+  const backTo = flow === 'recovery' ? '/(auth)/forgot-password' : '/(auth)/signup-email';
+  const goBack = () => (router.canGoBack() ? router.back() : router.replace(backTo));
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.inner}>
-        <ScrollView
-          contentContainerStyle={styles.scrollContent}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-          bounces={false}>
-          <AuthScreenEnter style={styles.content}>
-            <Text style={[styles.title, { color: colors.text }]}>{title}</Text>
-            <Text style={[styles.subtitle, { color: colors.textSecondary }]}>{subtitle}</Text>
+    <OnboardingStepScreen
+      art={<EnvelopeCharacter size={170} />}
+      title="Check your email"
+      subtitle={`We sent a 6 digit code to ${email}${flow === 'recovery' ? ' to reset your password' : ''}. Check spam if it’s not there.`}
+      primaryLabel={verifying ? 'Verifying…' : 'Verify'}
+      onPrimary={() => void handleVerify()}
+      primaryDisabled={(code.length !== 6 || verifying) && !(__DEV__ && designPass.on)}
+      busy={verifying}
+      centered
+      // No back arrow here; "Wrong email? Change it" is the way back.
+      onBack={null}>
+      {/* Opens calm: tap the boxes to type (or paste from Mail). */}
+      <OtpCodeInput value={code} onChange={setCode} autoFocus={false} />
 
-            <OtpCodeInput value={code} onChange={setCode} />
-
-            <AuthPrimaryButton
-              label={verifying ? 'Verifying…' : 'Verify'}
-              onPress={handleVerify}
-              loading={verifying}
-              disabled={code.length !== 6 || verifying}
-            />
-
-            <Pressable
-              onPress={handleResend}
-              disabled={resendCooldown > 0 || resending}
-              hitSlop={8}>
-              <Text
-                style={[
-                  authLinkStyles.inlineLink,
-                  styles.resend,
-                  {
-                    color:
-                      resendCooldown > 0 || resending ? linkColors.legalMuted : linkColors.emphasis,
-                  },
-                ]}>
-                {resending
-                  ? 'Sending…'
-                  : resendCooldown > 0
-                    ? `Resend code in ${resendCooldown}s`
-                    : 'Resend code'}
-              </Text>
-            </Pressable>
-
-            <Pressable
-              onPress={() => router.replace(flow === 'recovery' ? '/(auth)/forgot-password' : '/(auth)/signup')}
-              hitSlop={8}>
-              <Text style={[styles.back, { color: linkColors.muted }]}>Go back</Text>
-            </Pressable>
-          </AuthScreenEnter>
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+      <Pressable onPress={() => void handleResend()} disabled={resendCooldown > 0 || resending} hitSlop={8} style={styles.linkRow}>
+        <Text style={[styles.muted, { color: colors.textSecondary }]}>
+          Didn’t get it?{' '}
+          <Text style={[styles.strong, { color: resendCooldown > 0 || resending ? colors.textTertiary : colors.text }]}>
+            {resending ? 'Sending…' : resendCooldown > 0 ? `Resend in 0:${String(resendCooldown).padStart(2, '0')}` : 'Resend code'}
+          </Text>
+        </Text>
+      </Pressable>
+      <Pressable onPress={goBack} hitSlop={8} style={styles.linkRow}>
+        <Text style={[styles.strong, { color: colors.text }]}>Wrong email? Change it</Text>
+      </Pressable>
+    </OnboardingStepScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  inner: { flex: 1 },
-  scrollContent: { flexGrow: 1, paddingHorizontal: 24, paddingVertical: 28, justifyContent: 'center' },
-  content: { width: '100%', maxWidth: 400, alignSelf: 'center', gap: 20 },
-  title: { fontSize: 26, fontWeight: '800', textAlign: 'center', letterSpacing: -0.5 },
-  subtitle: { fontSize: 15, textAlign: 'center', lineHeight: 21 },
-  resend: { textAlign: 'center', fontSize: 15 },
-  back: { textAlign: 'center', fontSize: 15 },
+  linkRow: { alignItems: 'center', paddingVertical: 2 },
+  muted: { fontSize: 14 },
+  strong: { fontSize: 14, fontWeight: '800' },
 });

@@ -162,7 +162,8 @@ export default function LoginScreen() {
 
             <AuthLegalLinks prefix="By signing in, you agree to our" style={styles.legalNotice} />
 
-            <AuthFooter prompt="New here?" linkLabel="Create account" href="/(auth)/signup" />
+            {/* The same create-account page as the welcome flow (not the old sign-up screen). */}
+            <AuthFooter prompt="New here?" linkLabel="Create account" href="/(auth)/get-started" />
           </AuthScreenEnter>
         </ScrollView>
       </KeyboardAvoidingView>

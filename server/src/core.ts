@@ -361,7 +361,8 @@ export async function getStreakStatus(env: Env, relationshipId: string, userId: 
 export async function restoreStreak(env: Env, relationshipId: string, userId: string) {
   const rel = await relationshipMembers(env, relationshipId);
   if (!rel) throw new ApiError('Relationship not found', 404);
-  if (rel.subscription_tier !== 'plus') throw new ApiError('Plus required to restore streaks', 403);
+  const { getPlusState } = await import('./billing');
+  if (!(await getPlusState(env, relationshipId)).plus) throw new ApiError('Plus required to restore streaks', 403);
 
   await normalizeStreakIfBroken(env, relationshipId);
   const row = await ensureStreakRow(env, relationshipId);

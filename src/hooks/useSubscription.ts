@@ -9,10 +9,12 @@ import {
 import {
   canManageBilling,
   getEffectiveTier,
+  isRelationshipTrial,
   hasActiveUserSubscription,
   isSubscriptionOwner,
 } from '@/lib/subscription';
 import { useMoments } from '@/hooks/queries';
+import { usePurchasesStore } from '@/lib/purchases';
 import { useAuthStore, useRelationshipStore } from '@/stores';
 
 export type Entitlement = 'free' | 'plus';
@@ -20,8 +22,11 @@ export type Entitlement = 'free' | 'plus';
 export function useSubscription() {
   const relationship = useRelationshipStore((s) => s.relationship);
   const user = useAuthStore((s) => s.user);
-  const tier = getEffectiveTier(user, relationship);
+  // This phone's live RevenueCat entitlement unlocks the buyer straight away, before the webhook lands.
+  const entitlement = usePurchasesStore((s) => s.entitlement);
+  const tier = entitlement.active ? 'plus' : getEffectiveTier(user, relationship);
   const isPlus = tier === 'plus';
+  const isTrial = isPlus && (entitlement.active ? entitlement.trial : isRelationshipTrial(relationship));
   const { data: momentsData } = useMoments();
 
   const dailyMomentsUsed = useMemo(() => {
@@ -33,6 +38,7 @@ export function useSubscription() {
   return {
     tier,
     isPlus,
+    isTrial,
     isOwner: isSubscriptionOwner(user?.id, relationship),
     canManageBilling: canManageBilling(user?.id, relationship, user),
     hasPersonalSubscription: hasActiveUserSubscription(user),

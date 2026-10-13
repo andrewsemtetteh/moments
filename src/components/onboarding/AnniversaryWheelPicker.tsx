@@ -20,8 +20,6 @@ const VISIBLE_ROWS = 5;
 const WHEEL_HEIGHT = ITEM_HEIGHT * VISIBLE_ROWS;
 const WHEEL_PAD = ITEM_HEIGHT * Math.floor(VISIBLE_ROWS / 2);
 const COLUMN_GAP = 10;
-const FLICK_VELOCITY_THRESHOLD = 0.15;
-const MAX_FLICK_ROWS = 3;
 
 const MONTHS = Array.from({ length: 12 }, (_, month) => month);
 const MIN_YEAR = 1970;
@@ -64,22 +62,6 @@ function indexForValue<T>(
   return index >= 0 ? index : 0;
 }
 
-function computeTargetIndex(
-  offsetY: number,
-  velocityY: number,
-  dragStartIndex: number,
-  rowCount: number,
-) {
-  const nearest = clampIndex(Math.round(offsetY / ITEM_HEIGHT), rowCount);
-  if (Math.abs(velocityY) <= FLICK_VELOCITY_THRESHOLD) {
-    return nearest;
-  }
-
-  const direction = velocityY > 0 ? 1 : -1;
-  const steps = Math.min(MAX_FLICK_ROWS, Math.max(1, Math.round(Math.abs(velocityY) * 0.15)));
-  return clampIndex(dragStartIndex + direction * steps, rowCount);
-}
-
 function WheelColumn<T>({
   rows,
   value,
@@ -89,55 +71,44 @@ function WheelColumn<T>({
 }: WheelColumnProps<T>) {
   const { colors } = useTheme();
   const scrollRef = useRef<ScrollView>(null);
-  const indexRef = useRef(indexForValue(rows, value, compare));
-  const dragStartIndexRef = useRef(indexRef.current);
-  const interactingRef = useRef(false);
-  const hasMountedRef = useRef(false);
-  const gestureFinishedRef = useRef(false);
+  const [initialIndex] = useState(() => indexForValue(rows, value, compare));
+  /** The row under the highlight right now (updates while scrolling). */
+  const liveIndexRef = useRef(initialIndex);
+  const draggingRef = useRef(false);
+  const settlingRef = useRef(false);
 
-  const scrollToIndex = useCallback((index: number) => {
-    const clamped = clampIndex(index, rows.length);
-    scrollRef.current?.scrollTo({ y: clamped * ITEM_HEIGHT, animated: false });
-    indexRef.current = clamped;
-  }, [rows.length]);
-
+  // Follow outside changes (e.g. the day clamps when the month gets shorter),
+  // but never fight a finger or a coast that's still going.
   useEffect(() => {
-    if (!hasMountedRef.current) {
-      hasMountedRef.current = true;
-      scrollToIndex(indexForValue(rows, value, compare));
-      return;
-    }
-    if (interactingRef.current) return;
+    if (draggingRef.current || settlingRef.current) return;
+    const next = indexForValue(rows, value, compare);
+    if (next === liveIndexRef.current) return;
+    liveIndexRef.current = next;
+    scrollRef.current?.scrollTo({ y: next * ITEM_HEIGHT, animated: true });
+  }, [compare, rows, value]);
 
-    const nextIndex = indexForValue(rows, value, compare);
-    if (nextIndex === indexRef.current) return;
-    scrollToIndex(nextIndex);
-  }, [compare, rows, scrollToIndex, value]);
-
-  const finishGesture = useCallback(
+  // A light tick as each row passes the middle, like the iOS picker.
+  const onScroll = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-      if (gestureFinishedRef.current) return;
-      gestureFinishedRef.current = true;
-
-      const { contentOffset, velocity } = event.nativeEvent;
-      const target = computeTargetIndex(
-        contentOffset.y,
-        velocity?.y ?? 0,
-        dragStartIndexRef.current,
-        rows.length,
-      );
-
-      scrollToIndex(target);
-      dragStartIndexRef.current = target;
-      interactingRef.current = false;
-
-      const nextValue = rows[target]?.value;
-      if (nextValue !== undefined && !compare(nextValue, value)) {
-        void Haptics.selectionAsync();
-        onValueChange(nextValue);
-      }
+      const index = clampIndex(Math.round(event.nativeEvent.contentOffset.y / ITEM_HEIGHT), rows.length);
+      if (index === liveIndexRef.current) return;
+      liveIndexRef.current = index;
+      void Haptics.selectionAsync();
     },
-    [compare, onValueChange, rows, scrollToIndex, value],
+    [rows.length],
+  );
+
+  // Only commit once it has come to rest on a row.
+  const settle = useCallback(
+    (offsetY: number) => {
+      draggingRef.current = false;
+      settlingRef.current = false;
+      const index = clampIndex(Math.round(offsetY / ITEM_HEIGHT), rows.length);
+      liveIndexRef.current = index;
+      const nextValue = rows[index]?.value;
+      if (nextValue !== undefined && !compare(nextValue, value)) onValueChange(nextValue);
+    },
+    [compare, onValueChange, rows, value],
   );
 
   return (
@@ -156,19 +127,31 @@ function WheelColumn<T>({
         ref={scrollRef}
         style={styles.list}
         contentContainerStyle={styles.listContent}
+        // Start on the value with no jump on mount.
+        contentOffset={{ x: 0, y: initialIndex * ITEM_HEIGHT }}
         showsVerticalScrollIndicator={false}
         nestedScrollEnabled
-        bounces={false}
+        // Native snapping and momentum: flicks coast and land on a row smoothly.
+        snapToInterval={ITEM_HEIGHT}
+        decelerationRate={0.988}
+        disableIntervalMomentum={false}
+        bounces
         overScrollMode="never"
-        decelerationRate="fast"
         scrollEventThrottle={16}
+        onScroll={onScroll}
         onScrollBeginDrag={() => {
-          interactingRef.current = true;
-          gestureFinishedRef.current = false;
-          dragStartIndexRef.current = indexRef.current;
+          draggingRef.current = true;
+          settlingRef.current = false;
         }}
-        onScrollEndDrag={finishGesture}
-        onMomentumScrollEnd={finishGesture}>
+        onScrollEndDrag={(e) => {
+          draggingRef.current = false;
+          // A flick (or a snap back to a row) is followed by momentum events.
+          settlingRef.current = true;
+          const v = e.nativeEvent.velocity?.y ?? 0;
+          const y = e.nativeEvent.contentOffset.y;
+          if (Math.abs(v) < 0.01 && Math.abs(y - Math.round(y / ITEM_HEIGHT) * ITEM_HEIGHT) < 0.5) settle(y);
+        }}
+        onMomentumScrollEnd={(e) => settle(e.nativeEvent.contentOffset.y)}>
         {rows.map((row) => (
           <WheelListItem key={row.key} label={row.label} />
         ))}

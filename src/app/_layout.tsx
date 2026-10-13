@@ -8,7 +8,9 @@ import { StyleSheet } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { AppModals } from '@/components/layout/AppModals';
+import { SubscriptionSync } from '@/components/layout/SubscriptionSync';
 import { DynamicIslandHost } from '@/components/layout/DynamicIslandHost';
+import { PermissionSheetHost } from '@/components/layout/PermissionSheetHost';
 import { resolveThemeColors } from '@/constants/design-system';
 import { AppProviders } from '@/providers/AppProviders';
 import { useUIStore } from '@/stores';
@@ -49,7 +51,10 @@ function RootStack() {
             otherwise reveal (the splash/index screen) if anything upstream
             ever reaches here via push instead of replace. */}
           <Stack.Screen name="(auth)" options={{ gestureEnabled: false, fullScreenGestureEnabled: false }} />
-          <Stack.Screen name="(onboarding)" />
+          {/* Onboarding can never be swiped away back to sign-up, however it was
+              reached (email, Apple, Google, login). Steps still swipe between
+              themselves inside the group's own stack. */}
+          <Stack.Screen name="(onboarding)" options={{ gestureEnabled: false, fullScreenGestureEnabled: false }} />
           <Stack.Screen name="(tabs)" />
           {/* Chat, Notifications and Settings: the platform's own push
             (`default` = the real UIKit transition on iOS, not a JS/custom
@@ -108,8 +113,16 @@ function RootStack() {
             replaces it with Home, and inside a modal that left Home stuck in a
             card with a curved top that dragged down. */}
           <Stack.Screen name="pro" options={{ animation: 'fade', gestureEnabled: false }} />
+          {/* Invite a couple for a free week (from the paywall). */}
+          <Stack.Screen
+            name="refer"
+            options={{ animation: 'default', gestureEnabled: true, fullScreenGestureEnabled: true }}
+          />
         </Stack>
         <AppModals />
+        <SubscriptionSync />
+        {/* "Why we need this" before camera / mic / location / photos (see lib/permissions). */}
+        <PermissionSheetHost />
       </DynamicIslandHost>
     </ThemeProvider>
   );

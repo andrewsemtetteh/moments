@@ -1,3 +1,4 @@
+import { checkAi, recordAi } from './billing';
 import { ApiError, shapeRow } from './core';
 import { generateId, isRelationshipMember } from './db';
 import './env';
@@ -94,10 +95,11 @@ async function generateActivity(env: Env, userId: string, body: Body, limit: Rat
   const relationshipId = await requireRelationship(env, userId, body.relationship_id);
   await limit(env, `activity:user:${userId}`, 20, 86_400);
   await limit(env, `activity:rel:${relationshipId}`, 40, 86_400);
+  const usage = await checkAi(env, relationshipId, 'game');
 
   const text = await askClaude(
     env,
-    'claude-sonnet-5',
+    'claude-haiku-4-5-20251001',
     1024,
     `Generate 3-5 couple activity ideas. Mood: ${body.mood}, Budget: $${body.budget}, Time: ${body.time_available} hours. Return JSON array with objects having title, type, description. Keep tone warm and natural, not robotic. Only return valid JSON.`,
   );
@@ -110,6 +112,7 @@ async function generateActivity(env: Env, userId: string, body: Body, limit: Rat
       activities = [];
     }
   }
+  if (activities.length) await recordAi(env, relationshipId, usage, 'game');
   return { activities: activities.length ? activities : FALLBACK_ACTIVITIES };
 }
 
@@ -147,9 +150,10 @@ async function generateQuizLive(env: Env, userId: string, body: Body, limit: Rat
   await limit(env, `quiz:${relationshipId}`, 15, 3600);
 
   const count = Math.min(8, Math.max(4, Number(body.count) || 6));
+  const usage = await checkAi(env, relationshipId, 'question', count);
   const text = await askClaude(
     env,
-    'claude-sonnet-5',
+    'claude-haiku-4-5-20251001',
     2048,
     `Generate exactly ${count} quiz questions for a live couple quiz game.
 
@@ -175,8 +179,10 @@ Return ONLY a JSON array of objects:
       questions = [];
     }
   }
-  // Empty => the app substitutes its bundled fallback questions.
-  return { questions: questions.length >= 4 ? questions.slice(0, count) : [] };
+  // Empty => the app substitutes its bundled fallback questions (and nothing is counted).
+  const out = questions.length >= 4 ? questions.slice(0, count) : [];
+  if (out.length) await recordAi(env, relationshipId, usage, 'question', out.length);
+  return { questions: out };
 }
 
 // ---------------------------------------------------------------------------
@@ -225,13 +231,15 @@ async function generateGameContent(env: Env, userId: string, body: Body, limit: 
   const count = Math.max(3, Math.min(20, Number(body.count) || 8));
   const topic = clean(String(body.topic ?? ''), 80);
   const names = Array.isArray(body.names) ? body.names.slice(0, 2).map((n: unknown) => clean(String(n), 30)).filter(Boolean) : [];
-  void relationshipId;
+  const usage = await checkAi(env, relationshipId, 'game');
 
   const text = await askClaude(env, 'claude-haiku-4-5-20251001', 2048, gamePrompt(game, vibe, count, topic, names));
   const match = text?.match(/\{[\s\S]*\}/);
   if (!match) return { items: [] };
   try {
-    return JSON.parse(match[0]);
+    const parsed = JSON.parse(match[0]);
+    if (Array.isArray(parsed?.items) && parsed.items.length) await recordAi(env, relationshipId, usage, 'game');
+    return parsed;
   } catch {
     return { items: [] };
   }

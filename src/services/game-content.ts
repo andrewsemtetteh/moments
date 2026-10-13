@@ -46,7 +46,11 @@ export async function fetchGameContent(input: GameContentRequest): Promise<GameC
       setTimeout(() => reject(new Error('timeout')), AI_TIMEOUT_MS),
     );
     const { data, error } = await Promise.race([request, timeout]);
-    if (error) return fallback();
+    if (error) {
+      // Free, or the trial's AI games are used up: say so once, then play our own rounds.
+      void import('@/lib/plus').then(({ handlePlusError }) => handlePlusError(error));
+      return fallback();
+    }
     const clean = sanitizeContent(input.game, data);
     if (!clean) return fallback();
 

@@ -49,7 +49,7 @@ export default function SignupScreen() {
     }
 
     if (signUp.status === 'complete') {
-      await signUp.finalize({ navigate: () => router.replace('/(onboarding)/profile-name') });
+      await signUp.finalize({ navigate: () => router.replace('/(onboarding)/about-you') });
       return;
     }
 
@@ -125,7 +125,7 @@ export default function SignupScreen() {
             </View>
 
             <SocialAuthButtons
-              onSuccess={() => router.replace('/(onboarding)/profile-name')}
+              onSuccess={() => router.replace('/(onboarding)/about-you')}
               requireTerms
               agreedToTerms={agreedToTerms}
             />

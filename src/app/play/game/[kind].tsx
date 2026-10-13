@@ -23,6 +23,7 @@ import { useTheme } from '@/hooks/useTheme';
 import { gameRoom } from '@/lib/game-room/manager';
 import { startOwnTimeGame } from '@/lib/game-room/sessions';
 import { LIVE_GAMES, VIBES, getGameDefinition, type LiveGameKind, type Vibe } from '@/lib/game-room/types';
+import { requirePlusNow } from '@/lib/plus';
 import { useAuthStore, useRelationshipStore } from '@/stores';
 import { useGameRoomStore } from '@/stores/game-room-store';
 
@@ -56,6 +57,8 @@ export default function GameSetupScreen() {
       Alert.alert('Connect with your partner', 'Games are for two. Link up with your partner first.');
       return;
     }
+    // Endless games are written by AI: Plus (or its free trial).
+    if (!requirePlusNow('AI games')) return;
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
     if (mode === 'live') {

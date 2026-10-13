@@ -1,6 +1,6 @@
 import { useQueryClient, type InfiniteData } from '@tanstack/react-query';
 import { router, useFocusEffect } from 'expo-router';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { Platform, RefreshControl, StyleSheet, Text, View } from 'react-native';
 
 import { ContinueChatCard } from '@/components/home/ContinueChatCard';
@@ -33,11 +33,11 @@ import {
   useUpdateMood,
 } from '@/hooks/queries';
 import { useOpenPartnerProfile } from '@/hooks/useOpenPartnerProfile';
-import { useSubscription } from '@/hooks/useSubscription';
+// import { useSubscription } from '@/hooks/useSubscription';
 import { useTheme } from '@/hooks/useTheme';
 import { isHiddenFrom } from '@/lib/plan-day';
 import { enrichMomentsWithAuthors, filterMediaMoments, filterMomentsForHome } from '@/lib/moment-display';
-import { shouldShowEntryPaywall } from '@/lib/paywall-storage';
+// import { shouldShowEntryPaywall } from '@/lib/paywall-storage';
 import { openActivities, openCalendar } from '@/lib/router';
 import { emptyStreakStatus, isStreakRestoreAvailable } from '@/lib/streak';
 import { useAuthStore, useRelationshipStore, useUIStore } from '@/stores';
@@ -59,10 +59,10 @@ export default function HomeScreen() {
   const user = useAuthStore((s) => s.user);
   const session = useAuthStore((s) => s.session);
   const setShowMoodHistory = useUIStore((s) => s.setShowMoodHistory);
-  const openPaywall = useUIStore((s) => s.openPaywall);
+  // const openPaywall = useUIStore((s) => s.openPaywall);
   const openPartnerProfile = useOpenPartnerProfile();
-  const paywallShownThisSession = useUIStore((s) => s.paywallShownThisSession);
-  const markPaywallShownThisSession = useUIStore((s) => s.markPaywallShownThisSession);
+  // const paywallShownThisSession = useUIStore((s) => s.paywallShownThisSession);
+  // const markPaywallShownThisSession = useUIStore((s) => s.markPaywallShownThisSession);
   const [refreshing, setRefreshing] = useState(false);
   const queryClient = useQueryClient();
   const refreshInFlightRef = useRef(false);
@@ -80,25 +80,27 @@ export default function HomeScreen() {
   useRealtimeSubscription('daily_challenges');
   useRealtimeSubscription('messages');
 
-  const { isPlus } = useSubscription();
+  // The weekly Home reminder now lives in PaywallMoments (with the partner joined,
+  // milestone and win back moments); free limits open the paywall through requirePlus.
+  // const { isPlus } = useSubscription();
 
-  useEffect(() => {
-    if (isPlus || paywallShownThisSession || !relationship || relationship.status === 'ended') return;
+  // useEffect(() => {
+  //   if (isPlus || paywallShownThisSession || !relationship || relationship.status === 'ended') return;
 
-    let cancelled = false;
-    const timer = setTimeout(() => {
-      void shouldShowEntryPaywall().then((show) => {
-        if (cancelled || !show) return;
-        markPaywallShownThisSession();
-        openPaywall();
-      });
-    }, 800);
+  //   let cancelled = false;
+  //   const timer = setTimeout(() => {
+  //     void shouldShowEntryPaywall().then((show) => {
+  //       if (cancelled || !show) return;
+  //       markPaywallShownThisSession();
+  //       openPaywall();
+  //     });
+  //   }, 800);
 
-    return () => {
-      cancelled = true;
-      clearTimeout(timer);
-    };
-  }, [isPlus, paywallShownThisSession, relationship, markPaywallShownThisSession, openPaywall]);
+  //   return () => {
+  //     cancelled = true;
+  //     clearTimeout(timer);
+  //   };
+  // }, [isPlus, paywallShownThisSession, relationship, markPaywallShownThisSession, openPaywall]);
 
   const homePartnerMoments = useMemo(() => {
     const enriched = enrichMomentsWithAuthors(

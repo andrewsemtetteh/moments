@@ -21,6 +21,8 @@ import { HEADER_ICON_SIZE } from '@/components/ui/HeaderIconButton';
 import { Icon } from '@/components/ui/Icon';
 import { useTheme } from '@/hooks/useTheme';
 import { saveLocalMomentMedia } from '@/lib/download-moment-media';
+import { PermissionSheetHost } from '@/components/layout/PermissionSheetHost';
+import { ensurePermission } from '@/lib/permissions';
 
 const MAX_VIDEO_SEC = 60;
 const SHUTTER_HOLD_MS = 280;
@@ -74,22 +76,16 @@ export function ChatCameraModal({ visible, onClose, onCapture }: Props) {
 
   const ensureCamera = async (): Promise<boolean> => {
     if (!cameraPermission?.granted) {
-      const cam = await requestCameraPermission();
-      if (!cam.granted) {
-        Alert.alert('Camera access required', 'Allow camera access in Settings to take photos and videos.');
-        return false;
-      }
+      if (!(await ensurePermission('camera', { host: 'camera' }))) return false;
+      await requestCameraPermission(); // refresh the hook's status (no dialog once granted)
     }
     return true;
   };
 
   const ensureMic = async (): Promise<boolean> => {
     if (!micPermission?.granted) {
-      const mic = await requestMicPermission();
-      if (!mic.granted) {
-        Alert.alert('Microphone needed', 'Allow microphone access to record video messages.');
-        return false;
-      }
+      if (!(await ensurePermission('microphone', { host: 'camera' }))) return false;
+      await requestMicPermission();
     }
     return true;
   };
@@ -289,7 +285,7 @@ export function ChatCameraModal({ visible, onClose, onCapture }: Props) {
                     Take photos and videos to send in chat. Camera access is required.
                   </Text>
                   <Pressable
-                    onPress={() => void requestCameraPermission()}
+                    onPress={() => void ensureCamera()}
                     style={[styles.permissionBtn, { backgroundColor: colors.accent }]}>
                     <Text style={[styles.permissionBtnText, { color: colors.onAccent }]}>Allow camera</Text>
                   </Pressable>
@@ -372,6 +368,8 @@ export function ChatCameraModal({ visible, onClose, onCapture }: Props) {
             </View>
           </Animated.View>
         </GestureDetector>
+        {/* "Why we need this" sheets for the camera and mic, over this screen. */}
+        <PermissionSheetHost host="camera" inline />
       </GestureHandlerRootView>
     </Modal>
   );

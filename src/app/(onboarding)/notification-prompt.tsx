@@ -1,200 +1,85 @@
-import * as Haptics from 'expo-haptics';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
-import Animated, { FadeInDown } from 'react-native-reanimated';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { StyleSheet, Text, View } from 'react-native';
 
-import { OnboardingChrome } from '@/components/onboarding/OnboardingChrome';
+import { BellCharacter } from '@/components/onboarding/Characters';
+import { OnboardingStepScreen } from '@/components/onboarding/OnboardingStepScreen';
 import { Icon, type IconName } from '@/components/ui/Icon';
-import { Card, PrimaryButton } from '@/components/ui/primitives';
-import { Radius, Spacing } from '@/constants/design-system';
 import { useTheme } from '@/hooks/useTheme';
+import { goNext } from '@/lib/onboarding-v2';
 import { markNotificationPromptDone } from '@/lib/onboarding-storage';
 import { requestPushNotificationPermission } from '@/lib/push-notifications';
 import { useAuthStore } from '@/stores';
 
-type NextRoute = 'home' | 'welcome';
-
-const NOTIFICATION_BENEFITS: { icon: IconName; title: string; body: string }[] = [
-  {
-    icon: 'camera',
-    title: 'New moments',
-    body: 'Know when your partner shares a photo or message',
-  },
-  {
-    icon: 'fire',
-    title: 'Streak alerts',
-    body: 'Get a nudge 3 hours before, then a last-chance alert 1 hour before midnight',
-  },
+const ITEMS: { icon: IconName; title: string; body: string; tint: string }[] = [
+  { icon: 'cards', title: 'Conversations and games', body: 'When they start a conversation deck or a game for you two', tint: '#DCEBFF' },
+  { icon: 'calendar', title: 'Anniversaries and milestones', body: 'A week’s notice, and on the day', tint: '#FFD6DC' },
+  { icon: 'question', title: 'Today’s question', body: 'When they’ve answered and it’s your turn', tint: '#D7F2E3' },
+  { icon: 'fire', title: 'Streak saver', body: 'One nudge before your streak ends tonight', tint: '#FFE7A0' },
+  { icon: 'messages', title: 'Messages', body: 'Replies and voice notes, even when the app is closed', tint: '#E3DDFF' },
+  { icon: 'camera', title: 'New moments', body: 'The second they share a photo or video', tint: '#FFD9CC' },
 ];
 
+/** Step 9: what notifications are for, then iPhone asks (only on "Turn on"). */
 export default function NotificationPromptScreen() {
   const router = useRouter();
-  const insets = useSafeAreaInsets();
+  const preview = useLocalSearchParams<{ preview?: string }>().preview === '1';
   const { colors } = useTheme();
   const user = useAuthStore((s) => s.user);
-  const params = useLocalSearchParams<{ next?: string }>();
-  const [loading, setLoading] = useState(false);
+  const [busy, setBusy] = useState(false);
 
-  const nextRoute: NextRoute = params.next === 'welcome' ? 'welcome' : 'home';
-
-  const finish = async () => {
-    if (user) await markNotificationPromptDone(user.id);
-
-    router.replace({
-      pathname: '/pro',
-      params: { from: 'onboarding', next: nextRoute },
-    });
-  };
-
-  const enableNotifications = async () => {
-    setLoading(true);
+  const next = async (turnOn: boolean) => {
+    setBusy(true);
     try {
-      await requestPushNotificationPermission();
-      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      await finish();
+      if (turnOn && !preview) await requestPushNotificationPermission().catch(() => undefined);
+      if (user && !preview) await markNotificationPromptDone(user.id);
+      await goNext(router, 'notification-prompt', { userId: user?.id, preview });
     } finally {
-      setLoading(false);
+      setBusy(false);
     }
   };
 
-  const skip = async () => {
-    void Haptics.selectionAsync();
-    await finish();
-  };
-
   return (
-    <OnboardingChrome stepId="notification-prompt">
-      <View
-        style={[
-          styles.safe,
-          {
-            paddingBottom: insets.bottom + Spacing.lg,
-          },
-        ]}>
-        <View style={styles.body}>
-          <Animated.View entering={FadeInDown.duration(400).springify()} style={styles.hero}>
-            <View
-              style={[
-                styles.iconWrap,
-                {
-                  backgroundColor: colors.accentSoft,
-                  borderColor: colors.border,
-                },
-              ]}>
-              <Icon name="bell" size={32} color={colors.accent} filled />
+    <OnboardingStepScreen
+      step="notification-prompt"
+      art={<BellCharacter size={96} />}
+      title="Never miss your person"
+      subtitle="Turn these on and you’ll know the moment something happens between you two:"
+      primaryLabel="Turn on notifications"
+      onPrimary={() => void next(true)}
+      busy={busy}
+      secondaryLabel="Not now"
+      onSecondary={() => void next(false)}>
+      <View style={[styles.list, { borderColor: colors.text, backgroundColor: colors.surface }]}>
+        {ITEMS.map((n, i) => (
+          <View
+            key={n.title}
+            style={[styles.row, i < ITEMS.length - 1 && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border }]}>
+            <View style={[styles.tile, { backgroundColor: n.tint }]}>
+              <Icon name={n.icon} size={18} color="#1A1A1A" />
             </View>
-          </Animated.View>
-
-          <Animated.View entering={FadeInDown.delay(60).duration(400).springify()} style={styles.copy}>
-            <Text style={[styles.title, { color: colors.text }]}>Never miss a moment</Text>
-            <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-              You&apos;ll receive notifications from your partner.
-            </Text>
-          </Animated.View>
-
-          <Animated.View entering={FadeInDown.delay(120).duration(400).springify()} style={styles.benefitsWrap}>
-            <Card style={styles.benefitsCard}>
-              {NOTIFICATION_BENEFITS.map((item, index) => (
-                <View
-                  key={item.title}
-                  style={[
-                    styles.benefitRow,
-                    index > 0 && {
-                      borderTopWidth: StyleSheet.hairlineWidth,
-                      borderTopColor: colors.border,
-                    },
-                  ]}>
-                  <View style={[styles.benefitIcon, { backgroundColor: colors.accentSoft }]}>
-                    <Icon name={item.icon} size={18} color={colors.accent} filled={item.icon === 'fire'} />
-                  </View>
-                  <View style={styles.benefitCopy}>
-                    <Text style={[styles.benefitTitle, { color: colors.text }]}>{item.title}</Text>
-                    <Text style={[styles.benefitBody, { color: colors.textSecondary }]}>{item.body}</Text>
-                  </View>
-                </View>
-              ))}
-            </Card>
-
-            <Text style={[styles.settingsHint, { color: colors.textTertiary }]}>
-              You can change this anytime in your device settings.
-            </Text>
-          </Animated.View>
-        </View>
-
-        <Animated.View entering={FadeInDown.delay(180).duration(400).springify()} style={styles.actions}>
-          <PrimaryButton
-            label={loading ? 'Enabling…' : 'Turn on notifications'}
-            onPress={enableNotifications}
-            loading={loading}
-            style={styles.btn}
-          />
-          <Pressable
-            onPress={skip}
-            disabled={loading}
-            hitSlop={8}
-            style={({ pressed }) => [styles.skipWrap, pressed && { opacity: 0.65 }]}>
-            <Text style={[styles.skip, { color: colors.textSecondary }]}>Not now</Text>
-          </Pressable>
-        </Animated.View>
+            <View style={styles.flex}>
+              <Text style={[styles.title, { color: colors.text }]}>{n.title}</Text>
+              <Text style={[styles.body, { color: colors.textSecondary }]}>{n.body}</Text>
+            </View>
+          </View>
+        ))}
       </View>
-    </OnboardingChrome>
+      <View style={styles.reassure}>
+        <Icon name="lock" size={14} color={colors.textSecondary} />
+        <Text style={[styles.reassureText, { color: colors.textSecondary }]}>No ads or spam, ever.</Text>
+      </View>
+    </OnboardingStepScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, paddingHorizontal: Spacing.lg },
-  body: { flex: 1, justifyContent: 'center' },
-  hero: { alignItems: 'center', marginBottom: 24 },
-  iconWrap: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    borderWidth: StyleSheet.hairlineWidth,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  copy: { alignItems: 'center', gap: 10, marginBottom: 28 },
-  title: {
-    fontSize: 28,
-    fontWeight: '800',
-    textAlign: 'center',
-    letterSpacing: -0.5,
-    lineHeight: 34,
-  },
-  subtitle: {
-    fontSize: 16,
-    lineHeight: 24,
-    textAlign: 'center',
-    maxWidth: 320,
-  },
-  benefitsWrap: { width: '100%', gap: 12 },
-  benefitsCard: { width: '100%' },
-  benefitRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 14,
-    paddingVertical: 14,
-  },
-  benefitIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  benefitCopy: { flex: 1, gap: 3 },
-  benefitTitle: { fontSize: 16, fontWeight: '700' },
-  benefitBody: { fontSize: 14, lineHeight: 20 },
-  settingsHint: {
-    fontSize: 13,
-    lineHeight: 18,
-    textAlign: 'center',
-    paddingHorizontal: 12,
-  },
-  actions: { gap: 14, paddingTop: 8 },
-  btn: { borderRadius: Radius.pill },
-  skipWrap: { alignItems: 'center', paddingVertical: 6 },
-  skip: { fontSize: 15, fontWeight: '600' },
+  flex: { flex: 1 },
+  list: { borderWidth: 2, borderRadius: 22, overflow: 'hidden' },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 11, paddingHorizontal: 14 },
+  tile: { width: 36, height: 36, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
+  title: { fontSize: 15, fontWeight: '800' },
+  body: { fontSize: 12, lineHeight: 17, marginTop: 1 },
+  reassure: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
+  reassureText: { fontSize: 13, fontWeight: '700' },
 });

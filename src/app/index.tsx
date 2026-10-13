@@ -14,8 +14,9 @@ import { Wordmark } from '@/components/ui/Wordmark';
 import { useTheme } from '@/hooks/useTheme';
 // eslint-disable-next-line @typescript-eslint/no-unused-vars -- used by the commented-out restore path below
 import { isIntroCompleted } from '@/lib/intro-storage';
-import { isAvatarPromptDone, isNotificationPromptDone, isOnboardingPaywallDone, isRelationshipOnboardingDone, isThemePromptDone, isWidgetPromptDone } from '@/lib/onboarding-storage';
-import { needsProfileSetup, profileSetupEntryRoute } from '@/lib/profile-setup';
+import { isAvatarPromptDone, isOnboardingPaywallDone } from '@/lib/onboarding-storage';
+import { getOnboardingStep, setOnboardingStep, stepRoute } from '@/lib/onboarding-v2';
+import { needsProfileSetup } from '@/lib/profile-setup';
 import { useAuthStore, useRelationshipStore } from '@/stores';
 
 const WORDMARK_SIZE = 42;
@@ -109,69 +110,35 @@ export default function IndexScreen() {
         // await replaceWithExit(hasUsedAuthBefore ? '/(auth)/login' : '/(auth)/welcome');
         return;
       }
+      // Onboarding (lib/onboarding-v2): resume at the saved step, so leaving
+      // halfway picks up where they were.
+      if (!user) {
+        await replaceWithExit('/(onboarding)/about-you');
+        return;
+      }
+      let step = await getOnboardingStep(user.id);
+      if (!step) {
+        // Accounts from before this flow: done if they finished the old one.
+        if (relationship && (await isOnboardingPaywallDone(user.id))) {
+          await setOnboardingStep(user.id, 'done');
+          step = 'done';
+        } else if (!relationship) {
+          // A brand-new account, however it signed up (email, Apple, Google,
+          // or the login page): always the same flow from the name step. A
+          // name/photo from Apple or Google is filled in there, not skipped.
+          step = 'about-you';
+        } else {
+          const avatarDone = await isAvatarPromptDone(user.id);
+          step = needsProfileSetup(user, avatarDone) ? 'about-you' : 'theme-picker';
+        }
+      }
+      if (step !== 'done') {
+        await replaceWithExit(stepRoute(step));
+        return;
+      }
       if (!relationship) {
-        if (user && needsProfileSetup(user, await isAvatarPromptDone(user.id))) {
-          await replaceWithExit(profileSetupEntryRoute(user, await isAvatarPromptDone(user.id)) as Href);
-        } else if (user && (await isRelationshipOnboardingDone(user.id))) {
-          await replaceWithExit({
-            pathname: '/(onboarding)/relationship-path',
-            params: { anniversarySkipped: '1', relationshipTypeSkipped: '1' },
-          });
-        } else {
-          await replaceWithExit('/(onboarding)/anniversary-setup');
-        }
-        return;
-      }
-      if (relationship.status === 'pending' && !relationship.user_2_id) {
-        if (user && !(await isThemePromptDone(user.id))) {
-          await replaceWithExit({
-            pathname: '/(onboarding)/theme-picker',
-            params: { next: 'home' },
-          });
-        } else if (user && !(await isWidgetPromptDone(user.id))) {
-          await replaceWithExit({
-            pathname: '/(onboarding)/widget-prompt',
-            params: { next: 'home' },
-          });
-        } else if (user && !(await isNotificationPromptDone(user.id))) {
-          await replaceWithExit({
-            pathname: '/(onboarding)/notification-prompt',
-            params: { next: 'home' },
-          });
-        } else if (user && !(await isOnboardingPaywallDone(user.id))) {
-          await replaceWithExit({
-            pathname: '/pro',
-            params: { from: 'onboarding', next: 'home' },
-          });
-        } else {
-          await replaceWithExit('/(tabs)/home');
-        }
-        return;
-      }
-      if (relationship.status === 'pending') {
-        if (user && !(await isThemePromptDone(user.id))) {
-          await replaceWithExit({
-            pathname: '/(onboarding)/theme-picker',
-            params: { next: 'welcome' },
-          });
-        } else if (user && !(await isWidgetPromptDone(user.id))) {
-          await replaceWithExit({
-            pathname: '/(onboarding)/widget-prompt',
-            params: { next: 'welcome' },
-          });
-        } else if (user && !(await isNotificationPromptDone(user.id))) {
-          await replaceWithExit({
-            pathname: '/(onboarding)/notification-prompt',
-            params: { next: 'welcome' },
-          });
-        } else if (user && !(await isOnboardingPaywallDone(user.id))) {
-          await replaceWithExit({
-            pathname: '/pro',
-            params: { from: 'onboarding', next: 'welcome' },
-          });
-        } else {
-          await replaceWithExit('/(onboarding)/welcome');
-        }
+        // Finished before but no space now (left one): make a new one or join.
+        await replaceWithExit(stepRoute('invite'));
         return;
       }
       await replaceWithExit('/(tabs)/home');

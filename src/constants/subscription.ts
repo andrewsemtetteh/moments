@@ -1,21 +1,29 @@
 import type { IconName } from '@/components/ui/Icon';
-import {
-  FREE_DAILY_MOMENTS,
-  FREE_TIMELINE_MOMENTS,
-} from '@/constants/design-system';
+import { FREE_DAILY_MOMENTS, FREE_TIMELINE_MOMENTS } from '@/constants/design-system';
 
-/** Source of truth — see src/docs/MONETIZATION.md §4 */
-export const MONTHLY_PRICE_USD = 9.99;
+/**
+ * Moments Plus pricing: source of truth (see src/docs/MONETIZATION.md §4).
+ * One subscription per couple. Store prices (local currency) replace these USD figures on the
+ * paywall once RevenueCat loads; these are the fallbacks and the basis for the per week maths.
+ */
 export const WEEKLY_PRICE_USD = 4.99;
-export const YEARLY_COMPARE_AT_USD = roundUsd(MONTHLY_PRICE_USD * 12);
 export const YEARLY_PRICE_USD = 69.99;
-/** Saving vs paying monthly for a year (69.99 vs 119.88 → 42%). */
-export const YEARLY_DISCOUNT_PERCENT = Math.round((1 - YEARLY_PRICE_USD / YEARLY_COMPARE_AT_USD) * 100);
-export const WEEKLY_COMPARE_AT_USD = roundUsd(MONTHLY_PRICE_USD / 4);
+export const MONTHLY_PRICE_USD = 9.99;
 
-export const TRIAL_DAYS = 3;
+/** Free trial on weekly and yearly (monthly has none). Set the same on the store products. */
+export const TRIAL_DAYS = 7;
+/** The day before the trial ends, when we remind them. */
+export const TRIAL_REMINDER_DAY = 5;
 
-export type SubscriptionPlanId = 'yearly' | 'monthly' | 'weekly';
+
+/** True once RevenueCat keys are configured; until then the paywall lets people carry on with Free. */
+export const BILLING_CONNECTED = !!(
+  process.env.EXPO_PUBLIC_REVENUECAT_IOS_API_KEY || process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY
+);
+
+export type SubscriptionPlanId = 'weekly' | 'yearly' | 'monthly';
+
+const WEEKS_PER_YEAR = 52;
 
 function roundUsd(amount: number): number {
   return Math.round(amount * 100) / 100;
@@ -25,7 +33,59 @@ export function formatUsd(amount: number): string {
   return `$${amount.toFixed(2)}`;
 }
 
-/** Plus-gated features — mirrors `requirePlus` call sites and free-tier limits in the app. */
+/** What a week costs on each plan, for the per week line on every card. */
+export const PER_WEEK_USD: Record<SubscriptionPlanId, number> = {
+  weekly: WEEKLY_PRICE_USD,
+  yearly: roundUsd(YEARLY_PRICE_USD / WEEKS_PER_YEAR),
+  monthly: roundUsd((MONTHLY_PRICE_USD * 12) / WEEKS_PER_YEAR),
+};
+
+/** Yearly vs paying weekly all year (69.99 vs 259.48 → 73%). */
+export const YEARLY_SAVING_PERCENT = Math.round((1 - YEARLY_PRICE_USD / (WEEKLY_PRICE_USD * WEEKS_PER_YEAR)) * 100);
+
+export type SubscriptionPlan = {
+  id: SubscriptionPlanId;
+  name: string;
+  /** Billed price (fallback; the store's local price replaces it). */
+  priceUsd: number;
+  /** "/week" etc, after the price. */
+  per: string;
+  /** "a week", "a year", "a month" for sentences. */
+  perWords: string;
+  trial: boolean;
+  badge?: string;
+};
+
+/** In the order shown. Weekly is selected by default. */
+export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
+  {
+    id: 'weekly',
+    name: 'Weekly',
+    priceUsd: WEEKLY_PRICE_USD,
+    per: '/week',
+    perWords: 'a week',
+    trial: true,
+    badge: `${TRIAL_DAYS} days free`,
+  },
+  {
+    id: 'yearly',
+    name: 'Yearly',
+    priceUsd: YEARLY_PRICE_USD,
+    per: '/year',
+    perWords: 'a year',
+    trial: true,
+    badge: `Best value · Save ${YEARLY_SAVING_PERCENT}%`,
+  },
+  { id: 'monthly', name: 'Monthly', priceUsd: MONTHLY_PRICE_USD, per: '/month', perWords: 'a month', trial: false },
+];
+
+export const DEFAULT_PLAN: SubscriptionPlanId = 'weekly';
+
+export function planById(id: SubscriptionPlanId): SubscriptionPlan {
+  return SUBSCRIPTION_PLANS.find((p) => p.id === id) ?? SUBSCRIPTION_PLANS[0];
+}
+
+/** Plus-gated features: mirrors `requirePlus` call sites and free tier limits in the app. */
 export type PlusFeatureItem = {
   icon: IconName;
   title: string;
@@ -33,91 +93,8 @@ export type PlusFeatureItem = {
 };
 
 export const PLUS_FEATURE_ITEMS: PlusFeatureItem[] = [
-  {
-    icon: 'camera',
-    title: 'Unlimited daily moments',
-    freeLimit: `${FREE_DAILY_MOMENTS} per day on Free`,
-  },
-  {
-    icon: 'list',
-    title: 'Full moment timeline',
-    freeLimit: `${FREE_TIMELINE_MOMENTS} recent moments on Free`,
-  },
-  {
-    icon: 'fire',
-    title: 'Streak restore',
-    freeLimit: 'Plus only',
-  },
+  { icon: 'camera', title: 'Unlimited daily moments', freeLimit: `${FREE_DAILY_MOMENTS} per day on Free` },
+  { icon: 'list', title: 'Full moment timeline', freeLimit: `${FREE_TIMELINE_MOMENTS} recent moments on Free` },
+  { icon: 'sparkles', title: 'AI games and questions', freeLimit: 'Plus only' },
+  { icon: 'fire', title: 'Streak restore', freeLimit: 'Plus only' },
 ];
-
-export const TRIAL_STEPS: { day: string; title: string; body: string; icon: IconName }[] = [
-  {
-    day: 'Today',
-    title: 'Today',
-    body: 'Unlock unlimited moments, timeline, and streak restore for both of you.',
-    icon: 'lock',
-  },
-  {
-    day: 'Day 2',
-    title: 'Day 2',
-    body: "We'll send a reminder before your trial ends so there are no surprises.",
-    icon: 'bell',
-  },
-  {
-    day: 'Day 3',
-    title: 'Day 3',
-    body: 'Your subscription starts. Cancel anytime before then and you will not be charged.',
-    icon: 'star',
-  },
-];
-
-export type SubscriptionPlan = {
-  id: SubscriptionPlanId;
-  label: string;
-  price: string;
-  period: string;
-  compareAt?: string;
-  badge?: string;
-  sublabel: string;
-};
-
-function buildPlanSublabel(amount: number, period: '/week' | '/month' | '/year'): string {
-  return `${TRIAL_DAYS}-day free trial, then ${formatUsd(amount)}${period} per relationship`;
-}
-
-export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
-  {
-    id: 'weekly',
-    label: 'Weekly',
-    price: formatUsd(WEEKLY_PRICE_USD),
-    period: '/week',
-    compareAt: formatUsd(WEEKLY_COMPARE_AT_USD),
-    badge: 'Flexible',
-    sublabel: buildPlanSublabel(WEEKLY_PRICE_USD, '/week'),
-  },
-  {
-    id: 'monthly',
-    label: 'Monthly',
-    price: formatUsd(MONTHLY_PRICE_USD),
-    period: '/month',
-    sublabel: buildPlanSublabel(MONTHLY_PRICE_USD, '/month'),
-  },
-  {
-    id: 'yearly',
-    label: 'Yearly',
-    price: formatUsd(YEARLY_PRICE_USD),
-    period: '/year',
-    compareAt: formatUsd(YEARLY_COMPARE_AT_USD),
-    badge: `${YEARLY_DISCOUNT_PERCENT}% off`,
-    sublabel: buildPlanSublabel(YEARLY_PRICE_USD, '/year'),
-  },
-];
-
-export function getTrialCtaLabel(): string {
-  return `Start ${TRIAL_DAYS}-Day Free Trial`;
-}
-
-export function getTrialPriceLine(planId: SubscriptionPlanId): string {
-  const plan = SUBSCRIPTION_PLANS.find((p) => p.id === planId)!;
-  return `${TRIAL_DAYS}-day free trial, then ${plan.price}${plan.period} per relationship`;
-}

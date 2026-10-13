@@ -17,6 +17,19 @@ export function hasActiveUserSubscription(profile: SubscriptionFields | null | u
   return new Date(profile.subscription_expires_at) > new Date();
 }
 
+/** The couple's Plus (one subscription covers both partners), honouring its expiry. */
+export function isRelationshipPlusActive(relationship: Relationship | null | undefined): boolean {
+  if (!relationship || normalizeTier(relationship.subscription_tier) !== 'plus' || !relationship.subscription_owner_id) {
+    return false;
+  }
+  return !relationship.subscription_expires_at || new Date(relationship.subscription_expires_at) > new Date();
+}
+
+/** True while the couple's Plus is a free trial (it has every Plus feature, AI included). */
+export function isRelationshipTrial(relationship: Relationship | null | undefined): boolean {
+  return isRelationshipPlusActive(relationship) && relationship?.subscription_period === 'trial';
+}
+
 /** Effective tier for the current user in (or out of) a relationship. */
 export function getEffectiveTier(
   user: UserProfile | null | undefined,
@@ -28,10 +41,7 @@ export function getEffectiveTier(
     return userHasPlus ? 'plus' : 'free';
   }
 
-  const relTier = normalizeTier(relationship.subscription_tier);
-  if (relTier === 'plus' && relationship.subscription_owner_id) {
-    return 'plus';
-  }
+  if (isRelationshipPlusActive(relationship)) return 'plus';
 
   return userHasPlus ? 'plus' : 'free';
 }

@@ -81,6 +81,12 @@ interface UIState {
   showWrapped: boolean;
   showMoodHistory: boolean;
   showPaywall: boolean;
+  /** What opened the paywall ("Unlimited moments"), for its headline; null for the general one. */
+  paywallReason: string | null;
+  /** A full headline instead (e.g. when the partner joins). */
+  paywallHeadline: string | null;
+  /** 'winback': the one time discounted first year. */
+  paywallOffer: 'winback' | null;
   showPartnerProfile: boolean;
   partnerLocationMap: PartnerLocationMapState | null;
   streakMilestoneCount: number | null;
@@ -116,7 +122,8 @@ interface UIState {
   setChatDraft: (draft: string | null) => void;
   setChatMomentReply: (reply: MomentReplyContext | null) => void;
   clearChatDraft: () => void;
-  openPaywall: () => void;
+  /** `reason` names the feature that was hit. Non-string args (a press event) are ignored. */
+  openPaywall: (reason?: unknown, opts?: { headline?: string; offer?: 'winback' }) => void;
   closePaywall: () => void;
   openPartnerProfile: () => void;
   closePartnerProfile: () => void;
@@ -148,6 +155,9 @@ export const useUIStore = create<UIState>((set) => ({
   showWrapped: false,
   showMoodHistory: false,
   showPaywall: false,
+  paywallReason: null,
+  paywallHeadline: null,
+  paywallOffer: null,
   showPartnerProfile: false,
   partnerLocationMap: null,
   streakMilestoneCount: null,
@@ -175,7 +185,12 @@ export const useUIStore = create<UIState>((set) => ({
     if (list.length === 0) return;
     const requested = moments[startIndex];
     const resolvedIndex =
-      requested != null ? Math.max(0, list.findIndex((m) => m.id === requested.id)) : startIndex;
+      requested != null
+        ? Math.max(
+            0,
+            list.findIndex((m) => m.id === requested.id),
+          )
+        : startIndex;
     const safeIndex = resolvedIndex >= 0 ? resolvedIndex : 0;
     set({
       momentViewer: {
@@ -192,17 +207,21 @@ export const useUIStore = create<UIState>((set) => ({
     set((state) => ({
       momentViewer: null,
       showMomentHistory: state.momentViewer?.returnToHistory ? true : state.showMomentHistory,
-      showPartnerProfile: state.momentViewer?.returnToPartnerProfile
-        ? true
-        : state.showPartnerProfile,
+      showPartnerProfile: state.momentViewer?.returnToPartnerProfile ? true : state.showPartnerProfile,
     })),
   setShowWrapped: (showWrapped) => set({ showWrapped }),
   setShowMoodHistory: (showMoodHistory) => set({ showMoodHistory }),
   setChatDraft: (chatDraft) => set({ chatDraft }),
   setChatMomentReply: (chatMomentReply) => set({ chatMomentReply }),
   clearChatDraft: () => set({ chatDraft: null, chatMomentReply: null }),
-  openPaywall: () => set({ showPaywall: true }),
-  closePaywall: () => set({ showPaywall: false }),
+  openPaywall: (reason, opts) =>
+    set({
+      showPaywall: true,
+      paywallReason: typeof reason === 'string' ? reason : null,
+      paywallHeadline: opts?.headline ?? null,
+      paywallOffer: opts?.offer ?? null,
+    }),
+  closePaywall: () => set({ showPaywall: false, paywallReason: null, paywallHeadline: null, paywallOffer: null }),
   openPartnerProfile: () => set({ showPartnerProfile: true }),
   closePartnerProfile: () => set({ showPartnerProfile: false }),
   openPartnerLocationMap: (markers, title) => set({ partnerLocationMap: { markers, title } }),
@@ -283,8 +302,7 @@ const initialCallState = {
 export const useCallStore = create<CallState>((set, get) => ({
   ...initialCallState,
   setPhase: (phase) => set({ phase }),
-  setIncoming: ({ callId, mode, partnerName }) =>
-    set({ phase: 'incoming', callId, mode, partnerName, error: null }),
+  setIncoming: ({ callId, mode, partnerName }) => set({ phase: 'incoming', callId, mode, partnerName, error: null }),
   setMode: (mode) => set({ mode }),
   setCallId: (callId) => set({ callId }),
   setPartnerName: (partnerName) => set({ partnerName }),

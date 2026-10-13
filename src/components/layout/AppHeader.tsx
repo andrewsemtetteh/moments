@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { HEADER_ICON_SIZE } from '@/components/ui/HeaderIconButton';
 import { Icon, type IconName } from '@/components/ui/Icon';
+import { Wordmark } from '@/components/ui/Wordmark';
 // Partner avatar + name are hidden in the header for now (see below).
 // import { Avatar } from '@/components/ui/primitives';
 import { useMinuteTick } from '@/hooks/useMinuteTick';
@@ -138,9 +139,8 @@ export function AppHeader({ showPlan = true }: AppHeaderProps) {
             </View>
           </View>
         ) : (
-          <Text style={[styles.appName, { color: colors.text }]} numberOfLines={1}>
-            {APP_NAME}
-          </Text>
+          // Not paired yet: the logo (mark + name) in the middle of the bar.
+          <Wordmark size={18} />
         )}
       </Pressable>
 

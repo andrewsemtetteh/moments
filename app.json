@@ -5,11 +5,11 @@
     "owner": "andrewsemtetteh",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/moments.png",
+    "icon": "./assets/images/app-icon.png",
     "scheme": "moments",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/images/moments.png",
+      "icon": "./assets/images/app-icon.png",
       "bundleIdentifier": "com.moments.app",
       "supportsTablet": false,
       "usesAppleSignIn": true
@@ -17,16 +17,16 @@
     "android": {
       "package": "com.moments.app",
       "adaptiveIcon": {
-        "backgroundColor": "#FAFAF8",
-        "foregroundImage": "./assets/images/moments.png",
-        "monochromeImage": "./assets/images/moments.png"
+        "backgroundColor": "#1F1B3A",
+        "foregroundImage": "./assets/images/app-icon-android-foreground.png",
+        "monochromeImage": "./assets/images/app-icon-android-foreground.png"
       },
       "predictiveBackGestureEnabled": false,
       "softwareKeyboardLayoutMode": "resize"
     },
     "web": {
       "output": "static",
-      "favicon": "./assets/images/moments.png"
+      "favicon": "./assets/images/moments-logo.png"
     },
     "plugins": [
       [
@@ -40,14 +40,29 @@
       "@clerk/expo",
       "expo-apple-authentication",
       [
+        "expo-tracking-transparency",
+        {
+          "userTrackingPermission": "This only tells us which ads brought you to Moments, so we can stop paying for ones that don't work. It never touches your moments, messages or photos."
+        }
+      ],
+      [
         "expo-splash-screen",
         {
-          "backgroundColor": "#000000",
-          "image": "./assets/images/moments.png",
-          "imageWidth": 200,
+          "backgroundColor": "#FFFFFF",
+          "image": "./assets/images/moments-logo.png",
+          "imageWidth": 180,
+          "dark": {
+            "backgroundColor": "#000000",
+            "image": "./assets/images/moments-logo.png"
+          },
           "android": {
-            "image": "./assets/images/moments.png",
-            "imageWidth": 200
+            "backgroundColor": "#FFFFFF",
+            "image": "./assets/images/moments-logo.png",
+            "imageWidth": 180,
+            "dark": {
+              "backgroundColor": "#000000",
+              "image": "./assets/images/moments-logo.png"
+            }
           }
         }
       ],
@@ -92,7 +107,13 @@
           "contactsPermission": "Moments needs contacts access to share a contact in chat."
         }
       ],
-      "expo-notifications",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/notification-icon.png",
+          "color": "#FF4D6D"
+        }
+      ],
       "expo-video",
       "@react-native-community/datetimepicker"
     ],

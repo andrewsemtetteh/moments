@@ -25,6 +25,7 @@ import { useTheme } from '@/hooks/useTheme';
 import { formatAuthError } from '@/lib/auth-errors';
 import { markIntroCompleted } from '@/lib/intro-storage';
 import { goBackOrReplace } from '@/lib/router';
+import { designPass } from '@/lib/onboarding-v2';
 
 type Props = {
   showBack?: boolean;
@@ -41,6 +42,11 @@ export function GetStartedAuth({ showBack = true }: Props) {
 
   const handleSSO = async (strategy: 'oauth_apple' | 'oauth_google', provider: 'apple' | 'google') => {
     const label = provider === 'apple' ? 'Apple' : 'Google';
+    if (__DEV__ && designPass.on) {
+      // Replace, like the email route: there's no going back to sign-up.
+      router.replace({ pathname: '/(onboarding)/about-you', params: { preview: '1' } });
+      return;
+    }
     setLoadingProvider(provider);
     try {
       void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);

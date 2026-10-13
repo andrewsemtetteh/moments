@@ -12,7 +12,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ChangePasswordModal } from '@/components/profile/ChangePasswordModal';
 import { EditAnniversaryModal } from '@/components/profile/EditAnniversaryModal';
 import { EditFieldModal } from '@/components/profile/EditFieldModal';
-import { EditGenderModal } from '@/components/profile/EditGenderModal';
+// import { EditGenderModal } from '@/components/profile/EditGenderModal';
 import { EditRelationshipTypeModal } from '@/components/profile/EditRelationshipTypeModal';
 import { LocationSharingSettings } from '@/components/profile/LocationSharingSettings';
 import { OnlineStatusSettings } from '@/components/profile/OnlineStatusSettings';
@@ -28,7 +28,7 @@ import { formatAuthError } from '@/lib/auth-errors';
 import { signOutUser } from '@/lib/auth-session';
 import { getFirstName } from '@/lib/avatar-initial';
 import { markRelationshipOnboardingDone } from '@/lib/onboarding-storage';
-import { profileGenderLabel } from '@/lib/profile-gender';
+// import { profileGenderLabel } from '@/lib/profile-gender';
 import { relationshipTypeLabel } from '@/lib/relationship-type';
 import { closeStackScreen } from '@/lib/router';
 import { toUserFacingNetworkError } from '@/lib/network-error';
@@ -36,7 +36,9 @@ import { requestStoreReviewFromSettings } from '@/lib/store-review';
 import { formatSubscriptionExpiry } from '@/lib/subscription';
 import * as api from '@/services/api';
 import { useAuthStore, useRelationshipStore, useUIStore } from '@/stores';
-import type { ProfileGender, RelationshipType } from '@/types/database';
+// import type { ProfileGender, RelationshipType } from '@/types/database';
+import type { RelationshipType } from '@/types/database';
+import { ensurePermission } from '@/lib/permissions';
 
 type PendingEmailAddress = Awaited<
   ReturnType<NonNullable<ReturnType<typeof useUser>['user']>['createEmailAddress']>
@@ -68,9 +70,10 @@ export default function SettingsScreen() {
   const [savingEdit, setSavingEdit] = useState(false);
   const [avatarSaving, setAvatarSaving] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
-  const [showGenderModal, setShowGenderModal] = useState(false);
-  const [genderDraft, setGenderDraft] = useState<ProfileGender | null>(user?.gender ?? null);
-  const [savingGender, setSavingGender] = useState(false);
+  // Gender isn't used anywhere in the app, so it's not asked for (kept for later).
+  // const [showGenderModal, setShowGenderModal] = useState(false);
+  // const [genderDraft, setGenderDraft] = useState<ProfileGender | null>(user?.gender ?? null);
+  // const [savingGender, setSavingGender] = useState(false);
   const [showRelationshipTypeModal, setShowRelationshipTypeModal] = useState(false);
   const [relationshipTypeDraft, setRelationshipTypeDraft] = useState<RelationshipType | null>(
     relationship?.relationship_type ?? null,
@@ -234,11 +237,7 @@ export default function SettingsScreen() {
 
   const changeProfilePhoto = async () => {
     if (!user) return;
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('Permission needed', 'Allow photo access to update your profile picture.');
-      return;
-    }
+    if (!(await ensurePermission('photos'))) return;
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
       allowsEditing: true,
@@ -298,32 +297,32 @@ export default function SettingsScreen() {
     }
   };
 
-  const openGenderModal = () => {
-    setGenderDraft(user?.gender ?? null);
-    setShowGenderModal(true);
-  };
+  // const openGenderModal = () => {
+    // setGenderDraft(user?.gender ?? null);
+    // setShowGenderModal(true);
+  // };
 
-  const closeGenderModal = () => {
-    setShowGenderModal(false);
-    setGenderDraft(user?.gender ?? null);
-  };
+  // const closeGenderModal = () => {
+    // setShowGenderModal(false);
+    // setGenderDraft(user?.gender ?? null);
+  // };
 
-  const saveGender = async (gender: ProfileGender) => {
-    if (!user) return;
+  // const saveGender = async (gender: ProfileGender) => {
+    // if (!user) return;
 
-    setGenderDraft(gender);
-    setSavingGender(true);
-    try {
-      const updated = await api.updateProfile(user.id, { gender });
-      setUser(updated);
-      closeGenderModal();
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    } catch (e) {
-      Alert.alert('Could not save', e instanceof Error ? e.message : 'Please try again.');
-    } finally {
-      setSavingGender(false);
-    }
-  };
+    // setGenderDraft(gender);
+    // setSavingGender(true);
+    // try {
+      // const updated = await api.updateProfile(user.id, { gender });
+      // setUser(updated);
+      // closeGenderModal();
+      // Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    // } catch (e) {
+      // Alert.alert('Could not save', e instanceof Error ? e.message : 'Please try again.');
+    // } finally {
+      // setSavingGender(false);
+    // }
+  // };
 
   const openRelationshipTypeModal = () => {
     setRelationshipTypeDraft(relationship?.relationship_type ?? null);
@@ -398,7 +397,7 @@ export default function SettingsScreen() {
         <Section title="Account">
           <Group>
             <Row icon="user" label="Name" value={user?.name?.trim() || 'Add your name'} onPress={() => openEdit('name', user?.name ?? '')} />
-            <Row icon="people" label="Gender" value={profileGenderLabel(user?.gender)} onPress={openGenderModal} />
+            {/* <Row icon="people" label="Gender" value={profileGenderLabel(user?.gender)} onPress={openGenderModal} /> */}
             <Row icon="mail" label="Email" value={user?.email ?? ''} onPress={() => openEdit('email', user?.email ?? '')} />
             <Row icon="lock" label="Password" value="••••••••" onPress={openPasswordModal} last />
           </Group>
@@ -475,6 +474,19 @@ export default function SettingsScreen() {
           </Group>
         </Section>
 
+        {__DEV__ ? (
+          <Section title="Developer" note="Walk the whole onboarding with sample data. Nothing is saved or sent.">
+            <Group>
+              <Row
+                icon="play"
+                label="Walk through onboarding"
+                onPress={() => router.push({ pathname: '/(onboarding)/about-you', params: { preview: '1' } })}
+                last
+              />
+            </Group>
+          </Section>
+        ) : null}
+
         <Pressable
           onPress={handleLogout}
           accessibilityRole="button"
@@ -536,13 +548,13 @@ export default function SettingsScreen() {
         onSave={savePassword}
       />
 
-      <EditGenderModal
+      {/* <EditGenderModal
         visible={showGenderModal}
         value={user?.gender}
         savingValue={savingGender ? genderDraft : null}
         onSelect={(g) => void saveGender(g)}
         onClose={closeGenderModal}
-      />
+      /> */}
 
       <EditRelationshipTypeModal
         visible={showRelationshipTypeModal}

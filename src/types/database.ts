@@ -67,6 +67,11 @@ export interface Relationship {
   distance_mode: boolean;
   subscription_tier?: SubscriptionTier;
   subscription_owner_id?: string | null;
+  /** When the couple's Plus (or its free trial) ends. Written by the RevenueCat webhook. */
+  subscription_expires_at?: string | null;
+  /** 'trial' during the free trial, 'normal' once paying. */
+  subscription_period?: 'trial' | 'normal' | null;
+  subscription_product?: string | null;
   anniversary_date?: string | null;
   relationship_type?: RelationshipType | null;
   created_at: string;

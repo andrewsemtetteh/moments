@@ -7,6 +7,7 @@ import Animated, { useAnimatedStyle, useSharedValue, withRepeat, withSequence, w
 import { PLAY_TONES } from '@/components/activities/explore/explore-catalog';
 import { firstName, shade } from '@/components/games/room-ui';
 import { gameRoom } from '@/lib/game-room/manager';
+import { requirePlusNow } from '@/lib/plus';
 import { getGameDefinition } from '@/lib/game-room/types';
 import { useAuthStore, useRelationshipStore } from '@/stores';
 import { useGameRoomStore } from '@/stores/game-room-store';
@@ -18,6 +19,8 @@ export function openLiveSession() {
     Alert.alert('Connect with your partner', 'Live sessions are for two. Link up with your partner first.');
     return;
   }
+  // Live games are written by AI: Plus (or its free trial).
+  if (!requirePlusNow('Live games')) return;
   void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
   void gameRoom.openRoom();
 }

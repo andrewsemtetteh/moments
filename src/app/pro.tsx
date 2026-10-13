@@ -1,55 +1,70 @@
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect } from 'react';
-import { Platform } from 'react-native';
+import { Alert, Platform } from 'react-native';
 
 import { PaywallScreen } from '@/components/subscription/PaywallScreen';
+import { BILLING_CONNECTED } from '@/constants/subscription';
 import { useSubscription } from '@/hooks/useSubscription';
+import { finishOnboarding } from '@/lib/onboarding-v2';
 import { markOnboardingPaywallDone } from '@/lib/onboarding-storage';
 import { markPaywallDismissed } from '@/lib/paywall-storage';
 import { closeStackScreen } from '@/lib/router';
 import { useAuthStore, useUIStore } from '@/stores';
 
+/**
+ * The last onboarding step. Hybrid pricing: the core app is free, so this
+ * can be closed (you carry on with Free); Plus is offered again when a free
+ * limit is hit (requirePlus). Someone whose space already has Plus (their
+ * partner pays) skips straight past it. Then Home, where the tour starts.
+ */
 export default function ProScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ from?: string; next?: string }>();
+  const params = useLocalSearchParams<{ from?: string; next?: string; preview?: string }>();
   const user = useAuthStore((s) => s.user);
   const { isPlus } = useSubscription();
   const markPaywallShownThisSession = useUIStore((s) => s.markPaywallShownThisSession);
 
   const isOnboarding = params.from === 'onboarding';
-  const nextHref = params.next === 'welcome' ? '/(onboarding)/welcome' : '/(tabs)/home';
+  const preview = params.preview === '1';
 
-  const finishOnboarding = useCallback(async () => {
-    if (user) await markOnboardingPaywallDone(user.id);
-    await markPaywallDismissed();
-    markPaywallShownThisSession();
-    router.replace(nextHref);
-  }, [user, nextHref, markPaywallShownThisSession, router]);
+  const done = useCallback(async () => {
+    if (!preview) {
+      if (user) await markOnboardingPaywallDone(user.id);
+      await markPaywallDismissed();
+      markPaywallShownThisSession();
+    }
+    await finishOnboarding(user?.id, preview);
+    router.replace('/(tabs)/home');
+  }, [user, preview, markPaywallShownThisSession, router]);
 
   useEffect(() => {
-    if (!isOnboarding || !isPlus) return;
-    void finishOnboarding();
-  }, [isOnboarding, isPlus, finishOnboarding]);
+    if (!isOnboarding || !isPlus || preview) return;
+    void done();
+  }, [isOnboarding, isPlus, preview, done]);
 
-  if (Platform.OS === 'web') {
-    return <Redirect href="/(tabs)/home" />;
-  }
-
-  if (isOnboarding && isPlus) {
-    return null;
-  }
+  if (Platform.OS === 'web') return <Redirect href="/(tabs)/home" />;
+  if (isOnboarding && isPlus && !preview) return null;
 
   return (
     <PaywallScreen
+      placement={isOnboarding ? 'onboarding' : 'settings'}
+      // Free core: closing during onboarding just carries on with Free.
       showClose
       swipeToClose={false}
-      onClose={() => {
-        if (isOnboarding) {
-          void finishOnboarding();
-          return;
-        }
-        closeStackScreen(router);
-      }}
+      onClose={() => (isOnboarding ? void done() : closeStackScreen(router))}
+      onRefer={() => router.push({ pathname: '/refer', params: preview ? { preview: '1' } : undefined })}
+      onOpenLegal={(doc) => router.push(doc === 'terms' ? '/legal/terms' : '/legal/privacy')}
+      // Bought (or restored): onboarding finishes; otherwise just close.
+      onPurchased={() => (isOnboarding ? void done() : closeStackScreen(router))}
+      onSubscribe={
+        !BILLING_CONNECTED || preview
+          ? async () => {
+              // No purchases yet (or the preview): don't lock anyone out of the app.
+              if (isOnboarding) await done();
+              else Alert.alert('Coming soon', 'Moments Plus will be available soon.');
+            }
+          : undefined
+      }
     />
   );
 }

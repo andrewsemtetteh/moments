@@ -292,8 +292,18 @@ function DayCell({
 
   if (active) {
     circle = { backgroundColor: STREAK_COLORS.active };
-    // Every streak day is just the flame, in Week and Month alike (as on Home's intro card).
-    content = <Icon name="fire" size={iconSize} color={STREAK_COLORS.onActive} filled />;
+    if (flame) {
+      // Week: just the flame, as on Home's intro card.
+      content = <Icon name="fire" size={iconSize} color={STREAK_COLORS.onActive} filled />;
+    } else {
+      // Month: the date, with a small flame badge on the corner (like a missed day's ✕).
+      content = <Text style={[calStyles.num, calStyles.numActive, { color: STREAK_COLORS.onActive }]}>{number}</Text>;
+      badge = (
+        <View style={[calStyles.cornerBadge, { backgroundColor: '#FFFFFF', borderColor: colors.surface }]}>
+          <Icon name="fire" size={9} color={STREAK_COLORS.active} filled />
+        </View>
+      );
+    }
   } else if (day.state === 'today-at-risk') {
     circle = {
       backgroundColor: dark ? STREAK_COLORS.atRiskSoftDark : STREAK_COLORS.atRiskSoftLight,
@@ -324,7 +334,7 @@ function DayCell({
     };
     content = <Text style={[calStyles.num, calStyles.numActive, { color: STREAK_COLORS.lostDeep }]}>{number}</Text>;
     badge = (
-      <View style={[calStyles.missedBadge, { backgroundColor: STREAK_COLORS.lost, borderColor: colors.surface }]}>
+      <View style={[calStyles.cornerBadge, { backgroundColor: STREAK_COLORS.lost, borderColor: colors.surface }]}>
         <Icon name="close" size={9} color={STREAK_COLORS.onLost} />
       </View>
     );
@@ -531,7 +541,8 @@ const calStyles = StyleSheet.create({
   circle: { alignItems: 'center', justifyContent: 'center' },
   num: { fontSize: 14, fontWeight: '600', letterSpacing: -0.2 },
   numActive: { fontWeight: '900' },
-  missedBadge: {
+  // Small corner badge: ✕ on a missed day, flame on a streak day (month).
+  cornerBadge: {
     position: 'absolute',
     right: -2,
     bottom: -2,

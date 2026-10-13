@@ -20,6 +20,18 @@ export default function OnboardingLayout() {
         // showing a brief mismatched flash during the transition.
         contentStyle: { backgroundColor: colors.background },
       }}>
+      {/* The flow (lib/onboarding-v2): about-you → together-since →
+          relationship-kind → goals → your-plan → theme-picker → widget-prompt
+          → invite → notification-prompt → tracking → /pro. */}
+      {/* First step after sign-up: no swiping back to the auth screens. */}
+      <Stack.Screen name="about-you" options={{ gestureEnabled: false, fullScreenGestureEnabled: false }} />
+      <Stack.Screen name="together-since" />
+      <Stack.Screen name="relationship-kind" />
+      <Stack.Screen name="space-name" />
+      <Stack.Screen name="goals" />
+      <Stack.Screen name="your-plan" />
+      <Stack.Screen name="invite" />
+      <Stack.Screen name="tracking" />
       <Stack.Screen name="profile-name" />
       <Stack.Screen name="profile-setup" />
       <Stack.Screen name="profile-gender" />

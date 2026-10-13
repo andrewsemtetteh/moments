@@ -13,6 +13,7 @@ import { colorWithAlpha } from '@/components/ui/primitives';
 import { Radius, Spacing } from '@/constants/design-system';
 import { useTheme } from '@/hooks/useTheme';
 import { useAuthStore } from '@/stores';
+import { designPass } from '@/lib/onboarding-v2';
 
 // All three free under the Lottie Simple License (commercial use permitted,
 // attribution optional) via LottieFiles: "Couple sharing and caring love" by
@@ -152,6 +153,14 @@ export default function AuthWelcomeScreen() {
     void Haptics.selectionAsync();
     useAuthStore.setState({ session: true, isLoading: false });
     router.replace('/(tabs)/home');
+  };
+
+  // Dev-only: tap through sign-up and the whole onboarding without an account.
+  const handleDesignPass = () => {
+    if (!__DEV__) return;
+    void Haptics.selectionAsync();
+    designPass.on = true;
+    router.push('/(auth)/get-started');
   };
 
   const bottomInset = Math.max(insets.bottom, Spacing.lg);
@@ -316,6 +325,16 @@ export default function AuthWelcomeScreen() {
                       style={({ pressed }) => [styles.devPreview, { opacity: pressed ? 0.6 : 1 }]}>
                       <Text style={[styles.devPreviewText, { color: colors.textSecondary }]}>
                         Preview UI (dev only, no sign-in)
+                      </Text>
+                    </Pressable>
+                  )}
+                  {__DEV__ && (
+                    <Pressable
+                      onPress={handleDesignPass}
+                      hitSlop={8}
+                      style={({ pressed }) => [styles.devPreview, { opacity: pressed ? 0.6 : 1 }]}>
+                      <Text style={[styles.devPreviewText, { color: colors.textSecondary }]}>
+                        Design pass: sign-up and onboarding (dev only)
                       </Text>
                     </Pressable>
                   )}

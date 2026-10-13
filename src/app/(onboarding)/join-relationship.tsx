@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { Alert, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { JoinWithCode } from '@/components/onboarding/JoinWithCode';
 import { OnboardingChrome } from '@/components/onboarding/OnboardingChrome';
 import { PromptLink } from '@/components/ui/PromptLink';
 import { PrimaryButton } from '@/components/ui/primitives';
@@ -19,9 +20,11 @@ import {
 } from '@/lib/onboarding-relationship-params';
 import { markRelationshipOnboardingDone } from '@/lib/onboarding-storage';
 import { goToOnboardingBack } from '@/lib/onboarding-navigation';
+import { goNext } from '@/lib/onboarding-v2';
 import { goBackOrReplace } from '@/lib/router';
 import { queryClient } from '@/providers/AppProviders';
 import { useAuthStore, useRelationshipStore } from '@/stores';
+import { AnalyticsEvents, trackForCouple } from '@/services/analytics';
 import type { RelationshipType } from '@/types/database';
 
 function JoinRelationshipContent({
@@ -29,7 +32,12 @@ function JoinRelationshipContent({
   relationshipType,
   onboardingParams,
   onBack,
+  onJoined,
+  preview = false,
 }: {
+  /** New onboarding: where to go after joining (instead of the old theme step). */
+  onJoined?: () => void;
+  preview?: boolean;
   fromProfile: boolean;
   relationshipType: RelationshipType | null;
   onboardingParams?: OnboardingRelationshipParams;
@@ -46,6 +54,10 @@ function JoinRelationshipContent({
   const [loading, setLoading] = useState(false);
 
   const join = async () => {
+    if (preview) {
+      onJoined?.();
+      return;
+    }
     if (!user || !code.trim()) return;
     setLoading(true);
     try {
@@ -59,8 +71,13 @@ function JoinRelationshipContent({
       }
       await markRelationshipOnboardingDone(user.id);
       setRelationship(relationship);
+      void trackForCouple(AnalyticsEvents.PARTNER_JOINED);
       setPartner(partner);
       queryClient.clear();
+      if (onJoined) {
+        onJoined();
+        return;
+      }
       router.replace({
         pathname: '/(onboarding)/theme-picker',
         params: { next: 'welcome' },
@@ -73,11 +90,7 @@ function JoinRelationshipContent({
   };
 
   return (
-    <View
-      style={[
-        styles.content,
-        { paddingBottom: insets.bottom + Spacing.lg, paddingHorizontal: Spacing.lg },
-      ]}>
+    <View style={[styles.content, { paddingBottom: insets.bottom + Spacing.lg, paddingHorizontal: Spacing.lg }]}>
       <Text style={[styles.title, { color: colors.text }]}>Join your partner</Text>
       <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
         {fromProfile
@@ -125,14 +138,18 @@ function JoinRelationshipContent({
 
 export default function JoinRelationshipScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<OnboardingRelationshipParams & { from?: string }>();
+  const params = useLocalSearchParams<OnboardingRelationshipParams & { from?: string; preview?: string }>();
   const { colors } = useTheme();
   const fromProfile = params.from === 'profile';
+  // The new onboarding's invite step ("They already sent me a code").
+  const fromInvite = params.from === 'invite';
+  const preview = params.preview === '1';
+  const userId = useAuthStore((s) => s.user?.id);
   const parsed = paramsFromSearch(params);
   const relationshipType = parsed.relationshipType ?? null;
 
   useEffect(() => {
-    if (fromProfile) return;
+    if (fromProfile || fromInvite) return;
     if (params.spacePathChosen === 'join') return;
     if (hasCompletedPreSpaceOnboarding(params) && !hasChosenSpacePath(params)) {
       router.replace({
@@ -159,6 +176,16 @@ export default function JoinRelationshipScreen() {
 
   const goBack = () => goBackOrReplace(router, '/(tabs)/profile');
 
+  if (fromInvite) {
+    return (
+      <JoinWithCode
+        preview={preview}
+        onBack={() => router.back()}
+        onJoined={() => void goNext(router, 'invite', { userId, preview })}
+      />
+    );
+  }
+
   if (fromProfile) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
@@ -171,11 +198,7 @@ export default function JoinRelationshipScreen() {
 
   return (
     <OnboardingChrome stepId="join-relationship" onBack={goBackOnboarding}>
-      <JoinRelationshipContent
-        fromProfile={false}
-        relationshipType={relationshipType}
-        onboardingParams={params}
-      />
+      <JoinRelationshipContent fromProfile={false} relationshipType={relationshipType} onboardingParams={params} />
     </OnboardingChrome>
   );
 }

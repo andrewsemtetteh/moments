@@ -83,11 +83,33 @@ Adds:
 
 ---
 
-## Suggested Pricing
+## Current Pricing (one plan per relationship)
 
-* $9.99/month per relationship
-* $79.99/year per relationship (~33% off 12× monthly)
-* $4.99/week per relationship (flexible entry)
+| Plan | Price | Trial | Shown |
+|---|---|---|---|
+| Weekly | $4.99/week | 7 days free | First, selected by default |
+| Yearly | $69.99/year ($1.35/week, save 73%) | 7 days free | Second, "Best value" |
+| Monthly | $9.99/month ($2.31/week) | none | Third |
+
+* One free trial per person (Apple / Google rule); after that, plans start straight away.
+* The trial includes everything in Plus, AI included. AI has a monthly fair-use cap for every
+  Plus couple, trial or paid (200 games / 400 questions a month), enforced on the server
+  (`server/src/billing.ts`).
+* Win back: a one time discounted first year, from a RevenueCat offering named `winback`
+  (shown 3 days after the first paywall close; off until that offering exists).
+* Source of truth in code: `src/constants/subscription.ts`. Store prices (local currency) replace
+  the USD figures on the paywall.
+
+## Where the paywall shows
+
+1. End of onboarding (`/pro`), closable.
+2. When the partner joins (once per couple, for the inviter).
+3. At each free limit (`requirePlus`): daily moments, history, albums, streak restore, AI games.
+4. After a 7+ day streak milestone.
+5. Home reminder, at most once a week.
+6. The win back offer (above).
+
+Never before the partner can join, in chat, or mid game. Logic: `src/components/layout/PaywallMoments.tsx`.
 
 Regional adjustments (optional later):
 

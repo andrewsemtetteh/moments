@@ -36,6 +36,8 @@ import * as api from '@/services/api';
 import { useAuthStore, useMomentStore, useRelationshipStore, useUIStore } from '@/stores';
 import { todayKey } from '@/lib/play-progress';
 import { usePlayProgressStore } from '@/stores/play-progress-store';
+import { PermissionSheetHost } from '@/components/layout/PermissionSheetHost';
+import { ensurePermission } from '@/lib/permissions';
 
 const VIEWFINDER_RADIUS = 28;
 const MAX_VIDEO_SEC = 30;
@@ -100,12 +102,12 @@ export function MomentCreatorModal() {
   const locate = async () => {
     setLocating(true);
     try {
-      const result = await getCurrentPlace();
+      const result = await getCurrentPlace({ host: 'camera' });
       if (result.ok) {
         setPinnedPlace(result.place);
         return true;
       }
-      Alert.alert('Location unavailable', result.message);
+      if (result.message) Alert.alert('Location unavailable', result.message);
       return false;
     } finally {
       setLocating(false);
@@ -173,19 +175,16 @@ export function MomentCreatorModal() {
 
   const ensureCamera = async (): Promise<boolean> => {
     if (!cameraPermission?.granted) {
-      const cam = await requestCameraPermission();
-      if (!cam.granted) return false;
+      if (!(await ensurePermission('camera', { host: 'camera' }))) return false;
+      await requestCameraPermission(); // refresh the hook's status (no dialog once granted)
     }
     return true;
   };
 
   const ensureMic = async (): Promise<boolean> => {
     if (!micPermission?.granted) {
-      const mic = await requestMicPermission();
-      if (!mic.granted) {
-        Alert.alert('Microphone needed', 'Allow microphone access to record video moments for your partner.');
-        return false;
-      }
+      if (!(await ensurePermission('microphone', { host: 'camera' }))) return false;
+      await requestMicPermission();
     }
     return true;
   };
@@ -507,7 +506,7 @@ export function MomentCreatorModal() {
                   <Text style={[styles.permissionText, { color: chrome.textSecondary }]}>
                     Share photos and videos privately with {partnerName}. Camera access is required.
                   </Text>
-                  <Pressable onPress={() => void requestCameraPermission()} style={[styles.permissionBtn, { backgroundColor: chrome.accent }]}>
+                  <Pressable onPress={() => void ensureCamera()} style={[styles.permissionBtn, { backgroundColor: chrome.accent }]}>
                     <Text style={[styles.permissionBtnText, { color: chrome.onAccent }]}>Allow camera</Text>
                   </Pressable>
                 </View>
@@ -594,6 +593,7 @@ export function MomentCreatorModal() {
             </View>
           </>
         )}
+        <PermissionSheetHost host="camera" inline />
       </Animated.View>
     </GestureDetector>
   );

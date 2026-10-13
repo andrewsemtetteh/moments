@@ -11,6 +11,8 @@ import { useTheme } from '@/hooks/useTheme';
 import { getCurrentPlace, openAppSettings } from '@/lib/location';
 
 function showLocationError(message: string, reason?: string) {
+  // "Not now" on the permission sheet: they already chose, no alert needed.
+  if (!message) return;
   const buttons: { text: string; onPress?: () => void; style?: 'cancel' | 'default' }[] = [
     { text: 'OK', style: 'cancel' },
   ];

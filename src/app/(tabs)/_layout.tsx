@@ -6,9 +6,11 @@ import { StreakReminderSync } from '@/components/home/StreakReminderSync';
 import { StreakSparkSync } from '@/components/home/StreakSparkSync';
 import { AppTabBar } from '@/components/layout/AppTabBar';
 import { ChatMessageSync } from '@/components/layout/ChatMessageSync';
+import { PaywallMoments } from '@/components/layout/PaywallMoments';
 import { PlaySync } from '@/components/layout/PlaySync';
 import { HomeSync } from '@/components/layout/HomeSync';
 import { NotificationSync } from '@/components/layout/NotificationSync';
+import { OnboardingTour } from '@/components/layout/OnboardingTour';
 import { StoreReviewSync } from '@/components/layout/StoreReviewSync';
 import { PartnerPresenceSync } from '@/components/profile/PartnerPresenceSync';
 import { PartnerProfileModal } from '@/components/profile/PartnerProfileModal';
@@ -43,6 +45,7 @@ export default function TabsLayout() {
       <NotificationSync />
       <ChatMessageSync />
       <PlaySync />
+      <PaywallMoments />
       <PartnerPresenceSync />
       <PartnerTimezoneSync />
       <RelationshipReminderSync />
@@ -50,6 +53,8 @@ export default function TabsLayout() {
       <StreakSparkSync />
       <StreakReminderSync />
       <StoreReviewSync />
+      {/* Runs once, right after onboarding. */}
+      <OnboardingTour />
       <Tabs
         backBehavior="history"
         tabBar={(props) => <AppTabBar {...props} />}

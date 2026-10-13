@@ -58,4 +58,19 @@ export const AnalyticsEvents = {
   MOOD_SELECTED: 'mood_selected',
   MOOD_VIEWED: 'mood_viewed',
   TAB_VIEWED: 'tab_viewed',
+  // Moments Plus funnel (see src/docs/MONETIZATION.md).
+  PAYWALL_VIEWED: 'paywall_viewed',
+  PAYWALL_CLOSED: 'paywall_closed',
+  TRIAL_STARTED: 'trial_started',
+  PURCHASED: 'purchased',
+  PARTNER_JOINED: 'partner_joined',
 } as const;
+
+/** Logs an event for the signed in user's couple (skipped before a couple exists). */
+export async function trackForCouple(eventType: string, metadata?: Record<string, unknown>) {
+  const { useAuthStore, useRelationshipStore } = await import('@/stores');
+  const userId = useAuthStore.getState().user?.id;
+  const relationshipId = useRelationshipStore.getState().relationship?.id;
+  if (!userId || !relationshipId) return;
+  track({ relationshipId, userId, eventType, metadata });
+}

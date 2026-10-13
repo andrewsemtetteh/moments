@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as StoreReview from 'expo-store-review';
+import { Linking } from 'react-native';
 
 const FIRST_OPEN_KEY = 'moments_store_review_first_open_at';
 const LAST_PROMPT_KEY = 'moments_store_review_last_prompt_at';
@@ -66,4 +67,66 @@ export async function requestStoreReviewFromSettings(): Promise<void> {
     await markStoreReviewCompleted();
     await AsyncStorage.setItem(LAST_PROMPT_KEY, String(Date.now()));
   }
+}
+
+// ── The full-page rating ask (RatingPrompt) ──────────────────────────────────
+// Shows once they've really used the app (7 different days), then, if closed,
+// no sooner than 4 days later; never again once they've rated.
+
+const ACTIVE_DAYS_KEY = 'moments_rating_active_days';
+const DISMISSED_AT_KEY = 'moments_rating_dismissed_at';
+const DAY_MS = 24 * 60 * 60 * 1000;
+const MIN_ACTIVE_DAYS = 7;
+const RESHOW_AFTER_MS = 4 * DAY_MS;
+export const FEEDBACK_EMAIL = 'hello@moments.app';
+
+function todayKey() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+/** Count today as a day of use (call on app open). */
+export async function recordActiveDay(): Promise<number> {
+  const raw = await AsyncStorage.getItem(ACTIVE_DAYS_KEY);
+  const days: string[] = raw ? JSON.parse(raw) : [];
+  const today = todayKey();
+  if (!days.includes(today)) {
+    days.push(today);
+    await AsyncStorage.setItem(ACTIVE_DAYS_KEY, JSON.stringify(days.slice(-60)));
+  }
+  return days.length;
+}
+
+export async function shouldShowRatingPage(): Promise<boolean> {
+  if (await isMarkedReviewed()) return false;
+  const activeDays = await recordActiveDay();
+  if (activeDays < MIN_ACTIVE_DAYS) return false;
+  const dismissed = Number(await AsyncStorage.getItem(DISMISSED_AT_KEY));
+  if (Number.isFinite(dismissed) && dismissed > 0 && Date.now() - dismissed < RESHOW_AFTER_MS) return false;
+  return true;
+}
+
+export async function markRatingPageDismissed(): Promise<void> {
+  await AsyncStorage.setItem(DISMISSED_AT_KEY, String(Date.now()));
+}
+
+/**
+ * "Rate Moments": Apple's star sheet when it's allowed to show (it's capped at
+ * 3 a year), otherwise the App Store page. Either way, never ask again.
+ */
+export async function rateFromPage(): Promise<void> {
+  try {
+    if (await StoreReview.isAvailableAsync()) {
+      await StoreReview.requestReview();
+    } else {
+      const url = StoreReview.storeUrl();
+      if (url) await Linking.openURL(url);
+    }
+  } finally {
+    await markStoreReviewCompleted();
+  }
+}
+
+export async function sendFeedbackFromPage(): Promise<void> {
+  await markRatingPageDismissed();
+  await Linking.openURL(`mailto:${FEEDBACK_EMAIL}?subject=${encodeURIComponent('Moments feedback')}`).catch(() => undefined);
 }

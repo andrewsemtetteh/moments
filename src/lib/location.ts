@@ -1,5 +1,6 @@
 import * as Location from 'expo-location';
 import { Linking, Platform } from 'react-native';
+import { ensurePermission } from '@/lib/permissions';
 
 export interface PlaceCoords {
   latitude: number;
@@ -96,7 +97,11 @@ export async function requestLocationPermission(): Promise<boolean> {
   return status === 'granted';
 }
 
-export async function getCurrentPlace(): Promise<LocationResult> {
+/**
+ * Where you are now. Asks for location the friendly way first (our sheet,
+ * then iPhone's); "Not now" comes back as permission_denied with no message.
+ */
+export async function getCurrentPlace(opts: { host?: string } = {}): Promise<LocationResult> {
   const servicesEnabled = await Location.hasServicesEnabledAsync();
   if (!servicesEnabled) {
     return {
@@ -110,13 +115,8 @@ export async function getCurrentPlace(): Promise<LocationResult> {
     await Location.enableNetworkProviderAsync().catch(() => undefined);
   }
 
-  const { status } = await Location.requestForegroundPermissionsAsync();
-  if (status !== 'granted') {
-    return {
-      ok: false,
-      reason: 'permission_denied',
-      message: 'Moments needs location permission to share where you are. Allow access in Settings.',
-    };
+  if (!(await ensurePermission('location', opts))) {
+    return { ok: false, reason: 'permission_denied', message: '' };
   }
 
   const position = await readPosition();

@@ -2,6 +2,7 @@ import { createClerkClient } from '@clerk/backend';
 import { Hono } from 'hono';
 
 import { requireAuth, type AuthVariables } from './auth';
+import { billingWebhooks, carryPersonalPlus } from './billing';
 import { compat } from './compat';
 import { verifyToken } from '@clerk/backend';
 import { buildUpdate, generateId, isRelationshipMember, nowIso, parseJson } from './db';
@@ -54,6 +55,9 @@ app.get('/ws/:relationshipId', async (c) => {
   return stub.fetch(new Request(url.toString(), c.req.raw));
 });
 
+// RevenueCat calls this with its own secret, not a Clerk token, so it sits before auth.
+app.route('/webhooks', billingWebhooks);
+
 app.use('*', requireAuth);
 
 // ---------------------------------------------------------------------------
@@ -88,10 +92,7 @@ const USER_UPDATE_FIELDS = [
   'name',
   'avatar_url',
   'gender',
-  'subscription_tier',
-  'subscription_expires_at',
-  'revenuecat_customer_id',
-  'revenuecat_subscription_id',
+  // Subscription fields are written only by the RevenueCat webhook (see billing.ts).
   'location_sharing_enabled',
   'location_latitude',
   'location_longitude',
@@ -200,6 +201,7 @@ app.post('/relationships', async (c) => {
   )
     .bind(id, userId, inviteCode, body.relationship_name ?? 'Our Moments', body.anniversary_date ?? null, body.relationship_type ?? null)
     .run();
+  await carryPersonalPlus(c.env, userId, id);
 
   const created = await c.env.DB.prepare('SELECT * FROM relationships WHERE id = ?1').bind(id).first();
   return c.json(created, 201);
@@ -252,6 +254,8 @@ app.post('/relationships/join', async (c) => {
       `UPDATE relationships SET user_2_id = ?1, status = 'active', invite_code = NULL WHERE id = ?2`,
     ).bind(userId, target.id),
   ]);
+  // If the joining partner already pays, their Plus now covers this couple.
+  await carryPersonalPlus(c.env, userId, target.id);
 
   const joined = await c.env.DB.prepare('SELECT * FROM relationships WHERE id = ?1').bind(target.id).first();
   const partner = await c.env.DB.prepare('SELECT * FROM users WHERE id = ?1').bind(target.user_1_id).first();

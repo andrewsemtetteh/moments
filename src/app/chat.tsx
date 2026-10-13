@@ -1,6 +1,5 @@
 import {
   RecordingPresets,
-  requestRecordingPermissionsAsync,
   setAudioModeAsync,
   useAudioRecorder,
   useAudioRecorderState,
@@ -64,6 +63,7 @@ import { backend } from '@/lib/backend';
 import * as api from '@/services/api';
 import { useAuthStore, useOfflineStore, useRelationshipStore, useUIStore } from '@/stores';
 import type { Message } from '@/types/database';
+import { ensurePermission } from '@/lib/permissions';
 
 /** Voice notes: high quality with live levels for the recording waveform. */
 const VOICE_PRESET = { ...RecordingPresets.HIGH_QUALITY, isMeteringEnabled: true };
@@ -583,11 +583,7 @@ export default function ChatScreen() {
   const sendImageMessage = (uri: string, mediaType: 'image' | 'video') => sendLocalMedia(uri, mediaType);
 
   const handlePickGallery = async () => {
-    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!perm.granted) {
-      Alert.alert('Permission required', 'Allow access to your photo library in Settings.');
-      return;
-    }
+    if (!(await ensurePermission('photos'))) return;
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images', 'videos'],
       quality: 0.8,
@@ -697,7 +693,7 @@ export default function ChatScreen() {
     try {
       const result = await getCurrentPlace();
       if (!result.ok) {
-        Alert.alert('Location unavailable', result.message);
+        if (result.message) Alert.alert('Location unavailable', result.message);
         return;
       }
 
@@ -749,14 +745,7 @@ export default function ChatScreen() {
   const startRecording = async (): Promise<boolean> => {
     if (isRecordingRef.current) return true;
     try {
-      const { granted } = await requestRecordingPermissionsAsync();
-      if (!granted) {
-        Alert.alert(
-          'Microphone access required',
-          'Go to Settings and enable microphone access for Moments to send voice messages.',
-        );
-        return false;
-      }
+      if (!(await ensurePermission('microphone'))) return false;
 
       await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
       await audioRecorder.prepareToRecordAsync();

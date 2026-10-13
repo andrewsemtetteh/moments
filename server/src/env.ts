@@ -6,5 +6,7 @@ declare global {
   interface Env {
     CLERK_SECRET_KEY: string;
     ANTHROPIC_API_KEY?: string;
+    /** RevenueCat webhook Authorization value (sent as 'Bearer <secret>'). */
+    REVENUECAT_WEBHOOK_SECRET?: string;
   }
 }

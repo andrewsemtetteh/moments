@@ -30,15 +30,14 @@ export function needsProfileGender(user: UserProfile): boolean {
 export function needsProfileSetup(user: UserProfile, avatarPromptDone: boolean): boolean {
   if (needsProfileName(user)) return true;
   if (needsProfilePhoto(user, avatarPromptDone)) return true;
-  if (needsProfileGender(user)) return true;
+  // Gender left onboarding; it's optional in Settings now.
   return false;
 }
 
 export function profileSetupEntryRoute(user: UserProfile, avatarPromptDone: boolean): string {
-  if (needsProfileName(user)) return '/(onboarding)/profile-name';
-  if (needsProfilePhoto(user, avatarPromptDone)) return '/(onboarding)/profile-setup';
-  if (needsProfileGender(user)) return '/(onboarding)/profile-gender';
-  return '/(onboarding)/anniversary-setup';
+  // Name and photo now share one step (onboarding-v2).
+  if (needsProfileName(user) || needsProfilePhoto(user, avatarPromptDone)) return '/(onboarding)/about-you';
+  return '/(onboarding)/together-since';
 }
 
 export function defaultSignupName(email: string): string {
