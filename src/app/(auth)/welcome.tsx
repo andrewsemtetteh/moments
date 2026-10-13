@@ -36,7 +36,7 @@ const SLIDES = [
     kind: 'lottie' as const,
     animation: require('@/assets/lottie/couple-daily.json'),
     title: ['Go ', 'deeper', ' than small talk.'],
-    body: 'A question a day that sparks real conversations.',
+    body: 'A question a day, cards and games that spark real conversations.',
     scale: 1,
   },
   {
