@@ -1,4 +1,5 @@
 import type { ConfigContext, ExpoConfig } from 'expo/config';
+import { withAndroidManifest, type ConfigPlugin } from 'expo/config-plugins';
 
 const STREAMING_SCHEMES = [
   'nflx',
@@ -23,26 +24,46 @@ const ANDROID_STREAMING_PACKAGES = [
   'com.crunchyroll.crunchyroid',
 ];
 
-export default ({ config }: ConfigContext): ExpoConfig => {
-  const base = require('./app.json').expo;
+/**
+ * Android 11+ package visibility: lets the app check whether streaming apps
+ * are installed (watch-together links). `android.queries` isn't part of the
+ * Expo config schema, so this writes the <queries> block into the manifest.
+ */
+const withStreamingQueries: ConfigPlugin = (config) =>
+  withAndroidManifest(config, (mod) => {
+    const manifest = mod.modResults.manifest as unknown as {
+      queries?: { intent?: unknown[]; package?: unknown[] }[];
+    };
+    const queries = manifest.queries?.[0] ?? {};
+    queries.intent = [
+      ...(queries.intent ?? []),
+      ...STREAMING_SCHEMES.map((scheme) => ({
+        action: [{ $: { 'android:name': 'android.intent.action.VIEW' } }],
+        data: [{ $: { 'android:scheme': scheme } }],
+      })),
+    ];
+    queries.package = [
+      ...(queries.package ?? []),
+      ...ANDROID_STREAMING_PACKAGES.map((pkg) => ({ $: { 'android:name': pkg } })),
+    ];
+    manifest.queries = [queries];
+    return mod;
+  });
+
+export default ({ config: base }: ConfigContext): ExpoConfig => {
+  // `base` is app.json's "expo" object, as Expo hands it in.
   const existing = (base.ios?.infoPlist?.LSApplicationQueriesSchemes as string[] | undefined) ?? [];
 
-  return {
+  const config: ExpoConfig = {
     ...base,
+    name: base.name ?? 'Moments',
+    slug: base.slug ?? 'moments',
     ios: {
       ...base.ios,
       infoPlist: {
         ...base.ios?.infoPlist,
         LSApplicationQueriesSchemes: [...new Set([...existing, ...STREAMING_SCHEMES])],
       },
-    },
-    android: {
-      ...base.android,
-      queries: [
-        ...((base.android?.queries as object[] | undefined) ?? []),
-        ...STREAMING_SCHEMES.map((scheme) => ({ scheme })),
-        ...ANDROID_STREAMING_PACKAGES.map((pkg) => ({ package: pkg })),
-      ],
     },
     extra: {
       ...base.extra,
@@ -54,4 +75,5 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       },
     },
   };
+  return withStreamingQueries(config);
 };

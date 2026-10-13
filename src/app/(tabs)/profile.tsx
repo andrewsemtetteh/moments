@@ -25,6 +25,7 @@ import { Spacing, type ThemeColors } from '@/constants/design-system';
 import { useStreak } from '@/hooks/queries';
 import { useOpenPartnerProfile } from '@/hooks/useOpenPartnerProfile';
 import { REFERRAL_DAYS } from '@/constants/subscription';
+import { usePlanActions } from '@/hooks/usePlanActions';
 import { useSubscription } from '@/hooks/useSubscription';
 import { useTheme } from '@/hooks/useTheme';
 import { getRelationshipAnniversaryDate } from '@/lib/anniversary';
@@ -88,7 +89,8 @@ export default function ProfileScreen() {
   const user = useAuthStore((s) => s.user);
   const setUser = useAuthStore((s) => s.setUser);
   const setShowWrapped = useUIStore((s) => s.setShowWrapped);
-  const openPaywall = useUIStore((s) => s.openPaywall);
+  // The Plus card: paywall (Free), Customer Center (paid here), or a note (partner pays).
+  const { openPlan } = usePlanActions();
   // eslint-disable-next-line @typescript-eslint/no-unused-vars -- kept for the quick actions commented out below
   const openPartnerProfile = useOpenPartnerProfile();
   const { isPlus, isOwner } = useSubscription();
@@ -382,7 +384,7 @@ export default function ProfileScreen() {
           ) : null}
 
           <Pressable
-            onPress={openPaywall}
+            onPress={openPlan}
             accessibilityRole="button"
             accessibilityLabel={isPlus ? 'Moments Plus active' : 'Try Moments Plus'}
             style={({ pressed }) => [pressed && styles.pressedScale]}>

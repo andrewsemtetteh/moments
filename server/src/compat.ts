@@ -21,6 +21,7 @@ import {
 import { generateId, isRelationshipMember, nowIso, parseJson, relationshipIdsForUser } from './db';
 import { stripProtected } from './billing';
 import { runFunction } from './functions';
+import { onPaired } from './pairing';
 import './env';
 
 /**
@@ -463,6 +464,8 @@ const RPC: Record<string, RpcHandler> = {
   },
 
   async join_relationship_by_invite(env, userId, a) {
+    // Invite codes are short: limit guesses (10 per 10 minutes per person).
+    await consumeRateLimit(env, `join:${userId}`, 10, 600);
     const code = String(a.p_invite_code ?? '').trim().toUpperCase();
     if (code.length < 6) throw new ApiError('Invalid or expired invite code');
     const target = await env.DB.prepare(
@@ -483,6 +486,7 @@ const RPC: Record<string, RpcHandler> = {
     ]);
     const joined = await env.DB.prepare('SELECT * FROM relationships WHERE id = ?1').bind(target.id).first<Record<string, unknown>>();
     if (joined) await emitRow(env, 'relationships', 'UPDATE', joined);
+    await onPaired(env, target.id, userId, target.user_1_id);
     return joined ? shapeRow(joined) : null;
   },
 
@@ -694,6 +698,7 @@ compat.post('/storage/:bucket/*', async (c) => {
     const bucket = c.req.param('bucket');
     const path = decodeURIComponent(c.req.path.replace(`/storage/${bucket}/`, ''));
     await assertStorageAccess(c.env, c.get('userId'), bucket, path);
+    await consumeRateLimit(c.env, `upload:${c.get('userId')}`, 60, 60);
     const body = await c.req.arrayBuffer();
     if (body.byteLength > 50 * 1024 * 1024) throw new ApiError('File too large', 413);
     await c.env.STORAGE.put(`${bucket}/${path}`, body, {
@@ -728,7 +733,9 @@ compat.post('/storage-remove/:bucket', async (c) => {
 compat.post('/fn/:name', async (c) => {
   try {
     const body = await c.req.json<Record<string, unknown>>().catch(() => ({}));
-    const data = await runFunction(c.env, c.get('userId'), c.req.param('name'), body, consumeRateLimit);
+    const data = await runFunction(c.env, c.get('userId'), c.req.param('name'), body, consumeRateLimit, (task) =>
+      c.executionCtx.waitUntil(task),
+    );
     return c.json({ data, error: null });
   } catch (e) {
     return c.json({ data: null, error: dbError(e) });

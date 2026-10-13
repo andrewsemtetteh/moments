@@ -1,0 +1,18 @@
+# Cloudflare Worker secrets (server). Gitignored. Used by `wrangler dev` locally;
+# production copies are uploaded to Cloudflare with `npx wrangler secret put <NAME>`.
+
+# Required: Clerk > Configure > API Keys > Secret key (same Clerk instance as EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY)
+CLERK_SECRET_KEY=
+
+# AI. Set one. OPENAI_API_KEY takes priority when both are set.
+# Prototype - Gemini 3.1 Flash-Lite: https://aistudio.google.com/apikey
+GEMINI_API_KEY=
+# Production - GPT-4o-mini: https://platform.openai.com/api-keys
+OPENAI_API_KEY=
+
+# Only if selling Plus: any long random string you make up. Put the same value in
+# RevenueCat > Integrations > Webhooks > Authorization header as: Bearer <value>
+REVENUECAT_WEBHOOK_SECRET=
+# Optional, recommended: RevenueCat > Webhooks > Enable HMAC webhook signing shows a signing secret once.
+# Paste it here; the Worker then also verifies X-RevenueCat-Webhook-Signature on every delivery.
+REVENUECAT_WEBHOOK_SIGNING_SECRET=

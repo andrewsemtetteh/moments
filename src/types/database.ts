@@ -72,6 +72,8 @@ export interface Relationship {
   /** 'trial' during the free trial, 'normal' once paying. */
   subscription_period?: 'trial' | 'normal' | null;
   subscription_product?: string | null;
+  /** Free Plus from referrals, until this time. Written by the server only. */
+  bonus_plus_until?: string | null;
   anniversary_date?: string | null;
   relationship_type?: RelationshipType | null;
   created_at: string;

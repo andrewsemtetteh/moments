@@ -1,3 +1,4 @@
+import { useAuth } from '@clerk/expo';
 import * as Clipboard from 'expo-clipboard';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
@@ -8,8 +9,10 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { TwoCouplesCharacters } from '@/components/onboarding/Characters';
 import { Icon } from '@/components/ui/Icon';
+import { referralLink } from '@/constants/links';
 import { REFERRAL_DAYS } from '@/constants/subscription';
 import { useTheme } from '@/hooks/useTheme';
+import { getMyReferral } from '@/lib/moments-api';
 import { useAuthStore } from '@/stores';
 
 const STEPS = [
@@ -29,8 +32,30 @@ export default function ReferScreen() {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const user = useAuthStore((s) => s.user);
-  const code = (user?.id ?? 'MOMENTS').replace(/[^a-zA-Z0-9]/g, '').slice(-6).toUpperCase();
-  const link = `moments.app/i/${code}`;
+  const { getToken } = useAuth();
+  // Your own referral code (made by the server on first visit).
+  const [code, setCode] = useState<string | null>(null);
+  useEffect(() => {
+    if (!user?.id) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const token = await getToken();
+        if (!token) return;
+        const res = await getMyReferral(token);
+        if (!cancelled) setCode(res.code);
+      } catch {
+        // Offline: the link fills in next time.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id, getToken]);
+  // No account in the dev walkthrough: show a sample link.
+  const shownCode = code ?? (user ? null : 'SAMPLE7');
+  const fullLink = shownCode ? referralLink(shownCode) : '';
+  const link = shownCode ? fullLink.replace(/^https:\/\//, '') : 'Getting your link…';
   const [copied, setCopied] = useState(false);
   // Copying counts as sharing: they'll paste it themselves, so the button moves them on.
   const [copiedOnce, setCopiedOnce] = useState(false);
@@ -46,9 +71,10 @@ export default function ReferScreen() {
   }, [copied]);
 
   const share = async () => {
+    if (!fullLink) return;
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const result = await Share.share({
-      message: `We use Moments to stay close every day. Join with our link and we both get ${REFERRAL_DAYS} days of Plus free: https://${link}`,
+      message: `We use Moments to stay close every day. Join with our link and we both get ${REFERRAL_DAYS} days of Plus free: ${fullLink}`,
     });
     if (result.action === Share.sharedAction) setSent(true);
   };
@@ -84,7 +110,8 @@ export default function ReferScreen() {
 
         <Pressable
           onPress={() => {
-            void Clipboard.setStringAsync(`https://${link}`);
+            if (!fullLink) return;
+            void Clipboard.setStringAsync(fullLink);
             void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
             setCopied(true);
             setCopiedOnce(true);

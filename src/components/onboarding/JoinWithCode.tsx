@@ -1,12 +1,13 @@
 import { useAuth } from '@clerk/expo';
 import LottieView from 'lottie-react-native';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Alert, StyleSheet, TextInput } from 'react-native';
 
 import { OnboardingStepScreen } from '@/components/onboarding/OnboardingStepScreen';
 import { useTheme } from '@/hooks/useTheme';
 import { joinRelationshipByInvite } from '@/lib/moments-api';
 import { markRelationshipOnboardingDone } from '@/lib/onboarding-storage';
+import { clearPendingInvite, getPendingInvite } from '@/lib/pending-links';
 import { queryClient } from '@/providers/AppProviders';
 import { useAuthStore, useRelationshipStore } from '@/stores';
 import { AnalyticsEvents, trackForCouple } from '@/services/analytics';
@@ -31,6 +32,12 @@ export function JoinWithCode({
   const setRelationship = useRelationshipStore((s) => s.setRelationship);
   const setPartner = useRelationshipStore((s) => s.setPartner);
   const [code, setCode] = useState('');
+  // Filled in from your partner's invite link, if you opened one.
+  useEffect(() => {
+    void getPendingInvite().then((pending) => {
+      if (pending) setCode((c) => c || pending.slice(0, 6));
+    });
+  }, []);
   const [busy, setBusy] = useState(false);
 
   const join = async () => {
@@ -49,6 +56,7 @@ export function JoinWithCode({
       void trackForCouple(AnalyticsEvents.PARTNER_JOINED);
       setPartner(partner);
       queryClient.clear();
+      await clearPendingInvite();
       onJoined();
     } catch (e) {
       Alert.alert('Couldn’t join', e instanceof Error ? e.message : 'Check the code and try again.');

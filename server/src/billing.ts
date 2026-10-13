@@ -17,6 +17,10 @@ export const PROTECTED_COLUMNS = new Set([
   'subscription_product',
   'revenuecat_customer_id',
   'revenuecat_subscription_id',
+  // Referrals: written by the server only, or anyone could give themselves Plus.
+  'bonus_plus_until',
+  'referral_code',
+  'referred_by',
 ]);
 
 /** Drops protected subscription columns from a client write. */
@@ -36,6 +40,10 @@ type RelationshipPlus = {
 export type PlusState = { plus: boolean; trial: boolean; expiresAt: string | null };
 
 export function plusStateOf(rel: RelationshipPlus | null | undefined): PlusState {
+  // Referral bonus days (bonus_plus_until) count as Plus, whatever RevenueCat says.
+  const bonus = (rel as { bonus_plus_until?: string | null } | null | undefined)?.bonus_plus_until;
+  const paid = rel?.subscription_tier === 'plus' && !!rel?.subscription_owner_id;
+  if (!paid && bonus && Date.parse(bonus) > Date.now()) return { plus: true, trial: false, expiresAt: bonus };
   if (!rel || rel.subscription_tier !== 'plus' || !rel.subscription_owner_id) {
     return { plus: false, trial: false, expiresAt: null };
   }
@@ -46,7 +54,7 @@ export function plusStateOf(rel: RelationshipPlus | null | undefined): PlusState
 
 export async function getPlusState(env: Env, relationshipId: string): Promise<PlusState> {
   const rel = await env.DB.prepare(
-    'SELECT subscription_tier, subscription_owner_id, subscription_expires_at, subscription_period FROM relationships WHERE id = ?1',
+    'SELECT subscription_tier, subscription_owner_id, subscription_expires_at, subscription_period, bonus_plus_until FROM relationships WHERE id = ?1',
   )
     .bind(relationshipId)
     .first<RelationshipPlus>();
@@ -125,6 +133,8 @@ export async function recordAi(env: Env, relationshipId: string, periodKey: stri
 
 type RevenueCatEvent = {
   id?: string;
+  /** Entitlements this event is about; Moments only grants on `moments_unlimited`. */
+  entitlement_ids?: string[] | null;
   type?: string;
   app_user_id?: string;
   original_app_user_id?: string;
@@ -168,6 +178,8 @@ async function activeRelationshipId(env: Env, userId: string): Promise<string | 
 async function applyEvent(env: Env, event: RevenueCatEvent) {
   const type = event.type ?? '';
   if (NO_CHANGE_EVENTS.has(type)) return;
+  // Only Moments Plus (other entitlements, if any are added later, don't unlock the couple).
+  if (event.entitlement_ids?.length && !event.entitlement_ids.includes(PLUS_ENTITLEMENT)) return;
   const userId = clerkUserId(event);
   if (!userId) return;
 
@@ -215,14 +227,70 @@ async function applyEvent(env: Env, event: RevenueCatEvent) {
 
 export const billingWebhooks = new Hono<{ Bindings: Env }>();
 
+/** The RevenueCat entitlement that is Moments Plus (same id as the app's PLUS_ENTITLEMENT). */
+export const PLUS_ENTITLEMENT = 'moments_unlimited';
+
+/** Signed deliveries older or newer than this are rejected (stops replays). */
+const SIGNATURE_TOLERANCE_S = 5 * 60;
+
+/** Constant-time string compare (no early exit that leaks how much matched). */
+function safeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
+
+/**
+ * RevenueCat HMAC signing: `X-RevenueCat-Webhook-Signature: t=<unix seconds>,v1=<hex>`, where v1 is
+ * HMAC-SHA256(signing secret, "<t>.<raw body>"). Checked over the raw bytes, before any JSON parsing.
+ */
+async function validSignature(header: string | undefined, rawBody: string, signingSecret: string): Promise<boolean> {
+  if (!header) return false;
+  const parts = Object.fromEntries(
+    header.split(',').map((p) => {
+      const i = p.indexOf('=');
+      return [p.slice(0, i).trim(), p.slice(i + 1).trim()];
+    }),
+  );
+  const t = Number(parts.t);
+  const v1 = parts.v1;
+  if (!Number.isFinite(t) || !v1) return false;
+  if (Math.abs(Date.now() / 1000 - t) > SIGNATURE_TOLERANCE_S) return false;
+
+  const key = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(signingSecret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign'],
+  );
+  const mac = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(`${parts.t}.${rawBody}`));
+  const expected = [...new Uint8Array(mac)].map((b) => b.toString(16).padStart(2, '0')).join('');
+  return safeEqual(expected, v1.toLowerCase());
+}
+
 billingWebhooks.post('/revenuecat', async (c) => {
   const secret = c.env.REVENUECAT_WEBHOOK_SECRET;
-  // The Authorization header set in RevenueCat's webhook settings.
-  if (!secret || c.req.header('Authorization') !== `Bearer ${secret}`) {
+  // 1 · The Authorization header set in RevenueCat's webhook settings.
+  if (!secret || !safeEqual(c.req.header('Authorization') ?? '', `Bearer ${secret}`)) {
     return c.json({ error: 'Unauthorized' }, 401);
   }
 
-  const body = await c.req.json<{ event?: RevenueCatEvent }>().catch(() => null);
+  // 2 · HMAC signature, once a signing secret is set (REVENUECAT_WEBHOOK_SIGNING_SECRET).
+  const rawBody = await c.req.text();
+  const signingSecret = c.env.REVENUECAT_WEBHOOK_SIGNING_SECRET;
+  if (signingSecret && !(await validSignature(c.req.header('X-RevenueCat-Webhook-Signature'), rawBody, signingSecret))) {
+    return c.json({ error: 'Bad signature' }, 401);
+  }
+
+  const body = (() => {
+    try {
+      return JSON.parse(rawBody) as { event?: RevenueCatEvent };
+    } catch {
+      return null;
+    }
+  })();
   const event = body?.event;
   if (!event?.type) return c.json({ error: 'No event' }, 400);
 

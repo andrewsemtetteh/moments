@@ -1,11 +1,16 @@
 import { createClerkClient } from '@clerk/backend';
 import { Hono } from 'hono';
 
+import { deleteAccount } from './account';
 import { requireAuth, type AuthVariables } from './auth';
 import { billingWebhooks, carryPersonalPlus } from './billing';
 import { compat } from './compat';
+import { stockBanks } from './functions';
 import { verifyToken } from '@clerk/backend';
 import { buildUpdate, generateId, isRelationshipMember, nowIso, parseJson } from './db';
+import { onPaired } from './pairing';
+import { rateLimit } from './rate-limit';
+import { claimReferral, referralSummary } from './referrals';
 import './env';
 
 const USERNAME_PATTERN = /^[a-z0-9_]{4,64}$/;
@@ -118,6 +123,41 @@ app.patch('/me', async (c) => {
   return c.json(updated);
 });
 
+/**
+ * Permanently delete my account (App Store guideline 5.1.1(v)): my shared
+ * spaces close and their content goes, then my own data, media and sign-in.
+ */
+app.delete('/me', rateLimit('delete-account', 5, 3600), async (c) => {
+  const userId = c.get('userId');
+  try {
+    await deleteAccount(c.env, userId);
+    return c.json({ ok: true });
+  } catch (e) {
+    console.error('delete account failed', userId, e);
+    return c.json({ error: 'Could not delete your account. Please try again.' }, 500);
+  }
+});
+
+/** My referral code and how many couples I've brought in. */
+app.get('/me/referral', async (c) => {
+  try {
+    return c.json(await referralSummary(c.env, c.get('userId')));
+  } catch (e) {
+    return c.json({ error: e instanceof Error ? e.message : 'Something went wrong' }, 500);
+  }
+});
+
+/** I opened someone's referral link: remember who invited me (credited when I pair). */
+app.post('/referrals/claim', rateLimit('referral-claim', 10, 3600), async (c) => {
+  const { code } = await c.req.json<{ code?: string }>().catch(() => ({ code: undefined }));
+  try {
+    return c.json(await claimReferral(c.env, c.get('userId'), String(code ?? '')));
+  } catch (e) {
+    const status = (e as { status?: number }).status ?? 400;
+    return c.json({ error: e instanceof Error ? e.message : 'Could not use that link' }, status as 400);
+  }
+});
+
 /** Live availability check while the user types — does not claim the username. */
 app.get('/username-available', async (c) => {
   const candidate = (c.req.query('u') ?? '').toLowerCase();
@@ -139,7 +179,7 @@ const IMAGE_CONTENT_TYPES: Record<string, string> = {
   'image/heic': 'heic',
 };
 
-app.post('/me/avatar', async (c) => {
+app.post('/me/avatar', rateLimit('avatar', 10, 600), async (c) => {
   const userId = c.get('userId');
   const contentType = c.req.header('Content-Type') ?? '';
   const ext = IMAGE_CONTENT_TYPES[contentType];
@@ -228,7 +268,7 @@ app.post('/relationships/:id/invite-code', async (c) => {
 });
 
 /** Mirrors join_relationship_by_invite(): ends the caller's own pending space, joins the target one. */
-app.post('/relationships/join', async (c) => {
+app.post('/relationships/join', rateLimit('join', 10, 600), async (c) => {
   const userId = c.get('userId');
   const body = await c.req.json<{ inviteCode: string }>();
   const code = body.inviteCode?.trim().toUpperCase();
@@ -256,6 +296,8 @@ app.post('/relationships/join', async (c) => {
   ]);
   // If the joining partner already pays, their Plus now covers this couple.
   await carryPersonalPlus(c.env, userId, target.id);
+  // Tell the inviter, and credit any referral that brought them here.
+  await onPaired(c.env, target.id, userId, target.user_1_id, (task) => c.executionCtx.waitUntil(task));
 
   const joined = await c.env.DB.prepare('SELECT * FROM relationships WHERE id = ?1').bind(target.id).first();
   const partner = await c.env.DB.prepare('SELECT * FROM users WHERE id = ?1').bind(target.user_1_id).first();
@@ -292,15 +334,18 @@ app.get('/relationships/:id/moments', async (c) => {
   const relationshipId = c.req.param('id');
   if (!(await isRelationshipMember(c.env.DB, userId, relationshipId))) return c.json({ error: 'Forbidden' }, 403);
 
+  const before = c.req.query('before');
+  const limit = Math.min(Math.max(Number(c.req.query('limit')) || 300, 1), 500);
   const { results } = await c.env.DB.prepare(
-    'SELECT * FROM moments WHERE relationship_id = ?1 ORDER BY created_at DESC',
+    `SELECT * FROM moments WHERE relationship_id = ?1 ${before ? 'AND created_at < ?3' : ''}
+     ORDER BY created_at DESC LIMIT ?2`,
   )
-    .bind(relationshipId)
+    .bind(...(before ? [relationshipId, limit, before] : [relationshipId, limit]))
     .all();
   return c.json(results);
 });
 
-app.post('/relationships/:id/moments', async (c) => {
+app.post('/relationships/:id/moments', rateLimit('moment', 30, 60), async (c) => {
   const userId = c.get('userId');
   const relationshipId = c.req.param('id');
   if (!(await isRelationshipMember(c.env.DB, userId, relationshipId))) return c.json({ error: 'Forbidden' }, 403);
@@ -365,7 +410,7 @@ app.get('/relationships/:id/messages', async (c) => {
   return c.json(results);
 });
 
-app.post('/relationships/:id/messages', async (c) => {
+app.post('/relationships/:id/messages', rateLimit('message', 120, 60), async (c) => {
   const userId = c.get('userId');
   const relationshipId = c.req.param('id');
   if (!(await isRelationshipMember(c.env.DB, userId, relationshipId))) return c.json({ error: 'Forbidden' }, 403);
@@ -558,4 +603,13 @@ app.route('/', compat);
 
 export { Hub } from './hub';
 
-export default app;
+export default {
+  fetch: app.fetch,
+  // Hourly: top up the emptiest shared content banks. Few AI calls per run keeps it inside the free CPU limit.
+  async scheduled(_event: ScheduledController, env: Env, ctx: ExecutionContext) {
+    ctx.waitUntil(stockBanks(env, 6));
+    // Rate-limit windows older than a day are never read again: clear them so the table stays small.
+    const dayAgo = Math.floor(Date.now() / 1000) - 86_400;
+    ctx.waitUntil(env.DB.prepare('DELETE FROM rate_limits WHERE window_start < ?1').bind(dayAgo).run());
+  },
+} satisfies ExportedHandler<Env>;

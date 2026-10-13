@@ -157,6 +157,9 @@ export function PaywallScreen({
           offer: winback ? 'winback' : null,
         });
         (onPurchased ?? onClose)?.();
+      } else if (result === 'pending') {
+        Alert.alert('Payment pending', message ?? 'Plus unlocks as soon as your payment is approved.');
+        onClose?.();
       } else if (result !== 'cancelled') {
         Alert.alert('That didn’t go through', message ?? 'Nothing was charged. Please try again.');
       }

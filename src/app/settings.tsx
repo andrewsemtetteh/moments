@@ -1,4 +1,4 @@
-import { useUser } from '@clerk/expo';
+import { useAuth, useUser } from '@clerk/expo';
 import { format, parseISO } from 'date-fns';
 import Constants from 'expo-constants';
 import * as Haptics from 'expo-haptics';
@@ -21,12 +21,14 @@ import { ScreenHeader } from '@/components/layout/ScreenHeader';
 import { Icon, type IconName } from '@/components/ui/Icon';
 import { Avatar, colorWithAlpha } from '@/components/ui/primitives';
 import { THEME_META, Spacing, Themes, type AppTheme, type ThemeColors } from '@/constants/design-system';
+import { usePlanActions } from '@/hooks/usePlanActions';
 import { useSubscription } from '@/hooks/useSubscription';
 import { REFERRAL_DAYS } from '@/constants/subscription';
 import { useTheme } from '@/hooks/useTheme';
 import { getRelationshipAnniversaryIso, isValidAnniversaryIso } from '@/lib/anniversary';
 import { formatAuthError } from '@/lib/auth-errors';
 import { signOutUser } from '@/lib/auth-session';
+import { deleteMyAccount } from '@/lib/moments-api';
 import { getFirstName } from '@/lib/avatar-initial';
 import { markRelationshipOnboardingDone } from '@/lib/onboarding-storage';
 // import { profileGenderLabel } from '@/lib/profile-gender';
@@ -55,15 +57,17 @@ export default function SettingsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { colors, theme, setTheme } = useTheme();
-  const openPaywall = useUIStore((s) => s.openPaywall);
   const cardSurface = surfaceStyle(colors);
   const relationship = useRelationshipStore((s) => s.relationship);
   const setRelationship = useRelationshipStore((s) => s.setRelationship);
   const partner = useRelationshipStore((s) => s.partner);
   const user = useAuthStore((s) => s.user);
+  const { getToken } = useAuth();
   const setUser = useAuthStore((s) => s.setUser);
   const { user: clerkUser } = useUser();
   const { isPlus, isOwner } = useSubscription();
+  // Your plan: paywall (Free), Customer Center (paid here), or a note (partner pays).
+  const { openPlan, restore: restorePlan } = usePlanActions();
   const plusExpiryLabel = formatSubscriptionExpiry(user?.subscription_expires_at);
 
   const [editField, setEditField] = useState<'name' | 'space' | 'email' | null>(null);
@@ -120,22 +124,36 @@ export default function SettingsScreen() {
     })();
   };
 
+  // Really deletes (App Store 5.1.1(v)): the server removes the shared space,
+  // all data and media and the sign-in, then we sign out locally.
   const handleDeleteAccount = () => {
-    Alert.alert('Delete Account', 'This permanently removes your account and data. This cannot be undone.', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            await signOutUser();
-            router.replace('/(auth)/login');
-          } catch (e) {
-            Alert.alert('Sign out failed', e instanceof Error ? e.message : 'Please try again.');
-          }
+    const space = relationship
+      ? ' Your shared space closes for both of you, with its moments, chats and memories.'
+      : '';
+    Alert.alert(
+      'Delete your account?',
+      `This permanently deletes your account, photos and messages.${space} This can’t be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete forever',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const token = await getToken();
+              if (!token) throw new Error('Please sign in again, then try.');
+              await deleteMyAccount(token);
+            } catch (e) {
+              Alert.alert('Couldn’t delete your account', e instanceof Error ? e.message : 'Please try again.');
+              return;
+            }
+            // The account is gone; signing out can fail on a dead session, which is fine.
+            await signOutUser().catch(() => undefined);
+            router.replace('/(auth)/welcome');
+          },
         },
-      },
-    ]);
+      ],
+    );
   };
 
   const handleLeaveRelationship = () => {
@@ -454,7 +472,7 @@ export default function SettingsScreen() {
               icon="diamond"
               label="Your plan"
               value={isPlus ? (isOwner ? 'Plus' : `Plus · via ${getFirstName(partner?.name) ?? 'partner'}`) : 'Free'}
-              onPress={openPaywall}
+              onPress={openPlan}
             />
             <Row
               icon="gift"
@@ -465,9 +483,7 @@ export default function SettingsScreen() {
             <Row
               icon="restore"
               label="Restore purchases"
-              onPress={() =>
-                Alert.alert('Restore purchases', 'Nothing to restore yet. Purchases will be available once billing is connected.')
-              }
+              onPress={() => void restorePlan()}
               last
             />
           </Group>

@@ -13,6 +13,8 @@ import { useTheme } from '@/hooks/useTheme';
 import { createRelationship, ensureInviteCode } from '@/lib/moments-api';
 import { markRelationshipOnboardingDone } from '@/lib/onboarding-storage';
 import { getOnboardingDraft, goNext } from '@/lib/onboarding-v2';
+import { inviteLink } from '@/constants/links';
+import { getPendingInvite } from '@/lib/pending-links';
 import { useAuthStore, useRelationshipStore } from '@/stores';
 
 /**
@@ -70,11 +72,23 @@ export default function InviteScreen() {
   }, [preview, partner, code, user, relationship, getToken, setRelationship]);
 
   // For people who'd rather send it straight to them than copy and paste.
+  // Opened your partner's invite link? Go straight to joining their space.
+  useEffect(() => {
+    if (preview || partner) return;
+    let cancelled = false;
+    void getPendingInvite().then((pending) => {
+      if (pending && !cancelled) router.push({ pathname: '/(onboarding)/join-relationship', params: { from: 'invite' } });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [preview, partner, router]);
+
   const share = async () => {
     if (!code) return;
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     await Share.share({
-      message: `Join me on Moments, our private little space. Use my code ${code} when you sign up.`,
+      message: `Join me on Moments, our private little space: ${inviteLink(code)}\n\nOr enter my code ${code} when you sign up.`,
     });
   };
   const next = () => void goNext(router, 'invite', { userId: user?.id, preview });

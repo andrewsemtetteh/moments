@@ -50,6 +50,21 @@ export async function createProfile(
   return apiFetch<UserProfile>('/users', token, { method: 'POST', body: profile });
 }
 
+/** My referral code and how many couples I've brought in. */
+export async function getMyReferral(token: string): Promise<{ code: string; credited: number; days: number }> {
+  return apiFetch('/me/referral', token);
+}
+
+/** Remember who invited me (from their link); credited when I pair with my partner. */
+export async function claimReferral(token: string, code: string): Promise<{ ok: boolean; already: boolean }> {
+  return apiFetch('/referrals/claim', token, { method: 'POST', body: { code } });
+}
+
+/** Permanently deletes the account: shared spaces close, all data, media and the sign-in go. */
+export async function deleteMyAccount(token: string): Promise<void> {
+  await apiFetch<{ ok: boolean }>('/me', token, { method: 'DELETE' });
+}
+
 export async function updateMyProfile(token: string, updates: Partial<UserProfile>): Promise<UserProfile> {
   return apiFetch<UserProfile>('/me', token, { method: 'PATCH', body: updates });
 }

@@ -7,13 +7,23 @@ import { StatusBar } from 'expo-status-bar';
 import { StyleSheet } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
+import { AppErrorScreen } from '@/components/layout/AppErrorScreen';
 import { AppModals } from '@/components/layout/AppModals';
 import { SubscriptionSync } from '@/components/layout/SubscriptionSync';
 import { DynamicIslandHost } from '@/components/layout/DynamicIslandHost';
 import { PermissionSheetHost } from '@/components/layout/PermissionSheetHost';
+import { ReferralClaimSync } from '@/components/layout/ReferralClaimSync';
 import { resolveThemeColors } from '@/constants/design-system';
+import { identifyUser, initMonitoring, Sentry } from '@/lib/monitoring';
 import { AppProviders } from '@/providers/AppProviders';
-import { useUIStore } from '@/stores';
+import { useAuthStore, useUIStore } from '@/stores';
+
+// Crash reporting first, so even start-up errors are caught.
+initMonitoring();
+// Reports carry the account id (nothing else), set and cleared with sign-in.
+useAuthStore.subscribe((state, prev) => {
+  if (state.user?.id !== prev.user?.id) identifyUser(state.user?.id ?? null);
+});
 
 const publishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY ?? '';
 
@@ -122,6 +132,7 @@ function RootStack() {
         </Stack>
         <AppModals />
         <SubscriptionSync />
+        <ReferralClaimSync />
         {/* "Why we need this" before camera / mic / location / photos (see lib/permissions). */}
         <PermissionSheetHost />
       </DynamicIslandHost>
@@ -129,7 +140,10 @@ function RootStack() {
   );
 }
 
-export default function RootLayout() {
+/** A crash while drawing any screen shows this (and is reported) instead of a blank screen. */
+export { AppErrorScreen as ErrorBoundary };
+
+function RootLayout() {
   return (
     <ClerkProvider publishableKey={publishableKey} tokenCache={tokenCache}>
       <GestureHandlerRootView style={styles.root}>
@@ -144,3 +158,6 @@ export default function RootLayout() {
 const styles = StyleSheet.create({
   root: { flex: 1 },
 });
+
+// Sentry.wrap captures crashes and screen timings from the root down.
+export default Sentry.wrap(RootLayout);

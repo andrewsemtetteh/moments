@@ -115,6 +115,7 @@
         }
       ],
       "expo-video",
+      "@sentry/react-native",
       "@react-native-community/datetimepicker"
     ],
     "experiments": {
@@ -125,6 +126,14 @@
       "eas": {
         "projectId": "febe8159-67a5-41d8-988f-1b1291698f57"
       }
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/febe8159-67a5-41d8-988f-1b1291698f57",
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 0
     }
   }
 }
