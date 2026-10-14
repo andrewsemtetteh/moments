@@ -342,7 +342,7 @@ export function ActionSheet({
   thumb?: React.ReactNode;
   actions: SheetAction[];
   /** One main call to action (e.g. upgrading): a full-width filled button, with "Not now" under it. */
-  primary?: { label: string; onPress: () => void };
+  primary?: { label: string; /** Button fill; defaults to the theme accent. */ color?: string; icon?: IconName; onPress: () => void };
   onClose: () => void;
 }) {
   const { colors } = useTheme();
@@ -369,8 +369,11 @@ export function ActionSheet({
               primary.onPress();
             }}
             accessibilityRole="button"
-            style={({ pressed }) => [styles.upgradeBtn, { backgroundColor: colors.accent }, pressed && { opacity: 0.9 }]}>
-            <Text style={[styles.upgradeText, { color: colors.onAccent }]}>{primary.label}</Text>
+            style={({ pressed }) => [styles.upgradeBtn, { backgroundColor: primary.color ?? colors.accent }, pressed && { opacity: 0.9 }]}>
+            {primary.icon ? (
+              <Icon name={primary.icon} size={20} color={primary.color ? '#FFFFFF' : colors.onAccent} filled />
+            ) : null}
+            <Text style={[styles.upgradeText, { color: primary.color ? '#FFFFFF' : colors.onAccent }]}>{primary.label}</Text>
           </Pressable>
           {/* "Not now", off for now: tapping outside the sheet closes it.
           <Pressable onPress={onClose} accessibilityRole="button" hitSlop={8} style={styles.notNow}>
@@ -528,7 +531,7 @@ const styles = StyleSheet.create({
   actionSubtitle: { fontSize: 13, fontWeight: '600' },
   actionMessage: { fontSize: 14, lineHeight: 20, marginTop: -4 },
   primaryWrap: { gap: 6, marginTop: 4 },
-  upgradeBtn: { height: 54, borderRadius: 27, alignItems: 'center', justifyContent: 'center' },
+  upgradeBtn: { height: 54, borderRadius: 27, flexDirection: 'row', gap: 8, alignItems: 'center', justifyContent: 'center' },
   upgradeText: { fontSize: 17, fontWeight: '800' },
   notNow: { height: 44, alignItems: 'center', justifyContent: 'center' },
   notNowText: { fontSize: 15, fontWeight: '700' },

@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { Modal, Platform, StyleSheet } from 'react-native';
+import { Modal, Platform, StyleSheet, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { PaywallScreen } from '@/components/subscription/PaywallScreen';
@@ -15,8 +15,12 @@ const USE_SUPERWALL = PAYWALL_SOURCE === 'superwall' && BILLING_AVAILABLE;
  * The in-app paywall. Ours (PaywallScreen) by default; with EXPO_PUBLIC_PAYWALL=superwall it shows
  * the paywall designed in the Superwall dashboard, falling back to ours when none is shown.
  */
-export function PaywallModal() {
+export function PaywallModal({ inline = false }: { inline?: boolean } = {}) {
   const visible = useUIStore((s) => s.showPaywall);
+  // While Moments (camera / history / viewer) is up it owns the screen on iPhone, and a
+  // second full-screen layer can't open over it — so Moments draws the paywall inside
+  // itself (`inline`) and the app-level one stays out of the way.
+  const momentsOpen = useUIStore((s) => s.showMomentCreator || s.showMomentHistory || !!s.momentViewer);
   const closePaywall = useUIStore((s) => s.closePaywall);
   const reason = useUIStore((s) => s.paywallReason);
   const headline = useUIStore((s) => s.paywallHeadline);
@@ -47,6 +51,14 @@ export function PaywallModal() {
   };
 
   if (!visible || Platform.OS === 'web') return null;
+  if (inline !== momentsOpen) return null;
+
+  // Leaving the paywall for a page: inside Moments, close Moments too so the page is visible.
+  const leaveTo = (href: '/refer' | '/legal/terms' | '/legal/privacy') => {
+    closePaywall();
+    if (inline) useUIStore.setState({ showMomentHistory: false, showMomentCreator: false, momentViewer: null });
+    setTimeout(() => router.push(href), inline ? 450 : 250);
+  };
   if (!useNative) {
     return (
       <SuperwallPaywall
@@ -57,9 +69,7 @@ export function PaywallModal() {
     );
   }
 
-  return (
-    // Transparent so swiping it down reveals the app behind, like Moments.
-    <Modal visible transparent animationType="slide" presentationStyle="overFullScreen" onRequestClose={handleClose}>
+  const content = (
       <GestureHandlerRootView style={StyleSheet.absoluteFill}>
         <PaywallScreen
           onClose={handleClose}
@@ -70,16 +80,18 @@ export function PaywallModal() {
           placement={placement}
           showClose
           // Leaving the overlay for a page: close it, then open the page.
-          onRefer={() => {
-            closePaywall();
-            setTimeout(() => router.push('/refer'), 250);
-          }}
-          onOpenLegal={(doc) => {
-            closePaywall();
-            setTimeout(() => router.push(doc === 'terms' ? '/legal/terms' : '/legal/privacy'), 250);
-          }}
+          onRefer={() => leaveTo('/refer')}
+          onOpenLegal={(doc) => leaveTo(doc === 'terms' ? '/legal/terms' : '/legal/privacy')}
         />
       </GestureHandlerRootView>
+  );
+
+  if (inline) return <View style={StyleSheet.absoluteFill}>{content}</View>;
+
+  return (
+    // Transparent so swiping it down reveals the app behind, like Moments.
+    <Modal visible transparent animationType="slide" presentationStyle="overFullScreen" onRequestClose={handleClose}>
+      {content}
     </Modal>
   );
 }

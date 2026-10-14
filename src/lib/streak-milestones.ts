@@ -10,23 +10,27 @@ export function isStreakMilestone(days: number): boolean {
   return false;
 }
 
+/**
+ * The line under the big number on the milestone celebration. The number is
+ * already shown, so these never spell it out again ("50" + "days of showing up").
+ */
 export function streakMilestoneHeadline(days: number): string {
   if (days === 7) return 'One week together';
   if (days === 15) return 'Two weeks strong';
   if (days === 30) return 'A full month';
-  if (days === 50) return 'Fifty days of showing up';
-  if (days === 75) return 'Seventy-five days';
+  if (days === 50) return 'days of showing up';
+  if (days === 75) return 'days and counting';
   if (days === 100) return 'Century streak';
-  if (days === 150) return 'A hundred and fifty days';
-  if (days === 200) return 'Two hundred days';
-  if (days === 250) return 'Two hundred fifty days';
-  if (days === 300) return 'Three hundred days';
+  if (days === 150) return 'days strong';
+  if (days === 200) return 'days together';
+  if (days === 250) return 'days of you two';
+  if (days === 300) return 'days strong';
   if (days === 365) return 'One year together';
-  if (days === 400) return 'Four hundred days';
-  if (days === 500) return 'Five hundred days';
-  if (days >= 1000 && days % 500 === 0) return `${days} days, legendary`;
-  if (days % 100 === 0) return `${days} days strong`;
-  return `${days} day milestone`;
+  if (days === 400) return 'days and counting';
+  if (days === 500) return 'days strong';
+  if (days >= 1000 && days % 500 === 0) return 'days, legendary';
+  if (days % 100 === 0) return 'days strong';
+  return 'day streak';
 }
 
 export function streakMilestoneCheer(days: number): string {

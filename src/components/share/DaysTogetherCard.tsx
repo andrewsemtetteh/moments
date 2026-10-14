@@ -29,9 +29,11 @@ export function DaysTogetherCard({ days, names, since }: { days: number; names: 
         <Text style={styles.unit} numberOfLines={1}>
           {days === 1 ? 'day together' : 'days together'}
         </Text>
+        {/* Names hidden for now (kept to bring back easily):
         <Text style={styles.names} numberOfLines={1}>
           {names}
         </Text>
+        */}
         <Text style={styles.since} numberOfLines={1}>
           since {format(since, 'd MMMM yyyy')}
         </Text>

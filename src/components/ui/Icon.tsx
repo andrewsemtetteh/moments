@@ -91,7 +91,8 @@ export type IconName =
   | 'help'
   | 'phone'
   | 'haptics'
-  | 'palette';
+  | 'palette'
+  | 'unlock';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
 
@@ -188,6 +189,7 @@ const ICON_MAP: Record<IconName, { outline: IoniconName; filled: IoniconName }> 
   phone: { outline: 'phone-portrait-outline', filled: 'phone-portrait' },
   haptics: { outline: 'pulse-outline', filled: 'pulse' },
   palette: { outline: 'color-palette-outline', filled: 'color-palette' },
+  unlock: { outline: 'lock-open-outline', filled: 'lock-open' },
 };
 
 interface IconProps {

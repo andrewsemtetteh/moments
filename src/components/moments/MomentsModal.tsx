@@ -7,6 +7,7 @@ import { MomentHistoryModal } from '@/components/moments/MomentHistoryModal';
 import { MomentStoryViewer } from '@/components/moments/MomentStoryViewer';
 import { useUIStore } from '@/stores';
 import { ThemedStatusBar } from '@/components/ui/ThemedStatusBar';
+import { PaywallModal } from '@/components/subscription/PaywallModal';
 
 /**
  * A native fullscreen Modal can't cleanly layer a second one on top — presenting/dismissing
@@ -59,6 +60,8 @@ export function MomentsModal() {
             {viewer.playback === 'focus' ? <MomentFocusViewer /> : <MomentStoryViewer />}
           </View>
         ) : null}
+        {/* Moments+ opened from in here (e.g. the album limit): on top, closing it lands back here. */}
+        <PaywallModal inline />
       </GestureHandlerRootView>
     </Modal>
   );

@@ -38,7 +38,8 @@ export function StreakShareCard({
           {headline ?? 'day streak'}
         </Text>
         <Text style={styles.names} numberOfLines={1}>
-          {names} · {format(date, 'd MMM yyyy')}
+          {/* Names hidden for now: {names} · */}
+          {format(date, 'd MMM yyyy')}
         </Text>
       </View>
       <ShareBrand style={styles.brand} />

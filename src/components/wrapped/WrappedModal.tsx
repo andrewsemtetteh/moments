@@ -377,45 +377,27 @@ function WrappedStory({ onClose }: { onClose: () => void }) {
       });
     }
 
-    // ── A question you both answered
-    const answered = (yearQuestions ?? questions).filter(
-      (q) => isPromptComplete(q) && new Date(q.challenge_date) >= yearStart,
-    );
-    const pick = answered.find(
-      (q) => myPromptResponse(q, user?.id, relationship) && partnerPromptResponse(q, user?.id, relationship),
-    );
-    if (pick) {
-      list.push({
-        key: 'question',
-        colors: ['#283C86', '#45A247'],
-        body: (
-          <>
-            <IconBadge icon="question" />
-            <Eyebrow>
-              {answered.length} question{answered.length === 1 ? '' : 's'} answered together this year
-            </Eyebrow>
-            <Title small>“{pick.prompt}”</Title>
-            <Animated.View entering={FadeInDown.delay(260).duration(420)} style={styles.answers}>
-              <Answer who="You" text={myPromptResponse(pick, user?.id, relationship) ?? ''} />
-              <Answer who={them} text={partnerPromptResponse(pick, user?.id, relationship) ?? ''} />
-            </Animated.View>
-          </>
-        ),
-      });
-    } else {
-      list.push({
-        key: 'question',
-        colors: ['#283C86', '#45A247'],
-        body: (
-          <>
-            <IconBadge icon="question" />
-            <Eyebrow>Daily questions answered together</Eyebrow>
-            <Big>{answered.length}</Big>
-            <Body>{answered.length > 0 ? 'One honest answer at a time.' : 'Answer Today’s Question together.'}</Body>
-          </>
-        ),
-      });
-    }
+    // ── Daily questions: how many you answered together (and each of you).
+    const yearQs = (yearQuestions ?? questions).filter((q) => new Date(q.challenge_date) >= yearStart);
+    const answered = yearQs.filter((q) => isPromptComplete(q));
+    const mineCount = yearQs.filter((q) => myPromptResponse(q, user?.id, relationship)).length;
+    const theirsCount = yearQs.filter((q) => partnerPromptResponse(q, user?.id, relationship)).length;
+    list.push({
+      key: 'question',
+      colors: ['#283C86', '#45A247'],
+      body: (
+        <>
+          <IconBadge icon="question" />
+          <Eyebrow>Daily questions answered together</Eyebrow>
+          <Big>{answered.length}</Big>
+          <Body>
+            {answered.length > 0
+              ? `You answered ${mineCount} · ${them} answered ${theirsCount}`
+              : 'Answer Today’s Question together.'}
+          </Body>
+        </>
+      ),
+    });
 
     // ── Memories
     const yearMemories = memories.filter((m) => new Date(m.date_time) >= yearStart);
@@ -864,7 +846,7 @@ function WrappedStory({ onClose }: { onClose: () => void }) {
             colors={slide.colors}
           />
         ) : (
-          <StoryShareCard slide={slide} year={year} shotRef={storyShotRef} />
+          <StoryShareCard slide={slide} year={year} names={`${me} & ${them}`} shotRef={storyShotRef} />
         )}
       </ShareCardModal>
     </View>
@@ -877,7 +859,18 @@ type CoupleType = { icon: IconName; name: string; line: string; why: string };
  * One story as a shareable image: the full screen story drawn at its real size, then scaled
  * down into the same short 4:5 card as the summary; anything too tall shrinks to fit.
  */
-function StoryShareCard({ slide, year, shotRef }: { slide: Slide; year: number; shotRef: RefObject<View | null> }) {
+function StoryShareCard({
+  slide,
+  year,
+  names,
+  shotRef,
+}: {
+  slide: Slide;
+  year: number;
+  /** Whose year it is, at the top of every shared story. */
+  names: string;
+  shotRef: RefObject<View | null>;
+}) {
   const { width: W, height: H } = useWindowDimensions();
   // The image is as tall as the story needs (no fixed box squashing a long one),
   // drawn at full phone width (that's what's captured, so it's sharp) and only
@@ -908,7 +901,14 @@ function StoryShareCard({ slide, year, shotRef }: { slide: Slide; year: number; 
             end={{ x: 1, y: 1 }}
             style={StyleSheet.absoluteFill}
           />
-          <Text style={styles.storyTopText}>Our {year} Wrapped</Text>
+          <View style={styles.storyHead}>
+            {/* Names hidden for now (kept to bring back easily):
+            <Text style={styles.storyNames} numberOfLines={1}>
+              {names}
+            </Text>
+            */}
+            <Text style={[styles.storyTopText, styles.storyTitle]}>Our {year} Wrapped</Text>
+          </View>
           <StickerCard>{slide.body}</StickerCard>
           <ShareBrand size="lg" style={styles.storyBrand} />
         </View>
@@ -1067,17 +1067,6 @@ function Bars({ values, labels, highlight }: { values: number[]; labels: string[
   );
 }
 
-function Answer({ who, text }: { who: string; text: string }) {
-  return (
-    <View style={styles.answer}>
-      <Text style={styles.answerWho}>{who}</Text>
-      <Text style={styles.answerText} numberOfLines={4}>
-        {text}
-      </Text>
-    </View>
-  );
-}
-
 /** Inner width of a sticker card (the card is the screen width less a margin, less its padding). */
 const CONTENT_W = Math.min(SCREEN_W - 32 - 40, 340);
 
@@ -1121,7 +1110,10 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
     paddingHorizontal: 16,
   },
-  storyTopText: { color: PAPER, fontSize: 18, fontWeight: '900', letterSpacing: 0.3, textAlign: 'center' },
+  storyHead: { alignItems: 'center', gap: 2 },
+  storyTitle: { color: PAPER, fontSize: 18, fontWeight: '900' },
+  storyNames: { color: PAPER, fontSize: 24, fontWeight: '900', letterSpacing: -0.4, textAlign: 'center' },
+  storyTopText: { color: 'rgba(255,255,255,0.82)', fontSize: 15, fontWeight: '800', letterSpacing: 0.3, textAlign: 'center' },
   fitBox: { flex: 1, alignSelf: 'stretch', alignItems: 'center', justifyContent: 'center' },
   fitInner: { width: '100%', alignItems: 'center', gap: 12 },
   sticker: {
@@ -1222,10 +1214,6 @@ const styles = StyleSheet.create({
   typeLabel: { flex: 1, color: INK, fontSize: 17, fontWeight: '700' },
   typeCount: { color: INK, fontSize: 24, fontWeight: '900' },
 
-  answers: { width: CONTENT_W, gap: 10, marginTop: 8 },
-  answer: { borderRadius: 18, padding: 14, gap: 4, backgroundColor: PAPER, borderWidth: 2, borderColor: INK },
-  answerWho: { color: SOFT, fontSize: 13, fontWeight: '800' },
-  answerText: { color: INK, fontSize: 16, fontWeight: '600', lineHeight: 22 },
 
   badge: {
     width: 168,

@@ -94,7 +94,7 @@ type SheetState =
       message?: string;
       thumb?: React.ReactNode;
       actions: SheetAction[];
-      primary?: { label: string; onPress: () => void };
+      primary?: { label: string; color?: string; icon?: IconName; onPress: () => void };
     }
   | null;
 
@@ -361,16 +361,11 @@ export function MomentHistoryModal() {
   /** Free accounts get FREE_ALBUM_LIMIT albums; the next one opens the paywall. */
   // Plus opens as its own full-screen layer, which can't appear over Moments on
   // iPhone; so Moments steps aside first, then Plus opens.
-  // Close Moments completely (not back to the camera, which would sit on top of the
-  // paywall and hide it), then open Plus headed with the feature that was hit.
+  // Plus opens right here, over History (Moments draws it), headed with the feature that
+  // was hit; closing it brings you back to your albums.
   const openPlus = (reason: string) => {
     setSheet(null);
-    setAlbumId(null);
-    setMapOpen(false);
-    setMomentHistoryReturnToCamera(false);
-    useUIStore.setState({ momentCameraWaking: false });
-    close();
-    setTimeout(() => requirePlus(reason), 450);
+    requirePlus(reason);
   };
   const canCreateAlbum = () => {
     if (isPlus || albums.length < FREE_ALBUM_LIMIT) return true;
@@ -379,13 +374,13 @@ export function MomentHistoryModal() {
       title: 'Unlimited albums',
       message: `Free accounts can keep ${FREE_ALBUM_LIMIT} albums. With Moments Plus you can make as many as you like.`,
       thumb: (
-        // Brand coral, so the upsell reads as Moments Plus whatever the theme.
-        <View style={[styles.sheetThumbIcon, { backgroundColor: 'rgba(255,77,109,0.15)' }]}>
-          <Icon name="albums" size={26} color="#FF4D6D" filled />
+        <View style={[styles.sheetThumbIcon, { backgroundColor: chrome.accentSoft }]}>
+          <Icon name="albums" size={26} color={chrome.accent} filled />
         </View>
       ),
       actions: [],
-      primary: { label: 'Upgrade Moments', onPress: () => openPlus('Unlimited albums') },
+      // Brand coral: the upgrade reads as Moments Plus whatever the theme.
+      primary: { label: 'Unlock unlimited albums', color: '#FF4D6D', icon: 'unlock', onPress: () => openPlus('Unlimited albums') },
     });
     return false;
   };

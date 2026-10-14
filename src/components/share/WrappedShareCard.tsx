@@ -52,7 +52,7 @@ export function WrappedShareCard({
             <View style={styles.typeIcon}>
               <Icon name={coupleType.icon} size={14} color={INK} filled />
             </View>
-            <Text style={styles.typeName} numberOfLines={1}>
+            <Text style={styles.typeName} numberOfLines={2}>
               {coupleType.name}
             </Text>
           </View>
@@ -68,7 +68,7 @@ export function WrappedShareCard({
                 {s.value.toLocaleString()}
               </Text>
             </View>
-            <Text style={styles.label} numberOfLines={1} adjustsFontSizeToFit>
+            <Text style={styles.label} numberOfLines={2}>
               {s.label}
             </Text>
           </View>
@@ -83,7 +83,8 @@ export function WrappedShareCard({
 const styles = StyleSheet.create({
   card: {
     width: SHARE_CARD_W,
-    height: SHARE_CARD_H,
+    // As tall as it needs: names, year, couple type and all six numbers always fit.
+    minHeight: SHARE_CARD_H,
     // Matches the share preview's rounded frame, so the border isn't clipped.
     borderRadius: 24,
     borderWidth: 3,
@@ -93,6 +94,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: PAD,
     alignItems: 'center',
     justifyContent: 'space-between',
+    gap: 16,
   },
   badge: {
     borderWidth: 2,
@@ -115,7 +117,8 @@ const styles = StyleSheet.create({
     maxWidth: '100%',
     paddingLeft: 4,
     paddingRight: 12,
-    height: 30,
+    minHeight: 30,
+    paddingVertical: 4,
     borderRadius: 15,
     borderWidth: 2,
     borderColor: INK,
