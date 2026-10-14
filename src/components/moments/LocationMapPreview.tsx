@@ -112,7 +112,7 @@ export function LocationMapPreview({
         pitchEnabled={false}
         toolbarEnabled={false}
         showsCompass={interactive}
-        showsPointsOfInterest
+        showsPointsOfInterests
         liteMode={Platform.OS === 'android' && !interactive}
         pointerEvents={interactive ? 'auto' : 'none'}>
         {markers.map((m, i) => (
