@@ -3,12 +3,13 @@ import { useCallback, useEffect, useState } from 'react';
 import { Alert, Platform, View } from 'react-native';
 
 import { PaywallScreen } from '@/components/subscription/PaywallScreen';
+import { SuperwallPaywall } from '@/components/subscription/SuperwallPaywall';
 import { BILLING_CONNECTED } from '@/constants/subscription';
 import { useSubscription } from '@/hooks/useSubscription';
 import { finishOnboarding } from '@/lib/onboarding-v2';
 import { markOnboardingPaywallDone } from '@/lib/onboarding-storage';
 import { markPaywallDismissed } from '@/lib/paywall-storage';
-import { PAYWALL_SOURCE, presentRevenueCatPaywall } from '@/lib/purchases';
+import { PAYWALL_SOURCE } from '@/lib/purchases';
 import { closeStackScreen } from '@/lib/router';
 import { useAuthStore, useUIStore } from '@/stores';
 
@@ -43,28 +44,26 @@ export default function ProScreen() {
     void done();
   }, [isOnboarding, isPlus, preview, done]);
 
-  // EXPO_PUBLIC_PAYWALL=revenuecat: the dashboard paywall; ours if it can't show.
-  const tryRevenueCat = PAYWALL_SOURCE === 'revenuecat' && BILLING_CONNECTED && !preview && !isPlus;
-  const [showNative, setShowNative] = useState(!tryRevenueCat);
-  useEffect(() => {
-    if (!tryRevenueCat) return;
-    let cancelled = false;
-    void presentRevenueCatPaywall().then((outcome) => {
-      if (cancelled) return;
-      if (outcome === 'unavailable') setShowNative(true);
-      else if (isOnboarding) void done();
-      else closeStackScreen(router);
-    });
-    return () => {
-      cancelled = true;
-    };
-    // Once, when the screen opens.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // EXPO_PUBLIC_PAYWALL=superwall: the dashboard paywall; ours if it can't show.
+  const trySuperwall = PAYWALL_SOURCE === 'superwall' && BILLING_CONNECTED && !preview && !isPlus;
+  const [showNative, setShowNative] = useState(!trySuperwall);
 
   if (Platform.OS === 'web') return <Redirect href="/(tabs)/home" />;
   if (isOnboarding && isPlus && !preview) return null;
-  if (!showNative) return <View style={{ flex: 1, backgroundColor: '#000' }} />;
+  if (!showNative) {
+    return (
+      <View style={{ flex: 1, backgroundColor: '#000' }}>
+        <SuperwallPaywall
+          placement={isOnboarding ? 'onboarding' : 'settings'}
+          onDone={(outcome) => {
+            if (outcome === 'unavailable') setShowNative(true);
+            else if (isOnboarding) void done();
+            else closeStackScreen(router);
+          }}
+        />
+      </View>
+    );
+  }
 
   return (
     <PaywallScreen

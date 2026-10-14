@@ -4,7 +4,7 @@ import { FREE_DAILY_MOMENTS, FREE_TIMELINE_MOMENTS } from '@/constants/design-sy
 /**
  * Moments Plus pricing: source of truth (see src/docs/MONETIZATION.md §4).
  * One subscription per couple. Store prices (local currency) replace these USD figures on the
- * paywall once RevenueCat loads; these are the fallbacks and the basis for the per week maths.
+ * paywall once Superwall loads them; these are the fallbacks and the basis for the per week maths.
  */
 export const WEEKLY_PRICE_USD = 4.99;
 export const YEARLY_PRICE_USD = 69.99;
@@ -19,10 +19,11 @@ export const TRIAL_REMINDER_DAY = 5;
 export const REFERRAL_DAYS = 14;
 
 
-/** True once RevenueCat keys are configured; until then the paywall lets people carry on with Free. */
-export const BILLING_CONNECTED = !!(
-  process.env.EXPO_PUBLIC_REVENUECAT_IOS_API_KEY || process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY
-);
+/**
+ * True once Superwall keys are configured and this build has its native module (not Expo Go / web);
+ * until then the paywall lets people carry on with Free.
+ */
+export { BILLING_AVAILABLE as BILLING_CONNECTED } from '@/lib/purchases';
 
 export type SubscriptionPlanId = 'weekly' | 'yearly' | 'monthly';
 

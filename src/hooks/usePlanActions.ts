@@ -9,7 +9,7 @@ import { useRelationshipStore, useUIStore } from '@/stores';
 /**
  * What "Your plan" and "Restore purchases" do, shared by Settings and the profile Plus card:
  * - Free: the paywall.
- * - Plus, paid on this account: RevenueCat's Customer Center (change plan, cancel, refund, restore).
+ * - Plus, paid on this account: the App Store / Play subscription page (change plan, cancel, refund).
  * - Plus through the partner: a note that they manage it (one plan covers both of you).
  */
 export function usePlanActions() {

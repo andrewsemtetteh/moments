@@ -1,5 +1,5 @@
 import { formatDistanceToNowStrict } from 'date-fns';
-import * as Haptics from 'expo-haptics';
+import * as Haptics from '@/lib/haptics';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
@@ -26,6 +26,7 @@ import { LOCKET_EXTRA_EMOJIS, getUserReactionEmoji, toggleMomentReactionForUser 
 import { momentToReplyContext } from '@/lib/moment-reply';
 import { useAuthStore, useRelationshipStore, useUIStore } from '@/stores';
 import type { Moment } from '@/types/database';
+import { useCardBorder } from '@/hooks/useCardBorder';
 
 /** Card spans the screen minus Home's 16pt padding and its own 12pt padding. */
 const MEDIA_W = Dimensions.get('window').width - 32 - 24;
@@ -45,6 +46,7 @@ interface PartnerMomentHomeProps {
 export function PartnerMomentHome({ partnerMoments }: PartnerMomentHomeProps) {
   const router = useRouter();
   const { colors } = useTheme();
+  const cardBorder = useCardBorder();
   const user = useAuthStore((s) => s.user);
   const partner = useRelationshipStore((s) => s.partner);
   const openMomentViewer = useUIStore((s) => s.openMomentViewer);
@@ -143,7 +145,7 @@ export function PartnerMomentHome({ partnerMoments }: PartnerMomentHomeProps) {
 
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <View style={[styles.card, { backgroundColor: colors.surface }]}>
+      <View style={[styles.card, { backgroundColor: colors.surface }, cardBorder]}>
         <View style={styles.head}>
           <Avatar name={authorName} imageUrl={authorAvatar} size={34} />
           <View style={styles.headText}>

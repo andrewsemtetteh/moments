@@ -39,8 +39,11 @@ export interface UserProfile {
   gender?: ProfileGender | null;
   subscription_tier?: SubscriptionTier;
   subscription_expires_at?: string | null;
-  revenuecat_customer_id?: string | null;
-  revenuecat_subscription_id?: string | null;
+  /** Superwall user id (UUID derived from the Clerk id). Server-written. */
+  billing_user_id?: string | null;
+  /** The store's original transaction id for the subscription. Server-written. */
+  billing_subscription_id?: string | null;
+  billing_product_id?: string | null;
   /** Reciprocal: when false, you also cannot see your partner's shared location. */
   location_sharing_enabled?: boolean;
   location_latitude?: number | null;
@@ -53,6 +56,8 @@ export interface UserProfile {
   last_seen_at?: string | null;
   /** IANA timezone identifier (e.g. "Europe/Lisbon"), synced from the device locale. */
   timezone?: string | null;
+  /** Settings > Notifications switches; missing keys mean on. */
+  notification_prefs?: Record<string, boolean> | null;
   created_at: string;
 }
 
@@ -67,7 +72,7 @@ export interface Relationship {
   distance_mode: boolean;
   subscription_tier?: SubscriptionTier;
   subscription_owner_id?: string | null;
-  /** When the couple's Plus (or its free trial) ends. Written by the RevenueCat webhook. */
+  /** When the couple's Plus (or its free trial) ends. Written by the Superwall webhook. */
   subscription_expires_at?: string | null;
   /** 'trial' during the free trial, 'normal' once paying. */
   subscription_period?: 'trial' | 'normal' | null;
@@ -109,6 +114,10 @@ export interface Message {
   deleted_for_all: boolean;
   hidden_for: string[];
   read_at: string | null;
+  /** Set when the sender edited the text (shows "Edited"). */
+  edited_at?: string | null;
+  /** When it was pinned (orders the pinned bar). */
+  pinned_at?: string | null;
   created_at: string;
   sender?: UserProfile;
   /** Joined when listing messages with moment preview */

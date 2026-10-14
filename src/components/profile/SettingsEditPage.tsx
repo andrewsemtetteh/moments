@@ -9,7 +9,7 @@ import {
   View,
   type TextInputProps,
 } from 'react-native';
-import * as Haptics from 'expo-haptics';
+import * as Haptics from '@/lib/haptics';
 
 import { FullScreenPage, PageFooter } from '@/components/layout/FullScreenPage';
 import { DraggableSheet } from '@/components/ui/DraggableSheet';

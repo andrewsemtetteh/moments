@@ -4,9 +4,9 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Icon } from '@/components/ui/Icon';
 import { Avatar } from '@/components/ui/primitives';
-import { MomentVideoPlayer } from '@/components/moments/MomentVideoPlayer';
 import { MOOD_COLORS, MOOD_EMOJI } from '@/constants/design-system';
 import { useTheme } from '@/hooks/useTheme';
+import { useVideoThumbnail } from '@/hooks/useVideoThumbnail';
 import { momentChrome } from '@/lib/moment-theme';
 import type { Moment } from '@/types/database';
 
@@ -55,6 +55,7 @@ export function MomentSquircle({
   const authorName = moment.author?.name;
 
   const hasMedia = !!moment.media_url && (moment.type === 'photo' || moment.type === 'video');
+  const videoThumb = useVideoThumbnail(moment.type === 'video' ? moment.media_url : null);
 
   const content = (
     <View style={[styles.outer, { width: size, height: size }]}>
@@ -73,7 +74,9 @@ export function MomentSquircle({
         ]}>
         {moment.type === 'video' && moment.media_url ? (
           <>
-            <MomentVideoPlayer uri={moment.media_url} width={size} height={size} autoPlay={false} controls={false} />
+            {videoThumb ? (
+              <Image source={videoThumb} style={StyleSheet.absoluteFill} contentFit="cover" transition={200} />
+            ) : null}
             <View style={[styles.playPill, { backgroundColor: 'rgba(0,0,0,0.42)' }]}>
               <Icon name="play" size={10} color="#fff" filled />
             </View>

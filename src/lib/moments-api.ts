@@ -1,4 +1,5 @@
 import type { Relationship, UserProfile } from '@/types/database';
+import { prepareImageForUpload, readUriAsArrayBuffer } from '@/lib/prepare-image';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
 
@@ -50,6 +51,36 @@ export async function createProfile(
   return apiFetch<UserProfile>('/users', token, { method: 'POST', body: profile });
 }
 
+/** A couple's shared document (albums, place names) and its version. */
+export type CoupleDoc<T> = { data: T | null; version: number };
+
+export async function getCoupleDoc<T>(token: string, relationshipId: string, kind: string): Promise<CoupleDoc<T>> {
+  return apiFetch(`/relationships/${relationshipId}/docs/${kind}`, token);
+}
+
+/**
+ * Saves the document if `version` is still the latest. If the other phone
+ * saved first, returns { conflict: true } with the latest copy instead of throwing.
+ */
+export async function putCoupleDoc<T>(
+  token: string,
+  relationshipId: string,
+  kind: string,
+  data: T,
+  version: number,
+): Promise<CoupleDoc<T> & { conflict?: boolean }> {
+  if (!API_URL) throw new Error('EXPO_PUBLIC_API_URL is not set');
+  const res = await fetch(`${API_URL}/relationships/${relationshipId}/docs/${kind}`, {
+    method: 'PUT',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ data, version }),
+  });
+  const body = (await res.json().catch(() => ({}))) as CoupleDoc<T> & { error?: string };
+  if (res.status === 409) return { data: body.data, version: body.version, conflict: true };
+  if (!res.ok) throw new MomentsApiError(res.status, body.error ?? res.statusText);
+  return { data: body.data, version: body.version };
+}
+
 /** My referral code and how many couples I've brought in. */
 export async function getMyReferral(token: string): Promise<{ code: string; credited: number; days: number }> {
   return apiFetch('/me/referral', token);
@@ -69,26 +100,19 @@ export async function updateMyProfile(token: string, updates: Partial<UserProfil
   return apiFetch<UserProfile>('/me', token, { method: 'PATCH', body: updates });
 }
 
-const AVATAR_CONTENT_TYPE_BY_EXT: Record<string, string> = {
-  jpg: 'image/jpeg',
-  jpeg: 'image/jpeg',
-  png: 'image/png',
-  webp: 'image/webp',
-  heic: 'image/heic',
-};
-
 /** Uploads a local image URI (from expo-image-picker) as the caller's avatar; returns the updated profile. */
 export async function uploadMyAvatar(token: string, localUri: string): Promise<UserProfile> {
   if (!API_URL) throw new Error('EXPO_PUBLIC_API_URL is not set');
 
-  const ext = localUri.split('.').pop()?.toLowerCase() ?? 'jpg';
-  const contentType = AVATAR_CONTENT_TYPE_BY_EXT[ext] ?? 'image/jpeg';
-  const blob = await (await fetch(localUri)).blob();
+  // Always a real JPEG: picked photos can be HEIC or PNG whatever their file name says,
+  // and a Blob body can override the Content-Type header (the "Unsupported image type" error).
+  const image = await prepareImageForUpload(localUri, { maxSide: 1024 });
+  const body = await readUriAsArrayBuffer(image.uri);
 
   const res = await fetch(`${API_URL}/me/avatar`, {
     method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': contentType },
-    body: blob,
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': image.contentType },
+    body,
   });
 
   if (!res.ok) {

@@ -1,4 +1,4 @@
-import * as Haptics from 'expo-haptics';
+import * as Haptics from '@/lib/haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useState } from 'react';
 import { LayoutChangeEvent, Pressable, StyleSheet, Text, View } from 'react-native';
@@ -13,6 +13,7 @@ import { useTheme } from '@/hooks/useTheme';
 import { formatBadgeCount } from '@/lib/format-badge';
 import { openChat } from '@/lib/router';
 import { useAuthStore, useUIStore } from '@/stores';
+import { TourTarget } from '@/components/layout/TourTarget';
 
 const TAB_ICON_SIZE = 28;
 const FAB_SIZE = 56;
@@ -134,36 +135,40 @@ export function AppTabBar({ state, navigation }: TabBarLikeProps) {
       style={[styles.wrap, { paddingBottom: bottomPad, paddingTop: TAB_BAR_FAB_OVERFLOW }]}
       pointerEvents="box-none"
       onLayout={(e) => setTabBarOverlayHeight(Math.ceil(e.nativeEvent.layout.height))}>
-      <View style={styles.bar} onLayout={onBarLayout} pointerEvents="box-none">
-        {barWidth > 0 && (
-          <Svg width={barWidth} height={TAB_BAR_HEIGHT} style={StyleSheet.absoluteFill} pointerEvents="none">
-            <Path
-              d={tabBarNotchPath(barWidth, TAB_BAR_HEIGHT, CUTOUT_RADIUS)}
-              fill={fill}
-              stroke={colors.border}
-              strokeWidth={StyleSheet.hairlineWidth}
-            />
-          </Svg>
-        )}
+      <TourTarget name="tour-tabs" style={styles.barTarget}>
+        <View style={styles.bar} onLayout={onBarLayout} pointerEvents="box-none">
+          {barWidth > 0 && (
+            <Svg width={barWidth} height={TAB_BAR_HEIGHT} style={StyleSheet.absoluteFill} pointerEvents="none">
+              <Path
+                d={tabBarNotchPath(barWidth, TAB_BAR_HEIGHT, CUTOUT_RADIUS)}
+                fill={fill}
+                stroke={colors.border}
+                strokeWidth={StyleSheet.hairlineWidth}
+              />
+            </Svg>
+          )}
 
-        {LEFT_TABS.map(renderTab)}
+          {LEFT_TABS.map(renderTab)}
 
-        <View style={styles.center} pointerEvents="box-none">
-          <Pressable
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-              setShowMomentCreator(true);
-            }}
-            accessibilityLabel="Create a Moment"
-            style={({ pressed }) => [styles.fabPressable, pressed && { transform: [{ scale: 0.92 }] }]}>
-            <LinearGradient colors={colors.gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.fab}>
-              <Icon name="plus" size={TAB_ICON_SIZE} color={colors.onAccent} />
-            </LinearGradient>
-          </Pressable>
+          <View style={styles.center} pointerEvents="box-none">
+            <TourTarget name="tour-camera">
+              <Pressable
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                  setShowMomentCreator(true);
+                }}
+                accessibilityLabel="Create a Moment"
+                style={({ pressed }) => [styles.fabPressable, pressed && { transform: [{ scale: 0.92 }] }]}>
+                <LinearGradient colors={colors.gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.fab}>
+                  <Icon name="plus" size={TAB_ICON_SIZE} color={colors.onAccent} />
+                </LinearGradient>
+              </Pressable>
+            </TourTarget>
+          </View>
+
+          {RIGHT_TABS.map(renderTab)}
         </View>
-
-        {RIGHT_TABS.map(renderTab)}
-      </View>
+      </TourTarget>
     </View>
   );
 }
@@ -177,6 +182,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 16,
   },
+  barTarget: { width: '100%', maxWidth: 460 },
   bar: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -1,5 +1,6 @@
+import { useAuth } from '@clerk/expo';
 import { format } from 'date-fns';
-import * as Haptics from 'expo-haptics';
+import * as Haptics from '@/lib/haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
@@ -13,6 +14,7 @@ import { MOOD_EMOJI } from '@/constants/design-system';
 import { useTheme } from '@/hooks/useTheme';
 import { goNext } from '@/lib/onboarding-v2';
 import { markWidgetPromptDone, saveWidgetPreferences } from '@/lib/onboarding-storage';
+import { prewarmOnboardingSpace } from '@/lib/onboarding-space';
 import { useAuthStore } from '@/stores';
 
 /*
@@ -395,6 +397,11 @@ export default function WidgetPromptScreen() {
   const preview = useLocalSearchParams<{ preview?: string }>().preview === '1';
   const { colors } = useTheme();
   const user = useAuthStore((s) => s.user);
+  // Keeps the invite code on its way (started on the theme step; this covers a resumed onboarding).
+  const { getToken } = useAuth();
+  useEffect(() => {
+    if (!preview) prewarmOnboardingSpace(user?.id, getToken);
+  }, [user?.id, preview, getToken]);
   const now = useNow();
   const [picked, setPicked] = useState<string[]>(['moment', 'days', 'streak', 'lock-days']);
   const [showHow, setShowHow] = useState(false);

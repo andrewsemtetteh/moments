@@ -1,5 +1,5 @@
 import { format, formatDistanceToNowStrict, isToday, startOfDay } from 'date-fns';
-import * as Haptics from 'expo-haptics';
+import * as Haptics from '@/lib/haptics';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { useMemo, useState } from 'react';

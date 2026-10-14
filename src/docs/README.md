@@ -502,7 +502,7 @@ Includes:
 
 ## Payments
 
-* RevenueCat
+* Superwall
 
 ## Analytics
 

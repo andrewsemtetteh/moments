@@ -49,7 +49,7 @@ export function SheetScrollView({ children, style, ...rest }: ScrollViewProps & 
   const hasScroll = ctx?.hasScroll;
   useEffect(() => {
     if (!hasScroll) return;
-    hasScroll.value = true;
+    hasScroll.set(true);
     return () => {
       hasScroll.value = false;
     };
@@ -86,6 +86,12 @@ interface DraggableSheetProps {
    * whose content doesn't scroll (a grid of choices) — easier to dismiss.
    */
   dragAnywhere?: boolean;
+  /**
+   * Draw inside the current screen instead of as its own Modal: for sheets over
+   * a screen that is itself a full-screen Modal (Moments), where a second
+   * native Modal can't present on top.
+   */
+  inline?: boolean;
 }
 
 /**
@@ -103,6 +109,7 @@ export function DraggableSheet({
   dragEnabled = true,
   avoidKeyboard = false,
   dragAnywhere = false,
+  inline = false,
 }: DraggableSheetProps) {
   const { colors } = useTheme();
   const [mounted, setMounted] = useState(visible);
@@ -125,14 +132,12 @@ export function DraggableSheet({
   const animateOut = useCallback(
     (velocityY = 0) => {
       const duration = Math.max(140, 260 - Math.abs(velocityY) / 14);
-      translateY.value = withTiming(
-        SCREEN_HEIGHT,
-        { duration, easing: Easing.in(Easing.cubic) },
-        (finished) => {
+      translateY.set(
+        withTiming(SCREEN_HEIGHT, { duration, easing: Easing.in(Easing.cubic) }, (finished) => {
           if (finished) runOnJS(finishClose)();
-        },
+        }),
       );
-      backdropOpacity.value = withTiming(0, { duration: Math.min(duration, 180) });
+      backdropOpacity.set(withTiming(0, { duration: Math.min(duration, 180) }));
     },
     [translateY, backdropOpacity, finishClose],
   );
@@ -140,9 +145,9 @@ export function DraggableSheet({
   useEffect(() => {
     if (visible) {
       setMounted(true);
-      translateY.value = SCREEN_HEIGHT;
+      translateY.set(SCREEN_HEIGHT);
       translateY.value = withSpring(0, OPEN_SPRING);
-      backdropOpacity.value = withTiming(1, { duration: 220, easing: Easing.out(Easing.cubic) });
+      backdropOpacity.set(withTiming(1, { duration: 220, easing: Easing.out(Easing.cubic) }));
     } else if (mounted) {
       animateOut(0);
     }
@@ -165,11 +170,11 @@ export function DraggableSheet({
         return;
       }
       const dy = event.translationY;
-      translateY.value = dy > 0 ? dy : hasScroll.value ? 0 : dy * 0.2;
+      translateY.set(dy > 0 ? dy : hasScroll.value ? 0 : dy * 0.2);
     })
     .onEnd((event) => {
       if (!dragsSheet.value) {
-        if (translateY.value !== 0) translateY.value = withSpring(0, SNAP_BACK_SPRING);
+        if (translateY.value !== 0) translateY.set(withSpring(0, SNAP_BACK_SPRING));
         return;
       }
       const shouldClose =
@@ -196,8 +201,9 @@ export function DraggableSheet({
     ? { behavior: Platform.OS === 'ios' ? ('padding' as const) : undefined }
     : {};
 
+  const Shell = inline ? InlineShell : ModalShell;
   return (
-    <Modal visible transparent animationType="none" onRequestClose={() => animateOut(0)}>
+    <Shell onRequestClose={() => animateOut(0)}>
       <Container style={styles.overlay} {...containerProps}>
         <Animated.View style={[StyleSheet.absoluteFill, backdropStyle]}>
           <Pressable
@@ -236,8 +242,21 @@ export function DraggableSheet({
           )}
         </Animated.View>
       </Container>
+    </Shell>
+  );
+}
+
+function ModalShell({ onRequestClose, children }: { onRequestClose: () => void; children: ReactNode }) {
+  return (
+    <Modal visible transparent animationType="none" onRequestClose={onRequestClose}>
+      {children}
     </Modal>
   );
+}
+
+/** Same sheet, drawn over the current screen (absolute fill) instead of in its own Modal. */
+function InlineShell({ children }: { onRequestClose: () => void; children: ReactNode }) {
+  return <View style={StyleSheet.absoluteFill}>{children}</View>;
 }
 
 const styles = StyleSheet.create({

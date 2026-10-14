@@ -1,9 +1,9 @@
 import { differenceInCalendarYears, format, isToday, isTomorrow } from 'date-fns';
 import * as Clipboard from 'expo-clipboard';
-import * as Haptics from 'expo-haptics';
+import * as Haptics from '@/lib/haptics';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Pressable, Share, StyleSheet, Text, View } from 'react-native';
 
 import { memoryPhotos } from '@/components/calendar/plan/MemorySheets';
@@ -16,14 +16,17 @@ import { openCalendar } from '@/lib/router';
 import * as api from '@/services/api';
 import { useRelationshipStore, useUIStore } from '@/stores';
 import type { CalendarEvent, Moment } from '@/types/database';
+import { useCardBorder } from '@/hooks/useCardBorder';
+import { formatInviteCode } from '@/lib/invite-code';
 
 /** Partner hasn't shared a moment today: nudge to send yours. */
 export function NoMomentCard({ partnerName }: { partnerName?: string | null }) {
   const { colors } = useTheme();
+  const cardBorder = useCardBorder();
   const setShowMomentCreator = useUIStore((s) => s.setShowMomentCreator);
   const name = getFirstName(partnerName) ?? 'your partner';
   return (
-    <View style={[styles.card, styles.momentCard, { backgroundColor: colors.surface }]}>
+    <View style={[styles.card, styles.momentCard, { backgroundColor: colors.surface }, cardBorder]}>
       <View style={[styles.emptyArea, { borderColor: colors.border }]}>
         <View style={[styles.emptyIcon, { backgroundColor: colors.accentSoft }]}>
           <Icon name="camera" size={30} color={colors.accent} />
@@ -47,9 +50,13 @@ export function NoMomentCard({ partnerName }: { partnerName?: string | null }) {
   );
 }
 
-/** Partner hasn't joined yet: the invite, front and centre. */
-export function InviteCard() {
+/**
+ * Partner hasn't joined yet: the invite, front and centre. Used on Home and the
+ * You page; each screen puts its own "Invite your person" section title above it.
+ */
+export function InviteCard({ from }: { from?: 'profile' } = {}) {
   const { colors } = useTheme();
+  const cardBorder = useCardBorder();
   const relationship = useRelationshipStore((s) => s.relationship);
   const setRelationship = useRelationshipStore((s) => s.setRelationship);
   const code = relationship?.invite_code ?? null;
@@ -68,35 +75,51 @@ export function InviteCard() {
     };
   }, [relationship, code, setRelationship]);
 
+  const [copied, setCopied] = useState(false);
   const copy = async () => {
     if (!code) return;
     await Clipboard.setStringAsync(code);
     void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    setCopied(true);
   };
+  // "Copied" for a moment, then the code's copy icon comes back.
+  useEffect(() => {
+    if (!copied) return;
+    const t = setTimeout(() => setCopied(false), 1800);
+    return () => clearTimeout(t);
+  }, [copied]);
   const share = async () => {
     if (!code) return;
     await Share.share({
-      message: `Join me on Moments! Use invite code: ${code}\n\nMoments is our private relationship space.`,
+      message: `Join me on Moments! Use invite code: ${formatInviteCode(code)}\n\nMoments is our private relationship space.`,
     });
   };
 
   return (
-    <View style={[styles.card, styles.inviteCard, { backgroundColor: colors.surface }]}>
-      <Text style={[styles.inviteTitle, { color: colors.text }]}>Invite your person</Text>
+    <View style={[styles.card, styles.inviteCard, { backgroundColor: colors.surface }, cardBorder]}>
       <Text style={[styles.emptyBody, { color: colors.textSecondary }]}>
         Moments is made for two. Share your code and you’ll be connected the second they join.
       </Text>
       <Pressable
         onPress={() => void copy()}
         accessibilityRole="button"
-        accessibilityLabel="Copy invite code"
+        accessibilityLabel={copied ? 'Invite code copied' : 'Copy invite code'}
         style={({ pressed }) => [
           styles.codeBox,
-          { borderColor: colors.accent, backgroundColor: colors.accentSoft },
+          copied
+            ? { borderColor: colors.success, backgroundColor: colors.accentSoft, borderStyle: 'solid' }
+            : { borderColor: colors.accent, backgroundColor: colors.accentSoft },
           pressed && styles.pressed,
         ]}>
-        <Text style={[styles.code, { color: colors.text }]}>{code ?? '······'}</Text>
-        <Icon name="document" size={18} color={colors.accent} />
+        <Text style={[styles.code, { color: colors.text }]}>{code ? formatInviteCode(code) : '····-····'}</Text>
+        {copied ? (
+          <View style={styles.copiedTag}>
+            <Icon name="check" size={16} color={colors.success} />
+            <Text style={[styles.copiedText, { color: colors.success }]}>Copied</Text>
+          </View>
+        ) : (
+          <Icon name="document" size={18} color={colors.accent} />
+        )}
       </Pressable>
       <Pressable
         onPress={() => void share()}
@@ -104,7 +127,15 @@ export function InviteCard() {
         style={({ pressed }) => [styles.primaryBtn, styles.fullWidth, { backgroundColor: colors.accent }, pressed && styles.pressed]}>
         <Text style={[styles.primaryBtnText, { color: colors.onAccent }]}>Share invite</Text>
       </Pressable>
-      <Pressable onPress={() => router.push('/(onboarding)/join-relationship')} style={styles.textBtn}>
+      <View style={styles.orRow}>
+        <View style={[styles.orLine, { backgroundColor: colors.border }]} />
+        <Text style={[styles.orText, { color: colors.textTertiary }]}>or</Text>
+        <View style={[styles.orLine, { backgroundColor: colors.border }]} />
+      </View>
+      <Pressable
+        onPress={() => router.push(from ? `/(onboarding)/join-relationship?from=${from}` : '/(onboarding)/join-relationship')}
+        accessibilityRole="button"
+        style={styles.textBtn}>
         <Text style={[styles.textBtnText, { color: colors.textSecondary }]}>I have their code</Text>
       </Pressable>
     </View>
@@ -120,12 +151,13 @@ function whenLabel(at: Date) {
 /** The next plan from Together. */
 export function NextUpCard({ event, viewerId }: { event: CalendarEvent; viewerId?: string }) {
   const { colors } = useTheme();
+  const cardBorder = useCardBorder();
   const at = new Date(event.date_time);
   return (
     <Pressable
       onPress={() => openCalendar({ dateISO: event.date_time })}
       accessibilityRole="button"
-      style={({ pressed }) => [styles.card, styles.row, { backgroundColor: colors.surface }, pressed && styles.pressed]}>
+      style={({ pressed }) => [styles.card, styles.row, { backgroundColor: colors.surface }, cardBorder, pressed && styles.pressed]}>
       <View style={[styles.rowIcon, { backgroundColor: colors.accentSoft }]}>
         <Icon name={planIcon(event)} size={22} color={colors.accent} />
       </View>
@@ -157,6 +189,7 @@ export function useOnThisDay(memories: CalendarEvent[]) {
 
 export function OnThisDayCard({ entry, momentsById }: { entry: CalendarEvent; momentsById: Map<string, Moment> }) {
   const { colors } = useTheme();
+  const cardBorder = useCardBorder();
   const years = Math.max(1, differenceInCalendarYears(new Date(), new Date(entry.date_time)));
   const photos = memoryPhotos(entry, momentsById);
   const meta = parsePlanMeta(entry.description);
@@ -167,7 +200,7 @@ export function OnThisDayCard({ entry, momentsById }: { entry: CalendarEvent; mo
     <Pressable
       onPress={() => router.navigate({ pathname: '/calendar', params: { tab: 'memories' } })}
       accessibilityRole="button"
-      style={({ pressed }) => [styles.card, styles.row, { backgroundColor: colors.surface }, pressed && styles.pressed]}>
+      style={({ pressed }) => [styles.card, styles.row, { backgroundColor: colors.surface }, cardBorder, pressed && styles.pressed]}>
       {photos[0] ? (
         <Image source={{ uri: photos[0] }} style={styles.memoryThumb} contentFit="cover" />
       ) : (
@@ -220,7 +253,6 @@ const styles = StyleSheet.create({
   fullWidth: { alignSelf: 'stretch' },
   primaryBtnText: { fontSize: 16, fontWeight: '800' },
   inviteCard: { borderRadius: 28, padding: 18, gap: 12, alignItems: 'center' },
-  inviteTitle: { fontSize: 20, fontWeight: '800', letterSpacing: -0.3 },
   codeBox: {
     alignSelf: 'stretch',
     height: 54,
@@ -233,6 +265,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   code: { fontSize: 20, fontWeight: '800', letterSpacing: 3 },
+  copiedTag: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  copiedText: { fontSize: 14, fontWeight: '800' },
   textBtn: { height: 40, justifyContent: 'center' },
   textBtnText: { fontSize: 15, fontWeight: '700' },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, paddingHorizontal: 14 },
@@ -245,4 +279,7 @@ const styles = StyleSheet.create({
   memoryThumb: { width: 84, height: 84, borderRadius: 18 },
   memoryThumbEmpty: { alignItems: 'center', justifyContent: 'center' },
   memoryTitle: { fontSize: 16, fontWeight: '800' },
+  orRow: { flexDirection: 'row', alignItems: 'center', gap: 10, alignSelf: 'stretch' },
+  orLine: { flex: 1, height: StyleSheet.hairlineWidth },
+  orText: { fontSize: 13, fontWeight: '600' },
 });

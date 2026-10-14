@@ -36,9 +36,13 @@ import type {
 } from '@/types/database';
 import { format, startOfDay } from 'date-fns';
 
-async function readUriAsArrayBuffer(uri: string): Promise<ArrayBuffer> {
-  const response = await fetch(uri);
-  return response.arrayBuffer();
+import { isConvertiblePhoto, prepareImageForUpload, readUriAsArrayBuffer } from '@/lib/prepare-image';
+
+/** Photos become real JPEGs (HEIC, PNG and huge camera shots included); other files go up untouched. */
+async function readForUpload(uri: string, contentType: string, maxSide?: number) {
+  if (!isConvertiblePhoto(contentType)) return { body: await readUriAsArrayBuffer(uri), contentType };
+  const image = await prepareImageForUpload(uri, { maxSide });
+  return { body: await readUriAsArrayBuffer(image.uri), contentType: image.contentType };
 }
 
 function generateInviteCode(): string {
@@ -198,33 +202,6 @@ async function syncRelationshipSubscription(
   }
 
   return relationship;
-}
-
-/** Update a user's personal subscription (RevenueCat webhook / purchase flow). */
-export async function setUserSubscription(
-  userId: string,
-  params: {
-    tier: SubscriptionTier;
-    expires_at?: string | null;
-    revenuecat_customer_id?: string | null;
-    revenuecat_subscription_id?: string | null;
-  },
-): Promise<{ profile: UserProfile; relationship: Relationship | null }> {
-  const profile = await updateProfile(userId, {
-    subscription_tier: params.tier,
-    subscription_expires_at: params.expires_at ?? null,
-    revenuecat_customer_id: params.revenuecat_customer_id ?? null,
-    revenuecat_subscription_id: params.revenuecat_subscription_id ?? null,
-  });
-
-  const { relationship } = await fetchRelationship(userId);
-  if (relationship && relationship.status !== 'ended') {
-    const memberIds = [relationship.user_1_id, relationship.user_2_id].filter(Boolean) as string[];
-    const synced = await syncRelationshipSubscription(relationship, memberIds);
-    return { profile, relationship: synced };
-  }
-
-  return { profile, relationship };
 }
 
 export async function createRelationship(
@@ -1404,10 +1381,10 @@ export async function uploadMedia(
   uri: string,
   contentType: string,
 ) {
-  const arrayBuffer = await readUriAsArrayBuffer(uri);
+  const file = await readForUpload(uri, contentType);
 
-  const { data, error } = await backend.storage.from(bucket).upload(path, arrayBuffer, {
-    contentType,
+  const { data, error } = await backend.storage.from(bucket).upload(path, file.body, {
+    contentType: file.contentType,
     upsert: true,
   });
   if (error) throw error;
@@ -1424,10 +1401,10 @@ export async function uploadMomentMedia(path: string, uri: string, contentType: 
 
 /** Upload chat media to the private `chat` bucket; returns a long-lived signed URL. */
 export async function uploadChatMedia(path: string, uri: string, contentType: string) {
-  const arrayBuffer = await readUriAsArrayBuffer(uri);
+  const file = await readForUpload(uri, contentType);
 
-  const { data, error } = await backend.storage.from('chat').upload(path, arrayBuffer, {
-    contentType,
+  const { data, error } = await backend.storage.from('chat').upload(path, file.body, {
+    contentType: file.contentType,
     upsert: true,
   });
   if (error) throw error;
@@ -1438,10 +1415,11 @@ export async function uploadChatMedia(path: string, uri: string, contentType: st
 /** Upload avatar to private profiles bucket; returns a long-lived signed URL. */
 export async function uploadProfileAvatar(userId: string, uri: string) {
   const path = `${userId}/avatar-${Date.now()}.jpg`;
-  const arrayBuffer = await readUriAsArrayBuffer(uri);
+  // Avatars are small on screen: 1024px is plenty and keeps uploads quick.
+  const file = await readForUpload(uri, 'image/jpeg', 1024);
 
-  const { data, error } = await backend.storage.from('profiles').upload(path, arrayBuffer, {
-    contentType: 'image/jpeg',
+  const { data, error } = await backend.storage.from('profiles').upload(path, file.body, {
+    contentType: file.contentType,
     upsert: true,
   });
   if (error) throw error;
@@ -1574,6 +1552,24 @@ export async function hideMessageForUser(messageId: string, userId: string) {
     p_user_id: userId,
   });
   if (error) throw error;
+}
+
+/** How long after sending a text message its sender can still edit it (like WhatsApp). */
+export const MESSAGE_EDIT_WINDOW_MS = 15 * 60 * 1000;
+
+/** Edit your own text message. The server only lets the sender update it. */
+export async function editMessage(messageId: string, senderId: string, content: string) {
+  const text = content.trim();
+  if (!text) throw new Error('A message can’t be empty.');
+  const { data, error } = await backend
+    .from('messages')
+    .update({ content: text, edited_at: new Date().toISOString() })
+    .eq('id', messageId)
+    .eq('sender_id', senderId)
+    .select()
+    .single();
+  if (error) throw error;
+  return data as Message;
 }
 
 export async function deleteMessageForAll(messageId: string, senderId: string) {

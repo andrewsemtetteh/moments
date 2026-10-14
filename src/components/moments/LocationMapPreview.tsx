@@ -1,6 +1,7 @@
-import { useMemo } from 'react';
-import { Platform, Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
-import { WebView } from 'react-native-webview';
+import { Image } from 'expo-image';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Platform, Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
+import MapView, { Marker, PROVIDER_DEFAULT, type Region } from 'react-native-maps';
 
 import { Icon } from '@/components/ui/Icon';
 import { useTheme } from '@/hooks/useTheme';
@@ -28,127 +29,39 @@ interface LocationMapPreviewProps {
   onMarkerPress?: (index: number) => void;
 }
 
-function buildMapHtml(
-  markers: MapMarker[],
-  interactive: boolean,
-  focusedIndex: number | null,
-  fallbackGradient: [string, string],
-): string {
-  const scrollZoom = interactive ? 'true' : 'false';
-  const dragging = interactive ? 'true' : 'false';
-  const tap = interactive ? 'true' : 'false';
-  const markersJson = JSON.stringify(
-    markers.map((m) => ({
-      lat: m.latitude,
-      lng: m.longitude,
-      label: m.label ?? '',
-      name: m.name?.trim() || m.label?.trim() || '',
-      color: m.color ?? '#e85d75',
-      avatarUrl: m.avatarUrl?.trim() || '',
-    })),
-  );
+const PIN_EDGE = { top: 70, right: 50, bottom: 50, left: 50 };
 
-  return `<!DOCTYPE html>
-<html>
-  <head>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <style>
-      html, body, #map { margin: 0; padding: 0; width: 100%; height: 100%; background: #1a1a1a; }
-      .leaflet-control-attribution {
-        font-size: 8px !important;
-        background: transparent !important;
-        box-shadow: none !important;
-        color: rgba(255,255,255,0.5) !important;
-        padding: 1px 4px !important;
-      }
-      .leaflet-control-attribution a { color: rgba(255,255,255,0.65) !important; }
-      .pin-label { font-size: 11px; font-weight: 700; white-space: nowrap; }
-      .avatar-pin-wrap { background: transparent !important; border: none !important; }
-    </style>
-  </head>
-  <body>
-    <div id="map"></div>
-    <script>
-      function escapeHtml(value) {
-        return String(value || '')
-          .replace(/&/g, '&amp;')
-          .replace(/"/g, '&quot;')
-          .replace(/</g, '&lt;')
-          .replace(/>/g, '&gt;');
-      }
-
-      var markers = ${markersJson};
-      var fallbackGradient = ${JSON.stringify(fallbackGradient)};
-      var map = L.map('map', {
-        zoomControl: ${interactive ? 'true' : 'false'},
-        scrollWheelZoom: ${scrollZoom},
-        dragging: ${dragging},
-        tap: ${tap},
-        doubleClickZoom: ${interactive ? 'true' : 'false'},
-        touchZoom: ${interactive ? 'true' : 'false'},
-      });
-      L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-        maxZoom: 19,
-        attribution: '&copy; Esri',
-      }).addTo(map);
-
-      var group = [];
-      function avatarInitial(name) {
-        var trimmed = String(name || '').trim();
-        if (!trimmed) return '?';
-        var first = trimmed.split(/\\s+/)[0];
-        return first ? first.charAt(0).toUpperCase() : '?';
-      }
-
-      markers.forEach(function(m, index) {
-        var ring = m.color || '#5b8def';
-        var label = escapeHtml(m.label || '');
-        var initial = avatarInitial(m.name || m.label);
-        var avatarSize = 30;
-        var pointerH = 11;
-        var pointerW = 14;
-        var pinW = 36;
-        var pinH = avatarSize + pointerH;
-        var face = m.avatarUrl
-          ? '<img src="' + escapeHtml(m.avatarUrl) + '" alt="" style="width:100%;height:100%;object-fit:cover;display:block;border-radius:50%;" />'
-          : '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;border-radius:50%;background:linear-gradient(135deg,' + fallbackGradient[0] + ' 0%,' + fallbackGradient[1] + ' 100%);color:#fff;font-size:11px;font-weight:800;letter-spacing:-0.3px;">' + initial + '</div>';
-        var icon = L.divIcon({
-          className: 'avatar-pin-wrap',
-          html:
-            '<div style="width:' + pinW + 'px;display:flex;flex-direction:column;align-items:center;filter:drop-shadow(0 3px 8px rgba(0,0,0,0.32));">' +
-              '<div style="width:' + avatarSize + 'px;height:' + avatarSize + 'px;box-sizing:border-box;border-radius:50%;border:2.5px solid ' + ring + ';background:#fff;padding:2px;overflow:hidden;">' + face + '</div>' +
-              '<div style="width:0;height:0;margin-top:-1px;border-left:' + (pointerW / 2) + 'px solid transparent;border-right:' + (pointerW / 2) + 'px solid transparent;border-top:' + pointerH + 'px solid ' + ring + ';"></div>' +
-            '</div>',
-          iconSize: [pinW, pinH],
-          iconAnchor: [pinW / 2, pinH],
-        });
-        var marker = L.marker([m.lat, m.lng], { icon: icon }).addTo(map);
-        marker.on('click', function() {
-          if (window.ReactNativeWebView) {
-            window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'marker', index: index }));
-          }
-        });
-        if (label) {
-          marker.bindTooltip('<span class="pin-label">' + label + '</span>', { direction: 'top', offset: [0, -pinH - 6] });
-        }
-        group.push(marker);
-      });
-
-      var focusedIndex = ${focusedIndex != null ? focusedIndex : 'null'};
-      if (focusedIndex !== null && markers[focusedIndex]) {
-        map.setView([markers[focusedIndex].lat, markers[focusedIndex].lng], 17);
-      } else if (group.length === 1) {
-        map.setView([markers[0].lat, markers[0].lng], 14);
-      } else if (group.length > 1) {
-        map.fitBounds(L.featureGroup(group).getBounds().pad(0.3));
-      }
-    </script>
-  </body>
-</html>`;
+function initial(name?: string | null) {
+  const first = name?.trim().split(/\s+/)[0];
+  return first ? first.charAt(0).toUpperCase() : '?';
 }
 
+/** Where the camera starts: the focused pin up close, one pin nearby, or a box around everyone. */
+function startRegion(markers: MapMarker[], focusedIndex: number | null): Region {
+  const focus = focusedIndex != null ? markers[focusedIndex] : undefined;
+  if (focus) return { latitude: focus.latitude, longitude: focus.longitude, latitudeDelta: 0.004, longitudeDelta: 0.004 };
+  if (markers.length === 1) {
+    return { latitude: markers[0].latitude, longitude: markers[0].longitude, latitudeDelta: 0.03, longitudeDelta: 0.03 };
+  }
+  const lats = markers.map((m) => m.latitude);
+  const lngs = markers.map((m) => m.longitude);
+  const minLat = Math.min(...lats);
+  const maxLat = Math.max(...lats);
+  const minLng = Math.min(...lngs);
+  const maxLng = Math.max(...lngs);
+  return {
+    latitude: (minLat + maxLat) / 2,
+    longitude: (minLng + maxLng) / 2,
+    latitudeDelta: Math.max((maxLat - minLat) * 1.6, 0.02),
+    longitudeDelta: Math.max((maxLng - minLng) * 1.6, 0.02),
+  };
+}
+
+/**
+ * A map with each person as a photo pin. Native maps (Apple Maps on iPhone, Google Maps
+ * on Android) via react-native-maps: smooth, no web page to load, follows light/dark.
+ * Non-interactive maps are a still preview (tap opens the full map via `onPress`).
+ */
 export function LocationMapPreview({
   markers,
   height = 180,
@@ -159,10 +72,26 @@ export function LocationMapPreview({
   onMarkerPress,
 }: LocationMapPreviewProps) {
   const { colors } = useTheme();
-  const html = useMemo(
-    () => buildMapHtml(markers, interactive, focusedIndex, colors.gradient),
-    [markers, interactive, focusedIndex, colors.gradient],
-  );
+  const mapRef = useRef<MapView>(null);
+  const region = useMemo(() => startRegion(markers, focusedIndex), [markers, focusedIndex]);
+
+  // Fit everyone on screen with room for the pins; refit when the people or the focus change.
+  const fit = () => {
+    if (!mapRef.current || markers.length === 0) return;
+    if (focusedIndex != null || markers.length === 1) {
+      mapRef.current.animateToRegion(region, 0);
+      return;
+    }
+    mapRef.current.fitToCoordinates(
+      markers.map((m) => ({ latitude: m.latitude, longitude: m.longitude })),
+      { edgePadding: PIN_EDGE, animated: false },
+    );
+  };
+  useEffect(() => {
+    fit();
+    // fit reads the same values listed here.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [region]);
 
   if (markers.length === 0) return null;
 
@@ -170,27 +99,32 @@ export function LocationMapPreview({
 
   const map = (
     <View style={[styles.wrapper, sizeStyle, { borderColor: colors.border }, style]}>
-      <WebView
-        source={{ html }}
-        style={styles.webview}
-        scrollEnabled={false}
-        bounces={false}
-        overScrollMode="never"
-        originWhitelist={['*']}
-        javaScriptEnabled
-        domStorageEnabled
-        pointerEvents={interactive ? 'auto' : 'none'}
-        onMessage={(event) => {
-          if (!onMarkerPress) return;
-          try {
-            const msg = JSON.parse(event.nativeEvent.data) as { type?: string; index?: number };
-            if (msg.type === 'marker' && typeof msg.index === 'number') onMarkerPress(msg.index);
-          } catch {
-            /* not ours */
-          }
-        }}
-        {...(Platform.OS === 'android' ? { androidLayerType: 'hardware' as const } : {})}
-      />
+      <MapView
+        ref={mapRef}
+        provider={PROVIDER_DEFAULT}
+        style={StyleSheet.absoluteFill}
+        initialRegion={region}
+        onMapReady={fit}
+        userInterfaceStyle={colors.isDark ? 'dark' : 'light'}
+        scrollEnabled={interactive}
+        zoomEnabled={interactive}
+        rotateEnabled={interactive}
+        pitchEnabled={false}
+        toolbarEnabled={false}
+        showsCompass={interactive}
+        showsPointsOfInterest
+        liteMode={Platform.OS === 'android' && !interactive}
+        pointerEvents={interactive ? 'auto' : 'none'}>
+        {markers.map((m, i) => (
+          <PhotoPin
+            key={`${m.latitude},${m.longitude},${i}`}
+            marker={m}
+            fallback={colors.gradient[0]}
+            onPress={onMarkerPress ? () => onMarkerPress(i) : undefined}
+            showTitle={interactive}
+          />
+        ))}
+      </MapView>
       {onPress && (
         <View style={styles.openHint} pointerEvents="none">
           <Icon name="expand" size={14} color="#fff" />
@@ -210,15 +144,62 @@ export function LocationMapPreview({
   return map;
 }
 
+/** A round photo (or initial) in the person's colour ring, with a little pointer under it. */
+function PhotoPin({
+  marker,
+  fallback,
+  onPress,
+  showTitle,
+}: {
+  marker: MapMarker;
+  fallback: string;
+  onPress?: () => void;
+  showTitle: boolean;
+}) {
+  const ring = marker.color ?? '#e85d75';
+  // Android draws custom pins once as a bitmap: keep redrawing until the photo has loaded.
+  const [tracking, setTracking] = useState(true);
+  useEffect(() => {
+    const t = setTimeout(() => setTracking(false), 1500);
+    return () => clearTimeout(t);
+  }, [marker.avatarUrl]);
+
+  return (
+    <Marker
+      coordinate={{ latitude: marker.latitude, longitude: marker.longitude }}
+      anchor={{ x: 0.5, y: 1 }}
+      title={showTitle ? marker.label || undefined : undefined}
+      onPress={onPress}
+      tracksViewChanges={tracking}>
+      <View style={styles.pin}>
+        <View style={[styles.face, { borderColor: '#fff', shadowColor: '#000' }]}>
+          <View style={[styles.ring, { borderColor: ring }]} />
+          {marker.avatarUrl ? (
+            <Image
+              source={{ uri: marker.avatarUrl }}
+              style={styles.photo}
+              contentFit="cover"
+              onLoad={() => setTracking(false)}
+            />
+          ) : (
+            <View style={[styles.photo, styles.initialBox, { backgroundColor: fallback }]}>
+              <Text style={styles.initialText}>{initial(marker.name || marker.label)}</Text>
+            </View>
+          )}
+        </View>
+        <View style={[styles.pointer, { borderTopColor: ring }]} />
+      </View>
+    </Marker>
+  );
+}
+
+const AVATAR = 38;
+
 const styles = StyleSheet.create({
   wrapper: {
     borderRadius: 14,
     overflow: 'hidden',
     borderWidth: StyleSheet.hairlineWidth,
-  },
-  webview: {
-    flex: 1,
-    backgroundColor: 'transparent',
   },
   openHint: {
     position: 'absolute',
@@ -232,4 +213,38 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   pressed: { opacity: 0.92 },
+  pin: { alignItems: 'center', width: 48 },
+  face: {
+    width: AVATAR,
+    height: AVATAR,
+    borderRadius: AVATAR / 2,
+    borderWidth: 3,
+    backgroundColor: '#fff',
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 4,
+  },
+  ring: {
+    position: 'absolute',
+    top: -5.5,
+    left: -5.5,
+    right: -5.5,
+    bottom: -5.5,
+    borderRadius: (AVATAR + 5) / 2,
+    borderWidth: 2.5,
+  },
+  photo: { width: '100%', height: '100%', borderRadius: AVATAR / 2 },
+  initialBox: { alignItems: 'center', justifyContent: 'center' },
+  initialText: { color: '#fff', fontSize: 13, fontWeight: '800' },
+  pointer: {
+    width: 0,
+    height: 0,
+    marginTop: 1,
+    borderLeftWidth: 7,
+    borderRightWidth: 7,
+    borderTopWidth: 10,
+    borderLeftColor: 'transparent',
+    borderRightColor: 'transparent',
+  },
 });

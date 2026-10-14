@@ -8,7 +8,7 @@ import { CalendarCharacter } from '@/components/onboarding/Characters';
 import { OnboardingStepScreen } from '@/components/onboarding/OnboardingStepScreen';
 import { useTheme } from '@/hooks/useTheme';
 import { formatAnniversaryForDb } from '@/lib/anniversary';
-import { goNext, saveOnboardingDraft } from '@/lib/onboarding-v2';
+import { goNext, saveOnboardingDraft, useSavedAnswer } from '@/lib/onboarding-v2';
 import { useAuthStore } from '@/stores';
 
 /** Step 2: when you got together (countdowns and milestones run off this). */
@@ -18,6 +18,7 @@ export default function TogetherSinceScreen() {
   const { colors } = useTheme();
   const userId = useAuthStore((s) => s.user?.id);
   const [date, setDate] = useState(formatAnniversaryForDb(new Date()));
+  useSavedAnswer(userId, preview, 'anniversaryDate', setDate);
   const days = Math.max(0, differenceInCalendarDays(new Date(), parseISO(date)));
 
   const next = async (value: string | null) => {

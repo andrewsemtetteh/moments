@@ -5,6 +5,9 @@
   "compatibility_date": "2026-08-29",
   "compatibility_flags": ["nodejs_compat"],
   "triggers": { "crons": ["23 * * * *"] },
+  // Share links (https://moments.vasemti.com/i/CODE, /r/CODE) are served by this Worker.
+  // Turn on once vasemti.com is a zone in this Cloudflare account (deploy fails otherwise):
+  // "routes": [{ "pattern": "moments.vasemti.com", "custom_domain": true }],
   "observability": {
     "enabled": true
   },

@@ -84,6 +84,10 @@ function RootStack() {
             name="settings"
             options={{ animation: 'default', gestureEnabled: true, fullScreenGestureEnabled: true }}
           />
+          <Stack.Screen
+            name="notification-settings"
+            options={{ animation: 'default', gestureEnabled: true, fullScreenGestureEnabled: true }}
+          />
           {/* Streak: opened from Home's streak pill; same push + swipe back as Settings. */}
           <Stack.Screen
             name="streak"

@@ -1,4 +1,4 @@
-import * as Haptics from 'expo-haptics';
+import * as Haptics from '@/lib/haptics';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
@@ -6,7 +6,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { PeekCharacter } from '@/components/onboarding/Characters';
 import { OnboardingStepScreen } from '@/components/onboarding/OnboardingStepScreen';
 import { useTheme } from '@/hooks/useTheme';
-import { goNext, saveOnboardingDraft } from '@/lib/onboarding-v2';
+import { goNext, saveOnboardingDraft, useSavedAnswer } from '@/lib/onboarding-v2';
 import { RELATIONSHIP_TYPE_OPTIONS } from '@/lib/relationship-type';
 import { useAuthStore } from '@/stores';
 import type { RelationshipType } from '@/types/database';
@@ -20,6 +20,7 @@ export default function RelationshipKindScreen() {
   const { colors } = useTheme();
   const userId = useAuthStore((s) => s.user?.id);
   const [picked, setPicked] = useState<RelationshipType | null>(null);
+  useSavedAnswer(userId, preview, 'relationshipType', setPicked);
   const pickedIndex = RELATIONSHIP_TYPE_OPTIONS.findIndex((o) => o.value === picked);
 
   const next = async (value: RelationshipType | null) => {

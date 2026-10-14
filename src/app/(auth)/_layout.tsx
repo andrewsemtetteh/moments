@@ -34,9 +34,7 @@ export default function AuthLayout() {
         name="get-started"
         options={{ animation: 'slide_from_right', gestureEnabled: true, fullScreenGestureEnabled: true }}
       />
-      <Stack.Screen name="intro" options={{ animation: 'slide_from_right' }} />
       <Stack.Screen name="login" />
-      <Stack.Screen name="signup" />
       <Stack.Screen name="signup-email" options={{ animation: 'slide_from_right' }} />
       <Stack.Screen name="forgot-password" />
       <Stack.Screen name="check-email" />

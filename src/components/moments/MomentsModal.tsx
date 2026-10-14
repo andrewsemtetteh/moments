@@ -2,9 +2,11 @@ import { Modal, StyleSheet, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { MomentCreatorModal } from '@/components/moments/MomentCreatorModal';
+import { MomentFocusViewer } from '@/components/moments/MomentFocusViewer';
 import { MomentHistoryModal } from '@/components/moments/MomentHistoryModal';
 import { MomentStoryViewer } from '@/components/moments/MomentStoryViewer';
 import { useUIStore } from '@/stores';
+import { ThemedStatusBar } from '@/components/ui/ThemedStatusBar';
 
 /**
  * A native fullscreen Modal can't cleanly layer a second one on top — presenting/dismissing
@@ -24,6 +26,9 @@ export function MomentsModal() {
   // Only animate the entrance when nothing else in this shared Modal was already
   // showing — a swap between Creator/History/Viewer while it's mounted should never animate.
   const enterAnimation = showCreator || showHistory ? 'none' : 'fade';
+  // Light icons only over the camera or a photo/video; History uses the theme's
+  // background, so it follows the theme (white-on-white would hide the clock).
+  const overMedia = !!viewer || showCreator;
 
   // `transparent` (over full screen): every child paints its own opaque
   // background, so this looks identical — but while History is swiped away
@@ -38,20 +43,22 @@ export function MomentsModal() {
       presentationStyle="overFullScreen"
       statusBarTranslucent
       onRequestClose={() => {}}>
+      <ThemedStatusBar style={overMedia ? 'light' : undefined} />
       <GestureHandlerRootView style={styles.root}>
+        {/* Camera and History stay drawn under an open moment when that's where it came
+            from, so closing or swiping the moment away reveals them, never Home. */}
+        {showCreator && !viewer ? <MomentCreatorModal /> : null}
+        {showHistory || viewer?.returnToHistory ? (
+          <View style={StyleSheet.absoluteFill} pointerEvents={viewer ? 'none' : 'auto'}>
+            <MomentHistoryModal />
+          </View>
+        ) : null}
         {viewer ? (
-          <MomentStoryViewer />
-        ) : (
-          <>
-            {showCreator && <MomentCreatorModal />}
-            {/* Over the camera when opened from it, so a swipe back reveals the camera. */}
-            {showHistory && (
-              <View style={StyleSheet.absoluteFill}>
-                <MomentHistoryModal />
-              </View>
-            )}
-          </>
-        )}
+          <View style={StyleSheet.absoluteFill}>
+            {/* Opened from Our moments or a chat reply: the full-screen photo viewer. Stories keep theirs. */}
+            {viewer.playback === 'focus' ? <MomentFocusViewer /> : <MomentStoryViewer />}
+          </View>
+        ) : null}
       </GestureHandlerRootView>
     </Modal>
   );

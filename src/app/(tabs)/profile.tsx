@@ -1,12 +1,11 @@
 import { useQuery } from '@tanstack/react-query';
 import { differenceInCalendarDays, format } from 'date-fns';
-import * as Clipboard from 'expo-clipboard';
-import * as Haptics from 'expo-haptics';
+import * as Haptics from '@/lib/haptics';
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { ActivityIndicator, Alert, Pressable, Share, StyleSheet, Text, View } from 'react-native';
+import { useMemo, useState, type ReactNode } from 'react';
+import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { StreakFlame } from '@/components/home/StreakFlame';
 import { ScreenContainer } from '@/components/layout/ScreenContainer';
@@ -38,6 +37,7 @@ import { useAuthStore, useRelationshipStore, useUIStore } from '@/stores';
 import { usePlayProgressStore } from '@/stores/play-progress-store';
 import type { Relationship, UserProfile } from '@/types/database';
 import { ensurePermission } from '@/lib/permissions';
+import { InviteCard } from '@/components/home/HomeCards';
 
 /**
  * DEV "Preview UI" mode has no partner or space, so the page would only ever
@@ -81,7 +81,6 @@ export default function ProfileScreen() {
   const router = useRouter();
   const { colors } = useTheme();
   const storedRelationship = useRelationshipStore((s) => s.relationship);
-  const setRelationship = useRelationshipStore((s) => s.setRelationship);
   const storedPartner = useRelationshipStore((s) => s.partner);
   const previewMode = __DEV__ && !storedRelationship;
   const relationship = previewMode ? PREVIEW_RELATIONSHIP : storedRelationship;
@@ -104,56 +103,12 @@ export default function ProfileScreen() {
   const playProgress = usePlayProgressStore((s) => s.progress);
   const level = useMemo(() => levelInfo((playProgress ?? emptyProgress(todayKey())).xp), [playProgress]);
 
-  const [inviteCode, setInviteCode] = useState<string | null>(relationship?.invite_code ?? null);
   const [avatarPreview, setAvatarPreview] = useState<AvatarPreview | null>(null);
   // eslint-disable-next-line @typescript-eslint/no-unused-vars -- kept for the quick actions commented out below
   const [photoSaving, setPhotoSaving] = useState(false);
   const [shareDays, setShareDays] = useState(false);
 
   const waitingForPartner = !!relationship && !partner;
-
-  useEffect(() => {
-    if (previewMode) return;
-    if (!relationship || partner) {
-      setInviteCode(null);
-      return;
-    }
-
-    if (relationship.invite_code) {
-      setInviteCode(relationship.invite_code);
-      return;
-    }
-
-    let cancelled = false;
-    api
-      .ensureInviteCode(relationship.id)
-      .then((rel) => {
-        if (cancelled) return;
-        setRelationship(rel);
-        setInviteCode(rel.invite_code);
-      })
-      .catch(() => {
-        if (!cancelled) setInviteCode(null);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [previewMode, relationship, partner, setRelationship]);
-
-  const copyInviteCode = async () => {
-    if (!inviteCode) return;
-    await Clipboard.setStringAsync(inviteCode);
-    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    Alert.alert('Copied', 'Your invite code is on the clipboard.');
-  };
-
-  const shareInviteCode = async () => {
-    if (!inviteCode) return;
-    await Share.share({
-      message: `Join me on Moments! Use invite code: ${inviteCode}\n\nMoments is our private relationship space.`,
-    });
-  };
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars -- kept for the quick actions commented out below
   const changePhoto = async () => {
@@ -267,51 +222,7 @@ export default function ProfileScreen() {
 
           {waitingForPartner ? (
             <Section title="Invite your person">
-              <View style={[styles.card, styles.cardPad, cardSurface(colors)]}>
-                <Text style={[styles.body, { color: colors.textSecondary }]}>
-                  Share your code. You’ll be connected the moment they join.
-                </Text>
-                <Pressable
-                  onPress={() => void copyInviteCode()}
-                  disabled={!inviteCode}
-                  accessibilityRole="button"
-                  accessibilityLabel={inviteCode ? `Invite code ${inviteCode}, tap to copy` : 'Invite code loading'}
-                  style={({ pressed }) => [
-                    styles.codeBox,
-                    { borderColor: colors.accent, backgroundColor: colors.accentSoft },
-                    pressed && styles.pressed,
-                  ]}>
-                  {inviteCode ? (
-                    <>
-                      <Text style={[styles.code, { color: colors.text }]}>{inviteCode}</Text>
-                      <Icon name="document" size={20} color={colors.accent} />
-                    </>
-                  ) : (
-                    <ActivityIndicator color={colors.accent} />
-                  )}
-                </Pressable>
-                <Pressable
-                  onPress={() => void shareInviteCode()}
-                  disabled={!inviteCode}
-                  accessibilityRole="button"
-                  style={({ pressed }) => [styles.primaryBtn, { backgroundColor: colors.accent }, pressed && styles.pressed]}>
-                  <Icon name="send" size={18} color={colors.onAccent} />
-                  <Text style={[styles.primaryBtnText, { color: colors.onAccent }]}>Share invite</Text>
-                </Pressable>
-              </View>
-              <Pressable
-                onPress={() => router.push('/(onboarding)/join-relationship?from=profile')}
-                accessibilityRole="button"
-                style={({ pressed }) => [styles.card, styles.rowPad, styles.row, cardSurface(colors), pressed && styles.pressed]}>
-                <View style={[styles.smallTile, { backgroundColor: colors.boldBorder ? colors.backgroundElevated : colors.surfaceElevated }]}>
-                  <Icon name="people" size={19} color={colors.text} />
-                </View>
-                <Text style={[styles.rowLabel, { color: colors.text }]}>I have their code</Text>
-                <Icon name="chevronRight" size={16} color={colors.textTertiary} />
-              </Pressable>
-              <Text style={[styles.note, { color: colors.textTertiary }]}>
-                If you both made a space, enter their code and your empty one closes.
-              </Text>
+              <InviteCard from="profile" />
             </Section>
           ) : null}
 

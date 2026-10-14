@@ -1,6 +1,7 @@
 import { useQueryClient } from '@tanstack/react-query';
+import { useIsFocused } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { ViewToken } from 'react-native';
+import { AppState, type ViewToken } from 'react-native';
 
 import { applyMessagesReadInCache } from '@/hooks/queries';
 import * as api from '@/services/api';
@@ -16,6 +17,10 @@ const BANNER_AUTO_DISMISS_MS = 3000;
  *   actually scrolled into view, the same way WhatsApp/iMessage wait for the message to be
  *   seen rather than clearing read state the instant the thread mounts.
  * - Banner dismisses after a few seconds once seen, when typing, or when scrolled past
+ * - Messages that arrive while you're looking at the chat (screen focused, app in the
+ *   foreground) are read straight away, like every chat app: your partner sees them
+ *   as read and the Chat badge doesn't count them. Ones that arrive while the app is
+ *   in the background are read when you come back to it.
  */
 export function useChatUnreadBanner(messages: Message[] | undefined) {
   const queryClient = useQueryClient();
@@ -27,6 +32,14 @@ export function useChatUnreadBanner(messages: Message[] | undefined) {
   const dismissedRef = useRef(false);
   const bannerSeenRef = useRef(false);
   const markedReadRef = useRef(false);
+
+  // Only read things the person can actually see: this screen in front, app in the foreground.
+  const focused = useIsFocused();
+  const [appActive, setAppActive] = useState(AppState.currentState === 'active');
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => setAppActive(state === 'active'));
+    return () => sub.remove();
+  }, []);
 
   // Reset when switching conversations.
   useEffect(() => {
@@ -104,6 +117,32 @@ export function useChatUnreadBanner(messages: Message[] | undefined) {
     });
     setUnreadBannerCount(unread.size);
   }, [messages, user, relationship?.id, unreadBannerIds, clearBadge]);
+
+  // New messages from your partner after the thread opened (not the ones the unread divider
+  // is waiting on): read as soon as they're on screen.
+  useEffect(() => {
+    if (!messages || !user || !relationship?.id || unreadBannerIds === null) return;
+    if (!focused || !appActive) return;
+    const fresh = messages.some(
+      (m) => m.sender_id !== user.id && !m.read_at && !m.deleted_for_all && !unreadBannerIds.has(m.id),
+    );
+    if (!fresh) return;
+    const relationshipId = relationship.id;
+    const userId = user.id;
+    const timer = setTimeout(() => {
+      clearBadge();
+      void api
+        .markMessagesRead(relationshipId, userId)
+        .then(() => {
+          applyMessagesReadInCache(queryClient, relationshipId, userId);
+          clearBadge();
+        })
+        .catch(() => {
+          void queryClient.invalidateQueries({ queryKey: ['unreadMessages', relationshipId, userId] });
+        });
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [messages, user, relationship?.id, unreadBannerIds, focused, appActive, clearBadge, queryClient]);
 
   // Auto-dismiss the "N UNREAD" label after a few seconds.
   useEffect(() => {

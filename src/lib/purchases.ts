@@ -1,54 +1,78 @@
+import { requireOptionalNativeModule } from 'expo';
+import * as Crypto from 'expo-crypto';
 import { Linking, Platform } from 'react-native';
-import Purchases, {
-  LOG_LEVEL,
-  type CustomerInfo,
-  type PurchasesOffering,
-  type PurchasesPackage,
-} from 'react-native-purchases';
 import { create } from 'zustand';
 
 import type { SubscriptionPlanId } from '@/constants/subscription';
 
 /**
- * Moments Plus billing through RevenueCat.
+ * Moments Plus billing through Superwall (StoreKit 2 / Google Play Billing, no RevenueCat).
  *
- * - One entitlement, `moments_unlimited`, attached to the weekly / yearly / monthly products
- *   (product ids `weekly`, `yearly`, `monthly`) in the current offering.
- * - The app user id is the Clerk user id, so the RevenueCat webhook can find the couple and
- *   unlock both partners (server/src/billing.ts).
- * - Paywall: our own native screen by default (PaywallScreen); set EXPO_PUBLIC_PAYWALL=revenuecat to
- *   show the paywall designed in the RevenueCat dashboard instead (falls back to ours if none).
- * - Customer Center (manage, cancel, refunds) for subscribers.
- * - In Expo Go the SDK runs in Preview API mode (no real purchases); use a dev build to buy.
+ * - One entitlement, `moments_unlimited`, attached in the Superwall dashboard to the weekly / yearly /
+ *   monthly products (PRODUCT_IDS below).
+ * - Superwall identifies each person by a UUID derived from their Clerk id (StoreKit only accepts a
+ *   UUID as appAccountToken), plus a `clerkUserId` attribute. The Superwall webhook maps either back
+ *   to the person and unlocks both partners (server/src/billing.ts).
+ * - Paywall: our own native screen by default (PaywallScreen); set EXPO_PUBLIC_PAYWALL=superwall to
+ *   show the paywall designed in the Superwall dashboard instead (falls back to ours if none shows).
+ * - Needs a development / store build: Superwall has no Expo Go or web module, so there the app
+ *   runs without billing (the paywall lets people carry on with Free).
  */
 
 export const PLUS_ENTITLEMENT = 'moments_unlimited';
 
 const API_KEY =
   Platform.OS === 'ios'
-    ? process.env.EXPO_PUBLIC_REVENUECAT_IOS_API_KEY
+    ? process.env.EXPO_PUBLIC_SUPERWALL_IOS_API_KEY
     : Platform.OS === 'android'
-      ? process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY
+      ? process.env.EXPO_PUBLIC_SUPERWALL_ANDROID_API_KEY
       : undefined;
 
-/** True once RevenueCat keys are set for this platform; until then the paywall can't sell. */
-export const BILLING_AVAILABLE = !!API_KEY;
+/** Superwall's native module is in this build (not in Expo Go or on web). */
+const NATIVE_AVAILABLE = Platform.OS !== 'web' && !!requireOptionalNativeModule('SuperwallExpo');
 
-/** Which paywall to show: our native one (default) or the one designed in RevenueCat. */
-export const PAYWALL_SOURCE: 'native' | 'revenuecat' =
-  process.env.EXPO_PUBLIC_PAYWALL === 'revenuecat' ? 'revenuecat' : 'native';
+/** True once Superwall keys are set and the native module is present; until then the paywall can't sell. */
+export const BILLING_AVAILABLE = !!API_KEY && NATIVE_AVAILABLE;
 
-/** Each plan by its standard package type, or by its product id (`weekly`, `yearly`, `monthly`). */
-const PACKAGE_FOR_PLAN: Record<SubscriptionPlanId, { type: string; productId: string }> = {
-  weekly: { type: 'WEEKLY', productId: 'weekly' },
-  yearly: { type: 'ANNUAL', productId: 'yearly' },
-  monthly: { type: 'MONTHLY', productId: 'monthly' },
+type SuperwallModule = typeof import('expo-superwall');
+
+/** The SDK, loaded only where its native module exists (a static import crashes Expo Go). */
+export const superwall: SuperwallModule | null = BILLING_AVAILABLE
+  ? // eslint-disable-next-line @typescript-eslint/no-require-imports
+    (require('expo-superwall') as SuperwallModule)
+  : null;
+
+/** Superwall SDK keys for SuperwallProvider (only read when BILLING_AVAILABLE). */
+export const SUPERWALL_API_KEYS = {
+  ios: process.env.EXPO_PUBLIC_SUPERWALL_IOS_API_KEY,
+  android: process.env.EXPO_PUBLIC_SUPERWALL_ANDROID_API_KEY,
 };
+
+/** Which paywall to show: our native one (default) or the one designed in Superwall. */
+export const PAYWALL_SOURCE: 'native' | 'superwall' =
+  process.env.EXPO_PUBLIC_PAYWALL === 'superwall' ? 'superwall' : 'native';
+
+/**
+ * Store product ids for each plan. iOS: the App Store Connect product id. Android: Superwall's
+ * `subscriptionId:basePlanId` form, e.g. `weekly:weekly-autorenew` (match the Play Console base plans).
+ */
+const PRODUCT_IDS: Record<SubscriptionPlanId, string> = {
+  weekly: 'weekly',
+  yearly: 'yearly',
+  monthly: 'monthly',
+};
+
+/**
+ * The one time win back offer: a second yearly product whose introductory offer is the discounted
+ * first year. Create it in the stores and add it to Superwall to switch the offer on.
+ */
+const WINBACK_PRODUCT_ID = 'yearly_winback';
+export const WINBACK_OFFER = 'winback';
 
 type Entitlement = { active: boolean; trial: boolean; expiresAt: string | null; willRenew: boolean };
 
 type PurchasesState = {
-  /** This phone's own entitlement, live from RevenueCat (unlocks the buyer before the webhook lands). */
+  /** This phone's own entitlement, live from Superwall (unlocks the buyer before the webhook lands). */
   entitlement: Entitlement;
   /** Store prices for each plan, already formatted in the local currency. */
   prices: Partial<Record<SubscriptionPlanId, string>>;
@@ -56,10 +80,10 @@ type PurchasesState = {
   perWeek: Partial<Record<SubscriptionPlanId, string>>;
   /** Whether this account can still get the free trial (one per subscription group). */
   trialEligible: boolean;
-  /** The one time win back offer (yearly, discounted first year) if a `winback` offering exists in RevenueCat. */
+  /** The discounted first year, if the win back product exists in the store. */
   winbackPrice: string | null;
-  /** Store page for managing the subscription (fallback when Customer Center isn't available). */
-  managementURL: string | null;
+  /** Product id of the active subscription (Play's manage page links straight to it). */
+  activeProductId: string | null;
 };
 
 const NO_ENTITLEMENT: Entitlement = { active: false, trial: false, expiresAt: null, willRenew: false };
@@ -70,232 +94,189 @@ export const usePurchasesStore = create<PurchasesState>(() => ({
   perWeek: {},
   trialEligible: true,
   winbackPrice: null,
-  managementURL: null,
+  activeProductId: null,
 }));
 
-function applyCustomerInfo(info: CustomerInfo) {
-  const plus = info.entitlements.active[PLUS_ENTITLEMENT];
+type SuperwallState = ReturnType<SuperwallModule['useSuperwallStore']['getState']>;
+
+function sdk(): SuperwallState {
+  return superwall!.useSuperwallStore.getState();
+}
+
+/** Mirrors Superwall's subscription status and purchase history into our store. */
+function applySuperwallState({ subscriptionStatus, customerInfo }: SuperwallState) {
+  const active =
+    subscriptionStatus.status === 'ACTIVE' && subscriptionStatus.entitlements.some((e) => e.id === PLUS_ENTITLEMENT);
+  const subs = customerInfo?.subscriptions ?? [];
+  const current = subs.filter((s) => s.isActive).sort((a, b) => b.purchaseDate.localeCompare(a.purchaseDate))[0];
   usePurchasesStore.setState({
-    entitlement: plus
+    entitlement: active
       ? {
           active: true,
-          trial: plus.periodType?.toUpperCase() === 'TRIAL',
-          expiresAt: plus.expirationDate ?? null,
-          willRenew: plus.willRenew,
+          trial: current?.offerType === 'trial',
+          expiresAt: current?.expirationDate ?? null,
+          willRenew: current?.willRenew ?? true,
         }
       : NO_ENTITLEMENT,
-    // Anyone who has ever had the entitlement has used their intro offer.
-    trialEligible: !info.entitlements.all[PLUS_ENTITLEMENT],
-    managementURL: info.managementURL ?? null,
+    // Anyone who has ever subscribed has used their intro offer. Unknown history keeps the trial on.
+    ...(customerInfo ? { trialEligible: subs.length === 0 } : {}),
+    activeProductId: current?.productId ?? null,
   });
 }
 
-let configured = false;
-let currentUserId: string | null = null;
+/** The person's Superwall id. Must match `billingUserId` in server/src/billing.ts exactly. */
+export async function billingUserId(clerkUserId: string): Promise<string> {
+  const hex = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA1, `moments-billing:${clerkUserId}`);
+  const b = hex.slice(0, 32).match(/../g)!.map((h) => parseInt(h, 16));
+  b[6] = (b[6] & 0x0f) | 0x50;
+  b[8] = (b[8] & 0x3f) | 0x80;
+  const out = b.map((x) => x.toString(16).padStart(2, '0')).join('');
+  return `${out.slice(0, 8)}-${out.slice(8, 12)}-${out.slice(12, 16)}-${out.slice(16, 20)}-${out.slice(20)}`;
+}
 
-/** Configure once and identify the signed in user. Safe to call on every sign in. */
+let listening = false;
+let currentUserId: string | null = null;
+/** The user to identify; retried once Superwall finishes configuring if the first try timed out. */
+let wantedUserId: string | null = null;
+
+/** Identify the signed in user with Superwall. Safe to call on every sign in. */
 export async function initPurchases(userId: string | null | undefined) {
-  if (!BILLING_AVAILABLE || Platform.OS === 'web') return;
+  if (!superwall) return;
+  wantedUserId = userId ?? null;
   try {
-    if (!configured) {
-      void Purchases.setLogLevel(__DEV__ ? LOG_LEVEL.VERBOSE : LOG_LEVEL.WARN);
-      // Identify up front with the Clerk id (no anonymous user to merge later).
-      Purchases.configure({ apiKey: API_KEY!, appUserID: userId ?? undefined });
-      Purchases.addCustomerInfoUpdateListener(applyCustomerInfo);
-      configured = true;
-      currentUserId = userId ?? null;
-    } else if (userId && userId !== currentUserId) {
-      const { customerInfo } = await Purchases.logIn(userId);
-      applyCustomerInfo(customerInfo);
+    if (!listening) {
+      superwall.useSuperwallStore.subscribe((state, prev) => {
+        applySuperwallState(state);
+        if (state.isConfigured && !prev.isConfigured && wantedUserId && wantedUserId !== currentUserId) {
+          void initPurchases(wantedUserId);
+        }
+      });
+      listening = true;
+    }
+    if (userId && userId !== currentUserId) {
+      await sdk().identify(await billingUserId(userId));
+      // The webhook also reads this, in case the store reports a different id.
+      await sdk().setUserAttributes({ clerkUserId: userId });
       currentUserId = userId;
     }
-    applyCustomerInfo(await Purchases.getCustomerInfo());
+    applySuperwallState(sdk());
+    void sdk()
+      .getCustomerInfo()
+      .then(() => applySuperwallState(sdk()))
+      .catch(() => undefined);
     void loadPrices();
   } catch (e) {
     console.warn('[purchases] init failed', e);
   }
 }
 
-/** Sign out: back to an anonymous RevenueCat user so the next account doesn't inherit Plus. */
+/** Sign out: back to an anonymous Superwall user so the next account doesn't inherit Plus. */
 export async function resetPurchases() {
-  if (!configured) return;
+  currentUserId = null;
+  wantedUserId = null;
+  usePurchasesStore.setState({ entitlement: NO_ENTITLEMENT, activeProductId: null, trialEligible: true });
+  if (!superwall) return;
   try {
-    await Purchases.logOut();
+    await sdk().reset();
   } catch {
     // Already anonymous.
   }
-  currentUserId = null;
-  usePurchasesStore.setState({ entitlement: NO_ENTITLEMENT, managementURL: null });
-}
-
-/** Fresh customer info (RevenueCat caches it; this also refreshes the store). Null if unavailable. */
-export async function getCustomerInfoSafe(): Promise<CustomerInfo | null> {
-  if (!configured) return null;
-  try {
-    const info = await Purchases.getCustomerInfo();
-    applyCustomerInfo(info);
-    return info;
-  } catch (e) {
-    console.warn('[purchases] customer info failed', e);
-    return null;
-  }
-}
-
-/** True when this account has `moments_unlimited` right now. */
-export async function hasMomentsUnlimited(): Promise<boolean> {
-  const info = await getCustomerInfoSafe();
-  return !!info?.entitlements.active[PLUS_ENTITLEMENT];
-}
-
-/** The offering to sell from: the current one, or a named one (`winback`). */
-async function currentOffering(offeringId?: string): Promise<PurchasesOffering | null> {
-  const offerings = await Purchases.getOfferings();
-  if (offeringId) return offerings.all[offeringId] ?? null;
-  return offerings.current ?? null;
-}
-
-function packageFor(offering: PurchasesOffering | null, plan: SubscriptionPlanId): PurchasesPackage | null {
-  const { type, productId } = PACKAGE_FOR_PLAN[plan];
-  const packages = offering?.availablePackages ?? [];
-  return (
-    packages.find((p) => p.packageType === type) ??
-    packages.find((p) => p.product.identifier === productId || p.product.identifier.startsWith(`${productId}:`)) ??
-    null
-  );
 }
 
 /** Local store prices for the paywall (falls back to the USD constants until they load). */
 export async function loadPrices() {
-  if (!configured) return;
+  if (!superwall) return;
   try {
-    const offering = await currentOffering();
+    const plans = Object.keys(PRODUCT_IDS) as SubscriptionPlanId[];
+    const products = await sdk().products([...plans.map((p) => PRODUCT_IDS[p]), WINBACK_PRODUCT_ID]);
+    const byId = new Map(products.map((p) => [p.productIdentifier, p]));
     const prices: PurchasesState['prices'] = {};
     const perWeek: PurchasesState['perWeek'] = {};
-    for (const plan of Object.keys(PACKAGE_FOR_PLAN) as SubscriptionPlanId[]) {
-      const pkg = packageFor(offering, plan);
-      if (!pkg) continue;
-      prices[plan] = pkg.product.priceString;
-      if (pkg.product.pricePerWeekString) perWeek[plan] = pkg.product.pricePerWeekString;
+    for (const plan of plans) {
+      const product = byId.get(PRODUCT_IDS[plan]);
+      if (!product) continue;
+      prices[plan] = product.localizedPrice;
+      if (product.weeklyPrice) perWeek[plan] = product.weeklyPrice;
     }
-    const winback = packageFor(await currentOffering(WINBACK_OFFERING), 'yearly');
-    usePurchasesStore.setState({ prices, perWeek, winbackPrice: winback?.product.priceString ?? null });
+    // The win back product's introductory price is the discounted first year.
+    const winback = byId.get(WINBACK_PRODUCT_ID);
+    const winbackPrice = winback && winback.trialPeriodPrice > 0 ? winback.localizedTrialPeriodPrice : null;
+    usePurchasesStore.setState({ prices, perWeek, winbackPrice });
   } catch (e) {
     console.warn('[purchases] prices failed', e);
   }
 }
 
-/** RevenueCat offering holding the discounted first year (create it in the dashboard to switch the offer on). */
-export const WINBACK_OFFERING = 'winback';
+/** Resolves once Superwall reports Plus (or after `ms`): a purchase's status can land a moment later. */
+async function waitForPlus(ms = 4000): Promise<boolean> {
+  if (usePurchasesStore.getState().entitlement.active) return true;
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => {
+      unsubscribe();
+      resolve(usePurchasesStore.getState().entitlement.active);
+    }, ms);
+    const unsubscribe = usePurchasesStore.subscribe((s) => {
+      if (!s.entitlement.active) return;
+      clearTimeout(timer);
+      unsubscribe();
+      resolve(true);
+    });
+  });
+}
 
 export type PurchaseResult = 'purchased' | 'cancelled' | 'pending' | 'unavailable' | 'failed';
-
-/** A short, human message for RevenueCat's purchase errors. */
-function purchaseErrorMessage(e: unknown): { result: PurchaseResult; message?: string } {
-  const err = e as { userCancelled?: boolean; code?: string; message?: string };
-  if (err.userCancelled) return { result: 'cancelled' };
-  const C = Purchases.PURCHASES_ERROR_CODE;
-  switch (err.code) {
-    case C.PURCHASE_CANCELLED_ERROR:
-      return { result: 'cancelled' };
-    case C.PAYMENT_PENDING_ERROR:
-      return { result: 'pending', message: 'Your payment is pending. Plus unlocks as soon as it’s approved.' };
-    case C.NETWORK_ERROR:
-    case C.OFFLINE_CONNECTION_ERROR:
-      return { result: 'failed', message: 'You’re offline. Check your connection and try again.' };
-    case C.PURCHASE_NOT_ALLOWED_ERROR:
-      return { result: 'failed', message: 'Purchases aren’t allowed on this device (check Screen Time or parental controls).' };
-    case C.PRODUCT_NOT_AVAILABLE_FOR_PURCHASE_ERROR:
-      return { result: 'unavailable', message: 'This plan isn’t available in your country yet.' };
-    case C.PRODUCT_ALREADY_PURCHASED_ERROR:
-      return { result: 'failed', message: 'You already have this plan. Try Restore purchase.' };
-    case C.STORE_PROBLEM_ERROR:
-      return { result: 'failed', message: 'The store is having trouble right now. Nothing was charged; please try again.' };
-    default:
-      return { result: 'failed', message: err.message };
-  }
-}
 
 /** Buy a plan. The trial (where the plan has one) is applied by the store automatically. */
 export async function purchasePlan(
   plan: SubscriptionPlanId,
-  offeringId?: string,
+  offer?: typeof WINBACK_OFFER,
 ): Promise<{ result: PurchaseResult; message?: string }> {
-  if (!configured) return { result: 'unavailable' };
+  if (!superwall) return { result: 'unavailable' };
+  const productId = offer === WINBACK_OFFER && plan === 'yearly' ? WINBACK_PRODUCT_ID : PRODUCT_IDS[plan];
   try {
-    const pkg = packageFor(await currentOffering(offeringId), plan);
-    if (!pkg) return { result: 'unavailable', message: 'This plan isn’t available right now.' };
-    const { customerInfo } = await Purchases.purchasePackage(pkg);
-    applyCustomerInfo(customerInfo);
-    return customerInfo.entitlements.active[PLUS_ENTITLEMENT]
-      ? { result: 'purchased' }
-      : { result: 'failed', message: 'The purchase finished but Plus didn’t unlock. Try Restore purchase.' };
+    const outcome = await sdk().purchase(productId);
+    switch (outcome.type) {
+      case 'purchased':
+        // Charged: unlock as soon as Superwall confirms; the webhook unlocks the couple regardless.
+        await waitForPlus();
+        return { result: 'purchased' };
+      case 'cancelled':
+        return { result: 'cancelled' };
+      case 'pending':
+        return { result: 'pending', message: 'Your payment is pending. Plus unlocks as soon as it’s approved.' };
+      case 'failed':
+      default:
+        console.warn('[purchases] purchase failed', outcome);
+        return {
+          result: 'failed',
+          message: 'The purchase didn’t go through. Nothing was charged; please try again.',
+        };
+    }
   } catch (e) {
-    return purchaseErrorMessage(e);
+    console.warn('[purchases] purchase threw', e);
+    return { result: 'failed', message: 'The store is having trouble right now. Nothing was charged; please try again.' };
   }
 }
 
 /** Restore a previous purchase (new phone, reinstall). True when Plus is active afterwards. */
 export async function restorePlus(): Promise<boolean> {
-  if (!configured) return false;
-  const info = await Purchases.restorePurchases();
-  applyCustomerInfo(info);
-  return !!info.entitlements.active[PLUS_ENTITLEMENT];
+  if (!superwall) return false;
+  const outcome = await sdk().restorePurchases();
+  if (outcome.result === 'failed') throw new Error(outcome.errorMessage ?? 'Restore failed');
+  await sdk()
+    .getCustomerInfo()
+    .then(() => applySuperwallState(sdk()))
+    .catch(() => undefined);
+  return waitForPlus(2500);
 }
 
-// ---------------------------------------------------------------------------
-// RevenueCat UI: the dashboard paywall and Customer Center (react-native-purchases-ui).
-// Loaded lazily so the app still starts where its native module isn't available.
-// ---------------------------------------------------------------------------
-
-export type RevenueCatPaywallOutcome = 'purchased' | 'closed' | 'unavailable';
-
-/**
- * Shows the paywall designed in the RevenueCat dashboard for the current (or a named) offering.
- * 'unavailable' when no paywall is configured or the UI can't load: the caller shows ours instead.
- */
-export async function presentRevenueCatPaywall(offeringId?: string): Promise<RevenueCatPaywallOutcome> {
-  if (!configured) return 'unavailable';
-  try {
-    const { default: RevenueCatUI, PAYWALL_RESULT } = await import('react-native-purchases-ui');
-    const offering = offeringId ? await currentOffering(offeringId) : null;
-    const result = await RevenueCatUI.presentPaywall({ displayCloseButton: true, ...(offering ? { offering } : {}) });
-    switch (result) {
-      case PAYWALL_RESULT.PURCHASED:
-      case PAYWALL_RESULT.RESTORED:
-        await getCustomerInfoSafe();
-        return 'purchased';
-      case PAYWALL_RESULT.CANCELLED:
-        return 'closed';
-      case PAYWALL_RESULT.NOT_PRESENTED:
-      case PAYWALL_RESULT.ERROR:
-      default:
-        return 'unavailable';
-    }
-  } catch (e) {
-    console.warn('[purchases] RevenueCat paywall unavailable', e);
-    return 'unavailable';
-  }
-}
-
-/**
- * Manage the subscription: RevenueCat's Customer Center (plan, cancel, refund request, restore),
- * or the store's own page when it can't open.
- */
+/** Manage the subscription: the store's own page (plan, cancel, refunds go through Apple / Google). */
 export async function openSubscriptionManagement(): Promise<void> {
-  try {
-    if (configured) {
-      const { default: RevenueCatUI } = await import('react-native-purchases-ui');
-      await RevenueCatUI.presentCustomerCenter();
-      await getCustomerInfoSafe();
-      return;
-    }
-  } catch (e) {
-    console.warn('[purchases] Customer Center unavailable, opening the store page', e);
+  if (Platform.OS === 'ios') {
+    await Linking.openURL('https://apps.apple.com/account/subscriptions');
+    return;
   }
-  const url =
-    usePurchasesStore.getState().managementURL ??
-    (Platform.OS === 'ios'
-      ? 'https://apps.apple.com/account/subscriptions'
-      : 'https://play.google.com/store/account/subscriptions');
-  await Linking.openURL(url);
+  const sku = usePurchasesStore.getState().activeProductId?.split(':')[0];
+  const params = sku ? `?sku=${encodeURIComponent(sku)}&package=com.vasemti.moments` : '';
+  await Linking.openURL(`https://play.google.com/store/account/subscriptions${params}`);
 }

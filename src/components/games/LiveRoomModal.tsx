@@ -51,6 +51,7 @@ import {
   useGameTone,
   useRoomPlayers,
 } from './room-ui';
+import { ThemedStatusBar } from '@/components/ui/ThemedStatusBar';
 
 /** Full-screen live game room: lobby → rounds → results, with voice chat and reactions. */
 export function LiveRoomModal() {
@@ -91,6 +92,7 @@ export function LiveRoomModal() {
 
   return (
     <Modal visible animationType="slide" presentationStyle="fullScreen" onRequestClose={leave}>
+      <ThemedStatusBar />
       <View style={[styles.root, { backgroundColor: colors.background }]}>
         <LinearGradient
           pointerEvents="none"

@@ -1,12 +1,13 @@
 import { useQuery } from '@tanstack/react-query';
 import { format, formatDistanceToNow } from 'date-fns';
-import * as Haptics from 'expo-haptics';
+import * as Haptics from '@/lib/haptics';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Pressable } from 'react-native-gesture-handler';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+// Gesture-aware ScrollView: scrolls cleanly inside the page's swipe-back gesture.
+import { Pressable, ScrollView } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { PartnerStatusLine } from '@/components/chat/PartnerStatusLine';
@@ -238,7 +239,7 @@ export function PartnerProfileModal() {
     <>
       {/* A full page, like Chat itself: slides in from the right, back arrow at
           the top, swipe right anywhere (or Android back) to close. */}
-      <FullScreenPage visible={visible} title="" onBack={close}>
+      <FullScreenPage visible={visible} title="" onBack={close} dismissKeyboardOnTap={false}>
         {!profile && isLoadingPartner ? (
           <View style={styles.loadingState}>
             <ActivityIndicator size="large" color={colors.accent} />

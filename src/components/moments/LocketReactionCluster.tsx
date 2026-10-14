@@ -1,4 +1,4 @@
-import * as Haptics from 'expo-haptics';
+import * as Haptics from '@/lib/haptics';
 import { useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Pressable } from 'react-native-gesture-handler';
@@ -30,6 +30,8 @@ interface LocketReactionClusterProps {
   /** preview: parent controls visibility; home: always shows the row when rendered */
   variant?: 'home' | 'preview';
   onPicked?: () => void;
+  /** Dark styling, for the moment viewer. */
+  dark?: boolean;
 }
 
 export function LocketReactionCluster({
@@ -38,8 +40,19 @@ export function LocketReactionCluster({
   onReact,
   variant = 'home',
   onPicked,
+  dark = false,
 }: LocketReactionClusterProps) {
-  const { colors } = useTheme();
+  const theme = useTheme().colors;
+  // In the dark moment viewer, the picker goes dark too.
+  const colors = dark
+    ? {
+        ...theme,
+        surface: 'rgba(255,255,255,0.10)',
+        surfaceElevated: 'rgba(255,255,255,0.14)',
+        border: 'rgba(255,255,255,0.16)',
+        text: '#FFFFFF',
+      }
+    : theme;
   const user = useAuthStore((s) => s.user);
   const userId = user?.id ?? '';
   const userReaction = getUserReactionEmoji(moment, userId);

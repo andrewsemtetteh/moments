@@ -6,14 +6,16 @@ import { StreakReminderSync } from '@/components/home/StreakReminderSync';
 import { StreakSparkSync } from '@/components/home/StreakSparkSync';
 import { AppTabBar } from '@/components/layout/AppTabBar';
 import { ChatMessageSync } from '@/components/layout/ChatMessageSync';
+import { EntryStackReset } from '@/components/layout/EntryStackReset';
+import { LiveLocationSync } from '@/components/layout/LiveLocationSync';
 import { PaywallMoments } from '@/components/layout/PaywallMoments';
 import { PlaySync } from '@/components/layout/PlaySync';
 import { HomeSync } from '@/components/layout/HomeSync';
 import { NotificationSync } from '@/components/layout/NotificationSync';
 import { OnboardingTour } from '@/components/layout/OnboardingTour';
 import { StoreReviewSync } from '@/components/layout/StoreReviewSync';
+import { WidgetSync } from '@/components/layout/WidgetSync';
 import { PartnerPresenceSync } from '@/components/profile/PartnerPresenceSync';
-import { PartnerProfileModal } from '@/components/profile/PartnerProfileModal';
 import { PartnerTimezoneSync } from '@/components/profile/PartnerTimezoneSync';
 import { RelationshipReminderSync } from '@/components/profile/RelationshipReminderSync';
 import { useRealtimeSubscription } from '@/hooks/queries';
@@ -41,6 +43,10 @@ export default function TabsLayout() {
   return (
     <>
       <TabsRealtimeSync />
+      {/* Back from Home never returns to sign-in or onboarding. */}
+      <EntryStackReset />
+      {/* "How far apart" stays live everywhere. */}
+      <LiveLocationSync />
       <HomeSync />
       <NotificationSync />
       <ChatMessageSync />
@@ -53,6 +59,7 @@ export default function TabsLayout() {
       <StreakSparkSync />
       <StreakReminderSync />
       <StoreReviewSync />
+      <WidgetSync />
       {/* Runs once, right after onboarding. */}
       <OnboardingTour />
       <Tabs
@@ -68,7 +75,6 @@ export default function TabsLayout() {
         {/* Chat (tab-bar button), Plan and Notifications (header buttons) are
             root stack screens pushed over these tabs, not tabs themselves. */}
       </Tabs>
-      <PartnerProfileModal />
     </>
   );
 }

@@ -67,11 +67,15 @@ export const useRelationshipStore = create<RelationshipState>((set) => ({
 
 interface UIState {
   theme: AppTheme;
+  /** The saved theme has been read from storage (or there was none), so `theme` is final. */
+  themeReady: boolean;
   isOffline: boolean;
   showMomentCreator: boolean;
   showMomentHistory: boolean;
   /** History was opened from the camera — closing it should reopen the camera instead of exiting to Home. */
   momentHistoryReturnToCamera: boolean;
+  /** History is on its way out over the camera: wake the camera now, so it's live when revealed. */
+  momentCameraWaking: boolean;
   momentViewer: MomentViewerState | null;
   momentHistoryScrollY: number;
   /** Album open inside Moment history — kept here so it survives a round trip through the viewer. */
@@ -144,10 +148,12 @@ export const useUIStore = create<UIState>((set) => ({
   // through the whole auth/onboarding flow. Existing users' saved preference
   // always overrides this on boot (see AppProviders), so this never touches them.
   theme: 'paper',
+  themeReady: false,
   isOffline: false,
   showMomentCreator: false,
   showMomentHistory: false,
   momentHistoryReturnToCamera: false,
+  momentCameraWaking: false,
   momentViewer: null,
   momentHistoryScrollY: 0,
   momentHistoryAlbumId: null,

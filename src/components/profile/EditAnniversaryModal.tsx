@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
-import { StyleSheet } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 
-import { AnniversaryDatePicker } from '@/components/onboarding/AnniversaryDatePicker';
+import { AnniversaryWheelPicker } from '@/components/onboarding/AnniversaryWheelPicker';
 import { DraggableSheet } from '@/components/ui/DraggableSheet';
 import { PrimaryButton } from '@/components/ui/primitives';
 import { useTheme } from '@/hooks/useTheme';
@@ -14,6 +14,7 @@ type Props = {
   onSave: (isoDate: string) => void;
 };
 
+/** Same layout as the other Settings sheets (relationship type etc.): title, hint, the control, then Save. */
 export function EditAnniversaryModal({ visible, value, saving = false, onClose, onSave }: Props) {
   const { colors } = useTheme();
   const [draft, setDraft] = useState(value);
@@ -22,22 +23,24 @@ export function EditAnniversaryModal({ visible, value, saving = false, onClose, 
     if (visible) setDraft(value);
   }, [visible, value]);
 
-  const save = () => {
-    onSave(draft);
-  };
-
   return (
-    <DraggableSheet visible={visible} onClose={onClose} style={styles.sheet}>
-      <AnniversaryDatePicker
-        value={draft}
-        onChange={setDraft}
-        subtitle="We use this for your anniversary countdown and how long you've been together."
-        surfaceColor={colors.surfaceElevated}
-      />
+    <DraggableSheet visible={visible} onClose={onClose}>
+      <Text style={[styles.title, { color: colors.text }]}>Anniversary</Text>
+      <Text style={[styles.hint, { color: colors.textSecondary }]}>
+        Used for your countdown and how long you’ve been together.
+      </Text>
+
+      <View
+        style={[
+          styles.picker,
+          { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: colors.boldBorder ? 2 : 0 },
+        ]}>
+        <AnniversaryWheelPicker value={draft} onChange={setDraft} surfaceColor={colors.surface} />
+      </View>
 
       <PrimaryButton
-        label={saving ? 'Saving…' : 'Save anniversary'}
-        onPress={save}
+        label={saving ? 'Saving…' : 'Save'}
+        onPress={() => onSave(draft)}
         loading={saving}
         style={styles.saveBtn}
       />
@@ -45,9 +48,11 @@ export function EditAnniversaryModal({ visible, value, saving = false, onClose, 
   );
 }
 
+// Closes by dragging the handle down or tapping outside (the date wheel needs
+// vertical drags, so unlike the choice sheets it isn't drag-anywhere).
 const styles = StyleSheet.create({
-  // Close by dragging the handle down or tapping outside (the date wheel
-  // needs the vertical drags, so it isn't drag-anywhere).
-  sheet: { paddingTop: 4 },
+  title: { fontSize: 20, fontWeight: '800', letterSpacing: -0.3 },
+  hint: { fontSize: 14, lineHeight: 20, marginTop: 4 },
+  picker: { marginTop: 16, borderRadius: 18, overflow: 'hidden', paddingVertical: 8 },
   saveBtn: { marginTop: 20 },
 });

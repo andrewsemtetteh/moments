@@ -10,9 +10,11 @@ interface Props {
   partner: UserProfile | null;
   userId: string;
   onClose: () => void;
+  /** "edit": the bar above the box while you're editing one of your messages. */
+  mode?: 'reply' | 'edit';
 }
 
-export function ChatReplyBar({ message, partner, userId, onClose }: Props) {
+export function ChatReplyBar({ message, partner, userId, onClose, mode = 'reply' }: Props) {
   const { colors } = useTheme();
   const isSelf = message.sender_id === userId;
   const author = isSelf ? 'You' : partner?.name ?? 'Partner';
@@ -22,13 +24,13 @@ export function ChatReplyBar({ message, partner, userId, onClose }: Props) {
       <View style={[styles.accent, { backgroundColor: colors.accent }]} />
       <View style={styles.meta}>
         <Text style={[styles.title, { color: colors.accent }]} numberOfLines={1}>
-          Replying to {author}
+          {mode === 'edit' ? 'Editing message' : `Replying to ${author}`}
         </Text>
         <Text style={[styles.preview, { color: colors.textSecondary }]} numberOfLines={1}>
           {getMessagePreviewText(message)}
         </Text>
       </View>
-      <Pressable onPress={onClose} hitSlop={8} accessibilityLabel="Cancel reply">
+      <Pressable onPress={onClose} hitSlop={8} accessibilityLabel={mode === 'edit' ? 'Cancel editing' : 'Cancel reply'}>
         <Icon name="close" size={20} color={colors.textSecondary} />
       </Pressable>
     </View>

@@ -1,182 +1,22 @@
-import { useAuth } from '@clerk/expo';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
-import { Alert, StyleSheet, Text, TextInput, View } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { JoinWithCode } from '@/components/onboarding/JoinWithCode';
-import { OnboardingChrome } from '@/components/onboarding/OnboardingChrome';
-import { PromptLink } from '@/components/ui/PromptLink';
-import { PrimaryButton } from '@/components/ui/primitives';
-import { Spacing } from '@/constants/design-system';
-import { useTheme } from '@/hooks/useTheme';
-import { joinRelationshipByInvite, updateRelationship } from '@/lib/moments-api';
-import {
-  buildOnboardingRelationshipParams,
-  hasChosenSpacePath,
-  hasCompletedPreSpaceOnboarding,
-  paramsFromSearch,
-  type OnboardingRelationshipParams,
-} from '@/lib/onboarding-relationship-params';
-import { markRelationshipOnboardingDone } from '@/lib/onboarding-storage';
-import { goToOnboardingBack } from '@/lib/onboarding-navigation';
 import { goNext } from '@/lib/onboarding-v2';
 import { goBackOrReplace } from '@/lib/router';
-import { queryClient } from '@/providers/AppProviders';
-import { useAuthStore, useRelationshipStore } from '@/stores';
-import { AnalyticsEvents, trackForCouple } from '@/services/analytics';
-import type { RelationshipType } from '@/types/database';
+import { useAuthStore } from '@/stores';
 
-function JoinRelationshipContent({
-  fromProfile,
-  relationshipType,
-  onboardingParams,
-  onBack,
-  onJoined,
-  preview = false,
-}: {
-  /** New onboarding: where to go after joining (instead of the old theme step). */
-  onJoined?: () => void;
-  preview?: boolean;
-  fromProfile: boolean;
-  relationshipType: RelationshipType | null;
-  onboardingParams?: OnboardingRelationshipParams;
-  onBack?: () => void;
-}) {
-  const router = useRouter();
-  const insets = useSafeAreaInsets();
-  const { colors } = useTheme();
-  const user = useAuthStore((s) => s.user);
-  const { getToken } = useAuth();
-  const setRelationship = useRelationshipStore((s) => s.setRelationship);
-  const setPartner = useRelationshipStore((s) => s.setPartner);
-  const [code, setCode] = useState('');
-  const [loading, setLoading] = useState(false);
-
-  const join = async () => {
-    if (preview) {
-      onJoined?.();
-      return;
-    }
-    if (!user || !code.trim()) return;
-    setLoading(true);
-    try {
-      const token = await getToken();
-      if (!token) throw new Error('Not signed in');
-      let { relationship, partner } = await joinRelationshipByInvite(token, code.trim());
-      if (relationshipType && !relationship.relationship_type) {
-        relationship = await updateRelationship(token, relationship.id, {
-          relationship_type: relationshipType,
-        });
-      }
-      await markRelationshipOnboardingDone(user.id);
-      setRelationship(relationship);
-      void trackForCouple(AnalyticsEvents.PARTNER_JOINED);
-      setPartner(partner);
-      queryClient.clear();
-      if (onJoined) {
-        onJoined();
-        return;
-      }
-      router.replace({
-        pathname: '/(onboarding)/theme-picker',
-        params: { next: 'welcome' },
-      });
-    } catch (e: unknown) {
-      Alert.alert('Could not join', e instanceof Error ? e.message : 'Please check the code and try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <View style={[styles.content, { paddingBottom: insets.bottom + Spacing.lg, paddingHorizontal: Spacing.lg }]}>
-      <Text style={[styles.title, { color: colors.text }]}>Join your partner</Text>
-      <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-        {fromProfile
-          ? 'Enter your partner\u2019s 6-character code. If you already created a space, your empty one will close when you join theirs.'
-          : 'Enter the 6-character invite code they shared with you'}
-      </Text>
-
-      <TextInput
-        style={[styles.input, { color: colors.text, backgroundColor: colors.surface, borderColor: colors.border }]}
-        placeholder="ABC123"
-        placeholderTextColor={colors.textTertiary}
-        value={code}
-        onChangeText={(t) => setCode(t.toUpperCase().replace(/[^A-Z0-9]/g, ''))}
-        autoCapitalize="characters"
-        maxLength={6}
-        autoFocus
-      />
-
-      <PrimaryButton
-        label={loading ? 'Joining…' : 'Join Relationship'}
-        onPress={join}
-        loading={loading}
-        disabled={code.length < 6}
-        style={styles.btn}
-      />
-
-      {fromProfile ? (
-        <PromptLink prompt="Changed your mind?" linkLabel="Back to Profile" onPress={onBack} />
-      ) : (
-        <PromptLink
-          prompt="Starting fresh?"
-          linkLabel="Create a space"
-          href={{
-            pathname: '/(onboarding)/create-relationship',
-            params: buildOnboardingRelationshipParams({
-              ...paramsFromSearch(onboardingParams ?? {}),
-              spacePathChosen: 'create',
-            }),
-          }}
-        />
-      )}
-    </View>
-  );
-}
-
+/**
+ * Join your partner's space with their code. From onboarding's invite step
+ * (?from=invite) it carries on with onboarding; from the app (the You page,
+ * Home) it goes back to Home once you're connected.
+ */
 export default function JoinRelationshipScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<OnboardingRelationshipParams & { from?: string; preview?: string }>();
-  const { colors } = useTheme();
-  const fromProfile = params.from === 'profile';
-  // The new onboarding's invite step ("They already sent me a code").
-  const fromInvite = params.from === 'invite';
-  const preview = params.preview === '1';
+  const params = useLocalSearchParams<{ from?: string; preview?: string }>();
   const userId = useAuthStore((s) => s.user?.id);
-  const parsed = paramsFromSearch(params);
-  const relationshipType = parsed.relationshipType ?? null;
+  const preview = params.preview === '1';
 
-  useEffect(() => {
-    if (fromProfile || fromInvite) return;
-    if (params.spacePathChosen === 'join') return;
-    if (hasCompletedPreSpaceOnboarding(params) && !hasChosenSpacePath(params)) {
-      router.replace({
-        pathname: '/(onboarding)/relationship-path',
-        params: buildOnboardingRelationshipParams(parsed),
-      });
-      return;
-    }
-    if (!hasCompletedPreSpaceOnboarding(params)) {
-      router.replace('/(onboarding)/anniversary-setup');
-    }
-    // deps list the individual primitive params fields deliberately; `params`/`parsed` are new
-    // objects every render (useLocalSearchParams) and would re-fire this effect on every render.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    fromProfile,
-    router,
-    params.anniversaryDate,
-    params.anniversarySkipped,
-    params.relationshipType,
-    params.relationshipTypeSkipped,
-    params.spacePathChosen,
-  ]);
-
-  const goBack = () => goBackOrReplace(router, '/(tabs)/profile');
-
-  if (fromInvite) {
+  if (params.from === 'invite') {
     return (
       <JoinWithCode
         preview={preview}
@@ -186,38 +26,12 @@ export default function JoinRelationshipScreen() {
     );
   }
 
-  if (fromProfile) {
-    return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-        <JoinRelationshipContent fromProfile onBack={goBack} relationshipType={null} />
-      </SafeAreaView>
-    );
-  }
-
-  const goBackOnboarding = () => goToOnboardingBack(router, 'join-relationship', parsed);
-
   return (
-    <OnboardingChrome stepId="join-relationship" onBack={goBackOnboarding}>
-      <JoinRelationshipContent fromProfile={false} relationshipType={relationshipType} onboardingParams={params} />
-    </OnboardingChrome>
+    <JoinWithCode
+      preview={preview}
+      inOnboarding={false}
+      onBack={() => goBackOrReplace(router, '/(tabs)/home')}
+      onJoined={() => router.replace('/(tabs)/home')}
+    />
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1 },
-  content: { flex: 1, justifyContent: 'center', alignItems: 'center', width: '100%' },
-  title: { fontSize: 28, fontWeight: '800', textAlign: 'center', letterSpacing: -0.5, width: '100%' },
-  subtitle: { fontSize: 16, textAlign: 'center', lineHeight: 22, marginTop: 10, maxWidth: 320 },
-  input: {
-    borderWidth: 1,
-    borderRadius: 14,
-    padding: 16,
-    fontSize: 28,
-    fontWeight: '800',
-    textAlign: 'center',
-    letterSpacing: 8,
-    width: '100%',
-    marginTop: 28,
-  },
-  btn: { width: '100%', marginTop: 20 },
-});

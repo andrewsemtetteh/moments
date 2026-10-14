@@ -100,12 +100,8 @@ export function shouldShowContinueChat(input: {
   const { hasPartner, latest, unreadCount, currentUserId, now = new Date() } = input;
   if (!hasPartner || !latest || !currentUserId) return false;
 
+  // Only while there's something new from them you haven't read; once it's read
+  // (or the last message is yours) Home doesn't need a way back into Chat.
   const fromPartner = latest.sender_id !== currentUserId;
-  const unreadFromPartner = unreadCount > 0 && fromPartner;
-  if (unreadFromPartner) return true;
-
-  const ageMs = now.getTime() - messageTimestampMs(latest.created_at);
-  if (Number.isNaN(ageMs) || ageMs < 0) return false;
-
-  return ageMs <= CONTINUE_CHAT_VISIBLE_DAYS * 24 * 60 * 60 * 1000;
+  return unreadCount > 0 && fromPartner && !Number.isNaN(now.getTime());
 }

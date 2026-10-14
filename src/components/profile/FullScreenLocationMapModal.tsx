@@ -7,6 +7,7 @@ import { Icon } from '@/components/ui/Icon';
 import { Avatar } from '@/components/ui/primitives';
 import { useTheme } from '@/hooks/useTheme';
 import { openInMaps } from '@/lib/location';
+import { ThemedStatusBar } from '@/components/ui/ThemedStatusBar';
 
 interface Props {
   visible: boolean;
@@ -43,6 +44,7 @@ export function FullScreenLocationMapModal({ visible, markers, title, onClose }:
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="fullScreen" onRequestClose={onClose}>
+      <ThemedStatusBar />
       <View style={[styles.root, { backgroundColor: colors.background }]}>
         <View style={[styles.topBar, { paddingTop: insets.top, borderBottomColor: colors.border }]}>
           <View style={styles.titleWrap}>

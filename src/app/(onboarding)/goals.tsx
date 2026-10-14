@@ -1,4 +1,4 @@
-import * as Haptics from 'expo-haptics';
+import * as Haptics from '@/lib/haptics';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
@@ -7,7 +7,7 @@ import { PeekCharacter } from '@/components/onboarding/Characters';
 import { OnboardingStepScreen } from '@/components/onboarding/OnboardingStepScreen';
 import { Icon } from '@/components/ui/Icon';
 import { useTheme } from '@/hooks/useTheme';
-import { GOAL_OPTIONS, goNext, saveOnboardingDraft } from '@/lib/onboarding-v2';
+import { GOAL_OPTIONS, goNext, saveOnboardingDraft, useSavedAnswer } from '@/lib/onboarding-v2';
 import { useAuthStore } from '@/stores';
 
 const MAX = 3;
@@ -19,6 +19,7 @@ export default function GoalsScreen() {
   const { colors } = useTheme();
   const userId = useAuthStore((s) => s.user?.id);
   const [picked, setPicked] = useState<string[]>([]);
+  useSavedAnswer(userId, preview, 'goals', setPicked);
   // The card just picked: the other characters turn to look at it.
   const [lastPicked, setLastPicked] = useState<number | null>(null);
 

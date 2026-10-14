@@ -1,8 +1,8 @@
-import { useSSO } from '@clerk/expo/experimental';
 import { useState } from 'react';
 import { ActivityIndicator, Alert, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { AppleIcon, GoogleIcon } from '@/components/auth/OAuthBrandIcon';
+import { useProviderSignIn } from '@/components/auth/useProviderSignIn';
 import { colorWithAlpha } from '@/components/ui/primitives';
 import { useTheme } from '@/hooks/useTheme';
 import { formatAuthError } from '@/lib/auth-errors';
@@ -15,7 +15,8 @@ type Props = {
 
 export function SocialAuthButtons({ onSuccess, requireTerms = false, agreedToTerms = true }: Props) {
   const { colors } = useTheme();
-  const { startSSOFlow } = useSSO();
+  // Native Apple / Google where available, the browser flow otherwise.
+  const signInWith = useProviderSignIn();
   const [loadingProvider, setLoadingProvider] = useState<'apple' | 'google' | null>(null);
 
   const guardTerms = () => {
@@ -26,12 +27,12 @@ export function SocialAuthButtons({ onSuccess, requireTerms = false, agreedToTer
     return true;
   };
 
-  const handleSSO = async (strategy: 'oauth_apple' | 'oauth_google', provider: 'apple' | 'google') => {
+  const handleSSO = async (provider: 'apple' | 'google') => {
     if (!guardTerms()) return;
     const label = provider === 'apple' ? 'Apple' : 'Google';
     setLoadingProvider(provider);
     try {
-      const { createdSessionId, signIn, signUp } = await startSSOFlow({ strategy });
+      const { createdSessionId, signIn, signUp } = await signInWith(provider);
       if (createdSessionId) {
         onSuccess();
         return;
@@ -61,8 +62,8 @@ export function SocialAuthButtons({ onSuccess, requireTerms = false, agreedToTer
     }
   };
 
-  const handleApple = () => handleSSO('oauth_apple', 'apple');
-  const handleGoogle = () => handleSSO('oauth_google', 'google');
+  const handleApple = () => handleSSO('apple');
+  const handleGoogle = () => handleSSO('google');
 
   const showApple = Platform.OS === 'ios' || Platform.OS === 'android';
   const busy = loadingProvider !== null;

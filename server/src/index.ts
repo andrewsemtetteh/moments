@@ -3,12 +3,15 @@ import { Hono } from 'hono';
 
 import { deleteAccount } from './account';
 import { requireAuth, type AuthVariables } from './auth';
-import { billingWebhooks, carryPersonalPlus } from './billing';
+import { billingWebhooks, carryPersonalPlus, ensureBillingUserId } from './billing';
 import { compat } from './compat';
+import { links } from './links';
+import { coupleDocs } from './couple-docs';
 import { stockBanks } from './functions';
 import { verifyToken } from '@clerk/backend';
 import { buildUpdate, generateId, isRelationshipMember, nowIso, parseJson } from './db';
 import { onPaired } from './pairing';
+import { resolveImageType } from './media-type';
 import { rateLimit } from './rate-limit';
 import { claimReferral, referralSummary } from './referrals';
 import './env';
@@ -60,10 +63,16 @@ app.get('/ws/:relationshipId', async (c) => {
   return stub.fetch(new Request(url.toString(), c.req.raw));
 });
 
-// RevenueCat calls this with its own secret, not a Clerk token, so it sits before auth.
+// Share links (verification files + a page for people without the app). Public.
+app.route('/', links);
+
+// Superwall signs its webhook with its own secret, not a Clerk token, so it sits before auth.
 app.route('/webhooks', billingWebhooks);
 
 app.use('*', requireAuth);
+
+// Shared albums / place names (versioned, synced between both phones).
+app.route('/', coupleDocs);
 
 // ---------------------------------------------------------------------------
 // Users
@@ -73,6 +82,8 @@ app.get('/me', async (c) => {
   const userId = c.get('userId');
   const row = await c.env.DB.prepare('SELECT * FROM users WHERE id = ?1').bind(userId).first();
   if (!row) return c.json({ error: 'Profile not found' }, 404);
+  // The Superwall id the webhook maps purchases back by (see billing.ts).
+  await ensureBillingUserId(c.env, userId, row.billing_user_id);
   return c.json(row);
 });
 
@@ -83,11 +94,16 @@ app.post('/users', async (c) => {
   if (!body.email) return c.json({ error: 'email is required' }, 400);
 
   const existing = await c.env.DB.prepare('SELECT * FROM users WHERE id = ?1').bind(userId).first();
-  if (existing) return c.json(existing);
+  if (existing) {
+    await ensureBillingUserId(c.env, userId, existing.billing_user_id);
+    return c.json(existing);
+  }
 
-  await c.env.DB.prepare('INSERT INTO users (id, email, name) VALUES (?1, ?2, ?3)')
+  // Location sharing starts off: turning it on is what asks for location permission.
+  await c.env.DB.prepare('INSERT INTO users (id, email, name, location_sharing_enabled) VALUES (?1, ?2, ?3, 0)')
     .bind(userId, body.email, body.name ?? null)
     .run();
+  await ensureBillingUserId(c.env, userId, null);
 
   const created = await c.env.DB.prepare('SELECT * FROM users WHERE id = ?1').bind(userId).first();
   return c.json(created, 201);
@@ -97,7 +113,7 @@ const USER_UPDATE_FIELDS = [
   'name',
   'avatar_url',
   'gender',
-  // Subscription fields are written only by the RevenueCat webhook (see billing.ts).
+  // Subscription fields are written only by the Superwall webhook (see billing.ts).
   'location_sharing_enabled',
   'location_latitude',
   'location_longitude',
@@ -172,22 +188,17 @@ app.get('/username-available', async (c) => {
   return c.json({ available: !taken });
 });
 
-const IMAGE_CONTENT_TYPES: Record<string, string> = {
-  'image/jpeg': 'jpg',
-  'image/png': 'png',
-  'image/webp': 'webp',
-  'image/heic': 'heic',
-};
-
 app.post('/me/avatar', rateLimit('avatar', 10, 600), async (c) => {
   const userId = c.get('userId');
-  const contentType = c.req.header('Content-Type') ?? '';
-  const ext = IMAGE_CONTENT_TYPES[contentType];
-  if (!ext) return c.json({ error: 'Unsupported image type' }, 400);
-
-  const key = `avatars/${userId}/${generateId()}.${ext}`;
   const body = await c.req.arrayBuffer();
-  await c.env.STORAGE.put(key, body, { httpMetadata: { contentType } });
+  if (body.byteLength === 0) return c.json({ error: 'That photo came through empty. Please try again.' }, 400);
+  if (body.byteLength > 15 * 1024 * 1024) return c.json({ error: 'That photo is too large. Try a smaller one.' }, 413);
+  // Trust the bytes over the header: phones label photos loosely (or not at all).
+  const image = resolveImageType(body, c.req.header('Content-Type'));
+  if (!image) return c.json({ error: 'That file isn’t a photo we can use. Try a JPEG, PNG or HEIC.' }, 400);
+
+  const key = `avatars/${userId}/${generateId()}.${image.ext}`;
+  await c.env.STORAGE.put(key, body, { httpMetadata: { contentType: image.contentType } });
 
   const url = new URL(c.req.url);
   const avatarUrl = `${url.protocol}//${url.host}/media/${key}`;
@@ -271,7 +282,7 @@ app.post('/relationships/:id/invite-code', async (c) => {
 app.post('/relationships/join', rateLimit('join', 10, 600), async (c) => {
   const userId = c.get('userId');
   const body = await c.req.json<{ inviteCode: string }>();
-  const code = body.inviteCode?.trim().toUpperCase();
+  const code = body.inviteCode?.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
   if (!code || code.length < 6) return c.json({ error: 'Invalid or expired invite code' }, 400);
 
   const target = await c.env.DB.prepare(

@@ -5,6 +5,7 @@ import { AppState, Platform, type AppStateStatus } from 'react-native';
 import { loadExpoNotifications } from '@/lib/expo-notifications-safe';
 import * as api from '@/services/api';
 import type { Notification } from '@/types/database';
+import { isNotificationTypeEnabled } from '@/lib/notification-prefs';
 
 function loadNotifications() {
   return loadExpoNotifications();
@@ -151,6 +152,8 @@ export async function presentLocalNotification(notification: Notification): Prom
   const Notifications = loadNotifications();
   if (!Notifications) return;
   if (AppState.currentState === 'active') return;
+  const { useAuthStore } = await import('@/stores');
+  if (!isNotificationTypeEnabled(useAuthStore.getState().user?.notification_prefs, notification.type)) return;
 
   try {
     await Notifications.scheduleNotificationAsync({

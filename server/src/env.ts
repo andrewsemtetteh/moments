@@ -11,9 +11,14 @@ declare global {
     GEMINI_MODEL?: string;
     /** Production AI (GPT-4o-mini). */
     OPENAI_API_KEY?: string;
-    /** RevenueCat webhook Authorization value (sent as 'Bearer <secret>'). */
-    REVENUECAT_WEBHOOK_SECRET?: string;
-    /** RevenueCat's HMAC signing secret (shown once when signing is enabled). Verifies X-RevenueCat-Webhook-Signature. */
-    REVENUECAT_WEBHOOK_SIGNING_SECRET?: string;
+    /** Superwall webhook signing secret (whsec_…, from the webhook's details). Verifies the svix-* headers. */
+    SUPERWALL_WEBHOOK_SECRET?: string;
+    /** Share links (moments.vasemti.com): Apple Team ID for the iOS app-site association. */
+    APPLE_TEAM_ID?: string;
+    /** Share links: Android signing cert SHA-256 fingerprint(s), comma-separated. */
+    ANDROID_CERT_SHA256?: string;
+    /** Store pages for people opening a link without the app. */
+    APP_STORE_URL?: string;
+    PLAY_STORE_URL?: string;
   }
 }

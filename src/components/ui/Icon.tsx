@@ -83,7 +83,15 @@ export type IconName =
   | 'share'
   | 'info'
   | 'cart'
-  | 'bag';
+  | 'bag'
+  | 'instagram'
+  | 'xLogo'
+  | 'tiktok'
+  | 'youtube'
+  | 'help'
+  | 'phone'
+  | 'haptics'
+  | 'palette';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
 
@@ -172,6 +180,14 @@ const ICON_MAP: Record<IconName, { outline: IoniconName; filled: IoniconName }> 
   info: { outline: 'information-circle-outline', filled: 'information-circle' },
   cart: { outline: 'cart-outline', filled: 'cart' },
   bag: { outline: 'bag-handle-outline', filled: 'bag-handle' },
+  instagram: { outline: 'logo-instagram', filled: 'logo-instagram' },
+  xLogo: { outline: 'logo-x', filled: 'logo-x' },
+  tiktok: { outline: 'logo-tiktok', filled: 'logo-tiktok' },
+  youtube: { outline: 'logo-youtube', filled: 'logo-youtube' },
+  help: { outline: 'help-buoy-outline', filled: 'help-buoy' },
+  phone: { outline: 'phone-portrait-outline', filled: 'phone-portrait' },
+  haptics: { outline: 'pulse-outline', filled: 'pulse' },
+  palette: { outline: 'color-palette-outline', filled: 'color-palette' },
 };
 
 interface IconProps {

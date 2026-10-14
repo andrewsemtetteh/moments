@@ -1,4 +1,4 @@
-import * as Haptics from 'expo-haptics';
+import * as Haptics from '@/lib/haptics';
 import { router, usePathname } from 'expo-router';
 import { useEffect, useRef, type ReactNode } from 'react';
 import { Platform } from 'react-native';
@@ -8,8 +8,8 @@ import { DynamicNotifications, useDynamicNotifications } from '@/lib/dynamic-isl
 import { subscribeIsland } from '@/lib/in-app-notify';
 import { openFromNotification } from '@/lib/notification-navigation';
 
-/** How long one island stays open before it tucks back up. */
-const ISLAND_MS = 4200;
+/** How long one island stays open before it tucks back up (long enough to read twice). */
+const ISLAND_MS = 5000;
 
 /** Turns app events into island pops, skipping ones for the screen you're already on. */
 function IslandListener() {

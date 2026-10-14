@@ -37,6 +37,19 @@ export function notifyIsland(event: IslandEvent): void {
   listeners.forEach((l) => l(event));
 }
 
+/**
+ * The island shows an icon for each kind of notification, so the emoji our
+ * notification text carries ("sent you a moment 📸") are dropped there.
+ * Chat previews keep theirs: that's what your partner actually typed.
+ */
+export function stripEmoji(text: string | undefined): string | undefined {
+  if (!text) return text;
+  return text
+    .replace(/[\p{Extended_Pictographic}\u{1F1E6}-\u{1F1FF}\u{FE0F}\u{200D}\u{20E3}\u{1F3FB}-\u{1F3FF}]/gu, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
 /** Rows older than this are backlog (e.g. a refetch after reconnecting), not live events. */
 const FRESH_MS = 2 * 60 * 1000;
 
@@ -77,7 +90,7 @@ export function islandFromNotification(n: Notification, now = Date.now()): Islan
   return {
     id: n.id,
     title: NOTIFICATION_TYPE_LABEL[n.type] ?? 'Moments',
-    message: formatNotificationContent(n.content),
+    message: stripEmoji(formatNotificationContent(n.content)),
     icon: NOTIFICATION_TYPE_ICON[n.type] ?? 'bell',
     ...face,
     target: { type: n.type, relatedId: related, mediaUrl: n.media_url },

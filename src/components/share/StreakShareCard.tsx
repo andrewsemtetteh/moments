@@ -10,7 +10,7 @@ const INK = '#000000';
 
 /**
  * The shareable streak achievement: a yellow sticker card with the flame
- * character, the count, both names and the date, and the Moments pill.
+ * character, the count, both names and the date, and the Moments pill (centred).
  */
 export function StreakShareCard({
   count,
@@ -41,7 +41,7 @@ export function StreakShareCard({
           {names} · {format(date, 'd MMM yyyy')}
         </Text>
       </View>
-      <ShareBrand />
+      <ShareBrand style={styles.brand} />
     </View>
   );
 }
@@ -73,4 +73,5 @@ const styles = StyleSheet.create({
   count: { fontSize: 52, fontWeight: '900', letterSpacing: -1.8, color: INK, lineHeight: 56 },
   unit: { fontSize: 21, fontWeight: '900', letterSpacing: -0.4, color: INK },
   names: { fontSize: 13, fontWeight: '700', color: '#444444', marginTop: 2 },
+  brand: { alignSelf: 'center' },
 });

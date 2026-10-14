@@ -38,7 +38,7 @@ Only private relationship spaces.
   - Storage
             ↓
 [ External Services ]
-  - RevenueCat
+  - Superwall
   - PostHog
   - Sentry
   - Expo Notifications
@@ -510,7 +510,7 @@ Sentry tracks:
 
 # 15. MONETIZATION ARCHITECTURE
 
-Managed by RevenueCat.
+Managed by Superwall.
 
 Entitlements:
 
@@ -531,7 +531,7 @@ Rules:
 
 ## Services
 
-* RevenueCat → subscriptions
+* Superwall → subscriptions
 * PostHog → analytics
 * Sentry → error tracking
 * Expo Notifications → push

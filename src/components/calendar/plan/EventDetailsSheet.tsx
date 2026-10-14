@@ -1,5 +1,5 @@
 import { format, setHours, setMilliseconds, setMinutes, setSeconds, startOfDay } from 'date-fns';
-import * as Haptics from 'expo-haptics';
+import * as Haptics from '@/lib/haptics';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,

@@ -1,4 +1,4 @@
-import * as Haptics from 'expo-haptics';
+import * as Haptics from '@/lib/haptics';
 import { useRouter, type Href } from 'expo-router';
 import { Pressable, Text } from 'react-native';
 

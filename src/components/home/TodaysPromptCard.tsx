@@ -1,9 +1,11 @@
-import * as Haptics from 'expo-haptics';
+import * as Haptics from '@/lib/haptics';
 import { useQueryClient } from '@tanstack/react-query';
-import { useEffect, useRef, useState } from 'react';
+import { useFocusEffect } from 'expo-router';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Alert,
   Animated,
+  Keyboard,
   Pressable,
   StyleSheet,
   Text,
@@ -25,35 +27,77 @@ import {
   promptPhase,
 } from '@/lib/daily-prompt';
 import { getErrorMessage } from '@/lib/network-error';
+import { getCachedPromptDraft, loadStoredPromptDraft, savePromptDraft } from '@/lib/prompt-draft';
 import { openChat } from '@/lib/router';
 import * as api from '@/services/api';
 import { useAuthStore, useRelationshipStore } from '@/stores';
 import type { DailyChallenge } from '@/types/database';
+import { useCardBorder } from '@/hooks/useCardBorder';
 
 type Props = {
   challenge: DailyChallenge;
   onOpenHistory: () => void;
+  /** Opened from an "Answer" button: go straight to the text box. */
+  startComposing?: boolean;
 };
 
-export function TodaysPromptCard({ challenge, onOpenHistory }: Props) {
+export function TodaysPromptCard({ challenge, onOpenHistory, startComposing = false }: Props) {
   const { colors } = useTheme();
+  const cardBorder = useCardBorder();
   const queryClient = useQueryClient();
   const user = useAuthStore((s) => s.user);
   const relationship = useRelationshipStore((s) => s.relationship);
   const partner = useRelationshipStore((s) => s.partner);
-  const [draft, setDraft] = useState('');
+  // The answer box starts folded; tap to open. Leaving Home folds it again, and
+  // whatever was typed stays (memory + storage) until it's sent.
+  const [draft, setDraftState] = useState(() => getCachedPromptDraft(challenge.id));
+  const [composing, setComposing] = useState(startComposing);
   const [sending, setSending] = useState(false);
+  // Both answered: the answers stay folded until "See your answers", and fold again on leaving Home.
+  const [showAnswers, setShowAnswers] = useState(false);
+  const inputRef = useRef<TextInput>(null);
+
+  const setDraft = useCallback(
+    (text: string) => {
+      setDraftState(text);
+      savePromptDraft(challenge.id, text);
+    },
+    [challenge.id],
+  );
+
+  // After an app restart only storage has it.
+  useEffect(() => {
+    if (getCachedPromptDraft(challenge.id)) return;
+    let cancelled = false;
+    void loadStoredPromptDraft(challenge.id).then((stored) => {
+      if (!cancelled && stored) setDraftState((current) => current || stored);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [challenge.id]);
+
+  useFocusEffect(
+    useCallback(
+      () => () => {
+        inputRef.current?.blur();
+        Keyboard.dismiss();
+        setComposing(false);
+        setShowAnswers(false);
+      },
+      [],
+    ),
+  );
   const revealAnim = useRef(new Animated.Value(0)).current;
 
   const phase = promptPhase(challenge, user?.id, relationship);
   const expired = isPromptExpired(challenge);
   const mine = myPromptResponse(challenge, user?.id, relationship);
   const theirs = partnerPromptResponse(challenge, user?.id, relationship);
-  const partnerFirst = getFirstName(partner?.name) ?? 'Your partner';
   const busy = sending;
 
   useEffect(() => {
-    if (phase !== 'reveal') {
+    if (phase !== 'reveal' || !showAnswers) {
       revealAnim.setValue(0);
       return;
     }
@@ -64,7 +108,7 @@ export function TodaysPromptCard({ challenge, onOpenHistory }: Props) {
       tension: 60,
       useNativeDriver: true,
     }).start();
-  }, [phase, challenge.id, revealAnim]);
+  }, [phase, showAnswers, challenge.id, revealAnim]);
 
   const submit = async () => {
     const text = draft.trim();
@@ -96,6 +140,7 @@ export function TodaysPromptCard({ challenge, onOpenHistory }: Props) {
       void queryClient.invalidateQueries({ queryKey: ['notificationUnreadCount'] });
 
       setDraft('');
+      setComposing(false);
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (e) {
       Alert.alert('Could not send', getErrorMessage(e) || 'Please try again.');
@@ -104,31 +149,9 @@ export function TodaysPromptCard({ challenge, onOpenHistory }: Props) {
     }
   };
 
-  const answerStatus = (line: string, action?: { label: string; onPress: () => void }) => (
-    <View style={styles.status}>
-      <View style={styles.statusAvatars}>
-        <AnsweredAvatar done={!!mine} name={user?.name} url={user?.avatar_url} ring={colors.surface} colors={colors} />
-        <View style={styles.statusOverlap}>
-          <AnsweredAvatar done={!!theirs} name={partner?.name} url={partner?.avatar_url} ring={colors.surface} colors={colors} />
-        </View>
-      </View>
-      <Text style={[styles.statusText, { color: colors.textSecondary }]} numberOfLines={2}>
-        {line}
-      </Text>
-      {action ? (
-        <Pressable
-          onPress={action.onPress}
-          accessibilityRole="button"
-          style={({ pressed }) => [styles.nudge, { backgroundColor: colors.accentSoft }, pressed && { opacity: 0.8 }]}>
-          <Text style={[styles.nudgeText, { color: colors.accent }]}>{action.label}</Text>
-        </Pressable>
-      ) : null}
-    </View>
-  );
-
   const header = (
     <View style={styles.topRow}>
-      <Text style={[styles.kicker, { color: colors.accent }]}>Today&apos;s question</Text>
+      <Text style={[styles.kicker, { color: colors.textSecondary }]}>Today&apos;s question</Text>
       <Pressable onPress={onOpenHistory} hitSlop={10} style={styles.historyBtn} accessibilityRole="button" accessibilityLabel="Past questions">
         <Icon name="time" size={22} color={colors.text} />
       </Pressable>
@@ -137,7 +160,7 @@ export function TodaysPromptCard({ challenge, onOpenHistory }: Props) {
 
   if (expired && phase !== 'reveal') {
     return (
-      <View style={[styles.card, { backgroundColor: colors.surface }]}>
+      <View style={[styles.card, { backgroundColor: colors.surface }, cardBorder]}>
         {header}
         <Text style={[styles.prompt, { color: colors.text }]}>{challenge.prompt}</Text>
       </View>
@@ -146,16 +169,10 @@ export function TodaysPromptCard({ challenge, onOpenHistory }: Props) {
 
   if (phase === 'waiting') {
     return (
-      <View style={[styles.card, { backgroundColor: colors.surface }]}>
+      <View style={[styles.card, { backgroundColor: colors.surface }, cardBorder]}>
         {header}
         <Text style={[styles.prompt, { color: colors.text }]}>{challenge.prompt}</Text>
-        {answerStatus(`You answered · waiting for ${partnerFirst}`, {
-          label: 'Nudge',
-          onPress: () => {
-            void Haptics.selectionAsync();
-            openChat(`Answer today’s question when you get a sec 💞`);
-          },
-        })}
+        <PromptStatus challenge={challenge} />
       </View>
     );
   }
@@ -164,9 +181,36 @@ export function TodaysPromptCard({ challenge, onOpenHistory }: Props) {
     return null;
   }
 
+  if (phase === 'reveal' && mine && theirs && !showAnswers) {
+    return (
+      <View style={[styles.card, { backgroundColor: colors.surface }, cardBorder]}>
+        {header}
+        <Text style={[styles.prompt, { color: colors.text }]}>{challenge.prompt}</Text>
+        <Pressable
+          onPress={() => {
+            void Haptics.selectionAsync();
+            setShowAnswers(true);
+          }}
+          accessibilityRole="button"
+          style={({ pressed }) => [styles.seeAnswers, { backgroundColor: colors.accent }, pressed && styles.pressed]}>
+          <View style={styles.seeFaces}>
+            <View style={[styles.seeFace, { borderColor: colors.accent }]}>
+              <Avatar name={user?.name} imageUrl={user?.avatar_url} size={24} />
+            </View>
+            <View style={[styles.seeFace, styles.seeFaceOverlap, { borderColor: colors.accent }]}>
+              <Avatar name={partner?.name} imageUrl={partner?.avatar_url} size={24} />
+            </View>
+          </View>
+          <Text style={[styles.seeAnswersText, { color: colors.onAccent }]}>See your answers</Text>
+          <Icon name="chevronDown" size={18} color={colors.onAccent} />
+        </Pressable>
+      </View>
+    );
+  }
+
   if (phase === 'reveal' && mine && theirs) {
     return (
-      <View style={[styles.card, { backgroundColor: colors.surface }]}>
+      <View style={[styles.card, { backgroundColor: colors.surface }, cardBorder]}>
         {header}
         <Text style={[styles.prompt, { color: colors.text }]}>{challenge.prompt}</Text>
         <Animated.View
@@ -200,44 +244,145 @@ export function TodaysPromptCard({ challenge, onOpenHistory }: Props) {
             avatarUrl={partner?.avatar_url}
           />
         </Animated.View>
+        <Pressable
+          onPress={() => {
+            void Haptics.selectionAsync();
+            setShowAnswers(false);
+          }}
+          hitSlop={8}
+          accessibilityRole="button"
+          style={styles.hideAnswers}>
+          <Text style={[styles.hideAnswersText, { color: colors.textSecondary }]}>Hide answers</Text>
+          <Icon name="chevronDown" size={14} color={colors.textSecondary} />
+        </Pressable>
       </View>
     );
   }
 
   return (
-    <View style={[styles.card, { backgroundColor: colors.surface }]}>
+    <View style={[styles.card, { backgroundColor: colors.surface }, cardBorder]}>
       {header}
       <Text style={[styles.prompt, { color: colors.text }]}>{challenge.prompt}</Text>
-      {answerStatus(
-        theirs ? `${partnerFirst} answered · your turn` : 'Answer to see each other’s',
+      <PromptStatus challenge={challenge} />
+      {composing ? (
+        <>
+          <TextInput
+            ref={inputRef}
+            style={[
+              styles.input,
+              {
+                color: colors.text,
+                backgroundColor: colors.background,
+                borderColor: colors.border,
+                borderWidth: colors.boldBorder ? 2 : 1,
+              },
+            ]}
+            placeholder="Your answer…"
+            placeholderTextColor={colors.textTertiary}
+            value={draft}
+            onChangeText={setDraft}
+            multiline
+            autoFocus
+            textAlignVertical="top"
+            editable={!busy}
+          />
+          <PrimaryButton
+            label={busy ? 'Sending…' : 'Submit answer'}
+            onPress={() => {
+              void submit();
+            }}
+            disabled={!draft.trim() || busy}
+            loading={busy}
+            style={styles.submitBtn}
+          />
+        </>
+      ) : (
+        <Pressable
+          onPress={() => {
+            void Haptics.selectionAsync();
+            setComposing(true);
+          }}
+          accessibilityRole="button"
+          accessibilityLabel={draft.trim() ? 'Continue your answer' : 'Write your answer'}
+          style={({ pressed }) => [
+            styles.collapsed,
+            {
+              backgroundColor: colors.background,
+              borderColor: colors.border,
+              borderWidth: colors.boldBorder ? 2 : 1,
+            },
+            pressed && { opacity: 0.8 },
+          ]}>
+          <Text
+            style={[styles.collapsedText, { color: draft.trim() ? colors.text : colors.textTertiary }]}
+            numberOfLines={1}>
+            {draft.trim() ? draft.trim() : 'Your answer…'}
+          </Text>
+          <Icon name="edit" size={18} color={colors.textSecondary} />
+        </Pressable>
       )}
-      <TextInput
-        style={[
-          styles.input,
-          {
-            color: colors.text,
-            backgroundColor: colors.background,
-            borderColor: colors.border,
-            borderWidth: colors.boldBorder ? 2 : 1,
-          },
-        ]}
-        placeholder="Your answer…"
-        placeholderTextColor={colors.textTertiary}
-        value={draft}
-        onChangeText={setDraft}
-        multiline
-        textAlignVertical="top"
-        editable={!busy}
-      />
-      <PrimaryButton
-        label={busy ? 'Sending…' : 'Submit answer'}
-        onPress={() => {
-          void submit();
-        }}
-        disabled={!draft.trim() || busy}
-        loading={busy}
-        style={styles.submitBtn}
-      />
+    </View>
+  );
+}
+
+/**
+ * Who has answered today's question, plus one line saying what happens next.
+ * Shared by Home and Play so every state reads the same:
+ * - No partner yet: your avatar + an empty dashed slot; they'll see it once they join.
+ * - Nobody answered: answer first and they get a nudge.
+ * - They answered, you haven't: answer to see theirs.
+ * - You answered, they haven't: waiting for them, with a Nudge.
+ * (Both answered = the reveal, which shows the answers instead.)
+ */
+export function PromptStatus({ challenge, ring }: { challenge: DailyChallenge; ring?: string }) {
+  const { colors } = useTheme();
+  const user = useAuthStore((s) => s.user);
+  const relationship = useRelationshipStore((s) => s.relationship);
+  const partner = useRelationshipStore((s) => s.partner);
+  const mine = myPromptResponse(challenge, user?.id, relationship);
+  const theirs = partnerPromptResponse(challenge, user?.id, relationship);
+  const partnerFirst = getFirstName(partner?.name) ?? 'Your partner';
+  const ringColor = ring ?? colors.surface;
+
+  let line: string;
+  let nudge = false;
+  if (!partner) {
+    line = mine ? 'You answered · they’ll see it when they join' : 'Your partner sees it once they join';
+  } else if (mine && !theirs) {
+    line = `You answered · waiting for ${partnerFirst}`;
+    nudge = true;
+  } else if (theirs && !mine) {
+    line = `${partnerFirst} answered · answer to see theirs`;
+  } else {
+    line = `Answer first and ${partnerFirst} gets a nudge`;
+  }
+
+  return (
+    <View style={styles.status}>
+      <View style={styles.statusAvatars}>
+        <AnsweredAvatar done={!!mine} name={user?.name} url={user?.avatar_url} ring={ringColor} colors={colors} />
+        <View style={styles.statusOverlap}>
+          {partner ? (
+            <AnsweredAvatar done={!!theirs} name={partner.name} url={partner.avatar_url} ring={ringColor} colors={colors} />
+          ) : (
+            <View style={[styles.emptySlot, { borderColor: colors.textTertiary, backgroundColor: ringColor }]} />
+          )}
+        </View>
+      </View>
+      <Text style={[styles.statusText, { color: colors.textSecondary }]} numberOfLines={2}>
+        {line}
+      </Text>
+      {nudge ? (
+        <Pressable
+          onPress={() => {
+            void Haptics.selectionAsync();
+            openChat(`Answer today’s question when you get a sec 💞`);
+          }}
+          accessibilityRole="button"
+          style={({ pressed }) => [styles.nudge, { backgroundColor: colors.accentSoft }, pressed && { opacity: 0.8 }]}>
+          <Text style={[styles.nudgeText, { color: colors.accent }]}>Nudge</Text>
+        </Pressable>
+      ) : null}
     </View>
   );
 }
@@ -306,6 +451,22 @@ function AnswerBubble({
 }
 
 const styles = StyleSheet.create({
+  seeAnswers: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    height: 52,
+    borderRadius: 26,
+    marginTop: 4,
+  },
+  seeFaces: { flexDirection: 'row' },
+  seeFace: { borderRadius: 14, borderWidth: 2 },
+  seeFaceOverlap: { marginLeft: -9 },
+  seeAnswersText: { fontSize: 16, fontWeight: '800' },
+  pressed: { opacity: 0.85 },
+  hideAnswers: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingTop: 2 },
+  hideAnswersText: { fontSize: 13, fontWeight: '700' },
   card: { borderRadius: 22, padding: 16, gap: 12 },
   topRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   kicker: { fontSize: 14, fontWeight: '800' },
@@ -314,6 +475,7 @@ const styles = StyleSheet.create({
   status: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   statusAvatars: { flexDirection: 'row' },
   statusOverlap: { marginLeft: -8 },
+  emptySlot: { width: 30, height: 30, borderRadius: 15, borderWidth: 2, borderStyle: 'dashed' },
   statusText: { flex: 1, fontSize: 13, fontWeight: '600' },
   nudge: { height: 34, paddingHorizontal: 14, borderRadius: 17, justifyContent: 'center' },
   nudgeText: { fontSize: 13, fontWeight: '800' },
@@ -339,6 +501,15 @@ const styles = StyleSheet.create({
     lineHeight: 22,
   },
   submitBtn: { marginTop: 2 },
+  collapsed: {
+    minHeight: 52,
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  collapsedText: { flex: 1, fontSize: 16 },
   reveal: { gap: 12 },
   bubble: {
     borderRadius: 16,

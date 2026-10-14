@@ -1,7 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { useCallback } from 'react';
 
+import { useCoupleDoc } from '@/lib/couple-doc';
 import { useRelationshipStore } from '@/stores';
 import type { Moment } from '@/types/database';
 
@@ -10,8 +11,9 @@ import type { Moment } from '@/types/database';
  * ("The café", "Her hometown").
  *
  * The pins themselves live on the moment (latitude/longitude, shared with the
- * partner). The NAMES couples give places are stored on this device for now,
- * like albums (moment-albums.ts), until they get a backend table.
+ * partner). The NAMES couples give places are shared between both phones
+ * (the couple's "places" document, see couple-doc.ts). The city/street
+ * suggestions stay on each phone (they're only a fallback label).
  */
 
 export type PlaceName = { name: string; emoji: string };
@@ -27,8 +29,6 @@ export type MomentPlace = {
   suggestion: string | null;
 };
 
-export const PLACE_EMOJIS = ['📍', '☕', '🏡', '🍝', '🌊', '🏞️', '✈️', '💞', '🎡', '🌃'] as const;
-export const PLACE_NAME_IDEAS = ['The café', 'Our spot', 'Home', 'Her hometown', 'His hometown', 'Our trip'] as const;
 
 /** ~110 m grid: moments taken around the same spot become one place. */
 export function placeKey(latitude: number, longitude: number) {
@@ -89,26 +89,28 @@ export function groupMomentsIntoPlaces(moments: Moment[], store: PlacesStore): M
   return [...byKey.values()].sort((a, b) => b.moments.length - a.moments.length);
 }
 
+type PlacesDoc = { names: Record<string, PlaceName> };
+const NO_NAMES: PlacesDoc = { names: {} };
+
 export function useMomentPlaces() {
   const relationshipId = useRelationshipStore((s) => s.relationship?.id);
-  const queryClient = useQueryClient();
 
-  const { data: store = EMPTY } = useQuery({
+  // This phone's suggestions (and, before syncing existed, its names).
+  const { data: local = EMPTY } = useQuery({
     queryKey: queryKey(relationshipId),
     queryFn: () => loadPlaces(relationshipId!),
     enabled: !!relationshipId,
   });
+  // The names, shared by both phones (this phone's old ones move up the first time).
+  const { data: shared, write } = useCoupleDoc<PlacesDoc>('places', NO_NAMES, storageKey);
 
-  const nameP = useCallback(
-    (key: string, name: PlaceName) => {
-      if (!relationshipId) return;
-      const current = queryClient.getQueryData<PlacesStore>(queryKey(relationshipId)) ?? EMPTY;
-      const next = { ...current, names: { ...current.names, [key]: { ...name, name: name.name.trim() } } };
-      queryClient.setQueryData(queryKey(relationshipId), next);
-      void AsyncStorage.setItem(storageKey(relationshipId), JSON.stringify(next));
-    },
-    [queryClient, relationshipId],
+  const store: PlacesStore = { names: { ...local.names, ...(shared?.names ?? {}) }, suggestions: local.suggestions };
+
+  const namePlace = useCallback(
+    (key: string, name: PlaceName) =>
+      write((current) => ({ names: { ...(current?.names ?? {}), [key]: { ...name, name: name.name.trim() } } })),
+    [write],
   );
 
-  return { store, namePlace: nameP };
+  return { store, namePlace };
 }

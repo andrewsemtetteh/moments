@@ -19,7 +19,7 @@ export type LocationResult =
 
 const POSITION_TIMEOUT_MS = 25_000;
 
-function formatPlace(place: Location.LocationGeocodedAddress | undefined): string | null {
+export function formatPlace(place: Location.LocationGeocodedAddress | undefined): string | null {
   if (!place) return null;
   const parts = [place.name, place.street, place.city, place.region, place.country].filter(Boolean);
   const unique = [...new Set(parts)];
@@ -90,6 +90,16 @@ async function readPosition(): Promise<Location.LocationObject | null> {
   }
 
   return readPositionViaWatch(POSITION_TIMEOUT_MS);
+}
+
+/** Already allowed? Never shows a prompt (for background refreshes). */
+export async function hasLocationPermission(): Promise<boolean> {
+  try {
+    const { status } = await Location.getForegroundPermissionsAsync();
+    return status === 'granted';
+  } catch {
+    return false;
+  }
 }
 
 export async function requestLocationPermission(): Promise<boolean> {

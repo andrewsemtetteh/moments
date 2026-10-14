@@ -1,6 +1,7 @@
+import { SUPPORT_EMAIL } from '@/constants/links';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as StoreReview from 'expo-store-review';
-import { Linking } from 'react-native';
+import { Alert, Linking } from 'react-native';
 
 const FIRST_OPEN_KEY = 'moments_store_review_first_open_at';
 const LAST_PROMPT_KEY = 'moments_store_review_last_prompt_at';
@@ -78,7 +79,7 @@ const DISMISSED_AT_KEY = 'moments_rating_dismissed_at';
 const DAY_MS = 24 * 60 * 60 * 1000;
 const MIN_ACTIVE_DAYS = 7;
 const RESHOW_AFTER_MS = 4 * DAY_MS;
-export const FEEDBACK_EMAIL = 'hello@moments.app';
+export const FEEDBACK_EMAIL = SUPPORT_EMAIL;
 
 function todayKey() {
   return new Date().toISOString().slice(0, 10);
@@ -120,6 +121,7 @@ export async function rateFromPage(): Promise<void> {
     } else {
       const url = StoreReview.storeUrl();
       if (url) await Linking.openURL(url);
+      else Alert.alert('Thank you!', 'Ratings open once Moments is in the App Store and Google Play.');
     }
   } finally {
     await markStoreReviewCompleted();

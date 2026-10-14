@@ -1,15 +1,13 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback } from 'react';
 
-import { useAuthStore, useRelationshipStore } from '@/stores';
+import { useCoupleDoc } from '@/lib/couple-doc';
+import { useAuthStore } from '@/stores';
 
 /**
  * Moment albums ("Lisbon trip", "Date nights"…).
  *
- * Stored on the device for now (like Plan lists, see plan-local.ts) so the
- * design can be tried out before it gets a backend table and syncs to the
- * partner's phone.
+ * Shared between both phones (the couple's "albums" document, see
+ * couple-doc.ts): works offline, syncs when online, partner edits arrive live.
  */
 export type MomentAlbum = {
   id: string;
@@ -26,21 +24,10 @@ export type MomentAlbum = {
 /** Free accounts get this many albums; Plus is unlimited. */
 export const FREE_ALBUM_LIMIT = 2;
 
-export const ALBUM_EMOJIS = ['💞', '✈️', '🍝', '🌅', '🎉', '🏡', '📸', '🎄', '🌸', '🐾'] as const;
-export const ALBUM_NAME_IDEAS = ['Date nights', 'Our trips', 'Our firsts', 'Just us', 'Food we loved'] as const;
 
-const storageKey = (relationshipId: string) => `moment-albums:${relationshipId}`;
-const queryKey = (relationshipId: string | undefined) => ['moment-albums', relationshipId] as const;
-
-async function loadAlbums(relationshipId: string): Promise<MomentAlbum[]> {
-  try {
-    const raw = await AsyncStorage.getItem(storageKey(relationshipId));
-    const parsed: unknown = raw ? JSON.parse(raw) : [];
-    return Array.isArray(parsed) ? (parsed as MomentAlbum[]) : [];
-  } catch {
-    return [];
-  }
-}
+/** Where this phone kept albums before they synced (moved up the first time). */
+const legacyKey = (relationshipId: string) => `moment-albums:${relationshipId}`;
+const NO_ALBUMS: MomentAlbum[] = [];
 
 export function albumCoverId(album: MomentAlbum): string | null {
   return album.coverMomentId ?? album.momentIds[0] ?? null;
@@ -51,27 +38,9 @@ function newAlbumId() {
 }
 
 export function useMomentAlbums() {
-  const relationshipId = useRelationshipStore((s) => s.relationship?.id);
   const userId = useAuthStore((s) => s.user?.id ?? null);
-  const queryClient = useQueryClient();
-
-  const { data: albums = [] } = useQuery({
-    queryKey: queryKey(relationshipId),
-    queryFn: () => loadAlbums(relationshipId!),
-    enabled: !!relationshipId,
-    staleTime: Infinity,
-  });
-
-  const write = useCallback(
-    (update: (current: MomentAlbum[]) => MomentAlbum[]) => {
-      if (!relationshipId) return;
-      const current = queryClient.getQueryData<MomentAlbum[]>(queryKey(relationshipId)) ?? [];
-      const next = update(current);
-      queryClient.setQueryData(queryKey(relationshipId), next);
-      void AsyncStorage.setItem(storageKey(relationshipId), JSON.stringify(next));
-    },
-    [queryClient, relationshipId],
-  );
+  const { data, write } = useCoupleDoc<MomentAlbum[]>('albums', NO_ALBUMS, legacyKey);
+  const albums = Array.isArray(data) ? data : NO_ALBUMS;
 
   const createAlbum = useCallback(
     (input: { name: string; emoji: string; momentIds?: string[] }): MomentAlbum => {

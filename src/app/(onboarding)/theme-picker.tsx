@@ -1,4 +1,5 @@
-import * as Haptics from 'expo-haptics';
+import { useAuth } from '@clerk/expo';
+import * as Haptics from '@/lib/haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
@@ -12,6 +13,7 @@ import { useTheme } from '@/hooks/useTheme';
 import { getFirstName } from '@/lib/avatar-initial';
 import { getOnboardingDraft, goNext, previewAnswers } from '@/lib/onboarding-v2';
 import { markThemePromptDone } from '@/lib/onboarding-storage';
+import { prewarmOnboardingSpace } from '@/lib/onboarding-space';
 import { useAuthStore } from '@/stores';
 
 /**
@@ -32,6 +34,12 @@ export default function ThemePickerScreen() {
     if (!user?.id || preview) return;
     void getOnboardingDraft(user.id).then((d) => setSpaceName(d.spaceName ?? null));
   }, [user?.id, preview]);
+
+  // Start making their space now, so the invite code is ready two steps later.
+  const { getToken } = useAuth();
+  useEffect(() => {
+    if (!preview) prewarmOnboardingSpace(user?.id, getToken);
+  }, [user?.id, preview, getToken]);
 
   const next = async () => {
     if (user && !preview) await markThemePromptDone(user.id);

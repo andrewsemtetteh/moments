@@ -9,6 +9,7 @@ import { useTheme } from '@/hooks/useTheme';
 import { callManager } from '@/lib/call-manager';
 import { isWebRTCAvailable } from '@/lib/webrtc-native';
 import { useCallStore } from '@/stores';
+import { ThemedStatusBar } from '@/components/ui/ThemedStatusBar';
 
 export function CallOverlay() {
   const insets = useSafeAreaInsets();
@@ -74,6 +75,7 @@ export function CallOverlay() {
 
   return (
     <Modal visible animationType="slide" presentationStyle="fullScreen" onRequestClose={endAndReset}>
+      <ThemedStatusBar />
       <View style={[styles.root, { backgroundColor: colors.background }]}>
         {mode === 'video' && remoteStream ? (
           <StreamView stream={remoteStream} />

@@ -15,6 +15,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ScreenHeader } from '@/components/layout/ScreenHeader';
 import { useTheme } from '@/hooks/useTheme';
+import { ThemedStatusBar } from '@/components/ui/ThemedStatusBar';
 
 const SCREEN_W = Dimensions.get('window').width;
 const OPEN_SPRING = { damping: 30, stiffness: 280, mass: 0.9 };
@@ -30,6 +31,7 @@ export function FullScreenPage({
   onBack,
   right,
   avoidKeyboard = true,
+  dismissKeyboardOnTap = true,
   children,
 }: {
   visible: boolean;
@@ -44,6 +46,11 @@ export function FullScreenPage({
    * scrolls the focused field into view.
    */
   avoidKeyboard?: boolean;
+  /**
+   * Tap empty space to close the keyboard (forms). Pages without fields turn it
+   * off: the catcher can swallow a scroll view's drags.
+   */
+  dismissKeyboardOnTap?: boolean;
   children: ReactNode;
 }) {
   const { colors } = useTheme();
@@ -70,14 +77,14 @@ export function FullScreenPage({
     .failOffsetX(-10)
     .failOffsetY([-14, 14])
     .onUpdate((e) => {
-      translateX.value = Math.max(0, e.translationX);
+      translateX.set(Math.max(0, e.translationX));
     })
     .onEnd((e) => {
       if (e.translationX > SCREEN_W * 0.3 || e.velocityX > 700) {
         runOnJS(onBack)();
         return;
       }
-      translateX.value = withSpring(0, OPEN_SPRING);
+      translateX.set(withSpring(0, OPEN_SPRING));
     });
 
   const pageStyle = useAnimatedStyle(() => ({ transform: [{ translateX: translateX.value }] }));
@@ -86,19 +93,33 @@ export function FullScreenPage({
 
   return (
     <Modal visible transparent animationType="none" statusBarTranslucent onRequestClose={onBack}>
+      <ThemedStatusBar />
       <GestureHandlerRootView style={styles.flex}>
         <GestureDetector gesture={swipeBack}>
           <Animated.View style={[styles.flex, { backgroundColor: colors.background }, pageStyle]}>
             {/* Tapping anywhere that isn't a field or a button — header included —
                 closes the keyboard. */}
-            <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+            {dismissKeyboardOnTap ? (
+              <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+                <View style={styles.flex}>
+                  <ScreenHeader title={title} onBack={onBack} right={right} />
+                  <KeyboardAvoidingView
+                    style={styles.flex}
+                    behavior={Platform.OS === 'ios' && avoidKeyboard ? 'padding' : undefined}>
+                    {children}
+                  </KeyboardAvoidingView>
+                </View>
+              </TouchableWithoutFeedback>
+            ) : (
               <View style={styles.flex}>
                 <ScreenHeader title={title} onBack={onBack} right={right} />
-                <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' && avoidKeyboard ? 'padding' : undefined}>
+                <KeyboardAvoidingView
+                  style={styles.flex}
+                  behavior={Platform.OS === 'ios' && avoidKeyboard ? 'padding' : undefined}>
                   {children}
                 </KeyboardAvoidingView>
               </View>
-            </TouchableWithoutFeedback>
+            )}
           </Animated.View>
         </GestureDetector>
       </GestureHandlerRootView>

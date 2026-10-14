@@ -1,16 +1,19 @@
 import { router } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Modal, Platform, StyleSheet } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { PaywallScreen } from '@/components/subscription/PaywallScreen';
+import { SuperwallPaywall, type SuperwallPaywallOutcome } from '@/components/subscription/SuperwallPaywall';
 import { markPaywallDismissed } from '@/lib/paywall-storage';
-import { PAYWALL_SOURCE, presentRevenueCatPaywall, WINBACK_OFFERING } from '@/lib/purchases';
+import { BILLING_AVAILABLE, PAYWALL_SOURCE } from '@/lib/purchases';
 import { useUIStore } from '@/stores';
 
+const USE_SUPERWALL = PAYWALL_SOURCE === 'superwall' && BILLING_AVAILABLE;
+
 /**
- * The in-app paywall. Ours (PaywallScreen) by default; with EXPO_PUBLIC_PAYWALL=revenuecat it shows
- * the paywall designed in the RevenueCat dashboard, falling back to ours when none is set up.
+ * The in-app paywall. Ours (PaywallScreen) by default; with EXPO_PUBLIC_PAYWALL=superwall it shows
+ * the paywall designed in the Superwall dashboard, falling back to ours when none is shown.
  */
 export function PaywallModal() {
   const visible = useUIStore((s) => s.showPaywall);
@@ -18,33 +21,41 @@ export function PaywallModal() {
   const reason = useUIStore((s) => s.paywallReason);
   const headline = useUIStore((s) => s.paywallHeadline);
   const offer = useUIStore((s) => s.paywallOffer);
-  // RevenueCat's paywall couldn't be shown this time: show ours.
-  const [useNative, setUseNative] = useState(PAYWALL_SOURCE === 'native');
+  // Superwall's paywall couldn't be shown this time: show ours.
+  const [useNative, setUseNative] = useState(!USE_SUPERWALL);
+  const placement = offer ?? (reason ? 'limit' : headline ? 'moment' : 'reminder');
 
   const handleClose = () => {
     void markPaywallDismissed();
     closePaywall();
   };
 
-  useEffect(() => {
-    if (!visible || PAYWALL_SOURCE !== 'revenuecat' || Platform.OS === 'web') return;
-    let cancelled = false;
-    void presentRevenueCatPaywall(offer === 'winback' ? WINBACK_OFFERING : undefined).then((outcome) => {
-      if (cancelled) return;
-      if (outcome === 'unavailable') {
-        setUseNative(true);
-        return;
-      }
-      if (outcome === 'closed') void markPaywallDismissed();
-      closePaywall();
-    });
-    return () => {
-      cancelled = true;
-      setUseNative(PAYWALL_SOURCE === 'native');
-    };
-  }, [visible, offer, closePaywall]);
+  // Each opening tries Superwall again.
+  const [wasVisible, setWasVisible] = useState(visible);
+  if (visible !== wasVisible) {
+    setWasVisible(visible);
+    if (!visible) setUseNative(!USE_SUPERWALL);
+  }
 
-  if (!visible || Platform.OS === 'web' || !useNative) return null;
+  const onSuperwallDone = (outcome: SuperwallPaywallOutcome) => {
+    if (outcome === 'unavailable') {
+      setUseNative(true);
+      return;
+    }
+    if (outcome === 'closed') void markPaywallDismissed();
+    closePaywall();
+  };
+
+  if (!visible || Platform.OS === 'web') return null;
+  if (!useNative) {
+    return (
+      <SuperwallPaywall
+        placement={placement}
+        params={{ feature: typeof reason === 'string' ? reason : '', headline: headline ?? '' }}
+        onDone={onSuperwallDone}
+      />
+    );
+  }
 
   return (
     // Transparent so swiping it down reveals the app behind, like Moments.
@@ -56,7 +67,7 @@ export function PaywallModal() {
           reason={reason}
           headline={headline}
           offer={offer}
-          placement={offer ?? (reason ? 'limit' : headline ? 'moment' : 'reminder')}
+          placement={placement}
           showClose
           // Leaving the overlay for a page: close it, then open the page.
           onRefer={() => {

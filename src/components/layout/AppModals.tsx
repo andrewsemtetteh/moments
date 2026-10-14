@@ -4,6 +4,7 @@ import { GameRoomBridge } from '@/components/games/GameRoomBridge';
 import { MoodHistoryModal } from '@/components/home/MoodHistoryModal';
 import { MomentsModal } from '@/components/moments/MomentsModal';
 import { FullScreenLocationMapModal } from '@/components/profile/FullScreenLocationMapModal';
+import { PartnerProfileModal } from '@/components/profile/PartnerProfileModal';
 import { PaywallModal } from '@/components/subscription/PaywallModal';
 import { StreakMilestoneModal } from '@/components/home/StreakMilestoneModal';
 import { StreakSparkModal } from '@/components/home/StreakSparkModal';
@@ -44,6 +45,8 @@ export function AppModals() {
   return (
     <>
       <MomentsModal />
+      {/* Root level, so it opens over Chat or any other screen, not behind it. */}
+      <PartnerProfileModal />
       <PartnerLocationMapModal />
       <WrappedModal />
       <MoodHistoryModal />

@@ -22,7 +22,7 @@ export type Entitlement = 'free' | 'plus';
 export function useSubscription() {
   const relationship = useRelationshipStore((s) => s.relationship);
   const user = useAuthStore((s) => s.user);
-  // This phone's live RevenueCat entitlement unlocks the buyer straight away, before the webhook lands.
+  // This phone's live Superwall entitlement unlocks the buyer straight away, before the webhook lands.
   const entitlement = usePurchasesStore((s) => s.entitlement);
   const tier = entitlement.active ? 'plus' : getEffectiveTier(user, relationship);
   const isPlus = tier === 'plus';

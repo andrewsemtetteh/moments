@@ -1,4 +1,4 @@
-import * as Haptics from 'expo-haptics';
+import * as Haptics from '@/lib/haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useMemo, useState } from 'react';
@@ -32,7 +32,7 @@ import {
   REFERRAL_DAYS,
 } from '@/constants/subscription';
 import { useTheme } from '@/hooks/useTheme';
-import { purchasePlan, restorePlus, usePurchasesStore, WINBACK_OFFERING } from '@/lib/purchases';
+import { purchasePlan, restorePlus, usePurchasesStore, WINBACK_OFFER } from '@/lib/purchases';
 import { AnalyticsEvents, trackForCouple } from '@/services/analytics';
 
 const SCREEN_H = Dimensions.get('window').height;
@@ -91,7 +91,7 @@ type Props = {
  *
  * Plans: weekly (selected), yearly, monthly. Weekly and yearly start with a free trial; monthly
  * starts today. Each card shows its billed price and what a week costs. Prices come from the
- * store (local currency) once RevenueCat loads.
+ * store (local currency) once Superwall loads them.
  */
 export function PaywallScreen({
   onClose,
@@ -148,7 +148,7 @@ export function PaywallScreen({
         Alert.alert('Coming soon', 'Moments Plus will be available soon.');
         return;
       }
-      const { result, message } = await purchasePlan(selectedPlan, winback ? WINBACK_OFFERING : undefined);
+      const { result, message } = await purchasePlan(selectedPlan, winback ? WINBACK_OFFER : undefined);
       if (result === 'purchased') {
         void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         void trackForCouple(hasTrial ? AnalyticsEvents.TRIAL_STARTED : AnalyticsEvents.PURCHASED, {

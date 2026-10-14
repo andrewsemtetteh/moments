@@ -10,9 +10,15 @@ GEMINI_API_KEY=
 # Production - GPT-4o-mini: https://platform.openai.com/api-keys
 OPENAI_API_KEY=
 
-# Only if selling Plus: any long random string you make up. Put the same value in
-# RevenueCat > Integrations > Webhooks > Authorization header as: Bearer <value>
-REVENUECAT_WEBHOOK_SECRET=
-# Optional, recommended: RevenueCat > Webhooks > Enable HMAC webhook signing shows a signing secret once.
-# Paste it here; the Worker then also verifies X-RevenueCat-Webhook-Signature on every delivery.
-REVENUECAT_WEBHOOK_SIGNING_SECRET=
+# Only if selling Plus: Superwall > Integrations > Webhooks, endpoint https://<api>/webhooks/superwall.
+# Paste the endpoint's signing secret (starts with whsec_). Every delivery's svix-* signature is checked.
+SUPERWALL_WEBHOOK_SECRET=
+
+# Share links on moments.vasemti.com (open the app from https links).
+# Apple Developer > Membership > Team ID
+APPLE_TEAM_ID=
+# `eas credentials` > Android > SHA-256 fingerprint (comma-separate several)
+ANDROID_CERT_SHA256=
+# Store pages, once published
+APP_STORE_URL=
+PLAY_STORE_URL=

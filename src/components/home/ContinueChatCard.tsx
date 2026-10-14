@@ -18,10 +18,12 @@ import {
 } from '@/lib/continue-chat';
 import { openChat } from '@/lib/router';
 import { useAuthStore, useRelationshipStore } from '@/stores';
+import { useCardBorder } from '@/hooks/useCardBorder';
 
 /** Intimate home shortcut back into the shared conversation. */
 export function ContinueChatCard() {
   const { colors } = useTheme();
+  const cardBorder = useCardBorder();
   const user = useAuthStore((s) => s.user);
   const partner = useRelationshipStore((s) => s.partner);
   const { data: latest } = useLatestMessage();
@@ -81,7 +83,7 @@ export function ContinueChatCard() {
       onPress={() => openChat()}
       accessibilityRole="button"
       accessibilityLabel={`${copy.title}. ${copy.preview}`}
-      style={({ pressed }) => [styles.card, { backgroundColor: colors.surface }, pressed && styles.pressed]}>
+      style={({ pressed }) => [styles.card, { backgroundColor: colors.surface }, cardBorder, pressed && styles.pressed]}>
       <View>
         {attachment?.type === 'location' ? (
           <LocationMapPreview

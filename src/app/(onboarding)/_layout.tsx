@@ -32,13 +32,6 @@ export default function OnboardingLayout() {
       <Stack.Screen name="your-plan" />
       <Stack.Screen name="invite" />
       <Stack.Screen name="tracking" />
-      <Stack.Screen name="profile-name" />
-      <Stack.Screen name="profile-setup" />
-      <Stack.Screen name="profile-gender" />
-      <Stack.Screen name="anniversary-setup" />
-      <Stack.Screen name="relationship-type" />
-      <Stack.Screen name="relationship-path" />
-      <Stack.Screen name="create-relationship" />
       <Stack.Screen name="join-relationship" />
       <Stack.Screen name="theme-picker" />
       <Stack.Screen name="widget-prompt" />

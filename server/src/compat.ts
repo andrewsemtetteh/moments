@@ -21,6 +21,7 @@ import {
 import { generateId, isRelationshipMember, nowIso, parseJson, relationshipIdsForUser } from './db';
 import { stripProtected } from './billing';
 import { runFunction } from './functions';
+import { normalizeContentType, sniffImageType } from './media-type';
 import { onPaired } from './pairing';
 import './env';
 
@@ -219,7 +220,7 @@ compat.post('/db', async (c) => {
       const list = Array.isArray(req.values) ? req.values : req.values ? [req.values] : [];
       const inserted: Record<string, unknown>[] = [];
       for (const raw of list) {
-        // Plus is granted only by the RevenueCat webhook.
+        // Plus is granted only by the Superwall webhook.
         const values: Record<string, unknown> =
           req.table === 'users' || req.table === 'relationships' ? stripProtected({ ...raw }) : { ...raw };
         if (policy.forceMe) values[policy.forceMe] = userId;
@@ -294,7 +295,8 @@ compat.post('/db', async (c) => {
       let sql = `SELECT ${selected} FROM ${req.table} WHERE ${whereSql}`;
       const order = (req.order ?? []).filter((o) => IDENT.test(o.col) && cols.has(o.col));
       if (order.length) sql += ` ORDER BY ${order.map((o) => `${o.col} ${o.asc ? 'ASC' : 'DESC'}`).join(', ')}`;
-      const limit = req.single ? 2 : Math.min(req.limit ?? 1000, 1000);
+      // A single row still honours .limit(1) ("newest one"); without a limit, 2 lets us spot duplicates.
+      const limit = req.single ? Math.min(req.limit ?? 2, 2) : Math.min(req.limit ?? 1000, 1000);
       sql += ` LIMIT ${Math.max(1, Math.floor(limit))}`;
       const { results } = await env.DB.prepare(sql).bind(...binds).all<Record<string, unknown>>();
       return c.json(finish(results, count));
@@ -466,7 +468,7 @@ const RPC: Record<string, RpcHandler> = {
   async join_relationship_by_invite(env, userId, a) {
     // Invite codes are short: limit guesses (10 per 10 minutes per person).
     await consumeRateLimit(env, `join:${userId}`, 10, 600);
-    const code = String(a.p_invite_code ?? '').trim().toUpperCase();
+    const code = String(a.p_invite_code ?? '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
     if (code.length < 6) throw new ApiError('Invalid or expired invite code');
     const target = await env.DB.prepare(
       `SELECT * FROM relationships WHERE invite_code = ?1 AND status = 'pending' AND user_2_id IS NULL LIMIT 1`,
@@ -572,7 +574,7 @@ const RPC: Record<string, RpcHandler> = {
 
   async set_message_pinned(env, userId, a) {
     await loadMessage(env, userId, a.p_message_id);
-    await saveMessage(env, a.p_message_id, { is_pinned: !!a.p_is_pinned });
+    await saveMessage(env, a.p_message_id, { is_pinned: !!a.p_is_pinned, pinned_at: a.p_is_pinned ? nowIso() : null });
     return null;
   },
 
@@ -701,9 +703,11 @@ compat.post('/storage/:bucket/*', async (c) => {
     await consumeRateLimit(c.env, `upload:${c.get('userId')}`, 60, 60);
     const body = await c.req.arrayBuffer();
     if (body.byteLength > 50 * 1024 * 1024) throw new ApiError('File too large', 413);
-    await c.env.STORAGE.put(`${bucket}/${path}`, body, {
-      httpMetadata: { contentType: c.req.header('Content-Type') ?? 'application/octet-stream' },
-    });
+    if (body.byteLength === 0) throw new ApiError('Upload was empty', 400);
+    // Store images under their real type (from the bytes), so they display everywhere.
+    const header = normalizeContentType(c.req.header('Content-Type')) || 'application/octet-stream';
+    const contentType = sniffImageType(body) ?? header;
+    await c.env.STORAGE.put(`${bucket}/${path}`, body, { httpMetadata: { contentType } });
     return c.json({ path });
   } catch (e) {
     const err = e instanceof ApiError ? e : new ApiError('Upload failed', 500);

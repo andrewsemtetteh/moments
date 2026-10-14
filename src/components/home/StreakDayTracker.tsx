@@ -1,5 +1,5 @@
 import { addMonths, format, isAfter, isBefore, isSameMonth, isSameYear, startOfMonth } from 'date-fns';
-import * as Haptics from 'expo-haptics';
+import * as Haptics from '@/lib/haptics';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View, type ViewStyle } from 'react-native';
 

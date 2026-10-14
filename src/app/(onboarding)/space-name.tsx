@@ -1,4 +1,4 @@
-import * as Haptics from 'expo-haptics';
+import * as Haptics from '@/lib/haptics';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
@@ -6,7 +6,7 @@ import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { CoupleCharacters } from '@/components/onboarding/Characters';
 import { OnboardingStepScreen } from '@/components/onboarding/OnboardingStepScreen';
 import { useTheme } from '@/hooks/useTheme';
-import { goNext, previewAnswers, saveOnboardingDraft } from '@/lib/onboarding-v2';
+import { goNext, previewAnswers, saveOnboardingDraft, useSavedAnswer } from '@/lib/onboarding-v2';
 import { sanitizeNameInput } from '@/lib/sanitize-input';
 import { useAuthStore } from '@/stores';
 
@@ -21,7 +21,8 @@ export default function SpaceNameScreen() {
   const preview = useLocalSearchParams<{ preview?: string }>().preview === '1';
   const { colors } = useTheme();
   const userId = useAuthStore((s) => s.user?.id);
-  const [name, setName] = useState('');
+  const [name, setName] = useState(preview ? (previewAnswers.spaceName ?? '') : '');
+  useSavedAnswer(userId, preview, 'spaceName', setName);
 
   const next = async (value: string | null) => {
     if (preview) previewAnswers.spaceName = value?.trim() || null;

@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { Href, useRouter } from 'expo-router';
 
@@ -100,6 +101,32 @@ export async function getOnboardingDraft(userId: string): Promise<OnboardingDraf
 export async function saveOnboardingDraft(userId: string, patch: OnboardingDraft) {
   const current = await getOnboardingDraft(userId);
   await AsyncStorage.setItem(DRAFT_KEY(userId), JSON.stringify({ ...current, ...patch }));
+}
+
+/**
+ * Fills a step with the answer saved for it earlier, once, when it opens.
+ * Going back usually returns to the same (still mounted) screen, but after the
+ * app was closed mid-onboarding the earlier steps are rebuilt fresh; this way
+ * they show what was picked instead of starting blank.
+ */
+export function useSavedAnswer<K extends keyof OnboardingDraft>(
+  userId: string | null | undefined,
+  preview: boolean,
+  key: K,
+  /** A state setter (stable), so it never re-triggers the load. */
+  apply: (value: NonNullable<OnboardingDraft[K]>) => void,
+) {
+  useEffect(() => {
+    if (!userId || preview) return;
+    let cancelled = false;
+    void getOnboardingDraft(userId).then((draft) => {
+      const value = draft[key];
+      if (!cancelled && value !== undefined && value !== null) apply(value as NonNullable<OnboardingDraft[K]>);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [userId, preview, key, apply]);
 }
 
 /** Go to the step after `current` (saving it, unless previewing). */

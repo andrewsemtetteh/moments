@@ -1,5 +1,5 @@
 import { CameraView, useCameraPermissions, useMicrophonePermissions } from 'expo-camera';
-import * as Haptics from 'expo-haptics';
+import * as Haptics from '@/lib/haptics';
 import { Image } from 'expo-image';
 import { useEffect, useRef, useState } from 'react';
 import {
@@ -23,6 +23,7 @@ import { useTheme } from '@/hooks/useTheme';
 import { saveLocalMomentMedia } from '@/lib/download-moment-media';
 import { PermissionSheetHost } from '@/components/layout/PermissionSheetHost';
 import { ensurePermission } from '@/lib/permissions';
+import { ThemedStatusBar } from '@/components/ui/ThemedStatusBar';
 
 const MAX_VIDEO_SEC = 60;
 const SHUTTER_HOLD_MS = 280;
@@ -57,7 +58,7 @@ export function ChatCameraModal({ visible, onClose, onCapture }: Props) {
   useEffect(() => {
     if (visible) return;
     // A swipe-close leaves the page off-screen; start the next open in place.
-    dragY.value = 0;
+    dragY.set(0);
     setPreviewUri(null);
     setPreviewIsVideo(false);
     setRecording(false);
@@ -81,6 +82,20 @@ export function ChatCameraModal({ visible, onClose, onCapture }: Props) {
     }
     return true;
   };
+
+  // First time the camera opens: ask right away (our sheet, then the system prompt),
+  // instead of showing a dead "Allow camera" screen. Never re-asks once refused.
+  const askedCameraRef = useRef(false);
+  useEffect(() => {
+    if (!visible) {
+      askedCameraRef.current = false;
+      return;
+    }
+    if (askedCameraRef.current || !cameraPermission || cameraPermission.granted || !cameraPermission.canAskAgain) return;
+    askedCameraRef.current = true;
+    void ensureCamera();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible, cameraPermission]);
 
   const ensureMic = async (): Promise<boolean> => {
     if (!micPermission?.granted) {
@@ -189,13 +204,15 @@ export function ChatCameraModal({ visible, onClose, onCapture }: Props) {
     .failOffsetY(-10)
     .failOffsetX([-18, 18])
     .onUpdate((e) => {
-      dragY.value = Math.max(0, e.translationY);
+      dragY.set(Math.max(0, e.translationY));
     })
     .onEnd((e) => {
       if (e.translationY > 120 || e.velocityY > 800) {
-        dragY.value = withTiming(SCREEN_H, { duration: 180 }, (done) => {
-          if (done) runOnJS(onClose)();
-        });
+        dragY.set(
+          withTiming(SCREEN_H, { duration: 180 }, (done) => {
+            if (done) runOnJS(onClose)();
+          }),
+        );
         return;
       }
       dragY.value = withSpring(0, { damping: 30, stiffness: 260, velocity: e.velocityY });
@@ -211,6 +228,7 @@ export function ChatCameraModal({ visible, onClose, onCapture }: Props) {
       presentationStyle="overFullScreen"
       statusBarTranslucent
       onRequestClose={close}>
+      <ThemedStatusBar style="light" />
       <GestureHandlerRootView style={styles.flex}>
         <GestureDetector gesture={swipeDown}>
           <Animated.View

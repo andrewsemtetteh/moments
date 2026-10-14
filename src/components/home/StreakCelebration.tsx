@@ -1,4 +1,4 @@
-import * as Haptics from 'expo-haptics';
+import * as Haptics from '@/lib/haptics';
 import { useEffect, useMemo, useState } from 'react';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, {
@@ -23,6 +23,7 @@ import { useTheme } from '@/hooks/useTheme';
 import { getFirstName } from '@/lib/avatar-initial';
 import { buildMilestoneWeek, type StreakDayCell } from '@/lib/streak-days';
 import { useAuthStore, useRelationshipStore } from '@/stores';
+import { ThemedStatusBar } from '@/components/ui/ThemedStatusBar';
 
 const LIT = '#FFE7A0';
 const DAY = 40;
@@ -100,10 +101,14 @@ export function StreakCelebration({ count, fromCount, headline, message, onClose
 
   return (
     <Modal visible animationType="fade" onRequestClose={close} statusBarTranslucent presentationStyle="fullScreen">
+      <ThemedStatusBar />
       <View style={[styles.screen, { backgroundColor: colors.background }]}>
         <SafeAreaView style={styles.content} edges={['top', 'bottom']}>
           <View style={styles.main}>
-            <StickerFlame size={156} face animated ignite />
+            {/* On top of everything while it ignites, so nothing covers it. */}
+            <View style={styles.flame}>
+              <StickerFlame size={156} face animated ignite />
+            </View>
             <View style={styles.numberBox}>
               <Animated.Text style={[styles.number, { color: colors.text }, numberStyle]}>{shown.toLocaleString()}</Animated.Text>
             </View>
@@ -129,7 +134,14 @@ export function StreakCelebration({ count, fromCount, headline, message, onClose
               <View style={styles.weekRow}>
                 {week.map((d) => (
                   <View key={d.date.toISOString()} style={styles.cell}>
-                    <DayDot day={d} todayLit={todayLit} ink={colors.text} empty={colors.surfaceElevated} />
+                    <DayDot
+                      day={d}
+                      todayLit={todayLit}
+                      ink={colors.text}
+                      ring={colors.borderStrong}
+                      fill={colors.surface}
+                      label={colors.textSecondary}
+                    />
                   </View>
                 ))}
               </View>
@@ -166,8 +178,22 @@ export function StreakCelebration({ count, fromCount, headline, message, onClose
   );
 }
 
-/** A day in the week row: lit (sticker flame), today waiting (dashed) or empty. */
-function DayDot({ day, todayLit, ink, empty }: { day: StreakDayCell; todayLit: boolean; ink: string; empty: string }) {
+/** A day in the week row: lit (sticker flame), today waiting (dashed), a past day (ring + date) or one to come (faint dashes). */
+function DayDot({
+  day,
+  todayLit,
+  ink,
+  ring,
+  fill,
+  label,
+}: {
+  day: StreakDayCell;
+  todayLit: boolean;
+  ink: string;
+  ring: string;
+  fill: string;
+  label: string;
+}) {
   const lit = day.isToday ? todayLit : day.state === 'completed' || day.state === 'today-done';
   const pop = useSharedValue(1);
   useEffect(() => {
@@ -186,19 +212,37 @@ function DayDot({ day, todayLit, ink, empty }: { day: StreakDayCell; todayLit: b
       </Animated.View>
     );
   }
-  if (day.isToday) return <View style={[styles.dot, styles.dashed, { borderColor: ink }]} />;
-  return <View style={[styles.dot, { backgroundColor: empty }]} />;
+  if (day.isToday) {
+    return (
+      <View style={[styles.dot, styles.dashed, { borderColor: ink }]}>
+        <Text style={[styles.dayNum, styles.dayNumToday, { color: ink }]}>{day.dayOfMonth}</Text>
+      </View>
+    );
+  }
+  const upcoming = day.state === 'future' || day.state === 'inactive';
+  return (
+    <View
+      style={[
+        styles.dot,
+        upcoming ? [styles.dashed, { borderColor: ring, opacity: 0.6 }] : { backgroundColor: fill, borderColor: ring, borderWidth: 2 },
+      ]}>
+      <Text style={[styles.dayNum, { color: label }]}>{day.dayOfMonth}</Text>
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({
   screen: { flex: 1 },
   content: { flex: 1, paddingHorizontal: 24, paddingTop: 12, paddingBottom: 16, justifyContent: 'space-between' },
-  main: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 14 },
-  numberBox: { height: 80, overflow: 'hidden', justifyContent: 'center', marginTop: 6 },
+  // Drawn above the week card, so anything sliding in never goes behind it.
+  main: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 14, zIndex: 2, elevation: 2 },
+  flame: { zIndex: 3, elevation: 3 },
+  // The roll fades rather than being clipped.
+  numberBox: { height: 80, justifyContent: 'center', marginTop: 6 },
   number: { fontSize: 72, fontWeight: '900', letterSpacing: -2.5, lineHeight: 80, textAlign: 'center' },
   title: { fontSize: 30, fontWeight: '900', letterSpacing: -0.7, lineHeight: 34, marginTop: -10, textAlign: 'center' },
   message: { fontSize: 16, lineHeight: 22, textAlign: 'center', maxWidth: 300 },
-  bottom: { gap: 18 },
+  bottom: { gap: 18, zIndex: 1 },
   weekCard: { borderWidth: 2, borderRadius: 22, paddingTop: 14, paddingBottom: 16, paddingHorizontal: 10, gap: 10 },
   weekRow: { flexDirection: 'row' },
   weekday: { flex: 1, textAlign: 'center', fontSize: 13, fontWeight: '700' },
@@ -206,6 +250,8 @@ const styles = StyleSheet.create({
   cell: { flex: 1, alignItems: 'center' },
   dot: { width: DAY, height: DAY, borderRadius: DAY / 2, alignItems: 'center', justifyContent: 'center' },
   dashed: { borderWidth: 2, borderStyle: 'dashed' },
+  dayNum: { fontSize: 13, fontWeight: '700' },
+  dayNumToday: { fontWeight: '900' },
   actions: { gap: 4 },
   cta: { height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center' },
   ctaText: { fontSize: 17, fontWeight: '800' },

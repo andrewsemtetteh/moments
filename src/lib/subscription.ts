@@ -55,7 +55,7 @@ export function isSubscriptionOwner(
   return !!userId && !!relationship?.subscription_owner_id && relationship.subscription_owner_id === userId;
 }
 
-/** Only the payer can manage billing once RevenueCat is connected. */
+/** Only the payer can manage billing (it's their App Store / Play subscription). */
 export function canManageBilling(
   userId: string | undefined,
   relationship: Relationship | null | undefined,

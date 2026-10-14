@@ -5,9 +5,14 @@ import { router, useRouter } from 'expo-router';
 
 export type AppTab = 'home' | 'activities' | 'profile';
 
-/** Leave the current screen for `fallback` (navigates — reuses the screen if it's already in the stack). */
+/**
+ * Back to wherever you came from; `fallback` only when there's nothing behind
+ * this screen (opened from a link or a notification). Navigate reuses that
+ * screen if it's already in the stack.
+ */
 export function goBackOrReplace(routerInstance: ReturnType<typeof useRouter>, fallback: Href) {
-  routerInstance.navigate(fallback);
+  if (routerInstance.canGoBack()) routerInstance.back();
+  else routerInstance.navigate(fallback);
 }
 
 /**

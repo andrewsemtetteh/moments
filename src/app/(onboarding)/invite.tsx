@@ -1,6 +1,6 @@
 import { useAuth } from '@clerk/expo';
 import * as Clipboard from 'expo-clipboard';
-import * as Haptics from 'expo-haptics';
+import * as Haptics from '@/lib/haptics';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, Share, StyleSheet, Text, View } from 'react-native';
@@ -10,12 +10,12 @@ import { CoupleCharacters } from '@/components/onboarding/Characters';
 import { OnboardingStepScreen } from '@/components/onboarding/OnboardingStepScreen';
 import { Icon } from '@/components/ui/Icon';
 import { useTheme } from '@/hooks/useTheme';
-import { createRelationship, ensureInviteCode } from '@/lib/moments-api';
-import { markRelationshipOnboardingDone } from '@/lib/onboarding-storage';
-import { getOnboardingDraft, goNext } from '@/lib/onboarding-v2';
+import { ensureOnboardingSpace, syncSpaceWithDraft } from '@/lib/onboarding-space';
+import { goNext } from '@/lib/onboarding-v2';
 import { inviteLink } from '@/constants/links';
 import { getPendingInvite } from '@/lib/pending-links';
 import { useAuthStore, useRelationshipStore } from '@/stores';
+import { formatInviteCode } from '@/lib/invite-code';
 
 /**
  * Step 8: bring your person in. Your space is made here (with the answers so
@@ -30,8 +30,7 @@ export default function InviteScreen() {
   const { getToken } = useAuth();
   const relationship = useRelationshipStore((s) => s.relationship);
   const partner = useRelationshipStore((s) => s.partner);
-  const setRelationship = useRelationshipStore((s) => s.setRelationship);
-  const [code, setCode] = useState<string | null>(preview ? 'K7Q2PX' : relationship?.invite_code ?? null);
+  const [code, setCode] = useState<string | null>(preview ? 'K7Q2PX9A' : relationship?.invite_code ?? null);
   const [error, setError] = useState(false);
   // Tapping the code copies it; "Copied" shows for a moment. Continue always moves on.
   const [copied, setCopied] = useState(false);
@@ -41,35 +40,23 @@ export default function InviteScreen() {
     if (!preview && partner) void goNext(router, 'invite', { userId: user?.id });
   }, [preview, partner, router, user?.id]);
 
+  // Usually ready already: the space started being made two steps ago (theme step).
   useEffect(() => {
     if (preview || partner || code || !user) return;
     let cancelled = false;
-    (async () => {
-      try {
-        const token = await getToken();
-        if (!token) throw new Error('Not signed in');
-        let rel = relationship;
-        if (!rel || rel.status === 'ended') {
-          const draft = await getOnboardingDraft(user.id);
-          rel = await createRelationship(token, {
-            relationship_name: draft.spaceName?.trim() || 'Our space',
-            anniversary_date: draft.anniversaryDate ?? null,
-            relationship_type: draft.relationshipType ?? null,
-          });
-          await markRelationshipOnboardingDone(user.id);
-        }
-        const invite = rel.invite_code ?? (await ensureInviteCode(token, rel.id));
+    ensureOnboardingSpace(user.id, getToken)
+      .then((rel) => {
         if (cancelled) return;
-        setRelationship({ ...rel, invite_code: invite });
-        setCode(invite);
-      } catch {
+        setCode(rel.invite_code ?? null);
+        void syncSpaceWithDraft(user.id, rel, getToken).catch(() => undefined);
+      })
+      .catch(() => {
         if (!cancelled) setError(true);
-      }
-    })();
+      });
     return () => {
       cancelled = true;
     };
-  }, [preview, partner, code, user, relationship, getToken, setRelationship]);
+  }, [preview, partner, code, user, getToken]);
 
   // For people who'd rather send it straight to them than copy and paste.
   // Opened your partner's invite link? Go straight to joining their space.
@@ -88,7 +75,7 @@ export default function InviteScreen() {
     if (!code) return;
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     await Share.share({
-      message: `Join me on Moments, our private little space: ${inviteLink(code)}\n\nOr enter my code ${code} when you sign up.`,
+      message: `Join me on Moments, our private little space: ${inviteLink(code)}\n\nOr enter my code ${formatInviteCode(code)} when you sign up.`,
     });
   };
   const next = () => void goNext(router, 'invite', { userId: user?.id, preview });
@@ -127,8 +114,8 @@ export default function InviteScreen() {
           <Text style={[styles.codeLabel, { color: colors.textSecondary }]}>Your code · tap to copy</Text>
         )}
         {code ? (
-          <Pressable onPress={() => void copy()} accessibilityRole="button" accessibilityLabel={`Code ${code}, tap to copy`}>
-            <Text style={[styles.code, { color: colors.text }]}>{code}</Text>
+          <Pressable onPress={() => void copy()} accessibilityRole="button" accessibilityLabel={`Code ${formatInviteCode(code)}, tap to copy`}>
+            <Text style={[styles.code, { color: colors.text }]}>{formatInviteCode(code)}</Text>
           </Pressable>
         ) : error ? (
           <Text style={[styles.err, { color: colors.textSecondary }]}>Couldn’t make your code. Check your connection.</Text>
@@ -169,7 +156,7 @@ const styles = StyleSheet.create({
   card: { borderWidth: 2, borderRadius: 22, padding: 18, alignItems: 'center', gap: 10 },
   codeLabel: { fontSize: 13, fontWeight: '800' },
   copiedRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  code: { fontSize: 34, fontWeight: '900', letterSpacing: 8 },
+  code: { fontSize: 34, fontWeight: '900', letterSpacing: 4 },
   loader: { height: 41 },
   err: { fontSize: 14, textAlign: 'center' },
   shareRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },

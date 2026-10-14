@@ -1,4 +1,4 @@
-import * as Haptics from 'expo-haptics';
+import * as Haptics from '@/lib/haptics';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -15,17 +15,25 @@ import {
 } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
+  Easing,
   runOnJS,
   useAnimatedStyle,
   useSharedValue,
   withSpring,
+  withTiming,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { HistoryActionDock } from '@/components/moments/HistoryActionDock';
-import { AlbumEditSheet, AlbumPickerSheet, AlbumsShelf } from '@/components/moments/MomentAlbums';
+import {
+  ActionSheet,
+  AlbumEditSheet,
+  AlbumPickerSheet,
+  AlbumsShelf,
+  type SheetAction,
+} from '@/components/moments/MomentAlbums';
 import { OurMapCard, OurMapView, placeTitle } from '@/components/moments/MomentPlaces';
-import { MomentSquircle } from '@/components/moments/MomentSquircle';
+import { MomentTile } from '@/components/moments/MomentTile';
 import { HeaderIconButton } from '@/components/ui/HeaderIconButton';
 import { Icon, type IconName } from '@/components/ui/Icon';
 import { useDeleteMoments, useMoments } from '@/hooks/queries';
@@ -34,13 +42,8 @@ import { useSubscription } from '@/hooks/useSubscription';
 import { useTheme } from '@/hooks/useTheme';
 import { downloadMultipleMomentMedia } from '@/lib/download-moment-media';
 import { FREE_ALBUM_LIMIT, useMomentAlbums, type MomentAlbum } from '@/lib/moment-albums';
-import {
-  PLACE_EMOJIS,
-  PLACE_NAME_IDEAS,
-  groupMomentsIntoPlaces,
-  useMomentPlaces,
-  type MomentPlace,
-} from '@/lib/moment-places';
+import { markIcon, PLACE_ICONS } from '@/lib/mark-icons';
+import { groupMomentsIntoPlaces, useMomentPlaces, type MomentPlace } from '@/lib/moment-places';
 import {
   enrichMomentsWithAuthors,
   filterMediaMoments,
@@ -54,10 +57,12 @@ import { useAuthStore, useRelationshipStore, useUIStore } from '@/stores';
 import type { Moment } from '@/types/database';
 
 const SCREEN_W = Dimensions.get('window').width;
-const GRID_PAD = 12;
-const GRID_GAP = 10;
+const GRID_PAD = 14;
+const GRID_GAP = 6;
 const COLS = 3;
 const TILE = Math.floor((SCREEN_W - GRID_PAD * 2 - GRID_GAP * (COLS - 1)) / COLS);
+/** Portrait, like the photos themselves. */
+const TILE_H = Math.round(TILE * (4 / 3));
 const DISMISS_DISTANCE = 72;
 const DISMISS_VELOCITY = 650;
 const SETTLE_SPRING = { damping: 32, stiffness: 280, mass: 0.9 };
@@ -82,6 +87,15 @@ type SheetState =
   | { kind: 'rename'; album: MomentAlbum }
   | { kind: 'picker' }
   | { kind: 'place'; place: MomentPlace }
+  | {
+      kind: 'actions';
+      title: string;
+      subtitle?: string;
+      message?: string;
+      thumb?: React.ReactNode;
+      actions: SheetAction[];
+      primary?: { label: string; onPress: () => void };
+    }
   | null;
 
 function toRows(key: string, label: string, moments: Moment[], withHeader: boolean): HistoryRow[] {
@@ -122,16 +136,8 @@ export function MomentHistoryModal() {
   const partner = useRelationshipStore((s) => s.partner);
   const { limits } = useSubscription();
   const { isPlus, requirePlus } = usePlusGate();
-  const {
-    albums,
-    createAlbum,
-    addMoments,
-    removeMoment,
-    pruneMoments,
-    setCover,
-    updateAlbum,
-    deleteAlbum,
-  } = useMomentAlbums();
+  const { albums, createAlbum, addMoments, removeMoment, pruneMoments, setCover, updateAlbum, deleteAlbum } =
+    useMomentAlbums();
   const { store: placesStore, namePlace } = useMomentPlaces();
 
   const [selecting, setSelecting] = useState(false);
@@ -168,31 +174,29 @@ export function MomentHistoryModal() {
   const inMap = mapOpen && !selecting && !openAlbum;
 
   // Every pinned moment (yours and your partner's), grouped by spot.
-  const places = useMemo(
-    () => groupMomentsIntoPlaces(allMoments, placesStore),
-    [allMoments, placesStore],
-  );
+  const places = useMemo(() => groupMomentsIntoPlaces(allMoments, placesStore), [allMoments, placesStore]);
 
   const albumMoments = useMemo(
-    () =>
-      openAlbum
-        ? openAlbum.momentIds.map((id) => momentsById.get(id)).filter((m): m is Moment => !!m)
-        : [],
+    () => (openAlbum ? openAlbum.momentIds.map((id) => momentsById.get(id)).filter((m): m is Moment => !!m) : []),
     [openAlbum, momentsById],
   );
 
   const lockedCount = Math.max(0, allMoments.length - displayMoments.length);
-  const rows = useMemo(() => {
-    if (inAlbum && openAlbum) return toRows(openAlbum.id, openAlbum.name, albumMoments, false);
-    return groupMomentsForHistory(displayMoments).flatMap((section) =>
-      toRows(section.key, section.label, section.moments, true),
-    );
-  }, [inAlbum, openAlbum, albumMoments, displayMoments]);
+  const rows = useMemo(
+    () =>
+      groupMomentsForHistory(displayMoments).flatMap((section) =>
+        toRows(section.key, section.label, section.moments, true),
+      ),
+    [displayMoments],
+  );
+  const albumRows = useMemo(
+    () => (openAlbum ? toRows(openAlbum.id, openAlbum.name, albumMoments, false) : []),
+    [openAlbum, albumMoments],
+  );
 
   // Free accounts still page in until they've loaded enough to fill their
   // limit (and to know how many more are locked); Plus loads everything.
-  const wantsMore =
-    !Number.isFinite(limits.timelineMoments) || allMoments.length < limits.timelineMoments;
+  const wantsMore = !Number.isFinite(limits.timelineMoments) || allMoments.length < limits.timelineMoments;
   const loadMore = () => {
     if (hasNextPage && !isFetchingNextPage && wantsMore) void fetchNextPage();
   };
@@ -238,6 +242,7 @@ export function MomentHistoryModal() {
     setAlbumId(null);
     setMapOpen(false);
     close();
+    useUIStore.setState({ momentCameraWaking: false });
     if (returnToCamera) {
       setMomentHistoryReturnToCamera(false);
       setShowMomentCreator(true);
@@ -257,11 +262,6 @@ export function MomentHistoryModal() {
     const target = addTarget;
     exitSelection();
     if (target) setAlbumId(target);
-  };
-
-  const leaveAlbum = () => {
-    Haptics.selectionAsync();
-    setAlbumId(null);
   };
 
   const toggleSelect = useCallback((momentId: string) => {
@@ -310,15 +310,29 @@ export function MomentHistoryModal() {
   const albumMomentOptions = (moment: Moment) => {
     if (!openAlbum) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    Alert.alert(openAlbum.name, undefined, [
-      { text: 'Make album cover', onPress: () => setCover(openAlbum.id, moment.id) },
-      {
-        text: 'Remove from album',
-        style: 'destructive',
-        onPress: () => removeMoment(openAlbum.id, moment.id),
-      },
-      { text: 'Cancel', style: 'cancel' },
-    ]);
+    setSheet({
+      kind: 'actions',
+      title: openAlbum.name,
+      actions: [
+        {
+          label: 'Make album cover',
+          icon: 'image',
+          onPress: () => {
+            setCover(openAlbum.id, moment.id);
+            setSheet(null);
+          },
+        },
+        {
+          label: 'Remove from album',
+          icon: 'trash',
+          destructive: true,
+          onPress: () => {
+            removeMoment(openAlbum.id, moment.id);
+            setSheet(null);
+          },
+        },
+      ],
+    });
   };
 
   const onTilePress = (moment: Moment, sectionMoments: Moment[], sectionLabel: string) => {
@@ -345,7 +359,36 @@ export function MomentHistoryModal() {
   // ── Albums ────────────────────────────────────────────────────────────
 
   /** Free accounts get FREE_ALBUM_LIMIT albums; the next one opens the paywall. */
-  const canCreateAlbum = () => isPlus || albums.length < FREE_ALBUM_LIMIT || requirePlus('Unlimited albums');
+  // Plus opens as its own full-screen layer, which can't appear over Moments on
+  // iPhone; so Moments steps aside first, then Plus opens.
+  // Close Moments completely (not back to the camera, which would sit on top of the
+  // paywall and hide it), then open Plus headed with the feature that was hit.
+  const openPlus = (reason: string) => {
+    setSheet(null);
+    setAlbumId(null);
+    setMapOpen(false);
+    setMomentHistoryReturnToCamera(false);
+    useUIStore.setState({ momentCameraWaking: false });
+    close();
+    setTimeout(() => requirePlus(reason), 450);
+  };
+  const canCreateAlbum = () => {
+    if (isPlus || albums.length < FREE_ALBUM_LIMIT) return true;
+    setSheet({
+      kind: 'actions',
+      title: 'Unlimited albums',
+      message: `Free accounts can keep ${FREE_ALBUM_LIMIT} albums. With Moments Plus you can make as many as you like.`,
+      thumb: (
+        // Brand coral, so the upsell reads as Moments Plus whatever the theme.
+        <View style={[styles.sheetThumbIcon, { backgroundColor: 'rgba(255,77,109,0.15)' }]}>
+          <Icon name="albums" size={26} color="#FF4D6D" filled />
+        </View>
+      ),
+      actions: [],
+      primary: { label: 'Upgrade Moments', onPress: () => openPlus('Unlimited albums') },
+    });
+    return false;
+  };
 
   const startNewAlbum = (pendingIds: string[] | null = null) => {
     if (!canCreateAlbum()) return;
@@ -363,13 +406,9 @@ export function MomentHistoryModal() {
       setAlbumId(album.id);
       return;
     }
-    // From "New album": create it, then pick its moments.
+    // From "New album": create it and open it, empty. "Add moments" is right there.
     const album = createAlbum({ name, emoji });
-    setAlbumId(null);
-    setAddTarget(album.id);
-    setSelectedIds(new Set());
-    setSelectAllEngaged(false);
-    setSelecting(true);
+    setAlbumId(album.id);
   };
 
   const startAddingToOpenAlbum = () => {
@@ -400,26 +439,55 @@ export function MomentHistoryModal() {
 
   const albumMenu = () => {
     if (!openAlbum) return;
-    Alert.alert(`${openAlbum.emoji} ${openAlbum.name}`, undefined, [
-      { text: 'Rename', onPress: () => setSheet({ kind: 'rename', album: openAlbum }) },
-      {
-        text: 'Delete album',
-        style: 'destructive',
-        onPress: () =>
-          Alert.alert('Delete album?', 'The moments stay in your history. Only the album goes.', [
-            { text: 'Cancel', style: 'cancel' },
-            {
-              text: 'Delete',
-              style: 'destructive',
-              onPress: () => {
-                deleteAlbum(openAlbum.id);
-                setAlbumId(null);
-              },
-            },
-          ]),
-      },
-      { text: 'Cancel', style: 'cancel' },
-    ]);
+    const coverId = openAlbum.coverMomentId ?? openAlbum.momentIds[0];
+    const cover = coverId ? momentsById.get(coverId) : undefined;
+    const count = albumMoments.length;
+    setSheet({
+      kind: 'actions',
+      title: openAlbum.name,
+      subtitle: `${count} moment${count === 1 ? '' : 's'}`,
+      thumb: cover ? (
+        <MomentTile moment={cover} width={52} height={52} />
+      ) : (
+        <View style={[styles.sheetThumbIcon, { backgroundColor: chrome.accentSoft }]}>
+          <Icon name={markIcon(openAlbum.emoji, 'albums')} size={26} color={chrome.accent} filled />
+        </View>
+      ),
+      actions: [
+        {
+          label: 'Add moments',
+          icon: 'plus',
+          onPress: () => {
+            setSheet(null);
+            startAddingToOpenAlbum();
+          },
+        },
+        { label: 'Edit album', icon: 'edit', onPress: () => setSheet({ kind: 'rename', album: openAlbum }) },
+        {
+          label: 'Delete album',
+          icon: 'trash',
+          destructive: true,
+          onPress: () =>
+            setSheet({
+              kind: 'actions',
+              title: 'Delete this album?',
+              message: 'The moments stay in your history. Only the album goes.',
+              actions: [
+                {
+                  label: 'Delete album',
+                  icon: 'trash',
+                  destructive: true,
+                  onPress: () => {
+                    setSheet(null);
+                    deleteAlbum(openAlbum.id);
+                    setAlbumId(null);
+                  },
+                },
+              ],
+            }),
+        },
+      ],
+    });
   };
 
   // ── Select-mode actions ───────────────────────────────────────────────
@@ -476,10 +544,7 @@ export function MomentHistoryModal() {
               Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
               exitSelection();
             } catch (error) {
-              Alert.alert(
-                'Could not delete',
-                toUserFacingNetworkError(error, 'Please try again.').message,
-              );
+              Alert.alert('Could not delete', toUserFacingNetworkError(error, 'Please try again.').message);
             } finally {
               setDeleting(false);
             }
@@ -489,13 +554,49 @@ export function MomentHistoryModal() {
     ]);
   };
 
+  // Swipe right anywhere: back out of an album / the map, otherwise close History.
+  // Only claims clearly horizontal drags, so the grid still scrolls.
+  // Two positions: History as a whole (rootX) and the album / map page on top
+  // of Our moments (levelX), so closing one never makes the other jump.
+  const rootX = useSharedValue(0);
+  const levelX = useSharedValue(0);
+  const subLevel = useSharedValue(false);
+  const onLevel = inAlbum || inMap;
+  useEffect(() => {
+    subLevel.set(onLevel);
+    // An album or the map slides in from the right, like a pushed page.
+    if (onLevel) {
+      levelX.set(SCREEN_W);
+      levelX.set(withTiming(0, { duration: 280, easing: Easing.out(Easing.cubic) }));
+    }
+  }, [onLevel, subLevel, levelX]);
+
+  const closeLevel = () => {
+    setAlbumId(null);
+    setMapOpen(false);
+  };
+  /** Back arrow on an album / the map: slide it away, then drop it (Our moments is already there). */
+  const backFromLevel = () => {
+    Haptics.selectionAsync();
+    levelX.set(
+      withTiming(SCREEN_W, { duration: 220, easing: Easing.out(Easing.quad) }, (done) => {
+        if (done) runOnJS(closeLevel)();
+      }),
+    );
+  };
+  const onSwipedAway = () => dismiss();
+  const sleepCamera = () => useUIStore.setState({ momentCameraWaking: false });
+  /** About to reveal the camera underneath: start it now instead of after History is gone. */
+  const wakeCamera = () => {
+    if (returnToCamera) useUIStore.setState({ momentCameraWaking: true });
+  };
+
   useEffect(() => {
     if (!visible) return;
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
       if (sheet) setSheet(null);
       else if (selecting) cancelSelection();
-      else if (albumId) setAlbumId(null);
-      else if (mapOpen) setMapOpen(false);
+      else if (albumId || mapOpen) backFromLevel();
       else dismiss();
       return true;
     });
@@ -503,45 +604,62 @@ export function MomentHistoryModal() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible, selecting, sheet, albumId, addTarget, mapOpen]);
 
-  // Swipe right anywhere: back out of an album, otherwise close History.
-  // Only claims clearly horizontal drags, so the grid still scrolls.
-  const translateX = useSharedValue(0);
-  const onSwipedAway = () => {
-    if (albumId) {
-      setAlbumId(null);
-      translateX.value = 0;
-      return;
-    }
-    dismiss();
-  };
   const swipeClose = Gesture.Pan()
-    .enabled(!selecting && !sheet && !inMap)
+    // Anywhere on Our map too: the map itself keeps its own pans, and a strip
+    // along its left edge (in OurMapView) lets the swipe start over it.
+    .enabled(!selecting && !sheet)
     .activeOffsetX(12)
     .failOffsetX(-8)
     .failOffsetY([-16, 16])
+    .onStart(() => {
+      if (!subLevel.value) runOnJS(wakeCamera)();
+    })
     .onUpdate((e) => {
-      translateX.value = Math.max(0, e.translationX);
+      const x = Math.max(0, e.translationX);
+      if (subLevel.value) levelX.set(x);
+      else rootX.set(x);
     })
     .onEnd((e) => {
-      if (e.translationX > DISMISS_DISTANCE || e.velocityX > DISMISS_VELOCITY) {
-        translateX.value = withSpring(SCREEN_W, { ...SETTLE_SPRING, velocity: e.velocityX }, (done) => {
-          if (done) runOnJS(onSwipedAway)();
-        });
+      const away = e.translationX > DISMISS_DISTANCE || e.velocityX > DISMISS_VELOCITY;
+      if (subLevel.value) {
+        levelX.set(
+          withSpring(away ? SCREEN_W : 0, { ...SETTLE_SPRING, velocity: e.velocityX }, (done) => {
+            if (done && away) runOnJS(closeLevel)();
+          }),
+        );
         return;
       }
-      translateX.value = withSpring(0, { ...SETTLE_SPRING, velocity: e.velocityX });
+      rootX.set(
+        withSpring(away ? SCREEN_W : 0, { ...SETTLE_SPRING, velocity: e.velocityX }, (done) => {
+          if (done && away) runOnJS(onSwipedAway)();
+          // Let go early: History stays, so the camera can rest again.
+          if (done && !away) runOnJS(sleepCamera)();
+        }),
+      );
     });
-  const swipeStyle = useAnimatedStyle(() => ({ transform: [{ translateX: translateX.value }] }));
+  const rootStyle = useAnimatedStyle(() => ({ transform: [{ translateX: rootX.value }] }));
+  const levelStyle = useAnimatedStyle(() => ({ transform: [{ translateX: levelX.value }] }));
+  // Like a native back swipe (Notifications): Our moments waits underneath, a
+  // little to the left and dimmed, and slides into place with the page on top.
+  const baseStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: subLevel.value ? -SCREEN_W * 0.3 * (1 - Math.min(1, levelX.value / SCREEN_W)) : 0 }],
+  }));
+  const dimStyle = useAnimatedStyle(() => ({
+    opacity: subLevel.value ? 0.22 * (1 - Math.min(1, levelX.value / SCREEN_W)) : 0,
+  }));
 
   const selectionCount = selectedIds.size;
   const bottomPad = selecting ? insets.bottom + 118 : insets.bottom + 88;
 
-  const renderRow = ({ item }: { item: HistoryRow }) => {
+  /** One row of the grid (a month heading or three tiles); long-press differs inside an album. */
+  const rowContent = (item: HistoryRow, inAlbumList: boolean) => {
     if (item.kind === 'header') {
       return (
         <View style={styles.sectionHeader}>
           <Text style={[styles.sectionLabel, { color: chrome.text }]}>{item.label}</Text>
-          <Text style={[styles.sectionCount, { color: chrome.textTertiary }]}>{item.count}</Text>
+          <View style={[styles.sectionPill, { backgroundColor: chrome.surfaceSoft }]}>
+            <Text style={[styles.sectionCount, { color: chrome.textSecondary }]}>{item.count}</Text>
+          </View>
         </View>
       );
     }
@@ -549,17 +667,15 @@ export function MomentHistoryModal() {
       <View style={[styles.grid, item.lastInSection && styles.gridSectionEnd]}>
         {item.moments.map((moment) => (
           <View key={moment.id} style={styles.cell}>
-            <MomentSquircle
+            <MomentTile
               moment={moment}
-              size={TILE}
+              width={TILE}
+              height={TILE_H}
               selecting={selecting}
               selected={selectedIds.has(moment.id)}
-              isMine={moment.user_id === user?.id}
-              reactionBadge={
-                selecting ? null : getHistoryReactionBadge(moment, user?.id ?? '', partner?.id)
-              }
+              reactionBadge={selecting ? null : getHistoryReactionBadge(moment, user?.id ?? '', partner?.id)}
               onPress={() => onTilePress(moment, item.sectionMoments, item.sectionLabel)}
-              onLongPress={() => (inAlbum ? albumMomentOptions(moment) : enterSelection(moment.id))}
+              onLongPress={() => (inAlbumList ? albumMomentOptions(moment) : enterSelection(moment.id))}
             />
           </View>
         ))}
@@ -567,17 +683,16 @@ export function MomentHistoryModal() {
     );
   };
 
+  const renderRow = ({ item }: { item: HistoryRow }) => rowContent(item, false);
+  const renderAlbumRow = ({ item }: { item: HistoryRow }) => rowContent(item, true);
+
   // ── Header (one row: left icon · centered title · right icon) ─────────
 
   let headerLeft: React.ReactNode;
   let headerTitle: string;
   let headerRight: React.ReactNode;
   if (selecting) {
-    headerLeft = (
-      <Pressable onPress={cancelSelection} hitSlop={12} style={styles.textAction} accessibilityLabel="Cancel">
-        <Text style={[styles.cancelText, { color: chrome.text }]}>Cancel</Text>
-      </Pressable>
-    );
+    headerLeft = <HeaderIconButton icon="close" onPress={cancelSelection} accessibilityLabel="Cancel selection" />;
     headerTitle = targetAlbum ? `Add to ${targetAlbum.name}` : `${selectionCount} selected`;
     headerRight = (
       <Pressable
@@ -597,16 +712,6 @@ export function MomentHistoryModal() {
         />
       </Pressable>
     );
-  } else if (inMap) {
-    headerLeft = (
-      <HeaderIconButton icon="chevronLeft" onPress={() => setMapOpen(false)} accessibilityLabel="Back to all moments" />
-    );
-    headerTitle = 'Our map';
-    headerRight = null;
-  } else if (inAlbum && openAlbum) {
-    headerLeft = <HeaderIconButton icon="chevronLeft" onPress={leaveAlbum} accessibilityLabel="Back to all moments" />;
-    headerTitle = `${openAlbum.emoji} ${openAlbum.name}`;
-    headerRight = <HeaderIconButton icon="more" onPress={albumMenu} accessibilityLabel="Album options" />;
   } else {
     // Back, not close: History sits on top of where you came from (Home or the
     // camera) and swipes away to the right, so it behaves like a pushed page.
@@ -625,163 +730,224 @@ export function MomentHistoryModal() {
 
   return (
     <GestureDetector gesture={swipeClose}>
-      <Animated.View
-        style={[styles.root, { paddingTop: insets.top, backgroundColor: chrome.background }, swipeStyle]}>
-        <View style={styles.header}>
-          <View style={[styles.side, styles.sideLeft]}>{headerLeft}</View>
-          <View style={styles.center}>
-            <Text style={[styles.title, { color: chrome.text }]} numberOfLines={1}>
-              {headerTitle}
-            </Text>
-          </View>
-          <View style={[styles.side, styles.sideRight]}>{headerRight}</View>
-        </View>
-
-        {isLoading ? (
-          <View style={styles.centered}>
-            <ActivityIndicator color={chrome.accent} />
-          </View>
-        ) : inMap ? (
-          <OurMapView
-            places={places}
-            bottomInset={insets.bottom}
-            onOpenPlace={(place) => {
-              const first = place.moments[0];
-              if (first) openMoment(first, place.moments, placeTitle(place));
-            }}
-            onNamePlace={(place) => setSheet({ kind: 'place', place })}
-          />
-        ) : emptyAll ? (
-          <View style={styles.centered}>
-            <View style={[styles.emptyIcon, { backgroundColor: chrome.surfaceSoft }]}>
-              <Icon name="camera" size={36} color={chrome.accent} />
+      <Animated.View style={[styles.root, { backgroundColor: chrome.background }, rootStyle]}>
+        {/* Our moments: always here, underneath an album or the map. */}
+        <Animated.View
+          style={[styles.root, { paddingTop: insets.top }, baseStyle]}
+          pointerEvents={onLevel ? 'none' : 'auto'}>
+          <View style={styles.header}>
+            <View style={[styles.side, styles.sideLeft]}>{headerLeft}</View>
+            <View style={styles.center}>
+              <Text style={[styles.title, { color: chrome.text }]} numberOfLines={1}>
+                {headerTitle}
+              </Text>
             </View>
-            <Text style={[styles.emptyTitle, { color: chrome.text }]}>No moments yet</Text>
-            <Text style={[styles.emptySub, { color: chrome.textSecondary }]}>
-              Photos and videos you share will appear here.
-            </Text>
-            <Pressable
-              onPress={openCamera}
-              style={({ pressed }) => [
-                styles.emptyCta,
-                { backgroundColor: chrome.accent },
-                pressed && { opacity: 0.9 },
-              ]}>
-              <Icon name="camera" size={18} color={chrome.onAccent} />
-              <Text style={[styles.emptyCtaText, { color: chrome.onAccent }]}>Send a moment</Text>
-            </Pressable>
+            <View style={[styles.side, styles.sideRight]}>{headerRight}</View>
           </View>
-        ) : (
-          <FlatList
-            ref={listRef}
-            data={rows}
-            keyExtractor={(row) => row.key}
-            renderItem={renderRow}
-            extraData={[selecting, selectedIds, inAlbum]}
-            onScroll={onScroll}
-            scrollEventThrottle={32}
-            onEndReached={loadMore}
-            onEndReachedThreshold={0.6}
-            initialNumToRender={8}
-            windowSize={9}
-            contentContainerStyle={[styles.scroll, { paddingBottom: bottomPad }]}
-            showsVerticalScrollIndicator={false}
-            ListHeaderComponent={
-              inAlbum && openAlbum ? (
-                <Text style={[styles.albumMeta, { color: chrome.textSecondary }]}>
-                  {albumMoments.length} moment{albumMoments.length === 1 ? '' : 's'} · long-press one to make it the cover
-                </Text>
-              ) : !selecting ? (
+
+          {isLoading ? (
+            <View style={styles.centered}>
+              <ActivityIndicator color={chrome.accent} />
+            </View>
+          ) : emptyAll ? (
+            <View style={styles.centered}>
+              <View style={[styles.emptyIcon, { backgroundColor: chrome.surfaceSoft }]}>
+                <Icon name="camera" size={36} color={chrome.accent} />
+              </View>
+              <Text style={[styles.emptyTitle, { color: chrome.text }]}>No moments yet</Text>
+              <Text style={[styles.emptySub, { color: chrome.textSecondary }]}>
+                Photos and videos you share will appear here.
+              </Text>
+              <Pressable
+                onPress={openCamera}
+                style={({ pressed }) => [
+                  styles.emptyCta,
+                  { backgroundColor: chrome.accent },
+                  pressed && { opacity: 0.9 },
+                ]}>
+                <Icon name="camera" size={18} color={chrome.onAccent} />
+                <Text style={[styles.emptyCtaText, { color: chrome.onAccent }]}>Send a moment</Text>
+              </Pressable>
+            </View>
+          ) : (
+            <FlatList
+              ref={listRef}
+              data={rows}
+              keyExtractor={(row) => row.key}
+              renderItem={renderRow}
+              extraData={[selecting, selectedIds]}
+              onScroll={onScroll}
+              scrollEventThrottle={32}
+              onEndReached={loadMore}
+              onEndReachedThreshold={0.6}
+              initialNumToRender={8}
+              windowSize={7}
+              removeClippedSubviews
+              contentContainerStyle={[styles.scroll, { paddingBottom: bottomPad }]}
+              showsVerticalScrollIndicator={false}
+              ListHeaderComponent={
+                !selecting ? (
+                  <>
+                    <OurMapCard
+                      places={places}
+                      onOpen={() => {
+                        Haptics.selectionAsync();
+                        setMapOpen(true);
+                      }}
+                    />
+                    <AlbumsShelf
+                      albums={albums}
+                      momentsById={momentsById}
+                      onOpen={(album) => {
+                        Haptics.selectionAsync();
+                        setAlbumId(album.id);
+                      }}
+                      onCreate={() => startNewAlbum()}
+                    />
+                  </>
+                ) : null
+              }
+              ListFooterComponent={
                 <>
-                  <OurMapCard
-                    places={places}
-                    onOpen={() => {
-                      Haptics.selectionAsync();
-                      setMapOpen(true);
-                    }}
-                  />
-                  <AlbumsShelf
-                    albums={albums}
-                    momentsById={momentsById}
-                    onOpen={(album) => {
-                      Haptics.selectionAsync();
-                      setAlbumId(album.id);
-                    }}
-                    onCreate={() => startNewAlbum()}
-                  />
+                  {lockedCount > 0 && (
+                    <Pressable
+                      onPress={() => openPlus('Full moment history')}
+                      style={[styles.unlockBanner, { backgroundColor: chrome.surfaceSoft }]}>
+                      <Icon name="lock" size={18} color={chrome.text} />
+                      <Text style={[styles.unlockText, { color: chrome.text }]}>
+                        Unlock {lockedCount} more moment{lockedCount === 1 ? '' : 's'} with Plus
+                      </Text>
+                    </Pressable>
+                  )}
+                  {isFetchingNextPage ? (
+                    <View style={styles.loadMore}>
+                      <ActivityIndicator color={chrome.accent} />
+                    </View>
+                  ) : null}
                 </>
-              ) : null
-            }
-            ListEmptyComponent={
-              inAlbum ? (
-                <View style={styles.albumEmpty}>
-                  <Text style={styles.albumEmptyEmoji}>{openAlbum?.emoji}</Text>
-                  <Text style={[styles.emptyTitle, { color: chrome.text }]}>Nothing in here yet</Text>
-                  <Text style={[styles.emptySub, { color: chrome.textSecondary }]}>
-                    Add moments you want to keep together.
+              }
+            />
+          )}
+
+          {selecting && addTarget ? (
+            <FloatingButton
+              icon="albums"
+              label={
+                selectionCount > 0
+                  ? `Add ${selectionCount} moment${selectionCount === 1 ? '' : 's'}`
+                  : 'Pick moments to add'
+              }
+              disabled={selectionCount === 0}
+              onPress={confirmAddToTarget}
+              bottomInset={insets.bottom}
+            />
+          ) : selecting ? (
+            <HistoryActionDock
+              bottomInset={insets.bottom}
+              selectionCount={selectionCount}
+              deletableCount={deletableSelectedCount}
+              downloading={downloading}
+              deleting={deleting}
+              onDelete={handleDelete}
+              onDownload={() => void handleDownload()}
+              onAddToAlbum={() => {
+                if (selectionCount === 0) return;
+                if (albums.length === 0) startNewAlbum([...selectedIds]);
+                else setSheet({ kind: 'picker' });
+              }}
+            />
+          ) : !emptyAll && !isLoading ? (
+            <FloatingButton
+              icon="albums"
+              label="New album"
+              onPress={() => startNewAlbum()}
+              bottomInset={insets.bottom}
+            />
+          ) : null}
+        </Animated.View>
+
+        {onLevel ? (
+          <>
+            <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.dim, dimStyle]} />
+            {/* The album or the map: a page of its own, on top of Our moments. */}
+            <Animated.View
+              style={[
+                StyleSheet.absoluteFill,
+                styles.layer,
+                { paddingTop: insets.top, backgroundColor: chrome.background },
+                levelStyle,
+              ]}>
+              <View style={styles.header}>
+                <View style={[styles.side, styles.sideLeft]}>
+                  <HeaderIconButton
+                    icon="chevronLeft"
+                    onPress={backFromLevel}
+                    accessibilityLabel="Back to all moments"
+                  />
+                </View>
+                <View style={styles.center}>
+                  <Text style={[styles.title, { color: chrome.text }]} numberOfLines={1}>
+                    {inMap ? 'Our map' : (openAlbum?.name ?? '')}
                   </Text>
                 </View>
-              ) : null
-            }
-            ListFooterComponent={
-              <>
-                {!inAlbum && lockedCount > 0 && (
-                  <Pressable
-                    onPress={() => requirePlus('Full moment history')}
-                    style={[styles.unlockBanner, { backgroundColor: chrome.surfaceSoft }]}>
-                    <Icon name="lock" size={18} color={chrome.text} />
-                    <Text style={[styles.unlockText, { color: chrome.text }]}>
-                      Unlock {lockedCount} more moment{lockedCount === 1 ? '' : 's'} with Plus
-                    </Text>
-                  </Pressable>
-                )}
-                {isFetchingNextPage ? (
-                  <View style={styles.loadMore}>
-                    <ActivityIndicator color={chrome.accent} />
-                  </View>
-                ) : null}
-              </>
-            }
-          />
-        )}
+                <View style={[styles.side, styles.sideRight]}>
+                  {inAlbum ? (
+                    <HeaderIconButton icon="more" onPress={albumMenu} accessibilityLabel="Album options" />
+                  ) : null}
+                </View>
+              </View>
 
-        {selecting && addTarget ? (
-          <FloatingButton
-            icon="albums"
-            label={
-              selectionCount > 0
-                ? `Add ${selectionCount} moment${selectionCount === 1 ? '' : 's'}`
-                : 'Pick moments to add'
-            }
-            disabled={selectionCount === 0}
-            onPress={confirmAddToTarget}
-            bottomInset={insets.bottom}
-          />
-        ) : selecting ? (
-          <HistoryActionDock
-            bottomInset={insets.bottom}
-            selectionCount={selectionCount}
-            deletableCount={deletableSelectedCount}
-            downloading={downloading}
-            deleting={deleting}
-            onDelete={handleDelete}
-            onDownload={() => void handleDownload()}
-            onAddToAlbum={() => {
-              if (selectionCount === 0) return;
-              if (albums.length === 0) startNewAlbum([...selectedIds]);
-              else setSheet({ kind: 'picker' });
-            }}
-          />
-        ) : inAlbum ? (
-          <FloatingButton icon="plus" label="Add moments" onPress={startAddingToOpenAlbum} bottomInset={insets.bottom} />
-        ) : inMap ? null : !emptyAll && !isLoading ? (
-          <FloatingButton icon="albums" label="New album" onPress={() => startNewAlbum()} bottomInset={insets.bottom} />
+              {inMap ? (
+                <OurMapView
+                  places={places}
+                  bottomInset={insets.bottom}
+                  onOpenPlace={(place) => {
+                    const first = place.moments[0];
+                    if (first) openMoment(first, place.moments, placeTitle(place));
+                  }}
+                  onNamePlace={(place) => setSheet({ kind: 'place', place })}
+                />
+              ) : (
+                <>
+                  <FlatList
+                    data={albumRows}
+                    keyExtractor={(row) => row.key}
+                    renderItem={renderAlbumRow}
+                    initialNumToRender={8}
+                    contentContainerStyle={[
+                      styles.scroll,
+                      { paddingBottom: insets.bottom + 88 },
+                      albumRows.length === 0 && styles.scrollFill,
+                    ]}
+                    showsVerticalScrollIndicator={false}
+                    ListEmptyComponent={
+                      <View style={styles.albumEmpty}>
+                        <View style={[styles.emptyIcon, { backgroundColor: chrome.accentSoft }]}>
+                          <Icon name={markIcon(openAlbum?.emoji, 'albums')} size={34} color={chrome.accent} filled />
+                        </View>
+                        <Text style={[styles.emptyTitle, { color: chrome.text }]}>Nothing in here yet</Text>
+                        <Text style={[styles.emptySub, { color: chrome.textSecondary }]}>
+                          Add moments you want to keep together.
+                        </Text>
+                      </View>
+                    }
+                  />
+                  <FloatingButton
+                    icon="plus"
+                    label="Add moments"
+                    onPress={startAddingToOpenAlbum}
+                    bottomInset={insets.bottom}
+                  />
+                </>
+              )}
+            </Animated.View>
+          </>
         ) : null}
 
         {sheet?.kind === 'create' ? (
           <AlbumEditSheet
             title="New album"
-            submitLabel={sheet.pendingIds?.length ? 'Create album' : 'Next: pick moments'}
+            submitLabel="Create album"
             onSubmit={onCreateAlbum}
             onClose={() => setSheet(null)}
           />
@@ -802,14 +968,23 @@ export function MomentHistoryModal() {
             title={sheet.place.name ? 'Rename this place' : 'Name this place'}
             submitLabel="Save"
             placeholder="Place name"
-            emojis={PLACE_EMOJIS}
-            ideas={PLACE_NAME_IDEAS}
+            icons={PLACE_ICONS}
             initialName={sheet.place.name?.name ?? ''}
             initialEmoji={sheet.place.name?.emoji}
             onSubmit={(value) => {
               namePlace(sheet.place.key, value);
               setSheet(null);
             }}
+            onClose={() => setSheet(null)}
+          />
+        ) : sheet?.kind === 'actions' ? (
+          <ActionSheet
+            title={sheet.title}
+            subtitle={sheet.subtitle}
+            message={sheet.message}
+            thumb={sheet.thumb}
+            actions={sheet.actions}
+            primary={sheet.primary}
             onClose={() => setSheet(null)}
           />
         ) : sheet?.kind === 'picker' ? (
@@ -873,9 +1048,7 @@ const styles = StyleSheet.create({
   sideLeft: { justifyContent: 'flex-start' },
   sideRight: { justifyContent: 'flex-end' },
   center: { flexShrink: 1, maxWidth: '64%', alignItems: 'center' },
-  textAction: { height: 44, justifyContent: 'center', paddingHorizontal: 10 },
   title: { fontSize: 24, fontWeight: '800', letterSpacing: -0.5 },
-  cancelText: { fontSize: 16, fontWeight: '700' },
   selectAllBtn: {
     width: 40,
     height: 40,
@@ -888,31 +1061,37 @@ const styles = StyleSheet.create({
   scroll: { paddingHorizontal: GRID_PAD },
   sectionHeader: {
     flexDirection: 'row',
-    alignItems: 'baseline',
-    gap: 8,
-    marginBottom: 14,
-  },
-  sectionLabel: { fontSize: 20, fontWeight: '800', letterSpacing: -0.3 },
-  sectionCount: { fontSize: 14, fontWeight: '700' },
-  albumMeta: { fontSize: 13, fontWeight: '600', textAlign: 'center', marginBottom: 14 },
-  albumEmpty: { alignItems: 'center', gap: 8, paddingTop: 60, paddingHorizontal: 32 },
-  albumEmptyEmoji: { fontSize: 48, marginBottom: 4 },
-  grid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginHorizontal: -GRID_GAP / 2,
-    overflow: 'visible',
-  },
-  // Cells already carry 20pt of bottom margin; this tops a section's end up to ~30.
-  gridSectionEnd: { marginBottom: 10 },
-  cell: {
-    width: `${100 / COLS}%`,
-    paddingHorizontal: GRID_GAP / 2,
-    paddingTop: 10,
-    marginBottom: GRID_GAP + 10,
     alignItems: 'center',
-    overflow: 'visible',
+    gap: 8,
+    marginBottom: 12,
+    marginTop: 4,
   },
+  sectionLabel: { fontSize: 22, fontWeight: '900', letterSpacing: -0.5 },
+  sectionPill: { paddingHorizontal: 9, height: 22, borderRadius: 11, justifyContent: 'center' },
+  sectionCount: { fontSize: 12, fontWeight: '800' },
+  scrollFill: { flexGrow: 1 },
+  sheetThumbIcon: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  dim: { backgroundColor: '#000' },
+  // The album / map page casts a soft edge shadow over Our moments while it's swiped.
+  layer: {
+    shadowColor: '#000',
+    shadowOffset: { width: -6, height: 0 },
+    shadowOpacity: 0.18,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  albumEmpty: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingHorizontal: 32,
+    paddingBottom: 60,
+  },
+  // Three portrait cards a row, a small even gap all round.
+  grid: { flexDirection: 'row', gap: GRID_GAP, marginBottom: GRID_GAP },
+  gridSectionEnd: { marginBottom: 26 },
+  cell: { width: TILE },
   loadMore: { alignItems: 'center', paddingVertical: 16 },
   unlockBanner: {
     flexDirection: 'row',

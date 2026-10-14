@@ -1,12 +1,12 @@
 import { useAuth, useUser } from '@clerk/expo';
 import { format, parseISO } from 'date-fns';
 import Constants from 'expo-constants';
-import * as Haptics from 'expo-haptics';
+import * as Haptics from '@/lib/haptics';
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { useState, type ReactNode } from 'react';
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Linking, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ChangePasswordModal } from '@/components/profile/ChangePasswordModal';
@@ -18,8 +18,10 @@ import { LocationSharingSettings } from '@/components/profile/LocationSharingSet
 import { OnlineStatusSettings } from '@/components/profile/OnlineStatusSettings';
 import { VerifyEmailCodeModal } from '@/components/profile/VerifyEmailCodeModal';
 import { ScreenHeader } from '@/components/layout/ScreenHeader';
+import { RatingPage } from '@/components/layout/StoreReviewSync';
 import { Icon, type IconName } from '@/components/ui/Icon';
 import { Avatar, colorWithAlpha } from '@/components/ui/primitives';
+import { SOCIAL_LINKS, SUPPORT_EMAIL } from '@/constants/social';
 import { THEME_META, Spacing, Themes, type AppTheme, type ThemeColors } from '@/constants/design-system';
 import { usePlanActions } from '@/hooks/usePlanActions';
 import { useSubscription } from '@/hooks/useSubscription';
@@ -35,13 +37,13 @@ import { markRelationshipOnboardingDone } from '@/lib/onboarding-storage';
 import { relationshipTypeLabel } from '@/lib/relationship-type';
 import { closeStackScreen } from '@/lib/router';
 import { toUserFacingNetworkError } from '@/lib/network-error';
-import { requestStoreReviewFromSettings } from '@/lib/store-review';
 import { formatSubscriptionExpiry } from '@/lib/subscription';
 import * as api from '@/services/api';
 import { useAuthStore, useRelationshipStore, useUIStore } from '@/stores';
 // import type { ProfileGender, RelationshipType } from '@/types/database';
 import type { RelationshipType } from '@/types/database';
 import { ensurePermission } from '@/lib/permissions';
+import { useHapticsPref } from '@/lib/haptics';
 
 type PendingEmailAddress = Awaited<
   ReturnType<NonNullable<ReturnType<typeof useUser>['user']>['createEmailAddress']>
@@ -93,6 +95,34 @@ export default function SettingsScreen() {
   const [verifyingEmailCode, setVerifyingEmailCode] = useState(false);
 
   const [anniversaryOpen, setAnniversaryOpen] = useState(false);
+  const [showRating, setShowRating] = useState(false);
+  const hapticsOn = useHapticsPref((s) => s.enabled);
+  const setHapticsOn = useHapticsPref((s) => s.setEnabled);
+
+  const openAccountOptions = () => {
+    const hasSpace = !!relationship && relationship.status !== 'ended';
+    Alert.alert('Account options', undefined, [
+      ...(hasSpace ? [{ text: 'End shared space', onPress: handleLeaveRelationship }] : []),
+      { text: 'Delete account', style: 'destructive' as const, onPress: handleDeleteAccount },
+      { text: 'Cancel', style: 'cancel' as const },
+    ]);
+  };
+
+  const showWidgetHelp = () => {
+    Alert.alert(
+      'Add a Moments widget',
+      'Touch and hold an empty spot on your Home Screen, tap +, then search for Moments and pick a widget.',
+    );
+  };
+
+  const openLink = (url: string) => {
+    void Linking.openURL(url).catch(() => Alert.alert('Couldn’t open link', 'Please try again later.'));
+  };
+
+  const contactSupport = (subject: string) => {
+    const version = Constants.expoConfig?.version ?? '';
+    openLink(`mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent(`${subject} (Moments ${version})`)}`);
+  };
   const [savingAnniversary, setSavingAnniversary] = useState(false);
 
   const waitingForPartner = !!relationship && !partner;
@@ -175,10 +205,10 @@ export default function SettingsScreen() {
       }
     }
 
-    Alert.alert('Leave relationship?', message, [
+    Alert.alert('End your shared space?', message, [
       { text: 'Stay', style: 'cancel' },
       {
-        text: 'Leave',
+        text: 'End space',
         style: 'destructive',
         onPress: async () => {
           try {
@@ -187,7 +217,7 @@ export default function SettingsScreen() {
             await signOutUser();
             router.replace('/(auth)/login');
           } catch (e) {
-            Alert.alert('Could not leave', e instanceof Error ? e.message : 'Please try again.');
+            Alert.alert('Could not end the space', e instanceof Error ? e.message : 'Please try again.');
           }
         },
       },
@@ -418,7 +448,8 @@ export default function SettingsScreen() {
             <Row icon="user" label="Name" value={user?.name?.trim() || 'Add your name'} onPress={() => openEdit('name', user?.name ?? '')} />
             {/* <Row icon="people" label="Gender" value={profileGenderLabel(user?.gender)} onPress={openGenderModal} /> */}
             <Row icon="mail" label="Email" value={user?.email ?? ''} onPress={() => openEdit('email', user?.email ?? '')} />
-            <Row icon="lock" label="Password" value="••••••••" onPress={openPasswordModal} last />
+            <Row icon="lock" label="Password" value="••••••••" onPress={openPasswordModal} />
+            <Row icon="settings" label="Account options" onPress={openAccountOptions} last />
           </Group>
         </Section>
 
@@ -448,7 +479,26 @@ export default function SettingsScreen() {
           </Section>
         ) : null}
 
-        <Section title="Appearance">
+        <Section title="Preferences">
+          <Group>
+            <Row icon="bell" label="Notifications" onPress={() => router.push('/notification-settings')} />
+            <Row icon="phone" label="Widget" onPress={showWidgetHelp} />
+            <Row
+              icon="haptics"
+              label="Haptics"
+              onPress={() => setHapticsOn(!hapticsOn)}
+              right={
+                <Switch
+                  value={hapticsOn}
+                  onValueChange={setHapticsOn}
+                  trackColor={{ false: colors.border, true: colors.accent }}
+                  thumbColor="#FFFFFF"
+                />
+              }
+              last
+            />
+          </Group>
+          <Text style={[styles.subheading, { color: colors.textSecondary }]}>Appearance</Text>
           <View style={[styles.card, styles.themeCard, cardSurface]}>
             {THEME_META.map((t) => (
               <ThemePreview key={t.key} themeKey={t.key} label={t.label} active={theme === t.key} onPress={() => setTheme(t.key)} />
@@ -456,9 +506,7 @@ export default function SettingsScreen() {
           </View>
         </Section>
 
-        <Section
-          title="Privacy"
-          note={`Only ${partner ? getFirstName(partner.name) ?? 'your partner' : 'your partner'} can ever see these. Turning one off hides it for both of you.`}>
+        <Section title="Privacy">
           <Group>
             <OnlineStatusSettings />
             <View style={[styles.divider, { backgroundColor: colors.border }]} />
@@ -489,16 +537,32 @@ export default function SettingsScreen() {
           </Group>
         </Section>
 
-        <Section title="Support">
+        <Section title="Help & support">
           <Group>
-            <Row icon="star" label="Rate Moments" onPress={() => void requestStoreReviewFromSettings()} />
+            <Row icon="help" label="Contact support" onPress={() => contactSupport('Help with Moments')} />
+            <Row icon="flag" label="Report a problem" onPress={() => contactSupport('Problem report')} />
+            <Row icon="star" label="Rate Moments" onPress={() => setShowRating(true)} />
             <Row icon="lock" label="Privacy policy" onPress={() => router.push('/legal/privacy')} />
             <Row icon="document" label="Terms of service" onPress={() => router.push('/legal/terms')} last />
           </Group>
         </Section>
 
+        <Section title="Follow us">
+          <Group>
+            {SOCIAL_LINKS.map((link, i) => (
+              <Row
+                key={link.key}
+                icon={link.icon}
+                label={link.label}
+                onPress={() => openLink(link.url)}
+                last={i === SOCIAL_LINKS.length - 1}
+              />
+            ))}
+          </Group>
+        </Section>
+
         {__DEV__ ? (
-          <Section title="Developer" note="Walk the whole onboarding with sample data. Nothing is saved or sent.">
+          <Section title="Developer">
             <Group>
               <Row
                 icon="play"
@@ -524,24 +588,14 @@ export default function SettingsScreen() {
           onPress={handleLogout}
           accessibilityRole="button"
           style={({ pressed }) => [styles.card, styles.signOut, cardSurface, pressed && styles.pressed]}>
-          <Icon name="logout" size={20} color={colors.error} />
-          <Text style={[styles.signOutText, { color: colors.error }]}>Sign out</Text>
+          <Icon name="logout" size={20} color={colors.text} />
+          <Text style={[styles.signOutText, { color: colors.text }]}>Sign out</Text>
         </Pressable>
-
-        <Section
-          title="Danger zone"
-          note="Leaving closes your shared space for both of you. Deleting removes your account and data for good.">
-          <Group>
-            {relationship && relationship.status !== 'ended' ? (
-              <Row icon="close" label="Leave relationship" danger onPress={handleLeaveRelationship} />
-            ) : null}
-            <Row icon="trash" label="Delete account" danger onPress={handleDeleteAccount} last />
-          </Group>
-        </Section>
 
         <Text style={[styles.footer, { color: colors.textTertiary }]}>
           Moments {Constants.expoConfig?.version ?? ''} · Closer, every day
         </Text>
+
       </ScrollView>
 
       <EditFieldModal
@@ -597,6 +651,8 @@ export default function SettingsScreen() {
         onClose={closeRelationshipTypeModal}
       />
 
+      {showRating ? <RatingPage onDone={() => setShowRating(false)} /> : null}
+
       {anniversaryIso ? (
         <EditAnniversaryModal
           visible={anniversaryOpen}
@@ -610,13 +666,12 @@ export default function SettingsScreen() {
   );
 }
 
-function Section({ title, note, children }: { title: string; note?: string; children: ReactNode }) {
+function Section({ title, children }: { title: string; children: ReactNode }) {
   const { colors } = useTheme();
   return (
     <View style={styles.section}>
       <Text style={[styles.sectionTitle, { color: colors.text }]}>{title}</Text>
       {children}
-      {note ? <Text style={[styles.note, { color: colors.textTertiary }]}>{note}</Text> : null}
     </View>
   );
 }
@@ -650,6 +705,8 @@ function Row({
   value,
   onPress,
   danger,
+  muted,
+  right,
   last,
 }: {
   icon: IconName;
@@ -657,10 +714,14 @@ function Row({
   value?: string;
   onPress: () => void;
   danger?: boolean;
+  /** Low-emphasis label for rows that shouldn't draw the eye. */
+  muted?: boolean;
+  /** Replaces the chevron (e.g. a switch). */
+  right?: ReactNode;
   last?: boolean;
 }) {
   const { colors } = useTheme();
-  const tint = danger ? colors.error : colors.text;
+  const tint = danger ? colors.error : muted ? colors.textSecondary : colors.text;
   return (
     <Pressable
       onPress={onPress}
@@ -683,7 +744,7 @@ function Row({
             {value}
           </Text>
         ) : null}
-        <Icon name="chevronRight" size={16} color={colors.textTertiary} />
+        {right ?? <Icon name="chevronRight" size={16} color={colors.textTertiary} />}
       </View>
     </Pressable>
   );
@@ -741,7 +802,7 @@ const styles = StyleSheet.create({
   scroll: { paddingHorizontal: Spacing.lg, paddingTop: Spacing.xs, gap: 24 },
   section: { gap: 10 },
   sectionTitle: { fontSize: 20, fontWeight: '800', letterSpacing: -0.3 },
-  note: { fontSize: 13, lineHeight: 18, paddingHorizontal: 6 },
+  subheading: { fontSize: 15, fontWeight: '700', marginTop: 6, paddingHorizontal: 4 },
   card: { borderRadius: 22 },
   group: { overflow: 'hidden', paddingVertical: 2 },
 

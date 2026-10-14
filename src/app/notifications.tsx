@@ -355,7 +355,7 @@ function NotificationRow({
             <Icon name="camera" size={20} color={colors.accent} />
           </View>
         )}
-        {!item.read ? <View style={[styles.unreadDot, { backgroundColor: colors.accent }]} /> : null}
+        {!item.read ? <View style={[styles.unreadDot, { backgroundColor: colors.error }]} /> : null}
       </Pressable>
     );
   }
@@ -387,7 +387,7 @@ function NotificationRow({
           {body}
         </Text>
       </View>
-      {!item.read ? <View style={[styles.unreadDot, { backgroundColor: colors.accent }]} /> : null}
+      {!item.read ? <View style={[styles.unreadDot, { backgroundColor: colors.error }]} /> : null}
     </Pressable>
   );
 }

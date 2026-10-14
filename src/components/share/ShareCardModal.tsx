@@ -1,10 +1,10 @@
-import * as Haptics from 'expo-haptics';
-import { useRef, useState, type ReactNode } from 'react';
+import * as Haptics from '@/lib/haptics';
+import { useRef, useState, type ReactNode, type RefObject } from 'react';
 import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Icon } from '@/components/ui/Icon';
-import { captureViewAsImage, saveImageToPhotos, shareViewAsImage } from '@/lib/share-image';
+import { shareViewAsImage } from '@/lib/share-image';
 
 /**
  * Preview a shareable card, then share it or save it to Photos as an image. The card is exactly what
@@ -19,6 +19,7 @@ export function ShareCardModal({
   title,
   children,
   inline = false,
+  captureFrom,
 }: {
   visible: boolean;
   onClose: () => void;
@@ -27,33 +28,24 @@ export function ShareCardModal({
   /** The card itself; give it a fixed size and its own background. */
   children: ReactNode;
   inline?: boolean;
+  /**
+   * Capture this view instead of the preview: for a card drawn full size and only
+   * shrunk to fit the preview, so the saved image keeps its full resolution.
+   */
+  captureFrom?: RefObject<View | null>;
 }) {
   const insets = useSafeAreaInsets();
   const cardRef = useRef<View>(null);
-  const [busy, setBusy] = useState<'share' | 'save' | null>(null);
-  const [saved, setSaved] = useState(false);
+  // Share opens the phone's share sheet, which already has "Save Image": one button is enough.
+  const [busy, setBusy] = useState<'share' | null>(null);
 
   const share = async () => {
     if (busy) return;
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setBusy('share');
     // Same as the version that worked: capture and share while the preview stays open.
-    await shareViewAsImage(cardRef, { title });
+    await shareViewAsImage(captureFrom ?? cardRef, { title });
     setBusy(null);
-  };
-
-  const save = async () => {
-    if (busy) return;
-    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setBusy('save');
-    const uri = await captureViewAsImage(cardRef);
-    const ok = uri ? await saveImageToPhotos(uri) : false;
-    setBusy(null);
-    if (ok) {
-      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      setSaved(true);
-      setTimeout(() => setSaved(false), 2000);
-    }
   };
 
   const content = (
@@ -80,19 +72,6 @@ export function ShareCardModal({
                 <Icon name="share" size={18} color="#1A1A1A" />
               )}
               <Text style={styles.mainText}>Share</Text>
-            </Pressable>
-            <Pressable
-              onPress={() => void save()}
-              disabled={!!busy}
-              accessibilityRole="button"
-              accessibilityLabel="Save to Photos"
-              style={({ pressed }) => [styles.sideBtn, pressed && styles.pressed]}>
-              {busy === 'save' ? (
-                <ActivityIndicator color="#FFFFFF" />
-              ) : (
-                <Icon name={saved ? 'check' : 'download'} size={18} color="#FFFFFF" />
-              )}
-              <Text style={styles.sideText}>{saved ? 'Saved' : 'Save'}</Text>
             </Pressable>
           </View>
           <Pressable onPress={onClose} hitSlop={8} accessibilityRole="button" style={styles.closeBtn}>
@@ -129,16 +108,6 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   mainText: { color: '#1A1A1A', fontSize: 16, fontWeight: '900' },
-  sideBtn: {
-    height: 54,
-    paddingHorizontal: 22,
-    borderRadius: 27,
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  sideText: { color: '#FFFFFF', fontSize: 16, fontWeight: '800' },
   closeBtn: { height: 36, justifyContent: 'center', paddingHorizontal: 10 },
   closeText: { color: '#FFFFFF', fontSize: 15, fontWeight: '700' },
   pressed: { opacity: 0.85 },

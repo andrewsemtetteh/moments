@@ -1,6 +1,7 @@
 import { getClerkInstance } from '@clerk/expo';
 
 import { markIntroCompleted } from '@/lib/intro-storage';
+import { clearWidgetSnapshot } from '@/lib/widget-data';
 import { createProfile, fetchMyProfile, fetchMyRelationship } from '@/lib/moments-api';
 import * as api from '@/services/api';
 import { useAuthStore, useRelationshipStore } from '@/stores';
@@ -129,7 +130,8 @@ export async function signOutUser(): Promise<void> {
   const { queryClient } = await import('@/providers/AppProviders');
   queryClient.clear();
   await clearAuthSession();
-  // Back to an anonymous RevenueCat user, so the next account here doesn't inherit Plus.
+  clearWidgetSnapshot();
+  // Back to an anonymous Superwall user, so the next account here doesn't inherit Plus.
   const { resetPurchases } = await import('@/lib/purchases');
   await resetPurchases();
 

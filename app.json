@@ -6,23 +6,58 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/app-icon.png",
+    "splash": {
+      "image": "./assets/images/splash-logo.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#FFFFFF"
+    },
     "scheme": "moments",
     "userInterfaceStyle": "automatic",
     "ios": {
       "icon": "./assets/images/app-icon.png",
-      "bundleIdentifier": "com.moments.app",
+      "bundleIdentifier": "com.vasemti.moments",
       "supportsTablet": false,
-      "usesAppleSignIn": true
+      "usesAppleSignIn": true,
+      "associatedDomains": [
+        "applinks:moments.vasemti.com"
+      ],
+      "entitlements": {
+        "com.apple.security.application-groups": [
+          "group.com.vasemti.moments"
+        ]
+      }
     },
     "android": {
-      "package": "com.moments.app",
+      "package": "com.vasemti.moments",
       "adaptiveIcon": {
         "backgroundColor": "#1F1B3A",
         "foregroundImage": "./assets/images/app-icon-android-foreground.png",
         "monochromeImage": "./assets/images/app-icon-android-foreground.png"
       },
       "predictiveBackGestureEnabled": false,
-      "softwareKeyboardLayoutMode": "resize"
+      "softwareKeyboardLayoutMode": "resize",
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "https",
+              "host": "moments.vasemti.com",
+              "pathPrefix": "/i/"
+            },
+            {
+              "scheme": "https",
+              "host": "moments.vasemti.com",
+              "pathPrefix": "/r/"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        }
+      ]
     },
     "web": {
       "output": "static",
@@ -38,6 +73,7 @@
       "expo-asset",
       "expo-secure-store",
       "@clerk/expo",
+      "@clerk/expo-google-signin",
       "expo-apple-authentication",
       [
         "expo-tracking-transparency",
@@ -49,19 +85,19 @@
         "expo-splash-screen",
         {
           "backgroundColor": "#FFFFFF",
-          "image": "./assets/images/moments-logo.png",
+          "image": "./assets/images/splash-logo.png",
           "imageWidth": 180,
           "dark": {
             "backgroundColor": "#000000",
-            "image": "./assets/images/moments-logo.png"
+            "image": "./assets/images/splash-logo.png"
           },
           "android": {
             "backgroundColor": "#FFFFFF",
-            "image": "./assets/images/moments-logo.png",
+            "image": "./assets/images/splash-logo.png",
             "imageWidth": 180,
             "dark": {
               "backgroundColor": "#000000",
-              "image": "./assets/images/moments-logo.png"
+              "image": "./assets/images/splash-logo.png"
             }
           }
         }
@@ -116,7 +152,16 @@
       ],
       "expo-video",
       "@sentry/react-native",
-      "@react-native-community/datetimepicker"
+      "@react-native-community/datetimepicker",
+      "@bacons/apple-targets",
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "deploymentTarget": "16.4"
+          }
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

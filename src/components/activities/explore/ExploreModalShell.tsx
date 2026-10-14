@@ -7,6 +7,7 @@ import { colorWithAlpha } from '@/components/ui/primitives';
 import { useTheme } from '@/hooks/useTheme';
 
 import type { ExploreMeta } from './explore-meta';
+import { ThemedStatusBar } from '@/components/ui/ThemedStatusBar';
 
 interface ExploreModalShellProps {
   visible: boolean;
@@ -20,6 +21,7 @@ export function ExploreModalShell({ visible, meta, onClose, children }: ExploreM
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+      <ThemedStatusBar style="light" />
       <View style={[styles.root, { backgroundColor: colors.background }]}>
         <LinearGradient colors={colors.gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.hero}>
           <View style={[styles.heroGlow, { backgroundColor: colorWithAlpha(colors.onAccent, 0.12) }]} pointerEvents="none" />

@@ -1,7 +1,7 @@
 import { format, getYear, isToday, startOfDay, subDays } from 'date-fns';
 import { Image } from 'expo-image';
 import { useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { memoryPhotos } from '@/components/calendar/plan/MemorySheets';
 import { Icon } from '@/components/ui/Icon';
@@ -302,7 +302,15 @@ function TimelineRow({
       />
       {isMilestone ? (
         <View style={[styles.card, styles.milestone, { backgroundColor: colors.surface }]}>
-          {cover ? <Image source={{ uri: cover }} style={styles.banner} contentFit="cover" /> : null}
+          {cover ? (
+            <Image source={{ uri: cover }} style={styles.banner} contentFit="cover" />
+          ) : (
+            // No photo: a tinted band with the milestone's emoji, so it still reads as a big moment.
+            <View style={[styles.bannerEmpty, { backgroundColor: colors.accentSoft }]}>
+              <Text style={styles.bannerEmoji}>{type.emoji}</Text>
+              <Text style={[styles.bannerYear, { color: colors.accent }]}>{format(item.date, 'yyyy')}</Text>
+            </View>
+          )}
           <View style={styles.milestoneBody}>
             <Text style={[styles.kicker, { color: colors.accent }]}>Milestone</Text>
             <View style={styles.titleRow}>
@@ -316,20 +324,32 @@ function TimelineRow({
         </View>
       ) : (
         <View style={[styles.card, styles.memory, { backgroundColor: colors.surface }]}>
-          {cover ? <Image source={{ uri: cover }} style={styles.memoryThumb} contentFit="cover" /> : null}
+          {/* Every memory gets the same anchor on the left: its photo, or a date stamp
+              (big day, month, the type's emoji) so text-only memories don't look empty. */}
+          {cover ? (
+            <Image source={{ uri: cover }} style={styles.memoryThumb} contentFit="cover" />
+          ) : (
+            <View style={[styles.memoryThumb, styles.stamp, { backgroundColor: colors.accentSoft }]}>
+              <Text style={[styles.stampDay, { color: colors.accent }]}>{format(item.date, 'd')}</Text>
+              <Text style={[styles.stampMonth, { color: colors.accent }]}>{format(item.date, 'MMM')}</Text>
+              <View style={[styles.stampBadge, { backgroundColor: colors.surface }]}>
+                <Text style={styles.stampEmoji}>{type.emoji}</Text>
+              </View>
+            </View>
+          )}
           <View style={styles.memoryText}>
             <View style={styles.titleRow}>
-              <Icon name={type.icon} size={16} color={colors.accent} />
+              {cover ? <Icon name={type.icon} size={16} color={colors.accent} /> : null}
               <Text style={[styles.cardTitle, styles.flexShrink, { color: colors.text }]} numberOfLines={1}>
                 {item.entry.title}
               </Text>
             </View>
             <Text style={[styles.cardSub, { color: colors.textSecondary }]} numberOfLines={1}>
-              {format(item.date, 'MMM d')}
+              {cover ? format(item.date, 'MMM d') : type.label}
               {meta.placeName ? ` · ${meta.placeName}` : ''}
             </Text>
             {meta.notes ? (
-              <Text style={[styles.cardSub, { color: colors.textSecondary }]} numberOfLines={1}>
+              <Text style={[styles.quote, { color: colors.text }]} numberOfLines={cover ? 1 : 2}>
                 “{meta.notes}”
               </Text>
             ) : null}
@@ -381,6 +401,31 @@ const styles = StyleSheet.create({
   milestoneBody: { padding: 12, gap: 3 },
   memory: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12 },
   memoryThumb: { width: 64, height: 64, borderRadius: 16 },
+  stamp: { alignItems: 'center', justifyContent: 'center' },
+  stampDay: { fontSize: 24, fontWeight: '900', lineHeight: 26, letterSpacing: -0.5 },
+  stampMonth: { fontSize: 11, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 1 },
+  stampBadge: {
+    position: 'absolute',
+    right: -6,
+    bottom: -6,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stampEmoji: { fontSize: 13 },
+  // A note reads like a quote, in a serif: for text-only memories it's the main content.
+  quote: {
+    fontSize: 14,
+    lineHeight: 19,
+    fontStyle: 'italic',
+    fontFamily: Platform.select({ ios: 'Georgia', android: 'serif', default: 'Georgia' }),
+    marginTop: 2,
+  },
+  bannerEmpty: { height: 84, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16 },
+  bannerEmoji: { fontSize: 40 },
+  bannerYear: { fontSize: 28, fontWeight: '900', letterSpacing: -0.5 },
   memoryText: { flex: 1, minWidth: 0, gap: 3 },
   // Fills the space under the filters and centers in it.
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 8, paddingHorizontal: 24, paddingBottom: 60 },

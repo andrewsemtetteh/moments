@@ -104,7 +104,7 @@ AI is NOT responsible for decisions you make.
 
 Payments are handled via:
 
-RevenueCat
+Superwall
 
 * subscriptions are per relationship
 * billing is managed through app stores

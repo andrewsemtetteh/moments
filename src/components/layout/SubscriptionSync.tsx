@@ -8,9 +8,9 @@ import type { Relationship } from '@/types/database';
 
 /**
  * Keeps Moments Plus in sync for both partners:
- * - starts RevenueCat for the signed in user (the paywall's prices and purchases need it),
+ * - identifies the signed in user with Superwall (the paywall's prices and purchases need it),
  * - takes the couple's relationship row live from the server, so when either partner buys
- *   (the RevenueCat webhook writes Plus onto the relationship) the other unlocks straight away,
+ *   (the Superwall webhook writes Plus onto the relationship) the other unlocks straight away,
  * - refreshes it whenever this phone's own entitlement changes (bought, renewed, expired).
  */
 export function SubscriptionSync() {

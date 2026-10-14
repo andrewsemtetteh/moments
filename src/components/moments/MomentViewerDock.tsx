@@ -9,7 +9,7 @@ import { Icon } from '@/components/ui/Icon';
 import { Avatar } from '@/components/ui/primitives';
 import { useTheme } from '@/hooks/useTheme';
 import { formatMomentDateLabel, getMomentReactionHistory, getUserReactionEmoji } from '@/lib/moment-display';
-import { momentChrome } from '@/lib/moment-theme';
+import { momentChrome, viewerChrome } from '@/lib/moment-theme';
 import type { Moment } from '@/types/database';
 
 const CLUSTER_W = Math.min(Dimensions.get('window').width - 48, 340);
@@ -29,6 +29,10 @@ interface MomentViewerDockProps {
   onReact: (emoji: string) => void;
   sending?: boolean;
   bottomInset: number;
+  /** Viewer layout: no sheet behind it and no author row (that's in the header). */
+  floating?: boolean;
+  /** The viewer's always-dark palette. */
+  dark?: boolean;
 }
 
 export function MomentViewerDock({
@@ -46,9 +50,11 @@ export function MomentViewerDock({
   onReact,
   sending,
   bottomInset,
+  floating = false,
+  dark = false,
 }: MomentViewerDockProps) {
   const { colors } = useTheme();
-  const chrome = momentChrome(colors);
+  const chrome = dark ? viewerChrome(colors) : momentChrome(colors);
   const createdAt = new Date(moment.created_at);
   // "3 hours ago" is only useful the same day — past that, a plain date/weekday
   // reads better than stacking a date next to a redundant relative time.
@@ -108,37 +114,40 @@ export function MomentViewerDock({
     <View style={[styles.inner, { paddingBottom: bottomInset + 10 }]}>
       <GestureDetector gesture={dragHandle}>
         <View style={styles.handleTouchTarget} hitSlop={{ top: 8, bottom: 8, left: 24, right: 24 }}>
-          <View
-            style={[
-              styles.handle,
-              { backgroundColor: replyFocused ? colors.accent : chrome.border },
-            ]}
-          />
+          <View style={[styles.handle, { backgroundColor: replyFocused ? chrome.accent : chrome.border }]} />
         </View>
       </GestureDetector>
 
-      <View style={styles.authorRow}>
-        <View style={[styles.avatarRing, { borderColor: isMine ? '#e85d75' : '#5b8def' }]}>
-          <Avatar name={authorName} imageUrl={authorAvatar} size={36} />
+      {floating ? null : (
+        <View style={styles.authorRow}>
+          <View style={[styles.avatarRing, { borderColor: isMine ? '#e85d75' : '#5b8def' }]}>
+            <Avatar name={authorName} imageUrl={authorAvatar} size={36} />
+          </View>
+          <View style={styles.authorMeta}>
+            <Text style={[styles.authorName, { color: chrome.text }]}>{isMine ? 'You' : authorName}</Text>
+            <Text style={[styles.dateLine, { color: chrome.textSecondary }]}>{dateLine}</Text>
+          </View>
         </View>
-        <View style={styles.authorMeta}>
-          <Text style={[styles.authorName, { color: chrome.text }]}>{isMine ? 'You' : authorName}</Text>
-          <Text style={[styles.dateLine, { color: chrome.textSecondary }]}>{dateLine}</Text>
-        </View>
-      </View>
+      )}
 
       <View style={styles.historyBlock}>
         {/* <Text style={[styles.historyTitle, { color: chrome.textTertiary }]}>Reaction history</Text> */}
-        {reactionHistory.length === 0 ? (
-          // <Text style={[styles.historyEmpty, { color: chrome.textTertiary }]}>No reactions yet. Be the first!</Text>
-          null
-        ) : (
+        {reactionHistory.length ===
+        0 ? // <Text style={[styles.historyEmpty, { color: chrome.textTertiary }]}>No reactions yet. Be the first!</Text>
+        null : (
           <View style={styles.historyRow}>
             {reactionHistory.map((item, i) => {
               const chip = (
                 <>
                   <Text style={styles.historyEmoji}>{item.emoji}</Text>
-                  <Text style={[styles.historyWho, { color: chrome.textSecondary }, item.isYou && { color: colors.accent }]}>{item.label}</Text>
+                  <Text
+                    style={[
+                      styles.historyWho,
+                      { color: chrome.textSecondary },
+                      item.isYou && { color: colors.accent },
+                    ]}>
+                    {item.label}
+                  </Text>
                 </>
               );
 
@@ -147,7 +156,7 @@ export function MomentViewerDock({
                   <Pressable
                     key={`${item.emoji}-${item.label}-${i}`}
                     onPress={() => setPickerOpen(true)}
-                    style={[styles.historyChip, { backgroundColor: colors.accentSoft, borderColor: colors.accent }]}>
+                    style={[styles.historyChip, { backgroundColor: chrome.accentSoft, borderColor: colors.accent }]}>
                     {chip}
                   </Pressable>
                 );
@@ -166,12 +175,7 @@ export function MomentViewerDock({
       </View>
 
       {showPicker && (
-        <LocketReactionCluster
-          moment={moment}
-          width={CLUSTER_W}
-          onReact={handleReact}
-          variant="preview"
-        />
+        <LocketReactionCluster moment={moment} width={CLUSTER_W} onReact={handleReact} variant="preview" />
       )}
 
       <View style={styles.replyRow}>
@@ -181,7 +185,10 @@ export function MomentViewerDock({
           onChangeText={onReplyChange}
           placeholder={isMine ? 'Note to self…' : `Whisper to ${partnerName.split(' ')[0]}…`}
           placeholderTextColor={chrome.textTertiary}
-          style={[styles.replyInput, { backgroundColor: chrome.surfaceSoft, color: chrome.text, borderColor: chrome.border }]}
+          style={[
+            styles.replyInput,
+            { backgroundColor: chrome.surfaceSoft, color: chrome.text, borderColor: chrome.border },
+          ]}
           returnKeyType="send"
           onSubmitEditing={onSendReply}
           onFocus={() => setReplyFocused(true)}
@@ -191,15 +198,8 @@ export function MomentViewerDock({
         <Pressable
           onPress={onSendReply}
           disabled={!reply.trim() || sending}
-          style={[
-            styles.sendBtn,
-            { backgroundColor: reply.trim() && !sending ? colors.accent : chrome.surfaceSoft },
-          ]}>
-          <Icon
-            name="send"
-            size={18}
-            color={reply.trim() && !sending ? colors.onAccent : chrome.textTertiary}
-          />
+          style={[styles.sendBtn, { backgroundColor: reply.trim() && !sending ? colors.accent : chrome.surfaceSoft }]}>
+          <Icon name="send" size={18} color={reply.trim() && !sending ? colors.onAccent : chrome.textTertiary} />
         </Pressable>
       </View>
 
@@ -207,6 +207,9 @@ export function MomentViewerDock({
     </View>
   );
 
+  if (floating) {
+    return <Animated.View style={[styles.floating, dragStyle]}>{body}</Animated.View>;
+  }
   return (
     <Animated.View style={[styles.dockShadowWrap, dragStyle]}>
       <View style={[styles.dock, { backgroundColor: chrome.elevated, borderColor: chrome.border }]}>{body}</View>
@@ -230,6 +233,7 @@ const styles = StyleSheet.create({
     borderTopWidth: StyleSheet.hairlineWidth,
   },
   inner: { paddingHorizontal: 18, paddingTop: 6, gap: 12 },
+  floating: { zIndex: 6 },
   handleTouchTarget: { alignSelf: 'center', paddingVertical: 8 },
   handle: { width: 36, height: 4, borderRadius: 2 },
   authorRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },

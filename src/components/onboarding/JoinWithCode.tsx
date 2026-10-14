@@ -5,6 +5,7 @@ import { Alert, StyleSheet, TextInput } from 'react-native';
 
 import { OnboardingStepScreen } from '@/components/onboarding/OnboardingStepScreen';
 import { useTheme } from '@/hooks/useTheme';
+import { formatInviteCode, INVITE_CODE_LENGTH, normalizeInviteCode } from '@/lib/invite-code';
 import { joinRelationshipByInvite } from '@/lib/moments-api';
 import { markRelationshipOnboardingDone } from '@/lib/onboarding-storage';
 import { clearPendingInvite, getPendingInvite } from '@/lib/pending-links';
@@ -21,10 +22,13 @@ export function JoinWithCode({
   preview,
   onJoined,
   onBack,
+  inOnboarding = true,
 }: {
   preview: boolean;
   onJoined: () => void;
   onBack: () => void;
+  /** Shows the onboarding progress bar; off when opened from the app (You page, Home). */
+  inOnboarding?: boolean;
 }) {
   const { colors } = useTheme();
   const user = useAuthStore((s) => s.user);
@@ -35,7 +39,7 @@ export function JoinWithCode({
   // Filled in from your partner's invite link, if you opened one.
   useEffect(() => {
     void getPendingInvite().then((pending) => {
-      if (pending) setCode((c) => c || pending.slice(0, 6));
+      if (pending) setCode((c) => c || normalizeInviteCode(pending).slice(0, INVITE_CODE_LENGTH));
     });
   }, []);
   const [busy, setBusy] = useState(false);
@@ -45,12 +49,12 @@ export function JoinWithCode({
       onJoined();
       return;
     }
-    if (!user || code.trim().length < 6) return;
+    if (!user || code.length < INVITE_CODE_LENGTH) return;
     setBusy(true);
     try {
       const token = await getToken();
       if (!token) throw new Error('Not signed in');
-      const { relationship, partner } = await joinRelationshipByInvite(token, code.trim());
+      const { relationship, partner } = await joinRelationshipByInvite(token, code);
       await markRelationshipOnboardingDone(user.id);
       setRelationship(relationship);
       void trackForCouple(AnalyticsEvents.PARTNER_JOINED);
@@ -67,33 +71,26 @@ export function JoinWithCode({
 
   return (
     <OnboardingStepScreen
-      step="invite"
+      step={inOnboarding ? 'invite' : undefined}
       art={
         <LottieView source={require('../../../assets/lottie/join-connect.json')} autoPlay loop style={styles.lottie} />
       }
       title="Join your person’s space"
-      subtitle="Type the 6 character code they sent you. You’ll be connected straight away."
+      subtitle="Type the code they sent you. You’ll be connected straight away."
       primaryLabel="Join"
       onPrimary={() => void join()}
-      primaryDisabled={!preview && code.trim().length < 6}
+      primaryDisabled={!preview && code.length < INVITE_CODE_LENGTH}
       busy={busy}
       centered
       onBack={onBack}>
       <TextInput
-        value={code}
-        onChangeText={(t) =>
-          setCode(
-            t
-              .replace(/[^a-zA-Z0-9]/g, '')
-              .toUpperCase()
-              .slice(0, 6),
-          )
-        }
-        placeholder="K7Q2PX"
+        value={formatInviteCode(code)}
+        onChangeText={(t) => setCode(normalizeInviteCode(t).slice(0, INVITE_CODE_LENGTH))}
+        placeholder="ABCD-1234"
         placeholderTextColor={colors.textTertiary}
         autoCapitalize="characters"
         autoCorrect={false}
-        maxLength={6}
+        maxLength={INVITE_CODE_LENGTH + 1}
         returnKeyType="go"
         onSubmitEditing={() => void join()}
         style={[styles.input, { color: colors.text, borderColor: colors.text, backgroundColor: colors.surface }]}
@@ -111,6 +108,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontSize: 30,
     fontWeight: '900',
-    letterSpacing: 8,
+    letterSpacing: 4,
   },
 });

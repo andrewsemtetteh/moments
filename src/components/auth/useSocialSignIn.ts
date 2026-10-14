@@ -1,11 +1,12 @@
-import { useSSO } from '@clerk/expo/experimental';
-import * as Haptics from 'expo-haptics';
+import * as Haptics from '@/lib/haptics';
 import { useState } from 'react';
 import { Alert } from 'react-native';
 
 import { formatAuthError } from '@/lib/auth-errors';
 
-export type SocialProvider = 'apple' | 'google';
+import { useProviderSignIn, type SocialProvider } from './useProviderSignIn';
+
+export type { SocialProvider };
 
 /**
  * Apple / Google sign-in (one flow for signing up and signing in: Clerk makes
@@ -13,7 +14,8 @@ export type SocialProvider = 'apple' | 'google';
  * stops the spinner.
  */
 export function useSocialSignIn({ onSuccess, beforeStart }: { onSuccess: () => void; beforeStart?: () => Promise<void> | void }) {
-  const { startSSOFlow } = useSSO();
+  // Native Apple / Google where available, the browser flow otherwise.
+  const signInWith = useProviderSignIn();
   const [loadingProvider, setLoadingProvider] = useState<SocialProvider | null>(null);
 
   const start = async (provider: SocialProvider) => {
@@ -22,9 +24,7 @@ export function useSocialSignIn({ onSuccess, beforeStart }: { onSuccess: () => v
     try {
       void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       await beforeStart?.();
-      const { createdSessionId, signIn, signUp } = await startSSOFlow({
-        strategy: provider === 'apple' ? 'oauth_apple' : 'oauth_google',
-      });
+      const { createdSessionId, signIn, signUp } = await signInWith(provider);
       if (createdSessionId) {
         onSuccess();
         return;

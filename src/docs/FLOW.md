@@ -445,7 +445,7 @@ Shown when:
 
 Handled by:
 
-RevenueCat
+Superwall
 
 ---
 

@@ -84,7 +84,7 @@ Data is only shared:
 ## Service Providers
 
 * Supabase (database, auth, storage)
-* RevenueCat (subscriptions)
+* Superwall (subscriptions and paywalls)
 * PostHog (analytics)
 * Sentry (error tracking)
 * Anthropic (AI features via Claude API)

@@ -95,8 +95,9 @@ Adds:
 * The trial includes everything in Plus, AI included. AI has a monthly fair-use cap for every
   Plus couple, trial or paid (200 games / 400 questions a month), enforced on the server
   (`server/src/billing.ts`).
-* Win back: a one time discounted first year, from a RevenueCat offering named `winback`
-  (shown 3 days after the first paywall close; off until that offering exists).
+* Win back: a one time discounted first year, from a second yearly product `yearly_winback` whose
+  introductory offer is the discounted year (shown 3 days after the first paywall close; off until
+  that product exists in the store).
 * Source of truth in code: `src/constants/subscription.ts`. Store prices (local currency) replace
   the USD figures on the paywall.
 
@@ -122,16 +123,36 @@ Regional adjustments (optional later):
 
 Uses:
 
-RevenueCat
+Superwall (`expo-superwall`): StoreKit 2 / Google Play Billing, entitlements, remote paywalls and
+paywall experiments. No RevenueCat.
 
----
+## How it fits together
 
-## Why RevenueCat
+* App: `src/lib/purchases.ts`. Identifies each person with Superwall by a UUID derived from their
+  Clerk id (StoreKit only accepts a UUID as appAccountToken) and sets a `clerkUserId` attribute.
+  Prices, purchase and restore go through Superwall. Entitlement: `moments_unlimited`.
+* Paywall: ours (`PaywallScreen`) by default. `EXPO_PUBLIC_PAYWALL=superwall` shows the dashboard
+  paywall for the placement instead (`onboarding`, `settings`, `limit`, `moment`, `reminder`,
+  `winback`), and falls back to ours when Superwall shows nothing.
+* Server: `POST /webhooks/superwall` (`server/src/billing.ts`), signed with Svix. Maps the buyer back
+  to the couple and writes Plus onto the relationship, so both partners unlock.
+* Manage / cancel / refunds: the App Store or Play subscription page.
+* Superwall has no Expo Go module: billing runs in development and store builds only.
 
-* handles App Store + Play Store billing
-* unified subscription logic
-* entitlement management
-* reduces backend complexity
+## Setup checklist
+
+1. Stores: subscriptions `weekly` (7 day trial), `yearly` (7 day trial), `monthly` in one
+   subscription group; optional `yearly_winback`. Android ids in `PRODUCT_IDS` use
+   `subscriptionId:basePlanId`.
+2. Superwall: iOS + Android apps (bundle `com.vasemti.moments`), App Store Connect / Play service
+   credentials, the products, and an entitlement `moments_unlimited` on all of them.
+3. App env: `EXPO_PUBLIC_SUPERWALL_IOS_API_KEY`, `EXPO_PUBLIC_SUPERWALL_ANDROID_API_KEY`
+   (EAS environment variables for builds).
+4. Webhook: Superwall > Integrations > Webhooks, URL `https://<api>/webhooks/superwall`, then
+   `npx wrangler secret put SUPERWALL_WEBHOOK_SECRET` with its `whsec_…` secret.
+5. Database: `npx wrangler d1 migrations apply moments-db --remote` (0011 adds `billing_user_id`).
+6. Test with TestFlight / Play internal testing and sandbox accounts (StoreKit local test
+   transactions don't send webhooks).
 
 ---
 

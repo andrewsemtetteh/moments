@@ -1,12 +1,12 @@
-import * as Haptics from 'expo-haptics';
+import * as Haptics from '@/lib/haptics';
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { firstName } from '@/components/games/room-ui';
-import { TodaysPromptCard } from '@/components/home/TodaysPromptCard';
+import { PromptStatus, TodaysPromptCard } from '@/components/home/TodaysPromptCard';
 import { Icon } from '@/components/ui/Icon';
-import { Avatar } from '@/components/ui/primitives';
+import { useCardBorder } from '@/hooks/useCardBorder';
 import { useTheme } from '@/hooks/useTheme';
 import { partnerPromptResponse, promptPhase } from '@/lib/daily-prompt';
 import { useAuthStore, useRelationshipStore } from '@/stores';
@@ -31,6 +31,7 @@ interface ActivitiesIntroSectionProps {
  */
 export function ActivitiesIntroSection({ challenge, loading, onRetry, onOpenHistory }: ActivitiesIntroSectionProps) {
   const { colors } = useTheme();
+  const cardBorder = useCardBorder();
   const user = useAuthStore((s) => s.user);
   const relationship = useRelationshipStore((s) => s.relationship);
   const partner = useRelationshipStore((s) => s.partner);
@@ -48,7 +49,7 @@ export function ActivitiesIntroSection({ challenge, loading, onRetry, onOpenHist
   );
 
   if (challenge && showFullCard) {
-    return <TodaysPromptCard challenge={challenge} onOpenHistory={onOpenHistory} />;
+    return <TodaysPromptCard challenge={challenge} onOpenHistory={onOpenHistory} startComposing={answering} />;
   }
 
   const partnerAnswered = !!challenge && !!partnerPromptResponse(challenge, user?.id, relationship);
@@ -66,35 +67,28 @@ export function ActivitiesIntroSection({ challenge, loading, onRetry, onOpenHist
   };
 
   return (
-    <View
-      style={[
-        styles.card,
-        {
-          backgroundColor: colors.surfaceElevated,
-          borderColor: colors.border,
-          borderWidth: colors.boldBorder ? 2 : StyleSheet.hairlineWidth,
-        },
-      ]}>
+    <View style={[styles.card, { backgroundColor: colors.surface }, cardBorder]}>
       <View style={styles.head}>
-        <Text style={[styles.title, { color: colors.text }]}>Today’s Question</Text>
-        <Pressable onPress={onOpenHistory} hitSlop={10} accessibilityRole="button" accessibilityLabel="Past questions">
-          <Icon name="time" size={22} color={colors.accent} />
+        <Text style={[styles.title, { color: colors.textSecondary }]}>Today’s question</Text>
+        <Pressable
+          onPress={onOpenHistory}
+          hitSlop={10}
+          style={styles.historyBtn}
+          accessibilityRole="button"
+          accessibilityLabel="Past questions">
+          <Icon name="time" size={22} color={colors.text} />
         </Pressable>
       </View>
 
       <Text style={[styles.prompt, { color: colors.text }]}>{challenge?.prompt ?? PREVIEW_QUESTION}</Text>
 
-      <View style={[styles.statusRow, { backgroundColor: colors.background, borderColor: colors.border }]}>
-        <View style={styles.avatars}>
-          <View style={[styles.avatarRing, { borderColor: colors.background }]}>
-            <Avatar name={partner?.name} imageUrl={partner?.avatar_url} size={28} />
-          </View>
-          <View style={[styles.slot, { borderColor: colors.textTertiary, backgroundColor: colors.background }]} />
-        </View>
+      {challenge ? (
+        <PromptStatus challenge={challenge} />
+      ) : (
         <Text style={[styles.status, { color: colors.textSecondary }]} numberOfLines={2}>
           {status}
         </Text>
-      </View>
+      )}
 
       <Pressable
         onPress={answer}
@@ -113,22 +107,12 @@ export function ActivitiesIntroSection({ challenge, loading, onRetry, onOpenHist
 }
 
 const styles = StyleSheet.create({
-  card: { borderRadius: 24, padding: 18, gap: 12 },
+  // Same as TodaysPromptCard (and Home's other cards: 14pt grey label, 22 radius, 16 padding).
+  card: { borderRadius: 22, padding: 16, gap: 12 },
   head: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  title: { fontSize: 21, fontWeight: '800', letterSpacing: -0.4 },
-  prompt: { fontSize: 17, fontWeight: '600', lineHeight: 24 },
-  statusRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    borderRadius: 16,
-    borderWidth: StyleSheet.hairlineWidth,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-  },
-  avatars: { flexDirection: 'row', alignItems: 'center' },
-  avatarRing: { borderRadius: 16, borderWidth: 2 },
-  slot: { width: 28, height: 28, borderRadius: 14, borderWidth: 2, borderStyle: 'dashed', marginLeft: -9 },
+  title: { fontSize: 14, fontWeight: '800' },
+  historyBtn: { width: 36, height: 36, marginRight: -8, marginVertical: -8, alignItems: 'center', justifyContent: 'center' },
+  prompt: { fontSize: 19, fontWeight: '800', lineHeight: 25, letterSpacing: -0.3 },
   status: { flex: 1, fontSize: 13, fontWeight: '600', lineHeight: 18 },
   answer: { height: 50, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
   answerText: { fontSize: 16, fontWeight: '800' },

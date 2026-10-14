@@ -29,6 +29,7 @@ const RELATIONSHIP_TABLES = [
   'ai_usage',
   'ai_history',
   'content_cursor',
+  'couple_docs',
 ] as const;
 
 /** Rows that belong to the person themselves, wherever they are. */

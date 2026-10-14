@@ -604,6 +604,29 @@ function pushTitle(type: string): string {
   }
 }
 
+/** Which Settings > Notifications switch covers each type. Keep in sync with src/lib/notification-prefs.ts. */
+const PUSH_CATEGORY: Record<string, string> = {
+  message: 'messages',
+  message_new: 'messages',
+  moment: 'moments',
+  mood: 'moods',
+  mood_update: 'moods',
+  challenge: 'dailyQuestion',
+  streak: 'streaks',
+  game_invite: 'games',
+  game_turn: 'games',
+};
+
+function pushAllowed(prefsRaw: string | null, type: string): boolean {
+  const category = PUSH_CATEGORY[type];
+  if (!category || !prefsRaw) return true;
+  try {
+    return (JSON.parse(prefsRaw) as Record<string, unknown>)[category] !== false;
+  } catch {
+    return true;
+  }
+}
+
 async function sendPush(env: Env, userId: string, body: Body, limit: RateLimiter) {
   try {
     await limit(env, `push:${userId}`, 120, 3600);
@@ -627,15 +650,18 @@ async function sendPush(env: Env, userId: string, body: Body, limit: RateLimiter
 
   const ids = [...new Set(rows.map((r) => r.user_id))];
   const { results: users } = await env.DB.prepare(
-    `SELECT id, expo_push_token FROM users WHERE id IN (${ids.map((_, i) => `?${i + 1}`).join(', ')})`,
+    `SELECT id, expo_push_token, notification_prefs FROM users WHERE id IN (${ids.map((_, i) => `?${i + 1}`).join(', ')})`,
   )
     .bind(...ids)
-    .all<{ id: string; expo_push_token: string | null }>();
+    .all<{ id: string; expo_push_token: string | null; notification_prefs: string | null }>();
   const tokens = new Map(users.filter((u) => u.expo_push_token).map((u) => [u.id, u.expo_push_token as string]));
+  const prefs = new Map(users.map((u) => [u.id, u.notification_prefs]));
 
   const messages: Record<string, unknown>[] = [];
   const unsent: string[] = [];
   for (const row of rows) {
+    // Turned off in Settings: stays in the in-app list, no push (and stays marked dispatched).
+    if (!pushAllowed(prefs.get(row.user_id) ?? null, row.type)) continue;
     const token = tokens.get(row.user_id);
     if (!token) {
       unsent.push(row.id);

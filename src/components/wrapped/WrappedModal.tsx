@@ -1,10 +1,10 @@
 import { useQuery } from '@tanstack/react-query';
 import { differenceInCalendarDays, format, startOfYear } from 'date-fns';
-import * as Haptics from 'expo-haptics';
+import * as Haptics from '@/lib/haptics';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
-import { useMemo, useState, type ReactNode } from 'react';
+import { useRef, useMemo, useState, type ReactNode, type RefObject } from 'react';
 import { Dimensions, Modal, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import Animated, {
@@ -20,7 +20,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { StreakFlame } from '@/components/home/StreakFlame';
+import { StickerFlame } from '@/components/home/StickerFlame';
 import { ShareBrand } from '@/components/share/ShareBrand';
 import { ShareCardModal } from '@/components/share/ShareCardModal';
 import { SHARE_CARD_H, SHARE_CARD_W } from '@/components/share/DaysTogetherCard';
@@ -38,9 +38,12 @@ import { useAuthStore, useRelationshipStore, useUIStore } from '@/stores';
 import { usePlayProgressStore } from '@/stores/play-progress-store';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
-const WHITE = '#FFFFFF';
-const SOFT = 'rgba(255,255,255,0.8)';
-const FAINT = 'rgba(255,255,255,0.28)';
+/** Sticker style, like the streak and anniversary designs: black ink on bright pastel. */
+const INK = '#000000';
+const SOFT = 'rgba(0,0,0,0.68)';
+const FAINT = 'rgba(0,0,0,0.14)';
+const PAPER = '#FFFFFF';
+/** One pastel per story, in turn. */
 const MONTHS = ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'];
 const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
@@ -129,7 +132,7 @@ function WrappedStory({ onClose }: { onClose: () => void }) {
     // ── Intro
     list.push({
       key: 'intro',
-      colors: ['#2B1B3D', '#6A2C5B', '#C9687A'],
+      colors: ['#F1C6CE', '#EAA9DA'],
       body: (
         <>
           <Eyebrow>{relationship?.relationship_name?.trim() || 'Moments'} · Wrapped</Eyebrow>
@@ -148,7 +151,7 @@ function WrappedStory({ onClose }: { onClose: () => void }) {
     const days = Math.max(1, differenceInCalendarDays(now, from) + 1);
     list.push({
       key: 'days',
-      colors: ['#0F2027', '#203A43', '#2C5364'],
+      colors: ['#C6E4F1', '#A9D7EA'],
       body: (
         <>
           <Eyebrow>Days together this year</Eyebrow>
@@ -166,7 +169,7 @@ function WrappedStory({ onClose }: { onClose: () => void }) {
     const mine = stats.filter((m) => m.user_id === user?.id).length;
     list.push({
       key: 'moments',
-      colors: ['#3A1C71', '#B4466F', '#D9714F'],
+      colors: ['#F2D0C4', '#C0A9EA'],
       body: (
         <>
           <Eyebrow>Moments shared</Eyebrow>
@@ -195,7 +198,7 @@ function WrappedStory({ onClose }: { onClose: () => void }) {
       const firstBy = stats[0].user_id === user?.id ? 'You' : them;
       list.push({
         key: 'first',
-        colors: ['#232526', '#414345', '#6D6875'],
+        colors: ['#D6C6F1', '#C2A9EA'],
         body: (
           <>
             <Eyebrow>Where it started</Eyebrow>
@@ -215,7 +218,7 @@ function WrappedStory({ onClose }: { onClose: () => void }) {
       if (photos.length >= 3) {
         list.push({
           key: 'photos',
-          colors: ['#4B134F', '#C94B4B'],
+          colors: ['#F1C6C6', '#E6A9EA'],
           body: (
             <>
               <Eyebrow>Some of your moments</Eyebrow>
@@ -240,7 +243,7 @@ function WrappedStory({ onClose }: { onClose: () => void }) {
       const topMonth = perMonth.indexOf(Math.max(...perMonth));
       list.push({
         key: 'month',
-        colors: ['#1D2B64', '#4A569D', '#9B5C8F'],
+        colors: ['#C6CEF1', '#A9B3EA'],
         body: (
           <>
             <Eyebrow>Your biggest month</Eyebrow>
@@ -259,7 +262,7 @@ function WrappedStory({ onClose }: { onClose: () => void }) {
       const topDay = perDay.indexOf(Math.max(...perDay));
       list.push({
         key: 'weekday',
-        colors: ['#0B486B', '#3B8686', '#4E8F72'],
+        colors: ['#BEE3F8', '#A9EAEA'],
         body: (
           <>
             <Eyebrow>Your favourite day</Eyebrow>
@@ -281,7 +284,7 @@ function WrappedStory({ onClose }: { onClose: () => void }) {
       const morning = perHour.slice(5, 11).reduce((a, b) => a + b, 0) / total;
       list.push({
         key: 'hour',
-        colors: night > 0.4 ? ['#0F0C29', '#302B63', '#24243E'] : ['#F2994A', '#F2C94C'],
+        colors: night > 0.4 ? ['#CAC6F1', '#AFA9EA'] : ['#FAD9BC', '#F8E19B'],
         body: (
           <>
             <IconBadge icon={night > 0.4 ? 'moon' : 'sunny'} />
@@ -305,7 +308,7 @@ function WrappedStory({ onClose }: { onClose: () => void }) {
       const otherN = total - photosN - videosN - voiceN;
       list.push({
         key: 'types',
-        colors: ['#614385', '#516395'],
+        colors: ['#D9C6F1', '#A9BAEA'],
         body: (
           <>
             <Eyebrow>What you shared</Eyebrow>
@@ -325,11 +328,11 @@ function WrappedStory({ onClose }: { onClose: () => void }) {
     // ── Streak
     list.push({
       key: 'streak',
-      colors: ['#1A0B05', '#7A2A0A', '#E0300B'],
+      colors: ['#FCC6BB', '#F7B69C'],
       body: (
         <>
           <Animated.View entering={FadeIn.duration(500)}>
-            <StreakFlame size={120} tone={longest > 0 ? 'active' : 'idle'} effect={longest > 0 ? 'pop' : 'none'} />
+            <StickerFlame size={120} face={longest > 0} animated={longest > 0} />
           </Animated.View>
           <Eyebrow>Longest streak</Eyebrow>
           <Big>{longest}</Big>
@@ -353,7 +356,7 @@ function WrappedStory({ onClose }: { onClose: () => void }) {
     {
       list.push({
         key: 'mood',
-        colors: ['#134E5E', '#2F7A6B', '#3F8458'],
+        colors: ['#C4E9F3', '#A9EADD'],
         body: (
           <>
             <Eyebrow>How you felt this year</Eyebrow>
@@ -385,7 +388,7 @@ function WrappedStory({ onClose }: { onClose: () => void }) {
     if (pick) {
       list.push({
         key: 'question',
-        colors: ['#283C86', '#45A247'],
+        colors: ['#C6CFF1', '#A9EAAB'],
         body: (
           <>
             <IconBadge icon="question" />
@@ -403,7 +406,7 @@ function WrappedStory({ onClose }: { onClose: () => void }) {
     } else {
       list.push({
         key: 'question',
-        colors: ['#283C86', '#45A247'],
+        colors: ['#C6CFF1', '#A9EAAB'],
         body: (
           <>
             <IconBadge icon="question" />
@@ -421,7 +424,7 @@ function WrappedStory({ onClose }: { onClose: () => void }) {
       const latest = [...yearMemories].sort((a, b) => +new Date(b.date_time) - +new Date(a.date_time))[0];
       list.push({
         key: 'memories',
-        colors: ['#42275A', '#734B6D', '#B06AB3'],
+        colors: ['#EFC6F1', '#CBA9EA'],
         body: (
           <>
             <IconBadge icon="albums" />
@@ -458,7 +461,7 @@ function WrappedStory({ onClose }: { onClose: () => void }) {
       const done = plans.filter((p) => isPlanCompleted(p, now)).length;
       list.push({
         key: 'plans',
-        colors: ['#0B5E57', '#11877D', '#23864D'],
+        colors: ['#C0F7F2', '#9FF4ED'],
         body: (
           <>
             <IconBadge icon="calendar" />
@@ -489,7 +492,7 @@ function WrappedStory({ onClose }: { onClose: () => void }) {
       const info = levelInfo(progress.xp);
       list.push({
         key: 'play',
-        colors: ['#6C4DFF', '#B14DFF'],
+        colors: ['#C4B8FF', '#D094FF'],
         body: (
           <>
             <IconBadge icon="gamepad" />
@@ -524,7 +527,7 @@ function WrappedStory({ onClose }: { onClose: () => void }) {
     if (highlights.length >= 1) {
       list.push({
         key: 'highlights',
-        colors: ['#8E2DE2', '#4A00E0'],
+        colors: ['#CFB8FF', '#CCA1F2'],
         body: (
           <>
             <IconBadge icon="target" />
@@ -541,7 +544,7 @@ function WrappedStory({ onClose }: { onClose: () => void }) {
     {
       list.push({
         key: 'badges',
-        colors: ['#6E2A00', '#B5530A', '#CC7A12'],
+        colors: ['#F9DFBD', '#F9C29A'],
         body: (
           <>
             <IconBadge icon="star" />
@@ -558,7 +561,7 @@ function WrappedStory({ onClose }: { onClose: () => void }) {
             <Animated.View entering={FadeInDown.delay(260).duration(420)} style={styles.badgeGrid}>
               {earned.slice(0, 6).map((b) => (
                 <View key={b.id} style={styles.badgeChip}>
-                  <Icon name={b.icon} size={16} color={WHITE} />
+                  <Icon name={b.icon} size={16} color={INK} />
                   <Text style={styles.badgeChipText} numberOfLines={1}>
                     {b.title}
                   </Text>
@@ -662,17 +665,17 @@ function WrappedStory({ onClose }: { onClose: () => void }) {
     const { fits: _fits, ...type } = TYPES.find((t) => t.fits)!;
     list.push({
       key: 'type',
-      colors: ['#DA4453', '#89216B'],
+      colors: ['#F3C3C8', '#EAA9D7'],
       body: (
         <>
           <Eyebrow>Your couple type</Eyebrow>
           <Animated.View entering={FadeIn.delay(80).duration(500)} style={styles.badge}>
-            <Icon name={type.icon} size={88} color={WHITE} filled />
+            <Icon name={type.icon} size={88} color={INK} filled />
           </Animated.View>
           <Title>{type.name}</Title>
           <Body>{type.line}</Body>
           <Animated.View entering={FadeInDown.delay(300).duration(420)} style={styles.whyPill}>
-            <Icon name="info" size={15} color={WHITE} />
+            <Icon name="info" size={15} color={INK} />
             <Text style={styles.whyText}>{type.why}</Text>
           </Animated.View>
         </>
@@ -684,7 +687,7 @@ function WrappedStory({ onClose }: { onClose: () => void }) {
     const summary = `${days} days together · ${total} moments · ${longest} day best streak · ${type.name}`;
     list.push({
       key: 'outro',
-      colors: ['#2B1B3D', '#6A2C5B', '#C9687A'],
+      colors: ['#F1C6CE', '#EAA9DA'],
       body: (
         <>
           <Eyebrow>That’s a wrap</Eyebrow>
@@ -720,6 +723,8 @@ function WrappedStory({ onClose }: { onClose: () => void }) {
 
   const [index, setIndex] = useState(0);
   const [sharing, setSharing] = useState(false);
+  /** The full-size story inside the share preview: captured at full resolution. */
+  const storyShotRef = useRef<View>(null);
 
   /**
    * Share what's on screen: each story becomes a story-shaped image (9:16,
@@ -776,7 +781,7 @@ function WrappedStory({ onClose }: { onClose: () => void }) {
 
   return (
     <View style={StyleSheet.absoluteFill}>
-      <StatusBar style="light" />
+      <StatusBar style="dark" />
       <Animated.View style={[StyleSheet.absoluteFill, styles.backdrop, backdropStyle]} />
       <GestureDetector gesture={pan}>
         <Animated.View style={[StyleSheet.absoluteFill, styles.page, pageStyle]}>
@@ -819,7 +824,7 @@ function WrappedStory({ onClose }: { onClose: () => void }) {
                 style={styles.closeBtn}
                 accessibilityRole="button"
                 accessibilityLabel="Close">
-                <Icon name="close" size={24} color={WHITE} />
+                <Icon name="close" size={24} color={INK} />
               </Pressable>
             </View>
           </View>
@@ -831,7 +836,7 @@ function WrappedStory({ onClose }: { onClose: () => void }) {
               accessibilityRole="button"
               accessibilityLabel={slide.key === 'outro' ? 'Share our year' : 'Share this story'}
               style={({ pressed }) => [styles.shareBtn, pressed && styles.pressed]}>
-              <Icon name="share" size={18} color="#2B1B3D" />
+              <Icon name="share" size={18} color={PAPER} />
               <Text style={styles.shareText}>{slide.key === 'outro' ? 'Share our year' : 'Share'}</Text>
             </Pressable>
             {slide.key === 'outro' ? (
@@ -843,7 +848,12 @@ function WrappedStory({ onClose }: { onClose: () => void }) {
         </Animated.View>
       </GestureDetector>
 
-      <ShareCardModal visible={sharing} onClose={() => setSharing(false)} title={`Our ${year} Wrapped`} inline>
+      <ShareCardModal
+        visible={sharing}
+        onClose={() => setSharing(false)}
+        title={`Our ${year} Wrapped`}
+        inline
+        captureFrom={slide.key === 'outro' ? undefined : storyShotRef}>
         {slide.key === 'outro' ? (
           <WrappedShareCard
             year={year}
@@ -853,7 +863,7 @@ function WrappedStory({ onClose }: { onClose: () => void }) {
             colors={slide.colors}
           />
         ) : (
-          <StoryShareCard slide={slide} year={year} />
+          <StoryShareCard slide={slide} year={year} shotRef={storyShotRef} />
         )}
       </ShareCardModal>
     </View>
@@ -866,7 +876,7 @@ type CoupleType = { icon: IconName; name: string; line: string; why: string };
  * One story as a shareable image: the full screen story drawn at its real size, then scaled
  * down into the same short 4:5 card as the summary; anything too tall shrinks to fit.
  */
-function StoryShareCard({ slide, year }: { slide: Slide; year: number }) {
+function StoryShareCard({ slide, year, shotRef }: { slide: Slide; year: number; shotRef: RefObject<View | null> }) {
   const { width: W, height: H } = useWindowDimensions();
   // Same 4:5 shape as the summary, as large as the preview allows (room is left for the buttons),
   // so the saved image is big and sharp.
@@ -876,8 +886,21 @@ function StoryShareCard({ slide, year }: { slide: Slide; year: number }) {
   const innerH = cardH / k;
   return (
     <LayoutAnimationConfig skipEntering>
-      <View style={{ width: cardW, height: cardH, overflow: 'hidden' }}>
-        <View style={{ width: W, height: innerH, transformOrigin: 'top left', transform: [{ scale: k }] }}>
+      <View style={[styles.storyClip, { width: cardW, height: cardH }]}>
+        {/* Drawn full size (that's what's captured, sharp), shrunk only to fit the preview. */}
+        <View
+          ref={shotRef}
+          collapsable={false}
+          style={{
+            width: W,
+            height: innerH,
+            transformOrigin: 'top left',
+            transform: [{ scale: k }],
+            overflow: 'hidden',
+            borderRadius: 24 / k,
+            borderWidth: 3 / k,
+            borderColor: INK,
+          }}>
           <LinearGradient
             colors={slide.colors}
             start={{ x: 0, y: 0 }}
@@ -924,7 +947,7 @@ function StatRows({ rows }: { rows: StatRow[] }) {
       {shown.map((t, i) => (
         <Animated.View key={t.label} entering={FadeInDown.delay(200 + i * 100).duration(420)} style={styles.typeRow}>
           <View style={styles.typeIcon}>
-            <Icon name={t.icon} size={22} color={WHITE} />
+            <Icon name={t.icon} size={22} color={INK} />
           </View>
           <Text style={styles.typeLabel}>{t.label}</Text>
           <Text style={styles.typeCount}>{t.n.toLocaleString()}</Text>
@@ -938,7 +961,7 @@ function StatRows({ rows }: { rows: StatRow[] }) {
 function IconBadge({ icon }: { icon: IconName }) {
   return (
     <Animated.View entering={FadeIn.duration(450)} style={styles.iconBadge}>
-      <Icon name={icon} size={34} color={WHITE} />
+      <Icon name={icon} size={34} color={INK} />
     </Animated.View>
   );
 }
@@ -1028,7 +1051,7 @@ function Bars({ values, labels, highlight }: { values: number[]; labels: string[
             <View
               style={[
                 styles.chartBar,
-                { height: `${Math.max(6, (v / max) * 100)}%`, backgroundColor: i === highlight ? WHITE : FAINT },
+                { height: `${Math.max(6, (v / max) * 100)}%`, backgroundColor: i === highlight ? INK : FAINT },
               ]}
             />
           </View>
@@ -1062,7 +1085,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 7,
     borderRadius: 999,
-    backgroundColor: 'rgba(255,255,255,0.14)',
+    backgroundColor: PAPER,
+    borderWidth: 2,
+    borderColor: INK,
   },
   whyText: { color: SOFT, fontSize: 14, fontWeight: '700', textAlign: 'center' },
   // Matches the summary card's top row (drawn at phone size, then scaled down with the story).
@@ -1072,14 +1097,15 @@ const styles = StyleSheet.create({
     right: 28,
     top: 34,
     textAlign: 'center',
-    color: 'rgba(255,255,255,0.85)',
+    color: INK,
     fontSize: 18,
     fontWeight: '900',
     letterSpacing: 0.3,
   },
   storyFoot: { position: 'absolute', left: 0, right: 0, bottom: 34, alignItems: 'center' },
   storyBrand: { alignSelf: 'center' },
-  scrim: { backgroundColor: 'rgba(0,0,0,0.14)' },
+  scrim: { backgroundColor: 'transparent' },
+  storyClip: { overflow: 'hidden', borderRadius: 24 },
   fitBox: { flex: 1, alignSelf: 'stretch', alignItems: 'center', justifyContent: 'center' },
   fitInner: { width: '100%', alignItems: 'center', gap: 12 },
   backdrop: { backgroundColor: 'rgba(0,0,0,0.5)' },
@@ -1089,25 +1115,33 @@ const styles = StyleSheet.create({
   top: { paddingHorizontal: 12, gap: 10 },
   bars: { flexDirection: 'row', gap: 3 },
   bar: { flex: 1, height: 3, borderRadius: 2, backgroundColor: FAINT, overflow: 'hidden' },
-  barFill: { height: '100%', backgroundColor: WHITE },
+  barFill: { height: '100%', backgroundColor: INK },
   topRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 4 },
-  topLabel: { color: WHITE, fontSize: 15, fontWeight: '800' },
+  topLabel: { color: INK, fontSize: 15, fontWeight: '800' },
   closeBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center', marginRight: -8 },
 
   // Every card: one centred column, the same width, the same rhythm.
   content: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 28, gap: 12 },
   eyebrow: { color: SOFT, fontSize: 16, fontWeight: '800', textAlign: 'center' },
-  big: { color: WHITE, fontSize: 108, fontWeight: '900', letterSpacing: -4, lineHeight: 114, textAlign: 'center' },
-  title: { color: WHITE, fontSize: 34, fontWeight: '900', letterSpacing: -0.8, lineHeight: 40, textAlign: 'center' },
+  big: { color: INK, fontSize: 108, fontWeight: '900', letterSpacing: -4, lineHeight: 114, textAlign: 'center' },
+  title: { color: INK, fontSize: 34, fontWeight: '900', letterSpacing: -0.8, lineHeight: 40, textAlign: 'center' },
   titleSmall: { fontSize: 26, lineHeight: 32 },
   body: { color: SOFT, fontSize: 18, fontWeight: '600', lineHeight: 25, textAlign: 'center', maxWidth: CONTENT_W },
-  hint: { color: 'rgba(255,255,255,0.6)', fontSize: 14, fontWeight: '700', marginTop: 28 },
+  hint: { color: 'rgba(0,0,0,0.5)', fontSize: 14, fontWeight: '700', marginTop: 28 },
 
   split: { width: CONTENT_W, gap: 8, marginTop: 8 },
-  splitTrack: { height: 12, borderRadius: 6, flexDirection: 'row', overflow: 'hidden', backgroundColor: FAINT },
-  splitLeft: { backgroundColor: WHITE, borderRadius: 6 },
+  splitTrack: {
+    height: 16,
+    borderRadius: 8,
+    flexDirection: 'row',
+    overflow: 'hidden',
+    backgroundColor: PAPER,
+    borderWidth: 2,
+    borderColor: INK,
+  },
+  splitLeft: { backgroundColor: INK },
   splitLabels: { flexDirection: 'row', justifyContent: 'space-between' },
-  splitText: { color: WHITE, fontSize: 15, fontWeight: '800' },
+  splitText: { color: INK, fontSize: 15, fontWeight: '800' },
 
   collage: {
     width: CONTENT_W,
@@ -1117,14 +1151,22 @@ const styles = StyleSheet.create({
     gap: 12,
     marginTop: 12,
   },
-  collageTile: { width: 100, height: 128, borderRadius: 16, borderWidth: 3, borderColor: WHITE, overflow: 'hidden' },
+  collageTile: {
+    width: 100,
+    height: 128,
+    borderRadius: 16,
+    borderWidth: 3,
+    borderColor: INK,
+    overflow: 'hidden',
+    backgroundColor: PAPER,
+  },
 
   chart: { width: CONTENT_W, height: 150, flexDirection: 'row', alignItems: 'flex-end', gap: 6, marginTop: 18 },
   chartCol: { flex: 1, height: '100%', alignItems: 'center', gap: 6 },
   chartTrack: { flex: 1, width: '100%', justifyContent: 'flex-end' },
-  chartBar: { width: '100%', borderRadius: 6 },
+  chartBar: { width: '100%', borderRadius: 6, borderWidth: 2, borderColor: INK },
   chartLabel: { color: SOFT, fontSize: 12, fontWeight: '700' },
-  chartLabelOn: { color: WHITE, fontWeight: '900' },
+  chartLabelOn: { color: INK, fontWeight: '900' },
 
   typeList: { width: CONTENT_W, gap: 10, marginTop: 8 },
   typeRow: {
@@ -1134,31 +1176,35 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     height: 64,
     borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.14)',
+    backgroundColor: PAPER,
+    borderWidth: 2,
+    borderColor: INK,
   },
   typeIcon: {
     width: 40,
     height: 40,
     borderRadius: 12,
-    backgroundColor: 'rgba(255,255,255,0.18)',
+    backgroundColor: '#FFE7A0',
+    borderWidth: 2,
+    borderColor: INK,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  typeLabel: { flex: 1, color: WHITE, fontSize: 17, fontWeight: '700' },
-  typeCount: { color: WHITE, fontSize: 24, fontWeight: '900' },
+  typeLabel: { flex: 1, color: INK, fontSize: 17, fontWeight: '700' },
+  typeCount: { color: INK, fontSize: 24, fontWeight: '900' },
 
   answers: { width: CONTENT_W, gap: 10, marginTop: 8 },
-  answer: { borderRadius: 18, padding: 14, backgroundColor: 'rgba(255,255,255,0.14)', gap: 4 },
+  answer: { borderRadius: 18, padding: 14, gap: 4, backgroundColor: PAPER, borderWidth: 2, borderColor: INK },
   answerWho: { color: SOFT, fontSize: 13, fontWeight: '800' },
-  answerText: { color: WHITE, fontSize: 16, fontWeight: '600', lineHeight: 22 },
+  answerText: { color: INK, fontSize: 16, fontWeight: '600', lineHeight: 22 },
 
   badge: {
     width: 168,
     height: 168,
     borderRadius: 84,
-    backgroundColor: 'rgba(255,255,255,0.16)',
+    backgroundColor: '#FFE7A0',
     borderWidth: 3,
-    borderColor: 'rgba(255,255,255,0.5)',
+    borderColor: INK,
     alignItems: 'center',
     justifyContent: 'center',
     marginVertical: 6,
@@ -1178,7 +1224,9 @@ const styles = StyleSheet.create({
     width: 72,
     height: 72,
     borderRadius: 36,
-    backgroundColor: 'rgba(255,255,255,0.16)',
+    backgroundColor: PAPER,
+    borderWidth: 2,
+    borderColor: INK,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 4,
@@ -1190,11 +1238,13 @@ const styles = StyleSheet.create({
     paddingVertical: 18,
     alignItems: 'center',
     gap: 4,
-    backgroundColor: 'rgba(255,255,255,0.14)',
+    backgroundColor: PAPER,
+    borderWidth: 2,
+    borderColor: INK,
   },
   moodEmoji: { fontSize: 56, lineHeight: 66 },
   moodWho: { color: SOFT, fontSize: 13, fontWeight: '800' },
-  moodName: { color: WHITE, fontSize: 18, fontWeight: '900' },
+  moodName: { color: INK, fontSize: 18, fontWeight: '900' },
   badgeGrid: {
     width: CONTENT_W,
     flexDirection: 'row',
@@ -1210,20 +1260,22 @@ const styles = StyleSheet.create({
     height: 38,
     paddingHorizontal: 12,
     borderRadius: 19,
-    backgroundColor: 'rgba(255,255,255,0.22)',
+    backgroundColor: PAPER,
+    borderWidth: 2,
+    borderColor: INK,
   },
-  badgeChipText: { color: WHITE, fontSize: 14, fontWeight: '800', maxWidth: 120 },
+  badgeChipText: { color: INK, fontSize: 14, fontWeight: '800', maxWidth: 120 },
   shareBtn: {
     height: 48,
     paddingHorizontal: 22,
     borderRadius: 24,
-    backgroundColor: WHITE,
+    backgroundColor: INK,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
   },
-  shareText: { color: '#2B1B3D', fontSize: 16, fontWeight: '900' },
+  shareText: { color: PAPER, fontSize: 16, fontWeight: '900' },
   doneBtn: { height: 40, justifyContent: 'center', paddingHorizontal: 8 },
-  doneText: { color: WHITE, fontSize: 16, fontWeight: '800' },
+  doneText: { color: INK, fontSize: 16, fontWeight: '800' },
   pressed: { opacity: 0.85 },
 });

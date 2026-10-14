@@ -29,6 +29,7 @@ export const JSON_COLUMNS = new Set([
   'mood_summary',
   'highlights',
   'state',
+  'notification_prefs',
 ]);
 
 /** SQLite row -> the JSON shape the app's Postgres-era types expect (booleans, parsed JSON). */

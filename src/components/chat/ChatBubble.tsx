@@ -1,6 +1,7 @@
 import { Image } from 'expo-image';
 import { format } from 'date-fns';
-import * as Haptics from 'expo-haptics';
+import * as Haptics from '@/lib/haptics';
+import { useEffect } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
@@ -8,7 +9,9 @@ import Animated, {
   runOnJS,
   useAnimatedStyle,
   useSharedValue,
+  withSequence,
   withSpring,
+  withTiming,
 } from 'react-native-reanimated';
 
 import { ChatAttachmentCard } from '@/components/chat/ChatAttachmentCard';
@@ -16,6 +19,7 @@ import { ChatVideoMessage } from '@/components/chat/ChatVideoMessage';
 import { MomentReplyCard } from '@/components/chat/MomentReplyCard';
 import { VoiceNotePlayer } from '@/components/chat/VoiceNotePlayer';
 import { Icon } from '@/components/ui/Icon';
+import { colorWithAlpha } from '@/components/ui/primitives';
 import { useTheme } from '@/hooks/useTheme';
 import { parseAttachment } from '@/lib/chat-attachments';
 import { getMessagePreviewText } from '@/lib/message-preview';
@@ -32,6 +36,8 @@ interface ChatBubbleProps {
   partner?: UserProfile | null;
   onLongPress?: (message: Message) => void;
   onSwipeReply?: (message: Message) => void;
+  /** Just jumped to (pinned bar, reply quote): the row flashes so the eye finds it. */
+  highlighted?: boolean;
 }
 
 export function ChatBubble({
@@ -40,6 +46,7 @@ export function ChatBubble({
   partner,
   onLongPress,
   onSwipeReply,
+  highlighted = false,
 }: ChatBubbleProps) {
   const { colors } = useTheme();
   const user = useAuthStore((s) => s.user);
@@ -94,6 +101,18 @@ export function ChatBubble({
     transform: [{ translateX: translateX.value }],
   }));
 
+  // Fades in, holds, fades out: the WhatsApp / Telegram "here it is" flash.
+  const flash = useSharedValue(0);
+  useEffect(() => {
+    if (!highlighted) return;
+    flash.value = withSequence(
+      withTiming(1, { duration: 220 }),
+      withTiming(1, { duration: 700 }),
+      withTiming(0, { duration: 600 }),
+    );
+  }, [highlighted, flash]);
+  const flashStyle = useAnimatedStyle(() => ({ opacity: flash.value }));
+
   const replyHintStyle = useAnimatedStyle(() => ({
     opacity: interpolate(-translateX.value, [0, 28, 72], [0, 0.5, 1]),
     transform: [{ scale: interpolate(-translateX.value, [0, 72], [0.6, 1]) }],
@@ -101,6 +120,10 @@ export function ChatBubble({
 
   return (
     <View style={[styles.row, isSelf ? styles.rowSelf : styles.rowPartner, isBoxyContent && styles.rowBoxy]}>
+      <Animated.View
+        pointerEvents="none"
+        style={[styles.flash, { backgroundColor: colorWithAlpha(colors.accent, 0.2) }, flashStyle]}
+      />
       <Animated.View
         style={[styles.replyHint, replyHintStyle]}>
         <Icon name="reply" size={20} color={colors.accent} />
@@ -181,6 +204,7 @@ export function ChatBubble({
 
             <View style={styles.meta}>
               <Text style={[styles.time, { color: timeColor }]}>
+                {message.edited_at && !message.deleted_for_all ? 'Edited · ' : ''}
                 {format(new Date(message.created_at), 'h:mm a')}
               </Text>
               {isSelf && isPending ? (
@@ -219,6 +243,7 @@ export function ChatBubble({
 
 const styles = StyleSheet.create({
   row: { marginBottom: 4, paddingHorizontal: 6, position: 'relative' },
+  flash: { position: 'absolute', top: -2, bottom: -2, left: -16, right: -16 },
   rowBoxy: { marginBottom: 10 },
   rowSelf: { alignItems: 'flex-end' },
   rowPartner: { alignItems: 'flex-start' },

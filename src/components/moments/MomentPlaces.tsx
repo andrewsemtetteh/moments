@@ -12,18 +12,12 @@ import { momentChrome } from '@/lib/moment-theme';
 const SCREEN_H = Dimensions.get('window').height;
 
 export function placeTitle(place: MomentPlace) {
-  if (place.name) return `${place.name.emoji} ${place.name.name}`;
+  if (place.name) return place.name.name;
   return place.suggestion?.split(',')[0]?.trim() || 'Unnamed place';
 }
 
 /** Entry card at the top of Moment history. */
-export function OurMapCard({
-  places,
-  onOpen,
-}: {
-  places: MomentPlace[];
-  onOpen: () => void;
-}) {
+export function OurMapCard({ places, onOpen }: { places: MomentPlace[]; onOpen: () => void }) {
   const { colors } = useTheme();
   const chrome = momentChrome(colors);
   const pinned = places.reduce((n, p) => n + p.moments.length, 0);
@@ -78,7 +72,7 @@ export function OurMapView({
           latitude: p.latitude,
           longitude: p.longitude,
           label: `${placeTitle(p)} · ${p.moments.length}`,
-          name: p.name?.emoji ?? placeTitle(p),
+          name: placeTitle(p),
           avatarUrl: cover?.media_url ?? null,
           color: colors.accent,
         };
@@ -106,17 +100,23 @@ export function OurMapView({
     <ScrollView
       contentContainerStyle={[styles.scroll, { paddingBottom: bottomInset + 24 }]}
       showsVerticalScrollIndicator={false}>
-      <LocationMapPreview
-        markers={markers}
-        interactive
-        height={Math.round(SCREEN_H * 0.42)}
-        focusedIndex={focusedIndex >= 0 ? focusedIndex : null}
-        onMarkerPress={(i) => {
-          const place = places[i];
-          if (place) setFocusedKey(place.key);
-        }}
-        style={styles.map}
-      />
+      <View>
+        <LocationMapPreview
+          markers={markers}
+          interactive
+          height={Math.round(SCREEN_H * 0.42)}
+          focusedIndex={focusedIndex >= 0 ? focusedIndex : null}
+          onMarkerPress={(i) => {
+            const place = places[i];
+            if (!place) return;
+            setFocusedKey(place.key);
+            onOpenPlace(place);
+          }}
+          style={styles.map}
+        />
+        {/* The map takes its own touches; this strip on the left edge lets the swipe back start there. */}
+        <View style={styles.edgeStrip} />
+      </View>
 
       <View style={styles.listHeader}>
         <Text style={[styles.listTitle, { color: chrome.text }]}>Places</Text>
@@ -130,11 +130,11 @@ export function OurMapView({
           <Pressable
             key={place.key}
             onPress={() => {
-              if (focused) onOpenPlace(place);
-              else setFocusedKey(place.key);
+              setFocusedKey(place.key);
+              onOpenPlace(place);
             }}
             accessibilityRole="button"
-            accessibilityHint={focused ? 'Opens the moments from here' : 'Shows it on the map'}
+            accessibilityHint="Opens the moments from here"
             style={({ pressed }) => [
               styles.row,
               focused && { backgroundColor: chrome.surfaceSoft },
@@ -151,21 +151,25 @@ export function OurMapView({
                 {place.moments.length} moment{place.moments.length === 1 ? '' : 's'} ·{' '}
                 {formatDistanceToNowStrict(new Date(last.created_at), { addSuffix: true })}
               </Text>
-              {focused ? (
-                <Text style={[styles.rowHint, { color: chrome.accent }]}>Tap again to see them</Text>
-              ) : null}
             </View>
             <Pressable
               onPress={() => onNamePlace(place)}
               hitSlop={8}
               accessibilityRole="button"
               accessibilityLabel={place.name ? `Rename ${place.name.name}` : 'Name this place'}
-              style={[styles.nameBtn, { backgroundColor: place.name ? 'transparent' : chrome.accentSoft }]}>
-              {place.name ? (
-                <Icon name="edit" size={18} color={chrome.textSecondary} />
-              ) : (
-                <Text style={[styles.nameBtnText, { color: chrome.accent }]}>Name it</Text>
-              )}
+              style={({ pressed }) => [
+                styles.nameBtn,
+                place.name
+                  ? { backgroundColor: chrome.surfaceSoft }
+                  : { backgroundColor: chrome.accentSoft, borderColor: chrome.accent, borderWidth: 1.5 },
+                pressed && styles.pressed,
+              ]}>
+              <Icon
+                name={place.name ? 'edit' : 'location'}
+                size={place.name ? 20 : 22}
+                color={place.name ? chrome.textSecondary : chrome.accent}
+                filled={!place.name}
+              />
             </Pressable>
           </Pressable>
         );
@@ -191,6 +195,7 @@ const styles = StyleSheet.create({
   cardSub: { fontSize: 13 },
   scroll: { paddingHorizontal: 12 },
   map: { borderRadius: 24 },
+  edgeStrip: { position: 'absolute', left: -12, top: 0, bottom: 0, width: 34 },
   listHeader: { flexDirection: 'row', alignItems: 'baseline', gap: 8, marginTop: 22, marginBottom: 8 },
   listTitle: { fontSize: 20, fontWeight: '800', letterSpacing: -0.3 },
   listCount: { fontSize: 14, fontWeight: '700' },
@@ -206,11 +211,24 @@ const styles = StyleSheet.create({
   rowText: { flex: 1, minWidth: 0, gap: 2 },
   rowTitle: { fontSize: 16, fontWeight: '700' },
   rowSub: { fontSize: 13, fontWeight: '600' },
-  rowHint: { fontSize: 12, fontWeight: '700', marginTop: 2 },
-  nameBtn: { minWidth: 44, height: 34, borderRadius: 17, paddingHorizontal: 12, alignItems: 'center', justifyContent: 'center' },
-  nameBtnText: { fontSize: 13, fontWeight: '800' },
+  // Round icon button: a map pin to name a place, a pencil to rename it.
+  nameBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 10, paddingHorizontal: 36, paddingBottom: 80 },
-  emptyIcon: { width: 72, height: 72, borderRadius: 36, alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
+  emptyIcon: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
+  },
   emptyTitle: { fontSize: 18, fontWeight: '800' },
   emptySub: { fontSize: 14, lineHeight: 20, textAlign: 'center' },
 });

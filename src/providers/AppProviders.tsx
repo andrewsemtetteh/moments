@@ -1,7 +1,10 @@
 import { useAuth, useUser } from '@clerk/expo';
 import { ReactNode, useEffect, useRef } from 'react';
 import { Platform } from 'react-native';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { createAsyncStoragePersister } from '@tanstack/query-async-storage-persister';
+import { QueryClient } from '@tanstack/react-query';
+import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import NetInfo from '@react-native-community/netinfo';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Font from 'expo-font';
@@ -15,18 +18,41 @@ import {
 import { clearAuthSession, hydrateAuthSession } from '@/lib/auth-session';
 import { getRememberMe } from '@/lib/remember-me-storage';
 import { getSavedTheme } from '@/lib/theme-storage';
+import { BillingProvider } from '@/providers/BillingProvider';
 import { CallProvider } from '@/providers/CallProvider';
 import { useAuthStore, useUIStore } from '@/stores';
+
+/** How long a saved copy of the app's data is good for at launch. */
+const CACHE_MAX_AGE = 24 * 60 * 60 * 1000;
 
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       staleTime: 60_000,
+      // Kept at least as long as the saved copy, so it can be restored.
+      gcTime: CACHE_MAX_AGE,
       retry: 2,
       refetchOnWindowFocus: true,
     },
   },
 });
+
+/**
+ * The app's data is saved on the phone, so opening it shows the last known
+ * Home (moods, question, streak, moments…) at once and refreshes quietly,
+ * instead of each part popping in on its own as it loads.
+ */
+const persister = createAsyncStoragePersister({
+  storage: AsyncStorage,
+  key: 'moments-query-cache-v1',
+  throttleTime: 1500,
+});
+
+/** Signing out (or switching account) forgets the saved copy too. */
+function forgetCache() {
+  queryClient.clear();
+  void persister.removeClient();
+}
 
 function AuthSync({ children }: { children: ReactNode }) {
   const { isLoaded, isSignedIn, userId, signOut } = useAuth();
@@ -45,8 +71,8 @@ function AuthSync({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     void (async () => {
-      const saved = await getSavedTheme();
-      if (saved) useUIStore.setState({ theme: saved });
+      const saved = await getSavedTheme().catch(() => null);
+      useUIStore.setState(saved ? { theme: saved, themeReady: true } : { themeReady: true });
     })();
   }, []);
 
@@ -82,7 +108,7 @@ function AuthSync({ children }: { children: ReactNode }) {
         if (!checkedRememberMeRef.current) {
           checkedRememberMeRef.current = true;
           if (isSignedIn && !(await getRememberMe())) {
-            queryClient.clear();
+            forgetCache();
             await clearAuthSession();
             await signOut().catch(() => undefined);
             return;
@@ -101,7 +127,7 @@ function AuthSync({ children }: { children: ReactNode }) {
             name: user?.fullName ?? null,
           });
         } else {
-          queryClient.clear();
+          forgetCache();
           await clearAuthSession();
         }
       } catch {
@@ -129,11 +155,20 @@ export function AppProviders({ children }: { children: ReactNode }) {
   }
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <AuthSync>
-        <CallProvider>{children}</CallProvider>
-      </AuthSync>
-    </QueryClientProvider>
+    <PersistQueryClientProvider
+      client={queryClient}
+      persistOptions={{
+        persister,
+        maxAge: CACHE_MAX_AGE,
+        // Only finished, successful data is worth restoring.
+        dehydrateOptions: { shouldDehydrateQuery: (q) => q.state.status === 'success' },
+      }}>
+      <BillingProvider>
+        <AuthSync>
+          <CallProvider>{children}</CallProvider>
+        </AuthSync>
+      </BillingProvider>
+    </PersistQueryClientProvider>
   );
 }
 

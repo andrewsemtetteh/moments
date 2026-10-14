@@ -1117,7 +1117,12 @@ export function useMessageActions() {
     onSuccess: invalidate,
     onError,
   });
-  return { react, pin, deleteForMe, deleteForAll };
+  const edit = useMutation({
+    mutationFn: (p: { messageId: string; content: string }) => api.editMessage(p.messageId, user!.id, p.content),
+    onSuccess: invalidate,
+    onError,
+  });
+  return { react, pin, deleteForMe, deleteForAll, edit };
 }
 
 export function useMomentReaction() {

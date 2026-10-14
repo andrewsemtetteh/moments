@@ -25,9 +25,8 @@ export function AuthCheckbox({ checked, onToggle, label, hitSlop = 4 }: Props) {
   }));
 
   const handlePress = () => {
-    scale.value = withSequence(
-      withTiming(0.86, { duration: 80 }),
-      withSpring(1, { damping: 14, stiffness: 320 }),
+    scale.set(
+      withSequence(withTiming(0.86, { duration: 80 }), withSpring(1, { damping: 14, stiffness: 320 })),
     );
     onToggle();
   };

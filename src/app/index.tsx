@@ -3,16 +3,17 @@ import * as SplashScreen from 'expo-splash-screen';
 import { useCallback, useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
-import { Wordmark } from '@/components/ui/Wordmark';
+import { LogoMark } from '@/components/ui/Logo';
 import { useTheme } from '@/hooks/useTheme';
 // eslint-disable-next-line @typescript-eslint/no-unused-vars -- used by the commented-out restore path below
 import { isIntroCompleted } from '@/lib/intro-storage';
 import { isAvatarPromptDone, isOnboardingPaywallDone } from '@/lib/onboarding-storage';
 import { getOnboardingStep, setOnboardingStep, stepRoute } from '@/lib/onboarding-v2';
 import { needsProfileSetup } from '@/lib/profile-setup';
-import { useAuthStore, useRelationshipStore } from '@/stores';
+import { useAuthStore, useRelationshipStore, useUIStore } from '@/stores';
 
-const WORDMARK_SIZE = 42;
+/** The heart alone, no name: same as the native splash it follows. */
+const LOGO_SIZE = 180;
 /** The launch screen: the logo, still (no animation), for 5 seconds from when
  * it's actually on screen, then straight on to the next screen (no fade). */
 const MIN_VISIBLE_MS = 5000;
@@ -27,6 +28,9 @@ export default function IndexScreen() {
   // very first screen already matches whatever the person last picked, instead
   // of always flashing black then shifting to their real theme a moment later.
   const { colors } = useTheme();
+  // Keep the native splash up until the saved theme is known, so the logo and
+  // "moments" are drawn in the right colours from the first frame.
+  const themeReady = useUIStore((s) => s.themeReady);
 
   const [minVisibleDone, setMinVisibleDone] = useState(false);
   // When this screen is actually on screen: after the native splash has gone,
@@ -36,6 +40,7 @@ export default function IndexScreen() {
   // before anyone saw it, and it flashed past.
   const [visible, setVisible] = useState(false);
   useEffect(() => {
+    if (!themeReady) return;
     let alive = true;
     void SplashScreen.hideAsync()
       .catch(() => undefined)
@@ -50,7 +55,7 @@ export default function IndexScreen() {
     return () => {
       alive = false;
     };
-  }, []);
+  }, [themeReady]);
 
   /** Straight on to the next screen: no exit animation. */
   const replaceWithExit = useCallback((href: Href) => {
@@ -125,9 +130,11 @@ export default function IndexScreen() {
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
-      <View style={styles.center}>
-        <Wordmark size={WORDMARK_SIZE} />
-      </View>
+      {themeReady ? (
+        <View style={styles.center}>
+          <LogoMark size={LOGO_SIZE} />
+        </View>
+      ) : null}
     </View>
   );
 }

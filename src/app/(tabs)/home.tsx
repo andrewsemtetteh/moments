@@ -7,13 +7,12 @@ import { ContinueChatCard } from '@/components/home/ContinueChatCard';
 import {
   InviteCard,
   NextUpCard,
-  NoMomentCard,
   OnThisDayCard,
   useOnThisDay,
 } from '@/components/home/HomeCards';
 import { MoodSnapshot } from '@/components/home/MoodSnapshot';
 import { StreakRestoreBanner } from '@/components/home/StreakRestoreBanner';
-import { TodaysPromptCard } from '@/components/home/TodaysPromptCard';
+import { ActivitiesIntroSection } from '@/components/activities/ActivitiesIntroSection';
 import { WelcomeCard } from '@/components/home/WelcomeCard';
 import { PlayPulseCard } from '@/components/games/PlayPulse';
 import { AppHeader } from '@/components/layout/AppHeader';
@@ -42,6 +41,7 @@ import { openActivities, openCalendar } from '@/lib/router';
 import { emptyStreakStatus, isStreakRestoreAvailable } from '@/lib/streak';
 import { useAuthStore, useRelationshipStore, useUIStore } from '@/stores';
 import type { Moment } from '@/types/database';
+import { TourTarget } from '@/components/layout/TourTarget';
 
 const HOME_REFRESH_TIMEOUT_MS = 8_000;
 
@@ -223,36 +223,43 @@ export default function HomeScreen() {
           showsVerticalScrollIndicator={false}
           refreshControl={refreshControl}
           contentContainerStyle={styles.scroll}>
-          <WelcomeCard
-            user={user ?? null}
-            partner={partner}
-            spaceName={relationship?.relationship_name}
-            status={session ? streakStatus : null}
-            joinedAt={relationship?.created_at}
-            onPressPartner={() => openPartnerProfile()}
-          />
+          <TourTarget name="tour-space">
+            <WelcomeCard
+              user={user ?? null}
+              partner={partner}
+              spaceName={relationship?.relationship_name}
+              status={session ? streakStatus : null}
+              joinedAt={relationship?.created_at}
+              onPressPartner={() => openPartnerProfile()}
+            />
+          </TourTarget>
 
           {restoreStatus ? <StreakRestoreBanner status={restoreStatus} /> : null}
 
           {!partner ? (
-            relationship ? <InviteCard /> : null
+            relationship ? (
+              <View style={styles.section}>
+                <Text style={[styles.sectionTitle, { color: colors.text }]}>Invite your person</Text>
+                <InviteCard />
+              </View>
+            ) : null
           ) : homePartnerMoments.length > 0 ? (
             <PartnerMomentHome partnerMoments={homePartnerMoments} />
-          ) : (
-            <NoMomentCard partnerName={partner.name} />
-          )}
+          ) : null}
 
           <View style={styles.section}>
             <Text style={[styles.sectionTitle, { color: colors.text }]}>Today</Text>
 
-            <MoodSnapshot
-              moods={moods ?? {}}
-              onSelectMood={(m) => updateMood.mutate(m)}
-              onViewHistory={() => setShowMoodHistory(true)}
-            />
+            <TourTarget name="tour-today">
+              <MoodSnapshot
+                moods={moods ?? {}}
+                onSelectMood={(m) => updateMood.mutate(m)}
+                onViewHistory={() => setShowMoodHistory(true)}
+              />
+            </TourTarget>
 
             {challenge ? (
-              <TodaysPromptCard challenge={challenge} onOpenHistory={() => router.push('/question-history')} />
+              <ActivitiesIntroSection challenge={challenge} onOpenHistory={() => router.push('/question-history')} />
             ) : null}
 
             {nextUp ? <NextUpCard event={nextUp} viewerId={user?.id} /> : null}

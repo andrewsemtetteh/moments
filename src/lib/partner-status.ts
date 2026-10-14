@@ -1,4 +1,4 @@
-import { formatDistanceToNow } from 'date-fns';
+import { formatDistanceToNowStrict } from 'date-fns';
 
 export type PartnerStatusVariant = 'typing' | 'online' | 'lastSeen' | 'away';
 
@@ -23,7 +23,8 @@ export function formatPartnerStatus(
   if (isOnline) return { label: 'online', variant: 'online' };
   if (lastSeenAt) {
     return {
-      label: `active ${formatDistanceToNow(new Date(lastSeenAt), { addSuffix: true })}`,
+      // "last seen 5 minutes ago": no "active about…".
+      label: `last seen ${formatDistanceToNowStrict(new Date(lastSeenAt), { addSuffix: true })}`,
       variant: 'lastSeen',
     };
   }

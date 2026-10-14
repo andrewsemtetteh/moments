@@ -1,6 +1,6 @@
 import * as Sharing from 'expo-sharing';
 import type { RefObject } from 'react';
-import { Alert, Share, type View } from 'react-native';
+import { Alert, Platform, Share, type View } from 'react-native';
 import { captureRef } from 'react-native-view-shot';
 
 /**
@@ -52,7 +52,7 @@ export async function saveImageToPhotos(uri: string): Promise<boolean> {
   try {
     const MediaLibrary = await import('expo-media-library');
     // Write only: saving doesn't need to read the rest of the library.
-    const { status } = await MediaLibrary.requestPermissionsAsync(true);
+    const { status } = await MediaLibrary.requestPermissionsAsync(true, Platform.OS === 'android' ? ['photo'] : undefined);
     if (status !== 'granted') {
       Alert.alert('Allow photo access', 'Moments needs permission to save images to your photos.');
       return false;

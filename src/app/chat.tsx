@@ -6,7 +6,7 @@ import {
 } from 'expo-audio';
 import * as Contacts from 'expo-contacts';
 import * as DocumentPicker from 'expo-document-picker';
-import * as Haptics from 'expo-haptics';
+import * as Haptics from '@/lib/haptics';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { useFocusEffect, useRouter } from 'expo-router';
@@ -71,9 +71,8 @@ const VOICE_PRESET = { ...RecordingPresets.HIGH_QUALITY, isMeteringEnabled: true
 const MIC_HOLD_MS = 350;
 /** A hold shorter than this is treated as a slip and discarded. */
 const MIN_HOLD_RECORD_MS = 1000;
-
-/** What was open (keyboard or emoji panel) when you last left Chat; it reopens next time. */
-let resumePanel: 'keyboard' | 'emoji' | null = null;
+/** Like WhatsApp: a few pins keep the bar useful. */
+const MAX_PINNED = 3;
 
 export default function ChatScreen() {
   const router = useRouter();
@@ -101,7 +100,7 @@ export default function ChatScreen() {
   const [selected, setSelected] = useState<Message | null>(null);
   const [replyTo, setReplyTo] = useState<Message | null>(() => getCachedChatDraft(relationship?.id)?.replyTo ?? null);
   const [partnerTyping, setPartnerTyping] = useState(false);
-  const [showEmoji, setShowEmoji] = useState(() => resumePanel === 'emoji');
+  const [showEmoji, setShowEmoji] = useState(false);
   const [showAttachment, setShowAttachment] = useState(false);
   const [showCamera, setShowCamera] = useState(false);
   // Recording
@@ -117,6 +116,8 @@ export default function ChatScreen() {
   const [isSendingMedia, setIsSendingMedia] = useState(false);
   const [flushingOffline, setFlushingOffline] = useState(false);
   const [pendingScrollMessageId, setPendingScrollMessageId] = useState<string | null>(null);
+  // The message just jumped to, flashed once it's on screen.
+  const [highlightId, setHighlightId] = useState<string | null>(null);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   // Mirrors for the unmount cleanup below (state is stale there).
@@ -146,7 +147,9 @@ export default function ChatScreen() {
     statusHidden: partnerStatusHidden,
   } = usePartnerPresence(relationship?.id, user?.id, partner?.id);
   const sendMessage = useSendMessage();
-  const { react, pin, deleteForMe, deleteForAll } = useMessageActions();
+  const { react, pin, deleteForMe, deleteForAll, edit: editMessage } = useMessageActions();
+  // Your own text message being edited from the long-press menu (the box holds its text).
+  const [editing, setEditing] = useState<Message | null>(null);
 
   useEffect(() => {
     if (!relationship?.id || !user?.id || partner?.id) return;
@@ -261,15 +264,11 @@ export default function ChatScreen() {
     };
   }, [scrollToLatest]);
 
-  // Reopen what was open when you last left Chat (keyboard or emoji), and remember it on the way out.
+  // Leaving Chat folds the keyboard / emoji panel away; it comes back closed next time,
+  // with whatever was typed (emoji included) still in the box (see the draft effects below).
   useEffect(() => {
-    const resume = resumePanel;
-    resumePanel = null;
-    const timer = resume === 'keyboard' ? setTimeout(() => inputRef.current?.focus(), 350) : null;
     return () => {
-      if (timer) clearTimeout(timer);
-      const open = panelRef.current;
-      resumePanel = open.emoji ? 'emoji' : open.keyboard ? 'keyboard' : null;
+      Keyboard.dismiss();
     };
   }, []);
 
@@ -307,9 +306,10 @@ export default function ChatScreen() {
   // Keep the draft (and the message being replied to) as it's typed, so
   // leaving Chat and coming back finds it where you left it. Sending clears it.
   useEffect(() => {
-    if (!relationship?.id) return;
+    // An edit in progress isn't a draft: it belongs to the message being edited.
+    if (!relationship?.id || editing) return;
     saveChatDraft(relationship.id, { text, replyTo });
-  }, [relationship?.id, text, replyTo]);
+  }, [relationship?.id, text, replyTo, editing]);
 
   useEffect(() => {
     if (!chatDraft && !chatMomentReply) return;
@@ -418,14 +418,62 @@ export default function ChatScreen() {
   }, [offlineQueue, user, relationship]);
 
   const allMessages = useMemo(() => {
-    const pending = [...queuedMessages, ...optimisticMessages].sort(
+    // Our own message can come back over realtime before the send call returns; once the
+    // real one is in, drop its temporary "sending" copy so it never shows twice.
+    const landed = (temp: Message) =>
+      messages.some(
+        (m) =>
+          m.sender_id === temp.sender_id &&
+          (m.content ?? '') === (temp.content ?? '') &&
+          (m.media_url ?? null) === (temp.media_url ?? null) &&
+          new Date(m.created_at).getTime() >= new Date(temp.created_at).getTime() - 10_000,
+      );
+    const pending = [...queuedMessages, ...optimisticMessages.filter((m) => !landed(m))].sort(
       (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
     );
     return [...messages, ...pending];
   }, [messages, queuedMessages, optimisticMessages]);
   const messageById = useMemo(() => new Map(allMessages.map((message) => [message.id, message])), [allMessages]);
-  const pinned = useMemo(() => messages.filter((m) => m.is_pinned && !m.deleted_for_all), [messages]);
-  const latestPinned = pinned[pinned.length - 1] ?? null;
+  // Pinned messages, newest pin first. The bar shows one at a time; tapping it jumps
+  // there and moves on to the next (WhatsApp / Telegram).
+  const pinned = useMemo(
+    () =>
+      messages
+        .filter((m) => m.is_pinned && !m.deleted_for_all)
+        .sort((a, b) => (b.pinned_at ?? b.created_at).localeCompare(a.pinned_at ?? a.created_at)),
+    [messages],
+  );
+  const [pinCursor, setPinCursor] = useState(0);
+  const shownPin = pinned.length ? pinned[pinCursor % pinned.length] : null;
+  const shownPinIndex = pinned.length ? pinCursor % pinned.length : 0;
+
+  const togglePin = (messageId: string, isPinned: boolean) => {
+    if (!isPinned || pinned.some((m) => m.id === messageId)) {
+      pin.mutate({ messageId, isPinned });
+      return;
+    }
+    if (pinned.length < MAX_PINNED) {
+      pin.mutate({ messageId, isPinned: true });
+      setPinCursor(0);
+      return;
+    }
+    const oldest = pinned[pinned.length - 1];
+    Alert.alert(
+      `You can pin up to ${MAX_PINNED} messages`,
+      'Replace the oldest pinned message with this one?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Replace',
+          onPress: () => {
+            pin.mutate({ messageId: oldest.id, isPinned: false });
+            pin.mutate({ messageId, isPinned: true });
+            setPinCursor(0);
+          },
+        },
+      ],
+    );
+  };
   const listItems = useMemo(() => {
     if (!user) return [];
     const bannerIds = unreadBannerIds && unreadBannerIds.size > 0 ? unreadBannerIds : new Set<string>();
@@ -450,6 +498,8 @@ export default function ChatScreen() {
   };
 
   /** A local, not-yet-confirmed message (shown with a pending clock, not a sent tick). */
+  const sendLockRef = useRef(false);
+
   const pendingMessage = (id: string, fields: Partial<Message>): Message => ({
     id,
     relationship_id: relationship?.id ?? '',
@@ -476,7 +526,20 @@ export default function ChatScreen() {
 
   const handleSend = useCallback(async () => {
     if (!text.trim() || !user || !relationship) return;
+    // A fast double-tap fires twice before the cleared box re-renders: send once.
+    if (sendLockRef.current) return;
+    sendLockRef.current = true;
+    setTimeout(() => {
+      sendLockRef.current = false;
+    }, 500);
     const content = text.trim();
+    if (editing) {
+      const target = editing;
+      setEditing(null);
+      setText('');
+      if (content !== target.content?.trim()) editMessage.mutate({ messageId: target.id, content });
+      return;
+    }
     const momentPayload: {
       momentId?: string;
       mediaUrl?: string;
@@ -526,7 +589,19 @@ export default function ChatScreen() {
     void api.trackEvent(relationship.id, user.id, 'message_sent').catch(() => undefined);
     // pendingMessage/moveToQueue are recreated each render but only read stable state.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [text, user, relationship, chatMomentReply, replyTo, isOffline, sendMessage, addToQueue, setChatMomentReply]);
+  }, [text, user, relationship, chatMomentReply, replyTo, isOffline, sendMessage, addToQueue, setChatMomentReply, editing, editMessage]);
+
+  const startEdit = (message: Message) => {
+    setReplyTo(null);
+    setEditing(message);
+    setText(message.content ?? '');
+    setTimeout(() => inputRef.current?.focus(), 250);
+  };
+
+  const cancelEdit = () => {
+    setEditing(null);
+    setText(getCachedChatDraft(relationship?.id)?.text ?? '');
+  };
 
   // ─── Emoji insert ─────────────────────────────────────────────────────────
   const handleEmojiSelect = (emoji: string) => {
@@ -844,10 +919,16 @@ export default function ChatScreen() {
       }
       return;
     }
+    const target = listItems[index];
     setPendingScrollMessageId(null);
     requestAnimationFrame(() => {
       listRef.current?.scrollToIndex({ index, animated: true, viewPosition: 0.5 });
     });
+    if (target.type === 'message') {
+      // After the scroll settles, flash it; clear so the same message can flash again.
+      setTimeout(() => setHighlightId(target.id), 350);
+      setTimeout(() => setHighlightId((id) => (id === target.id ? null : id)), 2000);
+    }
   }, [pendingScrollMessageId, listItems, hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   const scrollToMessage = useCallback((messageId: string) => {
@@ -925,6 +1006,7 @@ export default function ChatScreen() {
         partner={partner}
         onLongPress={setSelected}
         onSwipeReply={startReply}
+        highlighted={highlightId === item.message.id}
       />
     );
   };
@@ -990,17 +1072,37 @@ export default function ChatScreen() {
         </View>
 
         {/* ── Pinned bar ── */}
-        {latestPinned && (
+        {shownPin && (
           <Pressable
-            onPress={() => scrollToMessage(latestPinned.id)}
-            style={[styles.pinnedBar, { backgroundColor: colors.accentSoft, borderBottomColor: colors.border }]}>
-            <Icon name="pin" size={14} color={colors.accent} filled />
-            <Text style={[styles.pinnedText, { color: colors.text }]} numberOfLines={1}>
-              {messagePreviewLabel(latestPinned)}
-            </Text>
-            {pinned.length > 1 ? (
-              <Text style={[styles.pinnedCount, { color: colors.textSecondary }]}>{pinned.length}</Text>
-            ) : null}
+            onPress={() => {
+              scrollToMessage(shownPin.id);
+              if (pinned.length > 1) setPinCursor((c) => (c + 1) % pinned.length);
+            }}
+            onLongPress={() => setSelected(shownPin)}
+            accessibilityRole="button"
+            accessibilityLabel={`Pinned message ${shownPinIndex + 1} of ${pinned.length}: ${messagePreviewLabel(shownPin)}`}
+            style={[styles.pinnedBar, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
+            {/* One mark per pin; the bright one is the pin shown. */}
+            <View style={styles.pinMarks}>
+              {pinned.map((m, i) => (
+                <View
+                  key={m.id}
+                  style={[
+                    styles.pinMark,
+                    { backgroundColor: i === shownPinIndex ? colors.accent : colors.border },
+                  ]}
+                />
+              ))}
+            </View>
+            <View style={styles.pinnedBody}>
+              <Text style={[styles.pinnedLabel, { color: colors.accent }]} numberOfLines={1}>
+                {pinned.length > 1 ? `Pinned message ${shownPinIndex + 1} of ${pinned.length}` : 'Pinned message'}
+              </Text>
+              <Text style={[styles.pinnedText, { color: colors.text }]} numberOfLines={1}>
+                {messagePreviewLabel(shownPin)}
+              </Text>
+            </View>
+            <Icon name="pin" size={16} color={colors.textSecondary} filled />
           </Pressable>
         )}
 
@@ -1099,7 +1201,10 @@ export default function ChatScreen() {
             </View>
           )}
 
-          {replyTo && user && (
+          {editing && user ? (
+            <ChatReplyBar message={editing} partner={partner} userId={user.id} mode="edit" onClose={cancelEdit} />
+          ) : null}
+          {!editing && replyTo && user && (
             <ChatReplyBar message={replyTo} partner={partner} userId={user.id} onClose={() => setReplyTo(null)} />
           )}
 
@@ -1254,8 +1359,9 @@ export default function ChatScreen() {
         message={selected}
         onClose={() => setSelected(null)}
         onReply={startReply}
+        onEdit={startEdit}
         onReact={(messageId, emoji) => react.mutate({ messageId, emoji })}
-        onPin={(messageId, isPinned) => pin.mutate({ messageId, isPinned })}
+        onPin={togglePin}
         onDeleteForMe={(messageId) => deleteForMe.mutate(messageId)}
         onDeleteForAll={(messageId) => deleteForAll.mutate(messageId)}
       />
@@ -1305,13 +1411,17 @@ const styles = StyleSheet.create({
   pinnedBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 10,
     paddingHorizontal: 16,
-    paddingVertical: 10,
+    paddingVertical: 8,
+    minHeight: 52,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  pinnedText: { fontSize: 13, flex: 1 },
-  pinnedCount: { fontSize: 12, fontWeight: '700' },
+  pinMarks: { alignSelf: 'stretch', justifyContent: 'center', gap: 3 },
+  pinMark: { width: 3, flex: 1, maxHeight: 34, borderRadius: 1.5 },
+  pinnedBody: { flex: 1, minWidth: 0, gap: 1 },
+  pinnedLabel: { fontSize: 12, fontWeight: '800' },
+  pinnedText: { fontSize: 14 },
 
   offlineBar: { padding: 8, alignItems: 'center' },
   offlineText: { color: '#fff', fontSize: 12, fontWeight: '600' },

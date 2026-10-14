@@ -1,4 +1,4 @@
-import * as Haptics from 'expo-haptics';
+import * as Haptics from '@/lib/haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Redirect, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';

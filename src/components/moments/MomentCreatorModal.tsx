@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { CameraView, useCameraPermissions, useMicrophonePermissions } from 'expo-camera';
-import * as Haptics from 'expo-haptics';
+import * as Haptics from '@/lib/haptics';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { useEffect, useRef, useState } from 'react';
@@ -15,7 +15,7 @@ import {
     View,
 } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
+import Animated, { FadeInUp, FadeOut, runOnJS, useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { MomentVideoPlayer } from '@/components/moments/MomentVideoPlayer';
@@ -58,6 +58,8 @@ export function MomentCreatorModal() {
   const chrome = momentChrome(colors);
   const visible = useUIStore((s) => s.showMomentCreator);
   const historyOnTop = useUIStore((s) => s.showMomentHistory);
+  // Woken the moment History starts closing, so there's no frozen frame when it slides away.
+  const cameraWaking = useUIStore((s) => s.momentCameraWaking);
   const setVisible = useUIStore((s) => s.setShowMomentCreator);
   const setShowMomentHistory = useUIStore((s) => s.setShowMomentHistory);
   const setMomentHistoryReturnToCamera = useUIStore((s) => s.setMomentHistoryReturnToCamera);
@@ -161,6 +163,14 @@ export function MomentCreatorModal() {
     setDraft({ mediaUri: null, type: 'photo' });
   };
 
+  // "Sent to Alex" for a moment after sending (the camera stays open).
+  const [sentNotice, setSentNotice] = useState(false);
+  useEffect(() => {
+    if (!sentNotice) return;
+    const t = setTimeout(() => setSentNotice(false), 2400);
+    return () => clearTimeout(t);
+  }, [sentNotice]);
+
   const close = () => {
     if (holdTimerRef.current) clearTimeout(holdTimerRef.current);
     if (recording) {
@@ -180,6 +190,20 @@ export function MomentCreatorModal() {
     }
     return true;
   };
+
+  // First time the camera opens: ask right away (our sheet, then the system prompt),
+  // instead of showing a dead "Allow camera" screen. Never re-asks once refused.
+  const askedCameraRef = useRef(false);
+  useEffect(() => {
+    if (!visible) {
+      askedCameraRef.current = false;
+      return;
+    }
+    if (askedCameraRef.current || !cameraPermission || cameraPermission.granted || !cameraPermission.canAskAgain) return;
+    askedCameraRef.current = true;
+    void ensureCamera();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible, cameraPermission]);
 
   const ensureMic = async (): Promise<boolean> => {
     if (!micPermission?.granted) {
@@ -272,7 +296,9 @@ export function MomentCreatorModal() {
         'Moment sent',
       );
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      close();
+      // Stay in Moments: back to the camera, ready for the next one.
+      resetPreview();
+      setSentNotice(true);
     } catch (error) {
       Alert.alert(
         'Could not send moment',
@@ -497,7 +523,7 @@ export function MomentCreatorModal() {
                   flash={facing === 'back' ? flash : 'off'}
                   mirror={facing === 'front'}
                   mode="video"
-                  active={!historyOnTop}
+                  active={!historyOnTop || cameraWaking}
                   videoQuality="720p"
                   onCameraReady={() => setCameraReady(true)}
                 />
@@ -593,6 +619,16 @@ export function MomentCreatorModal() {
             </View>
           </>
         )}
+        {sentNotice ? (
+          <Animated.View
+            entering={FadeInUp.duration(220)}
+            exiting={FadeOut.duration(200)}
+            pointerEvents="none"
+            style={[styles.sentToast, { top: insets.top + 64 }]}>
+            <Icon name="check" size={16} color="#FFFFFF" />
+            <Text style={styles.sentToastText}>Sent to {partnerName}</Text>
+          </Animated.View>
+        ) : null}
         <PermissionSheetHost host="camera" inline />
       </Animated.View>
     </GestureDetector>
@@ -600,6 +636,18 @@ export function MomentCreatorModal() {
 }
 
 const styles = StyleSheet.create({
+  sentToast: {
+    position: 'absolute',
+    alignSelf: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    height: 40,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+    backgroundColor: 'rgba(20,20,20,0.82)',
+  },
+  sentToastText: { color: '#FFFFFF', fontSize: 15, fontWeight: '800' },
   root: { flex: 1 },
   topBar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingTop: 6, paddingBottom: 14 },
   topCircle: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },

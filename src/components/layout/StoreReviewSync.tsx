@@ -1,4 +1,4 @@
-import * as Haptics from 'expo-haptics';
+import * as Haptics from '@/lib/haptics';
 import { useEffect, useState } from 'react';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -14,6 +14,7 @@ import {
   sendFeedbackFromPage,
   shouldShowRatingPage,
 } from '@/lib/store-review';
+import { ThemedStatusBar } from '@/components/ui/ThemedStatusBar';
 
 /**
  * The rating ask: a full page of our own (not Apple's sheet out of nowhere),
@@ -37,11 +38,14 @@ export function StoreReviewSync() {
   return <RatingPage onDone={() => setVisible(false)} />;
 }
 
-function RatingPage({ onDone }: { onDone: () => void }) {
+export function RatingPage({ onDone }: { onDone: () => void }) {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const { data: streak } = useStreak();
   const days = Math.max(streak?.current_streak ?? 0, 0);
+  // Starts at 5; 4–5 stars go to the store, 1–3 open feedback instead.
+  const [stars, setStars] = useState(5);
+  const happy = stars >= 4;
 
   const close = () => {
     void markRatingPageDismissed();
@@ -50,6 +54,7 @@ function RatingPage({ onDone }: { onDone: () => void }) {
 
   return (
     <Modal visible animationType="slide" presentationStyle="fullScreen" onRequestClose={close}>
+      <ThemedStatusBar />
       <View style={[styles.root, { backgroundColor: colors.background, paddingTop: insets.top + 8, paddingBottom: insets.bottom + 18 }]}>
         <Pressable onPress={close} hitSlop={10} accessibilityRole="button" accessibilityLabel="Close" style={styles.close}>
           <Icon name="close" size={26} color={colors.text} />
@@ -63,9 +68,21 @@ function RatingPage({ onDone }: { onDone: () => void }) {
           <Text style={[styles.body, { color: colors.textSecondary }]}>
             If Moments is helping you two feel closer, a quick rating helps other couples find it.
           </Text>
-          <View style={styles.stars}>
-            {[0, 1, 2, 3, 4].map((i) => (
-              <Icon key={i} name="star" size={34} color={colors.text} filled />
+          <View style={styles.stars} accessibilityRole="adjustable" accessibilityLabel={`${stars} out of 5 stars`}>
+            {[1, 2, 3, 4, 5].map((n) => (
+              <Pressable
+                key={n}
+                onPress={() => {
+                  void Haptics.selectionAsync();
+                  setStars(n);
+                }}
+                hitSlop={4}
+                accessibilityRole="button"
+                accessibilityLabel={`${n} star${n === 1 ? '' : 's'}`}
+                accessibilityState={{ selected: n <= stars }}
+                style={({ pressed }) => [styles.star, pressed && { transform: [{ scale: 0.9 }] }]}>
+                <Icon name="star" size={38} color={n <= stars ? colors.accent : colors.textTertiary} filled={n <= stars} />
+              </Pressable>
             ))}
           </View>
         </View>
@@ -73,22 +90,20 @@ function RatingPage({ onDone }: { onDone: () => void }) {
         <Pressable
           onPress={() => {
             void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-            void rateFromPage();
+            if (happy) void rateFromPage();
+            else void sendFeedbackFromPage();
             onDone();
           }}
           accessibilityRole="button"
           style={({ pressed }) => [styles.rate, { backgroundColor: colors.accent, opacity: pressed ? 0.85 : 1 }]}>
-          <Text style={[styles.rateText, { color: colors.onAccent }]}>Rate Moments</Text>
+          <Text style={[styles.rateText, { color: colors.onAccent }]}>{happy ? 'Rate Moments' : 'Tell us what to improve'}</Text>
         </Pressable>
         <Pressable
-          onPress={() => {
-            void sendFeedbackFromPage();
-            onDone();
-          }}
+          onPress={close}
           hitSlop={8}
           accessibilityRole="button"
           style={styles.feedback}>
-          <Text style={[styles.feedbackText, { color: colors.textSecondary }]}>Send feedback instead</Text>
+          <Text style={[styles.feedbackText, { color: colors.textSecondary }]}>Not now</Text>
         </Pressable>
       </View>
     </Modal>
@@ -101,7 +116,8 @@ const styles = StyleSheet.create({
   middle: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 16 },
   title: { fontSize: 30, fontWeight: '900', letterSpacing: -0.7, lineHeight: 35, textAlign: 'center' },
   body: { fontSize: 16, lineHeight: 23, textAlign: 'center' },
-  stars: { flexDirection: 'row', gap: 8, marginTop: 4 },
+  stars: { flexDirection: 'row', gap: 4, marginTop: 4 },
+  star: { width: 48, height: 48, alignItems: 'center', justifyContent: 'center' },
   rate: { height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center' },
   rateText: { fontSize: 17, fontWeight: '800' },
   feedback: { height: 44, alignItems: 'center', justifyContent: 'center', marginTop: 4 },

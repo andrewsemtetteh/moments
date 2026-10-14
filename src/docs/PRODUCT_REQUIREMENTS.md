@@ -645,7 +645,7 @@ One subscription covers both users.
 
 ## Payments
 
-* RevenueCat
+* Superwall
 
 ## Notifications
 

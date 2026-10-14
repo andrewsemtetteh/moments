@@ -43,7 +43,7 @@ Contributors must follow the official stack:
 
 ## Services
 
-* RevenueCat (subscriptions)
+* Superwall (subscriptions and paywalls)
 * PostHog (analytics)
 * Sentry (error tracking)
 * Expo Notifications
