@@ -279,7 +279,31 @@ export function MomentStoryViewer() {
       }
       dragX.value = withSpring(0, { ...SETTLE_SPRING, velocity: e.velocityX });
     });
-  const dragStyle = useAnimatedStyle(() => ({ transform: [{ translateX: dragX.value }] }));
+  // Swipe down to put it away, straight like the Moments page: the viewer follows your finger down and
+  // slides off the bottom past the line (or a quick flick); let go early and it springs back.
+  // Off while replying: the reply bar has its own drag-down to close the keyboard.
+  const dragY = useSharedValue(0);
+  const swipeDown = Gesture.Pan()
+    .enabled(!replying)
+    .activeOffsetY(14)
+    .failOffsetY(-14)
+    .failOffsetX([-16, 16])
+    .onUpdate((e) => {
+      dragY.value = Math.max(0, e.translationY);
+    })
+    .onEnd((e) => {
+      if (e.translationY > DISMISS_DISTANCE || e.velocityY > DISMISS_VELOCITY) {
+        dragY.value = withSpring(SCREEN_H, { ...SETTLE_SPRING, velocity: e.velocityY }, (done) => {
+          if (done) runOnJS(dismissViewer)();
+        });
+        return;
+      }
+      dragY.value = withSpring(0, { ...SETTLE_SPRING, velocity: e.velocityY });
+    });
+  const dismissGesture = Gesture.Race(swipeClose, swipeDown);
+  const dragStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: dragX.value }, { translateY: dragY.value }],
+  }));
 
   if (!viewer || !moment) return null;
 
@@ -300,7 +324,7 @@ export function MomentStoryViewer() {
   const backdropUri = moment.type === 'photo' ? moment.media_url : null;
 
   return (
-    <GestureDetector gesture={swipeClose}>
+    <GestureDetector gesture={dismissGesture}>
       <Animated.View style={[styles.root, dragStyle]}>
         {/* No keyboard avoidance on the screen: the moment stays exactly where it is while replying;
             only the reply bar rides up on the keyboard (see MomentViewerDock). */}
