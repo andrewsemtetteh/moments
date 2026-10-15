@@ -31,7 +31,8 @@ export function FullScreenPage({
   onBack,
   right,
   avoidKeyboard = true,
-  dismissKeyboardOnTap = true,
+  dismissKeyboardOnTap = false,
+  overlay,
   children,
 }: {
   visible: boolean;
@@ -47,10 +48,13 @@ export function FullScreenPage({
    */
   avoidKeyboard?: boolean;
   /**
-   * Tap empty space to close the keyboard (forms). Pages without fields turn it
-   * off: the catcher can swallow a scroll view's drags.
+   * Tap empty space to close the keyboard. Only for forms (New plan, New memory,
+   * Settings edits): the catcher can swallow a scroll view's drags, so pages
+   * without fields leave it off (the default).
    */
   dismissKeyboardOnTap?: boolean;
+  /** Drawn over the whole page (header included), outside its swipe-back: e.g. the full map. */
+  overlay?: ReactNode;
   children: ReactNode;
 }) {
   const { colors } = useTheme();
@@ -89,6 +93,11 @@ export function FullScreenPage({
 
   const pageStyle = useAnimatedStyle(() => ({ transform: [{ translateX: translateX.value }] }));
 
+  // iPhone: pad up (or leave it to a scroll view that lifts the focused field itself).
+  // Android: this is a pop-up window the system doesn't resize for the keyboard, so
+  // always shrink to the space above it, or fields near the bottom end up hidden.
+  const keyboardBehavior = Platform.OS === 'android' ? 'height' : avoidKeyboard ? 'padding' : undefined;
+
   if (!mounted) return null;
 
   return (
@@ -105,7 +114,7 @@ export function FullScreenPage({
                   <ScreenHeader title={title} onBack={onBack} right={right} />
                   <KeyboardAvoidingView
                     style={styles.flex}
-                    behavior={Platform.OS === 'ios' && avoidKeyboard ? 'padding' : undefined}>
+                    behavior={keyboardBehavior}>
                     {children}
                   </KeyboardAvoidingView>
                 </View>
@@ -115,13 +124,14 @@ export function FullScreenPage({
                 <ScreenHeader title={title} onBack={onBack} right={right} />
                 <KeyboardAvoidingView
                   style={styles.flex}
-                  behavior={Platform.OS === 'ios' && avoidKeyboard ? 'padding' : undefined}>
+                  behavior={keyboardBehavior}>
                   {children}
                 </KeyboardAvoidingView>
               </View>
             )}
           </Animated.View>
         </GestureDetector>
+        {overlay}
       </GestureHandlerRootView>
     </Modal>
   );

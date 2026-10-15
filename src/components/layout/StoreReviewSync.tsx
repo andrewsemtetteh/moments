@@ -54,7 +54,8 @@ export function RatingPage({ onDone }: { onDone: () => void }) {
   const { colors } = useTheme();
   const { data: streak } = useStreak();
   const days = Math.max(streak?.current_streak ?? 0, 0);
-  const [stars, setStars] = useState(0);
+  // Starts at 5 ("Love it"); tap a star to change it.
+  const [stars, setStars] = useState(5);
   const [note, setNote] = useState('');
   const [thanks, setThanks] = useState(false);
   const happy = stars >= 4;
@@ -94,7 +95,7 @@ export function RatingPage({ onDone }: { onDone: () => void }) {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={[
           styles.root,
-          { backgroundColor: colors.background, paddingTop: insets.top + 8, paddingBottom: insets.bottom + 18 },
+          { backgroundColor: colors.background, paddingTop: insets.top + 8, paddingBottom: insets.bottom + 32 },
         ]}>
         <Pressable
           onPress={close}

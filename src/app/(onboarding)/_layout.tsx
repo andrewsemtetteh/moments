@@ -19,12 +19,18 @@ export default function OnboardingLayout() {
         // light/dark background instead of the app's actual theme color,
         // showing a brief mismatched flash during the transition.
         contentStyle: { backgroundColor: colors.background },
+        // Swipe right to go back is OnboardingStepScreen's own gesture, on both
+        // platforms. iPhone's native one stays off: running both popped two
+        // steps at once, and it skipped a screen's own Back (the widget
+        // how-to, the join screen).
+        gestureEnabled: false,
+        fullScreenGestureEnabled: false,
       }}>
       {/* The flow (lib/onboarding-v2): about-you → together-since →
-          relationship-kind → goals → your-plan → theme-picker → widget-prompt
-          → invite → notification-prompt → tracking → /pro. */}
-      {/* First step after sign-up: no swiping back to the auth screens. */}
-      <Stack.Screen name="about-you" options={{ gestureEnabled: false, fullScreenGestureEnabled: false }} />
+          relationship-kind → space-name → goals → your-plan → theme-picker →
+          widget-prompt → invite → notification-prompt → tracking → /pro.
+          Android skips widget-prompt and tracking. */}
+      <Stack.Screen name="about-you" />
       <Stack.Screen name="together-since" />
       <Stack.Screen name="relationship-kind" />
       <Stack.Screen name="space-name" />

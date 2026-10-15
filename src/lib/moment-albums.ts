@@ -22,7 +22,7 @@ export type MomentAlbum = {
 };
 
 /** Free accounts get this many albums; Plus is unlimited. */
-export const FREE_ALBUM_LIMIT = 2;
+export const FREE_ALBUM_LIMIT = 3;
 
 
 /** Where this phone kept albums before they synced (moved up the first time). */

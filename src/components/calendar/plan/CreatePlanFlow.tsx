@@ -14,11 +14,10 @@ import {
 } from 'react-native';
 import { ScrollView as GHScrollView } from 'react-native-gesture-handler';
 
-import { PlanDateModal, PlanTimeModal } from '@/components/calendar/plan/PlanPickerModals';
-import { FullScreenPage, PageFooter } from '@/components/layout/FullScreenPage';
+import { notInPast, PlanDateModal, PlanTimeModal } from '@/components/calendar/plan/PlanPickerModals';
+import { FullScreenPage } from '@/components/layout/FullScreenPage';
 import { HeaderIconButton } from '@/components/ui/HeaderIconButton';
 import { Icon } from '@/components/ui/Icon';
-import { PrimaryButton } from '@/components/ui/primitives';
 import { useTheme } from '@/hooks/useTheme';
 import {
   FAB_ACTIONS,
@@ -91,6 +90,12 @@ function titlePlaceholder(kind: PlanKindKey): string {
   }
 }
 
+/** The day a new plan starts on: the selected day, or today if that day has passed. */
+function startingPlanDay(selectedDate: Date): Date {
+  const today = startOfDay(new Date());
+  return startOfDay(selectedDate) < today ? today : selectedDate;
+}
+
 export function CreatePlanFlow({
   visible,
   selectedDate,
@@ -127,8 +132,9 @@ export function CreatePlanFlow({
   const [checklistDraft, setChecklistDraft] = useState('');
   const [createSharedList, setCreateSharedList] = useState(false);
   const [attachedListIds, setAttachedListIds] = useState<string[]>([]);
-  const [eventDate, setEventDate] = useState(selectedDate);
-  const [eventTime, setEventTime] = useState(() => defaultEventTime(selectedDate));
+  // Opened from a day that's already gone: start from today instead (plans can't be in the past).
+  const [eventDate, setEventDate] = useState(() => startingPlanDay(selectedDate));
+  const [eventTime, setEventTime] = useState(() => notInPast(defaultEventTime(startingPlanDay(selectedDate))));
   const [dateOpen, setDateOpen] = useState(false);
   const [timeOpen, setTimeOpen] = useState(false);
   const [reminderOpen, setReminderOpen] = useState(false);
@@ -190,6 +196,13 @@ export function CreatePlanFlow({
 
   const handleSave = () => {
     if (!title.trim()) return;
+    // The page may have sat open long enough for the chosen time to pass.
+    if (eventTime.getTime() <= Date.now()) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      setEventTime(notInPast(eventTime));
+      setTimeOpen(true);
+      return;
+    }
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     const meta: PlanMeta = {
       v: 1,
@@ -218,6 +231,7 @@ export function CreatePlanFlow({
   return (
     <>
       <FullScreenPage
+        dismissKeyboardOnTap
         visible={visible}
         title="New plan"
         avoidKeyboard={false}
@@ -507,54 +521,54 @@ export function CreatePlanFlow({
 
               </ScrollView>
 
-              {/* Pinned under the form like New memory's — always in reach. */}
-              <PageFooter hideWhileTyping>
-                <PrimaryButton label="Save plan" onPress={handleSave} disabled={!title.trim()} loading={saving} />
-              </PageFooter>
+
+        {/* Pickers live inside this page's own Modal: on iPhone a second Modal
+            opened beside an open one never shows, while one opened from inside it does. */}
+        <PlanDateModal
+          visible={dateOpen}
+          value={eventDate}
+          onClose={() => setDateOpen(false)}
+          onConfirm={(day) => {
+            setEventDate(day);
+            setEventTime(() => notInPast(applyTimeParts(day, hour12, minute, ampm)));
+            setDateOpen(false);
+          }}
+        />
+
+        <PlanTimeModal
+          visible={timeOpen}
+          hour12={hour12}
+          minute={minute}
+          period={ampm}
+          day={eventDate}
+          onClose={() => setTimeOpen(false)}
+          onConfirm={(h, m, p) => {
+            setEventTime(applyTimeParts(eventDate, h, m, p));
+            setTimeOpen(false);
+          }}
+        />
+
+        <Modal visible={reminderOpen} transparent animationType="fade" onRequestClose={() => setReminderOpen(false)}>
+          <Pressable style={styles.reminderBackdrop} onPress={() => setReminderOpen(false)}>
+            <View style={[styles.reminderSheet, { backgroundColor: colors.backgroundElevated }]}>
+              <Text style={[styles.reminderTitle, { color: colors.text }]}>Reminder</Text>
+              {REMINDER_OPTIONS.map((opt) => (
+                <Pressable
+                  key={String(opt.mins)}
+                  onPress={() => {
+                    setReminderMins(opt.mins);
+                    setReminderOpen(false);
+                  }}
+                  style={styles.reminderRow}>
+                  <Text style={{ color: colors.text, fontSize: 16, fontWeight: '600' }}>{opt.label}</Text>
+                  {reminderMins === opt.mins ? <Icon name="check" size={18} color={colors.accent} /> : null}
+                </Pressable>
+              ))}
+            </View>
+          </Pressable>
+        </Modal>
       </FullScreenPage>
 
-      <PlanDateModal
-        visible={dateOpen}
-        value={eventDate}
-        onClose={() => setDateOpen(false)}
-        onConfirm={(day) => {
-          setEventDate(day);
-          setEventTime((t) => applyTimeParts(day, hour12, minute, ampm));
-          setDateOpen(false);
-        }}
-      />
-
-      <PlanTimeModal
-        visible={timeOpen}
-        hour12={hour12}
-        minute={minute}
-        period={ampm}
-        onClose={() => setTimeOpen(false)}
-        onConfirm={(h, m, p) => {
-          setEventTime(applyTimeParts(eventDate, h, m, p));
-          setTimeOpen(false);
-        }}
-      />
-
-      <Modal visible={reminderOpen} transparent animationType="fade" onRequestClose={() => setReminderOpen(false)}>
-        <Pressable style={styles.reminderBackdrop} onPress={() => setReminderOpen(false)}>
-          <View style={[styles.reminderSheet, { backgroundColor: colors.backgroundElevated }]}>
-            <Text style={[styles.reminderTitle, { color: colors.text }]}>Reminder</Text>
-            {REMINDER_OPTIONS.map((opt) => (
-              <Pressable
-                key={String(opt.mins)}
-                onPress={() => {
-                  setReminderMins(opt.mins);
-                  setReminderOpen(false);
-                }}
-                style={styles.reminderRow}>
-                <Text style={{ color: colors.text, fontSize: 16, fontWeight: '600' }}>{opt.label}</Text>
-                {reminderMins === opt.mins ? <Icon name="check" size={18} color={colors.accent} /> : null}
-              </Pressable>
-            ))}
-          </View>
-        </Pressable>
-      </Modal>
     </>
   );
 }

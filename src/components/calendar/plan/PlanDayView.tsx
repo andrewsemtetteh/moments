@@ -1,7 +1,5 @@
 import { format } from 'date-fns';
-import * as Haptics from '@/lib/haptics';
-import { useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Icon } from '@/components/ui/Icon';
 import { Avatar } from '@/components/ui/primitives';
@@ -9,6 +7,7 @@ import { useTheme } from '@/hooks/useTheme';
 import { getFirstName } from '@/lib/avatar-initial';
 import { displayTitle, isHiddenFrom, planOwner } from '@/lib/plan-day';
 import { parsePlanMeta } from '@/lib/plan-meta';
+import { PlanEmptyState } from '@/components/calendar/plan/PlanAgendaList';
 import type { CalendarEvent, UserProfile } from '@/types/database';
 
 /** Partner lane / dot color — the blue half of the m♥ments hearts. */
@@ -23,12 +22,10 @@ export function ownerColor(
   return owner === meId ? colors.warning : PARTNER_COLOR;
 }
 
-/** One-tap reply to your partner's day note (inline, like the design). */
-const CHEER = 'Sending love 💞';
-
 /**
- * Upcoming → the selected day for both of you: day notes (today only),
- * when you're both free, and a lane each. "Together" plans show in both lanes.
+ * Upcoming → the selected day for both of you: when you're both free, then every
+ * plan in one list by time, each with the faces of who it's for (both of you for a
+ * plan together, otherwise just the one person).
  */
 export function PlanDayView({
   day,
@@ -36,131 +33,38 @@ export function PlanDayView({
   events,
   me,
   partner,
-  myNote,
-  partnerNote,
   freeLabel,
   onPressEvent,
   onPlanFree,
-  onSaveMyNote,
-  onCheer,
+  emptyTitle,
+  emptyBody,
 }: {
   day: Date;
   isTodaySelected: boolean;
   events: CalendarEvent[];
   me: UserProfile | null;
   partner: UserProfile | null;
-  myNote: CalendarEvent | null;
-  partnerNote: CalendarEvent | null;
   freeLabel: string | null;
   onPressEvent: (event: CalendarEvent) => void;
   onPlanFree: () => void;
-  onSaveMyNote: (text: string) => void;
-  onCheer: (note: CalendarEvent, cheer: string) => void;
+  /** Wording for the current filter when the day has nothing. */
+  emptyTitle?: string;
+  emptyBody?: string;
 }) {
   const { colors } = useTheme();
   const partnerName = getFirstName(partner?.name) ?? 'Partner';
-  const [editingNote, setEditingNote] = useState(false);
-  const myNoteText = myNote ? parsePlanMeta(myNote.description).notes ?? '' : '';
-  const [draft, setDraft] = useState(myNoteText);
 
-  const myCheerOnPartner = partnerNote && me ? parsePlanMeta(partnerNote.description).reactions?.[me.id] : undefined;
-  const partnerCheerOnMine = myNote && partner ? parsePlanMeta(myNote.description).reactions?.[partner.id] : undefined;
+  const sorted = [...events].sort((x, y) => new Date(x.date_time).getTime() - new Date(y.date_time).getTime());
 
-  const lanes: { key: string; name: string; profile: UserProfile | null; color: string; items: CalendarEvent[] }[] = [
-    {
-      key: 'me',
-      name: 'You',
-      profile: me,
-      color: colors.warning,
-      items: events.filter((e) => {
-        const o = planOwner(e);
-        return o === 'together' || o === me?.id;
-      }),
-    },
-    {
-      key: 'partner',
-      name: partnerName,
-      profile: partner,
-      color: PARTNER_COLOR,
-      items: events.filter((e) => {
-        const o = planOwner(e);
-        return o === 'together' || (o !== me?.id && o !== 'together');
-      }),
-    },
-  ];
-
-  const saveNote = () => {
-    const text = draft.trim();
-    setEditingNote(false);
-    if (text === myNoteText) return;
-    onSaveMyNote(text);
+  const whoFor = (event: CalendarEvent) => {
+    const owner = planOwner(event);
+    if (owner === 'together') return { people: [me, partner], label: 'Together' };
+    if (owner === me?.id) return { people: [me], label: 'You' };
+    return { people: [partner], label: partnerName };
   };
 
   return (
     <View style={styles.root}>
-      {isTodaySelected && partnerNote ? (
-        <View style={[styles.noteRow, { backgroundColor: colors.surface }]}>
-          <Avatar name={partner?.name} imageUrl={partner?.avatar_url} size={30} />
-          <Text style={[styles.noteText, { color: colors.text }]} numberOfLines={2}>
-            {partnerName}: “{parsePlanMeta(partnerNote.description).notes}”
-          </Text>
-          {myCheerOnPartner ? (
-            <Icon name="heart" size={18} color={colors.accent} filled />
-          ) : (
-            <Pressable
-              onPress={() => {
-                void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                onCheer(partnerNote, CHEER);
-              }}
-              accessibilityRole="button"
-              accessibilityLabel={`Send ${partnerName} love`}
-              style={({ pressed }) => [styles.cheerBtn, { backgroundColor: colors.accentSoft }, pressed && styles.pressed]}>
-              <Icon name="heart" size={14} color={colors.accent} />
-              <Text style={[styles.cheerText, { color: colors.accent }]}>Send love</Text>
-            </Pressable>
-          )}
-        </View>
-      ) : null}
-
-      {isTodaySelected ? (
-        editingNote ? (
-          <View style={[styles.noteRow, { backgroundColor: colors.surface }]}>
-            <Avatar name={me?.name} imageUrl={me?.avatar_url} size={30} />
-            <TextInput
-              value={draft}
-              onChangeText={setDraft}
-              placeholder="What's your day like?"
-              placeholderTextColor={colors.textTertiary}
-              autoFocus
-              maxLength={80}
-              returnKeyType="done"
-              onSubmitEditing={saveNote}
-              onBlur={saveNote}
-              style={[styles.noteInput, { color: colors.text }]}
-            />
-          </View>
-        ) : (
-          <Pressable
-            onPress={() => {
-              setDraft(myNoteText);
-              setEditingNote(true);
-            }}
-            accessibilityRole="button"
-            accessibilityLabel={myNoteText ? 'Edit your note for today' : 'Add a note about your day'}
-            style={({ pressed }) => [styles.noteRow, { backgroundColor: colors.surface }, pressed && styles.pressed]}>
-            <Avatar name={me?.name} imageUrl={me?.avatar_url} size={30} />
-            <Text
-              style={[styles.noteText, { color: myNoteText ? colors.text : colors.textTertiary }]}
-              numberOfLines={2}>
-              {myNoteText ? `You: “${myNoteText}”` : `Tell ${partnerName} about your day…`}
-            </Text>
-            {partnerCheerOnMine ? (
-              <Text style={[styles.cheerSent, { color: colors.accent }]}>{partnerCheerOnMine}</Text>
-            ) : null}
-          </Pressable>
-        )
-      ) : null}
-
       {freeLabel ? (
         <Pressable
           onPress={onPlanFree}
@@ -175,51 +79,70 @@ export function PlanDayView({
         </Pressable>
       ) : null}
 
-      <View style={styles.lanes}>
-        {lanes.map((lane) => (
-          <View key={lane.key} style={[styles.lane, { backgroundColor: colors.surface }]}>
-            <View style={styles.laneHead}>
-              <Avatar name={lane.profile?.name} imageUrl={lane.profile?.avatar_url} size={22} />
-              <Text style={[styles.laneName, { color: colors.text }]} numberOfLines={1}>
-                {lane.name}
-              </Text>
-            </View>
-            {lane.items.length === 0 ? (
-              <Text style={[styles.laneEmpty, { color: colors.textTertiary }]}>Nothing planned</Text>
-            ) : (
-              lane.items.map((event) => {
-                const hidden = isHiddenFrom(event, me?.id);
-                const owner = planOwner(event);
-                return (
-                  <Pressable
-                    key={`${lane.key}-${event.id}`}
-                    disabled={hidden}
-                    onPress={() => onPressEvent(event)}
-                    accessibilityRole="button"
-                    style={({ pressed }) => [styles.item, pressed && styles.pressed]}>
+      {sorted.length === 0 ? (
+        <PlanEmptyState
+          icon={day < new Date(new Date().toDateString()) ? 'moon' : 'calendar'}
+          title={day < new Date(new Date().toDateString()) ? 'A quiet day' : emptyTitle ?? 'Nothing planned'}
+          body={
+            day < new Date(new Date().toDateString())
+              ? 'No plans on this day.'
+              : emptyBody ?? 'Plans for this day will show here.'
+          }
+        />
+      ) : (
+      <View style={[styles.list, { backgroundColor: colors.surface }]}>
+        {(
+          sorted.map((event, i) => {
+            const hidden = isHiddenFrom(event, me?.id);
+            const owner = planOwner(event);
+            const at = new Date(event.date_time);
+            const tint = hidden ? colors.border : ownerColor(owner, me?.id, colors);
+            const place = hidden ? undefined : parsePlanMeta(event.description).location;
+            const who = whoFor(event);
+            return (
+              <Pressable
+                key={event.id}
+                disabled={hidden}
+                onPress={() => onPressEvent(event)}
+                accessibilityRole="button"
+                accessibilityLabel={`${format(at, 'h:mm a')}, ${displayTitle(event, me?.id)}, ${who.label}`}
+                style={({ pressed }) => [
+                  styles.row,
+                  i > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },
+                  pressed && styles.pressed,
+                ]}>
+                <View style={styles.time}>
+                  <Text style={[styles.timeMain, { color: colors.text }]}>{format(at, 'h:mm')}</Text>
+                  <Text style={[styles.timeAmPm, { color: colors.textTertiary }]}>{format(at, 'a')}</Text>
+                </View>
+                <View style={[styles.bar, { backgroundColor: tint }]} />
+                <View style={styles.body}>
+                  <View style={styles.titleRow}>
+                    <Text
+                      style={[styles.title, { color: hidden ? colors.textTertiary : colors.text }]}
+                      numberOfLines={1}>
+                      {displayTitle(event, me?.id)}
+                    </Text>
+                  </View>
+                  <Text style={[styles.sub, { color: colors.textSecondary }]} numberOfLines={1}>
+                    {place ? `${who.label} · ${place}` : who.label}
+                  </Text>
+                </View>
+                <View style={styles.faces}>
+                  {who.people.map((person, j) => (
                     <View
-                      style={[
-                        styles.itemBar,
-                        { backgroundColor: hidden ? colors.border : ownerColor(owner, me?.id, colors) },
-                      ]}
-                    />
-                    <View style={styles.itemText}>
-                      <Text style={[styles.itemTime, { color: colors.textTertiary }]}>
-                        {format(new Date(event.date_time), 'h:mm a')}
-                      </Text>
-                      <Text
-                        style={[styles.itemTitle, { color: hidden ? colors.textTertiary : colors.text }]}
-                        numberOfLines={1}>
-                        {displayTitle(event, me?.id)}
-                      </Text>
+                      key={j}
+                      style={[styles.face, j > 0 && styles.faceOverlap, { borderColor: colors.surface }]}>
+                      <Avatar name={person?.name} imageUrl={person?.avatar_url} size={28} />
                     </View>
-                  </Pressable>
-                );
-              })
-            )}
-          </View>
-        ))}
+                  ))}
+                </View>
+              </Pressable>
+            );
+          })
+        )}
       </View>
+      )}
     </View>
   );
 }
@@ -227,20 +150,6 @@ export function PlanDayView({
 const styles = StyleSheet.create({
   root: { gap: 10 },
   pressed: { opacity: 0.7 },
-  noteRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 16,
-    minHeight: 50,
-  },
-  noteText: { flex: 1, fontSize: 14, fontWeight: '700', lineHeight: 19 },
-  noteInput: { flex: 1, fontSize: 14, fontWeight: '700', padding: 0 },
-  cheerSent: { fontSize: 13, fontWeight: '800' },
-  cheerBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, height: 30, paddingHorizontal: 10, borderRadius: 15 },
-  cheerText: { fontSize: 13, fontWeight: '800' },
   freeBar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -251,14 +160,17 @@ const styles = StyleSheet.create({
   },
   freeText: { flex: 1, fontSize: 14, fontWeight: '700' },
   freeAction: { fontSize: 13, fontWeight: '800' },
-  lanes: { flexDirection: 'row', gap: 10 },
-  lane: { flex: 1, minWidth: 0, borderRadius: 18, padding: 12, gap: 10 },
-  laneHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  laneName: { flex: 1, fontSize: 14, fontWeight: '800' },
-  laneEmpty: { fontSize: 13, fontWeight: '600' },
-  item: { flexDirection: 'row', gap: 8, alignItems: 'stretch' },
-  itemBar: { width: 3, borderRadius: 2 },
-  itemText: { flex: 1, minWidth: 0, gap: 1 },
-  itemTime: { fontSize: 12, fontWeight: '700' },
-  itemTitle: { fontSize: 14, fontWeight: '700' },
+  list: { borderRadius: 18, overflow: 'hidden' },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingVertical: 12, minHeight: 64 },
+  time: { width: 46, alignItems: 'flex-end' },
+  timeMain: { fontSize: 15, fontWeight: '800', fontVariant: ['tabular-nums'] },
+  timeAmPm: { fontSize: 11, fontWeight: '700', textTransform: 'uppercase' },
+  bar: { width: 3, alignSelf: 'stretch', borderRadius: 2 },
+  body: { flex: 1, minWidth: 0, gap: 2 },
+  titleRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  title: { flexShrink: 1, fontSize: 15, fontWeight: '700' },
+  sub: { fontSize: 13, fontWeight: '600' },
+  faces: { flexDirection: 'row', alignItems: 'center' },
+  face: { borderWidth: 2, borderRadius: 16 },
+  faceOverlap: { marginLeft: -10 },
 });

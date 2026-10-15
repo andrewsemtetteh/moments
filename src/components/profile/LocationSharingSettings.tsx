@@ -1,11 +1,12 @@
 import * as Haptics from '@/lib/haptics';
 import { useEffect, useState } from 'react';
-import { Alert, AppState, StyleSheet, Switch, Text, View } from 'react-native';
+import { Alert, AppState, StyleSheet, Text, View } from 'react-native';
 
 import { Icon } from '@/components/ui/Icon';
 import { useLocationSharing } from '@/hooks/useLocationSharing';
 import { useTheme } from '@/hooks/useTheme';
 import { getCurrentPlace, hasLocationPermission, openAppSettings } from '@/lib/location';
+import { AppSwitch } from '@/components/ui/AppSwitch';
 
 function showLocationError(message: string, reason?: string) {
   // "Not now" on the permission sheet: they already chose, no alert needed.
@@ -117,12 +118,10 @@ export function LocationSharingSettings() {
             </Text>
           </View>
         </View>
-        <Switch
+        <AppSwitch
           value={switchValue}
           onValueChange={(value) => void onToggle(value)}
           disabled={locating}
-          trackColor={{ false: colors.border, true: colors.accent }}
-          thumbColor="#FFFFFF"
         />
       </View>
 

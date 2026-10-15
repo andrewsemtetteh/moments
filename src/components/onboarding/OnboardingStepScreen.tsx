@@ -17,7 +17,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { Icon } from '@/components/ui/Icon';
 import { useTheme } from '@/hooks/useTheme';
-import { ONBOARDING_STEPS, stepIndex, stepProgress, stepRoute, type OnboardingStep } from '@/lib/onboarding-v2';
+import { prevStep as stepBefore, stepProgress, stepRoute, type OnboardingStep } from '@/lib/onboarding-v2';
 
 function useKeyboardOpen() {
   const [open, setOpen] = useState(false);
@@ -86,7 +86,7 @@ export function OnboardingStepScreen({
   const preview = useLocalSearchParams<{ preview?: string }>().preview === '1';
   // Back: the previous screen. When this screen was opened fresh (the app
   // resumed mid-onboarding, so there's no history), go to the previous step.
-  const prevStep = step ? ONBOARDING_STEPS[stepIndex(step) - 1] : undefined;
+  const prevStep = step ? stepBefore(step) : undefined;
   const defaultBack =
     router.canGoBack() || prevStep
       ? () => {

@@ -2,12 +2,11 @@ import { format, isBefore, isSameDay, isToday, startOfDay } from 'date-fns';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 
-import { Icon } from '@/components/ui/Icon';
-import { PrimaryButton } from '@/components/ui/primitives';
+import { Icon, type IconName } from '@/components/ui/Icon';
 import { EVENT_TYPE_META, getEventTypeColors } from '@/constants/calendar-events';
 import { Radius } from '@/constants/design-system';
 import { useTheme } from '@/hooks/useTheme';
-import { isPlanCompleted, parsePlanMeta, planIcon } from '@/lib/plan-meta';
+import { isPlanCompleted, parsePlanMeta } from '@/lib/plan-meta';
 import type { CalendarEvent } from '@/types/database';
 
 function groupLabel(day: Date): string {
@@ -34,50 +33,49 @@ function groupEvents(events: CalendarEvent[]): AgendaGroup[] {
   }));
 }
 
+/** The empty state used across Plan: an icon, a title and a line, centred, nothing to tap. */
+export function PlanEmptyState({ icon, title, body }: { icon: IconName; title: string; body: string }) {
+  const { colors } = useTheme();
+  return (
+    <View style={styles.empty}>
+      <View style={[styles.emptyIcon, { backgroundColor: colors.accentSoft }]}>
+        <Icon name={icon} size={26} color={colors.accent} />
+      </View>
+      <Text style={[styles.emptyTitle, { color: colors.text }]}>{title}</Text>
+      <Text style={[styles.emptyBody, { color: colors.textSecondary }]}>{body}</Text>
+    </View>
+  );
+}
+
 export function PlanAgendaList({
   events,
   selectedDate,
   onPressEvent,
-  emptyAction,
   hideGroupLabel = false,
+  emptyTitle,
+  emptyBody,
 }: {
   events: CalendarEvent[];
-  /** When set, hide “Add a plan” for past empty days. */
+  /** Picks the past-day wording when nothing was planned. */
   selectedDate?: Date;
   onPressEvent?: (event: CalendarEvent) => void;
-  emptyAction?: () => void;
   hideGroupLabel?: boolean;
+  /** Wording for the current filter; defaults to a general "nothing planned". */
+  emptyTitle?: string;
+  emptyBody?: string;
 }) {
   const { colors } = useTheme();
   const groups = groupEvents(events);
   const isPastEmpty =
-    !!selectedDate &&
-    isBefore(startOfDay(selectedDate), startOfDay(new Date())) &&
-    groups.length === 0;
-  const showAdd = !!emptyAction && !isPastEmpty;
+    !!selectedDate && isBefore(startOfDay(selectedDate), startOfDay(new Date())) && groups.length === 0;
 
   if (groups.length === 0) {
     return (
-      <View
-        style={[
-          styles.empty,
-          { borderColor: colors.border, borderWidth: colors.boldBorder ? 2 : StyleSheet.hairlineWidth },
-        ]}>
-        <View style={[styles.emptyIcon, { backgroundColor: colors.accentSoft }]}>
-          <Icon name={isPastEmpty ? 'moon' : 'calendar'} size={24} color={colors.accent} />
-        </View>
-        <Text style={[styles.emptyTitle, { color: colors.text }]}>
-          {isPastEmpty ? 'A quiet day' : 'Nothing planned yet'}
-        </Text>
-        <Text style={[styles.emptyBody, { color: colors.textSecondary }]}>
-          {isPastEmpty
-            ? 'No plans on this day.'
-            : 'Every memory starts with one plan. Pick something to look forward to together.'}
-        </Text>
-        {showAdd ? (
-          <PrimaryButton label="Plan something" onPress={emptyAction} style={styles.emptyBtn} />
-        ) : null}
-      </View>
+      <PlanEmptyState
+        icon={isPastEmpty ? 'moon' : 'calendar'}
+        title={isPastEmpty ? 'A quiet day' : emptyTitle ?? 'Nothing planned'}
+        body={isPastEmpty ? 'No plans on this day.' : emptyBody ?? 'Plans for this day will show here.'}
+      />
     );
   }
 
@@ -117,7 +115,6 @@ function PlanCard({
   const tc = getEventTypeColors(event.type, colors);
   const at = new Date(event.date_time);
   const meta = parsePlanMeta(event.description);
-  const icon = planIcon(event);
   const typeLabel = EVENT_TYPE_META[event.type]?.label ?? 'Plan';
 
   return (
@@ -168,13 +165,11 @@ function PlanCard({
             )}
           </View>
         </View>
-        <View style={[styles.badge, { backgroundColor: done ? colors.surfaceElevated : tc.soft }]}>
-          {done ? (
+        {done ? (
+          <View style={[styles.badge, { backgroundColor: colors.surfaceElevated }]}>
             <Icon name="check" size={18} color={colors.success} />
-          ) : (
-            <Icon name={icon} size={19} color={tc.main} />
-          )}
-        </View>
+          </View>
+        ) : null}
       </View>
     </Pressable>
   );
@@ -233,23 +228,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   badgeEmoji: { fontSize: 19 },
-  empty: {
-    paddingVertical: 28,
-    paddingHorizontal: 20,
-    alignItems: 'center',
-    gap: 8,
-    borderRadius: Radius.xl,
-    borderStyle: 'dashed',
-  },
-  emptyIcon: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 4,
-  },
-  emptyTitle: { fontSize: 17, fontWeight: '800', letterSpacing: -0.2 },
+  empty: { alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 40, paddingHorizontal: 24 },
+  emptyIcon: { width: 60, height: 60, borderRadius: 30, alignItems: 'center', justifyContent: 'center', marginBottom: 6 },
+  emptyTitle: { fontSize: 18, fontWeight: '800', letterSpacing: -0.2, textAlign: 'center' },
   emptyBody: { fontSize: 14, textAlign: 'center', lineHeight: 20, maxWidth: 280 },
-  emptyBtn: { marginTop: 10, minWidth: 180 },
 });

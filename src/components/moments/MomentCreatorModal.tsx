@@ -7,7 +7,6 @@ import { useEffect, useRef, useState } from 'react';
 import {
     ActivityIndicator,
     Alert,
-    BackHandler,
     Dimensions,
     Pressable,
     StyleSheet,
@@ -32,6 +31,7 @@ import { getCurrentPlace, type PlaceSnapshot } from '@/lib/location';
 import { rememberPlaceSuggestion } from '@/lib/moment-places';
 import { momentChrome } from '@/lib/moment-theme';
 import { toUserFacingNetworkError } from '@/lib/network-error';
+import { MOMENTS_BACK, useMomentsBack } from '@/lib/moments-back';
 import * as api from '@/services/api';
 import { useAuthStore, useMomentStore, useRelationshipStore, useUIStore } from '@/stores';
 import { todayKey } from '@/lib/play-progress';
@@ -356,15 +356,7 @@ export function MomentCreatorModal() {
     });
   };
 
-  useEffect(() => {
-    if (!visible) return;
-    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
-      close();
-      return true;
-    });
-    return () => sub.remove();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visible]);
+  useMomentsBack(MOMENTS_BACK.creator, visible, () => close());
 
   const inPreview = !!previewUri;
   const showCamera = !previewUri;

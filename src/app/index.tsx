@@ -1,9 +1,9 @@
+import { Image } from 'expo-image';
 import { useRouter, type Href } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useCallback, useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
-import { LogoMark } from '@/components/ui/Logo';
 import { useTheme } from '@/hooks/useTheme';
 // eslint-disable-next-line @typescript-eslint/no-unused-vars -- used by the commented-out restore path below
 import { isIntroCompleted } from '@/lib/intro-storage';
@@ -14,6 +14,7 @@ import { useAuthStore, useRelationshipStore, useUIStore } from '@/stores';
 
 /** The heart alone, no name: same as the native splash it follows. */
 const LOGO_SIZE = 180;
+const SPLASH_LOGO = require('../../assets/images/splash-logo-rounded.png');
 /** The launch screen: the logo, still (no animation), for 5 seconds from when
  * it's actually on screen, then straight on to the next screen (no fade). */
 const MIN_VISIBLE_MS = 5000;
@@ -132,7 +133,8 @@ export default function IndexScreen() {
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
       {themeReady ? (
         <View style={styles.center}>
-          <LogoMark size={LOGO_SIZE} />
+          {/* Same rounded logo, same size as the native splash, so the hand-off doesn't jump. */}
+          <Image source={SPLASH_LOGO} style={styles.logo} contentFit="contain" />
         </View>
       ) : null}
     </View>
@@ -142,4 +144,5 @@ export default function IndexScreen() {
 const styles = StyleSheet.create({
   screen: { flex: 1 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  logo: { width: LOGO_SIZE, height: LOGO_SIZE },
 });

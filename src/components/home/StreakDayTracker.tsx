@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View, type ViewStyle } from 'react-native';
 
 import { AnimatedStreakFire } from '@/components/home/AnimatedStreakFire';
+import { StickerFlame } from '@/components/home/StickerFlame';
 import { DashedRing } from '@/components/ui/DashedRing';
 import { Icon } from '@/components/ui/Icon';
 import { Radius } from '@/constants/design-system';
@@ -291,16 +292,16 @@ function DayCell({
   let badge: ReactNode = null;
 
   if (active) {
-    circle = { backgroundColor: STREAK_COLORS.active };
+    // Lit, like the milestone celebration: yellow, bold ink outline, sticker flame.
+    circle = { backgroundColor: '#FFE7A0', borderWidth: 2, borderColor: '#000000' };
     if (flame) {
-      // Week: just the flame, as on Home's intro card.
-      content = <Icon name="fire" size={iconSize} color={STREAK_COLORS.onActive} filled />;
+      content = <StickerFlame size={Math.round(size * 0.46)} />;
     } else {
-      // Month: the date, with a small flame badge on the corner (like a missed day's ✕).
-      content = <Text style={[calStyles.num, calStyles.numActive, { color: STREAK_COLORS.onActive }]}>{number}</Text>;
+      // Month: the date, with a little sticker flame on the corner (like a missed day's ✕).
+      content = <Text style={[calStyles.num, calStyles.numActive, { color: '#000000' }]}>{number}</Text>;
       badge = (
-        <View style={[calStyles.cornerBadge, { backgroundColor: '#FFFFFF', borderColor: colors.surface }]}>
-          <Icon name="fire" size={9} color={STREAK_COLORS.active} filled />
+        <View style={[calStyles.cornerBadge, { backgroundColor: '#FFFFFF', borderColor: '#000000' }]}>
+          <StickerFlame size={9} />
         </View>
       );
     }
@@ -345,10 +346,22 @@ function DayCell({
     content = flame ? null : <Text style={[calStyles.num, { color: colors.textTertiary }]}>{number}</Text>;
   } else {
     const faded = day.state === 'inactive';
-    circle = { backgroundColor: flame ? colors.surfaceElevated : 'transparent', opacity: faded ? 0.45 : 1 };
-    content = flame ? null : (
-      <Text style={[calStyles.num, { color: faded ? colors.textTertiary : colors.textSecondary }]}>{number}</Text>
-    );
+    if (flame) {
+      // Week view: every day keeps a visible shape. Before you joined: faint dashes;
+      // an ordinary day: an outlined circle.
+      if (faded) {
+        circle = { opacity: 0.45 };
+        ring = <DashedRing size={size} color={colors.borderStrong} />;
+      } else {
+        circle = { backgroundColor: colors.surfaceElevated, borderWidth: 2, borderColor: colors.borderStrong };
+      }
+      content = null;
+    } else {
+      circle = { backgroundColor: 'transparent', opacity: faded ? 0.45 : 1 };
+      content = (
+        <Text style={[calStyles.num, { color: faded ? colors.textTertiary : colors.textSecondary }]}>{number}</Text>
+      );
+    }
   }
 
   return (
@@ -359,7 +372,7 @@ function DayCell({
             style={[
               calStyles.band,
               {
-                backgroundColor: STREAK_COLORS.active,
+                backgroundColor: '#FFE7A0',
                 left: prevActive ? 0 : '50%',
                 right: nextActive ? 0 : '50%',
               },

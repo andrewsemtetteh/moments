@@ -14,6 +14,7 @@ import { PartnerStatusLine } from '@/components/chat/PartnerStatusLine';
 import { StreakFlame } from '@/components/home/StreakFlame';
 import { FullScreenPage } from '@/components/layout/FullScreenPage';
 import { LocationMapPreview } from '@/components/moments/LocationMapPreview';
+import { FullScreenLocationMapModal } from '@/components/profile/FullScreenLocationMapModal';
 import { FullScreenImageModal } from '@/components/ui/FullScreenImageModal';
 import { Icon, type IconName } from '@/components/ui/Icon';
 import { Avatar } from '@/components/ui/primitives';
@@ -48,7 +49,6 @@ export function PartnerProfileModal() {
   const setMomentHistoryReturnToCamera = useUIStore((s) => s.setMomentHistoryReturnToCamera);
   const setShowMomentCreator = useUIStore((s) => s.setShowMomentCreator);
   const openMomentViewer = useUIStore((s) => s.openMomentViewer);
-  const openPartnerLocationMap = useUIStore((s) => s.openPartnerLocationMap);
 
   const user = useAuthStore((s) => s.user);
   const partner = useRelationshipStore((s) => s.partner);
@@ -100,8 +100,13 @@ export function PartnerProfileModal() {
     return { long: format(since, 'MMMM d, yyyy'), short: format(since, 'd MMM yyyy') };
   }, [relationship]);
 
+  // The full map opens over this page (not as its own layer), so closing it lands
+  // straight back here instead of flashing the screen underneath first.
+  const [showMap, setShowMap] = useState(false);
+
   const close = () => {
     setShowAvatar(false);
+    setShowMap(false);
     closePartnerProfile();
   };
 
@@ -129,9 +134,7 @@ export function PartnerProfileModal() {
 
   const openFullMap = () => {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    // Close this page first, same as every other full-screen flow launched from the
-    // profile (call, moment creator, history) — the map then opens as its own page.
-    leaveProfile(() => openPartnerLocationMap(locationMarkers, mapTitle));
+    setShowMap(true);
   };
 
   const startVoiceCall = () => {
@@ -152,11 +155,15 @@ export function PartnerProfileModal() {
       return;
     }
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    openMomentViewer(recentPartnerMoments, 0, {
-      playback: 'story',
-      sectionLabel: `${getFirstName(partnerName) ?? 'Partner'}'s moment`,
-      returnToPartnerProfile: true,
-    });
+    // Like Chat and Our moments: the profile closes first, or the moment (its own
+    // Modal) can't open over it on iPhone. Closing the moment brings the profile back.
+    leaveProfile(() =>
+      openMomentViewer(recentPartnerMoments, 0, {
+        playback: 'story',
+        sectionLabel: `${getFirstName(partnerName) ?? 'Partner'}'s moment`,
+        returnToPartnerProfile: true,
+      }),
+    );
   };
 
   const viewProfilePhoto = () => {
@@ -239,7 +246,20 @@ export function PartnerProfileModal() {
     <>
       {/* A full page, like Chat itself: slides in from the right, back arrow at
           the top, swipe right anywhere (or Android back) to close. */}
-      <FullScreenPage visible={visible} title="" onBack={close} dismissKeyboardOnTap={false}>
+      <FullScreenPage
+        visible={visible}
+        title=""
+        onBack={close}
+       
+        overlay={
+          <FullScreenLocationMapModal
+            inline
+            visible={showMap}
+            markers={locationMarkers}
+            title={mapTitle}
+            onClose={() => setShowMap(false)}
+          />
+        }>
         {!profile && isLoadingPartner ? (
           <View style={styles.loadingState}>
             <ActivityIndicator size="large" color={colors.accent} />
@@ -445,15 +465,17 @@ export function PartnerProfileModal() {
             </Pressable>
           </ScrollView>
         )}
+
+        {/* Inside the profile's own Modal: on iPhone one opened beside it never shows. */}
+        <FullScreenImageModal
+          visible={showAvatar}
+          imageUrl={profile?.avatar_url}
+          fallbackName={profile?.name}
+          title={partnerName}
+          onClose={() => setShowAvatar(false)}
+        />
       </FullScreenPage>
 
-      <FullScreenImageModal
-        visible={showAvatar}
-        imageUrl={profile?.avatar_url}
-        fallbackName={profile?.name}
-        title={partnerName}
-        onClose={() => setShowAvatar(false)}
-      />
     </>
   );
 }

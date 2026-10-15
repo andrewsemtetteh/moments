@@ -8,7 +8,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
     ActivityIndicator,
     Alert,
-    BackHandler,
     Dimensions,
     KeyboardAvoidingView,
     Platform,
@@ -36,6 +35,7 @@ import { toUserFacingNetworkError } from '@/lib/network-error';
 import * as api from '@/services/api';
 import { useAuthStore, useRelationshipStore, useUIStore } from '@/stores';
 import type { Moment } from '@/types/database';
+import { MOMENTS_BACK, useMomentsBack } from '@/lib/moments-back';
 
 const STORY_DURATION_MS = 8000;
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
@@ -113,14 +113,7 @@ export function MomentStoryViewer() {
     closeMomentViewer();
   }, [closeMomentViewer]);
 
-  useEffect(() => {
-    if (!viewer) return;
-    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
-      dismissViewer();
-      return true;
-    });
-    return () => sub.remove();
-  }, [viewer, dismissViewer]);
+  useMomentsBack(MOMENTS_BACK.viewer, !!viewer, dismissViewer);
 
   const clearTimer = useCallback(() => {
     if (timerRef.current) {

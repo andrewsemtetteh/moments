@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Platform } from 'react-native';
 import type { Href, useRouter } from 'expo-router';
 
 import type { RelationshipType } from '@/types/database';
@@ -70,13 +71,34 @@ export function stepRoute(step: OnboardingStep, preview = false): Href {
   return { pathname: `/(onboarding)/${step}` as never, params } as Href;
 }
 
+/**
+ * The steps this phone actually shows. Android has no Moments widgets and no
+ * App Tracking prompt, so those two steps would only be dead ends there.
+ */
+const FLOW_STEPS: readonly OnboardingStep[] =
+  Platform.OS === 'android'
+    ? ONBOARDING_STEPS.filter((s) => s !== 'widget-prompt' && s !== 'tracking')
+    : ONBOARDING_STEPS;
+
+/** Where `step` sits in this phone's flow (a skipped step counts as the one before it). */
 export function stepIndex(step: OnboardingStep) {
-  return ONBOARDING_STEPS.indexOf(step);
+  const i = FLOW_STEPS.indexOf(step);
+  if (i >= 0) return i;
+  const before = ONBOARDING_STEPS.slice(0, ONBOARDING_STEPS.indexOf(step)).filter((s) => FLOW_STEPS.includes(s));
+  return before.length - 0.5;
+}
+
+/** The step after / before `step` on this phone, if any. */
+export function nextStep(step: OnboardingStep): OnboardingStep | undefined {
+  return FLOW_STEPS[Math.floor(stepIndex(step)) + 1];
+}
+export function prevStep(step: OnboardingStep): OnboardingStep | undefined {
+  return FLOW_STEPS[Math.ceil(stepIndex(step)) - 1];
 }
 
 /** 0…1 for the progress bar. */
 export function stepProgress(step: OnboardingStep) {
-  return (stepIndex(step) + 1) / ONBOARDING_STEPS.length;
+  return (Math.max(0, stepIndex(step)) + 1) / FLOW_STEPS.length;
 }
 
 export async function getOnboardingStep(userId: string): Promise<OnboardingStep | 'done' | null> {
@@ -133,13 +155,28 @@ export function useSavedAnswer<K extends keyof OnboardingDraft>(
 export async function goNext(
   router: ReturnType<typeof useRouter>,
   current: OnboardingStep,
-  { userId, preview }: { userId?: string | null; preview?: boolean },
+  {
+    userId,
+    preview,
+    replace,
+  }: {
+    userId?: string | null;
+    preview?: boolean;
+    /** Skip past this screen without leaving it behind (Back won't land on it again). */
+    replace?: boolean;
+  },
 ) {
-  const next = ONBOARDING_STEPS[stepIndex(current) + 1];
+  const next = nextStep(current);
   if (!next) return;
+  // A quick double tap on Continue would push the next step twice.
+  const now = Date.now();
+  if (lastGoNext.step === current && now - lastGoNext.at < 800) return;
+  lastGoNext = { step: current, at: now };
   if (userId && !preview) await setOnboardingStep(userId, next);
-  router.push(stepRoute(next, preview));
+  if (replace) router.replace(stepRoute(next, preview));
+  else router.push(stepRoute(next, preview));
 }
+let lastGoNext = { step: '' as string, at: 0 };
 
 /** Called when the paywall is done: onboarding complete, the tour is next. */
 export async function finishOnboarding(userId: string | null | undefined, preview = false) {

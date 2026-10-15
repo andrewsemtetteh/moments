@@ -45,7 +45,7 @@ export function SettingsEditPage({
 }) {
   const { colors } = useTheme();
   return (
-    <FullScreenPage visible={visible} title={title} onBack={onClose}>
+    <FullScreenPage visible={visible} title={title} onBack={onClose} dismissKeyboardOnTap>
       <ScrollView
         style={styles.flex}
         contentContainerStyle={styles.body}

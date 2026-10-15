@@ -13,10 +13,14 @@ import {
   View,
 } from 'react-native';
 
-import { PlanDateModal, PlanTimeModal } from '@/components/calendar/plan/PlanPickerModals';
+import { ownerColor } from '@/components/calendar/plan/PlanDayView';
+import { notInPast, PlanDateModal, PlanTimeModal } from '@/components/calendar/plan/PlanPickerModals';
 import { DraggableSheet } from '@/components/ui/DraggableSheet';
 import { Icon } from '@/components/ui/Icon';
-import { Avatar, PrimaryButton } from '@/components/ui/primitives';
+import { Avatar, colorWithAlpha, PrimaryButton } from '@/components/ui/primitives';
+import { LinearGradient } from 'expo-linear-gradient';
+import { getFirstName } from '@/lib/avatar-initial';
+import { planOwner } from '@/lib/plan-day';
 import { useTheme } from '@/hooks/useTheme';
 import {
   parsePlanMeta,
@@ -38,7 +42,7 @@ function applyTimeParts(base: Date, h12: number, m: number, period: 'AM' | 'PM')
 
 export function EventDetailsSheet({
   visible,
-  event,
+  event: eventProp,
   linkedListTitle,
   onClose,
   onSave,
@@ -53,6 +57,8 @@ export function EventDetailsSheet({
   linkedListTitle?: string | null;
   onClose: () => void;
   onSave: (patch: {
+    /** The plan being saved (it can save as the sheet closes, after the page let go of it). */
+    id: string;
     title: string;
     dateTime: Date;
     description: string;
@@ -64,6 +70,11 @@ export function EventDetailsSheet({
   saving?: boolean;
 }) {
   const { colors } = useTheme();
+  // Keep showing the last plan while the sheet slides away, so closing it from
+  // the page (Message, a linked list) animates instead of vanishing.
+  const [kept, setKept] = useState(eventProp);
+  if (eventProp && eventProp !== kept) setKept(eventProp);
+  const event = eventProp ?? kept;
   const user = useAuthStore((s) => s.user);
   const partner = useRelationshipStore((s) => s.partner);
   const [title, setTitle] = useState('');
@@ -96,7 +107,9 @@ export function EventDetailsSheet({
     setChecklistDraft('');
     setEditingTitle(false);
     dirty.current = false;
-  }, [visible, event]);
+    // Per plan, not per object: a save coming back mustn't wipe what's being typed.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible, event?.id]);
 
   const countdown = useMemo(() => {
     if (!event) return null;
@@ -113,10 +126,16 @@ export function EventDetailsSheet({
     return { done: doneCount, total };
   }, [checklist]);
 
-  if (!visible || !event) return null;
+  if (!event) return null;
 
   const icon = planIcon(event);
   const done = completed;
+  const owner = planOwner(event);
+  const tint = ownerColor(owner, user?.id, colors);
+  const people = owner === 'together' ? [user, partner] : owner === user?.id ? [user] : [partner];
+  const forLabel =
+    owner === 'together' ? 'Together' : owner === user?.id ? 'Just you' : `Just ${getFirstName(partner?.name) ?? 'your partner'}`;
+  const passed = !!countdown && countdown.totalMs === 0;
 
   const h24 = eventTime.getHours();
   const hour12 = h24 % 12 || 12;
@@ -147,6 +166,7 @@ export function EventDetailsSheet({
       0,
     );
     onSave({
+      id: event.id,
       title: title.trim() || event.title,
       dateTime,
       description: buildMeta(nextChecklist, overrides),
@@ -193,7 +213,7 @@ export function EventDetailsSheet({
 
   return (
     <>
-      <DraggableSheet visible={visible} onClose={closeSheet} avoidKeyboard style={styles.sheet}>
+      <DraggableSheet visible={visible && !!eventProp} onClose={closeSheet} avoidKeyboard style={styles.sheet}>
             <View style={styles.topBar}>
               <Pressable
                 onPress={closeSheet}
@@ -221,63 +241,75 @@ export function EventDetailsSheet({
               showsVerticalScrollIndicator={false}
               keyboardShouldPersistTaps="handled"
               contentContainerStyle={styles.scroll}>
-              <View style={[styles.heroIcon, { backgroundColor: colors.accentSoft }]}>
-                <Icon name={icon} size={26} color={colors.accent} />
-              </View>
-              {editingTitle ? (
-                <TextInput
-                  value={title}
-                  onChangeText={(t) => {
-                    setTitle(t);
-                    dirty.current = true;
-                  }}
-                  onBlur={() => setEditingTitle(false)}
-                  autoFocus
-                  style={[styles.heroTitleInput, { color: colors.text }]}
-                />
-              ) : (
-                <Pressable onPress={() => setEditingTitle(true)}>
-                  <Text
-                    style={[
-                      styles.heroTitle,
-                      { color: colors.text, textDecorationLine: done ? 'line-through' : 'none' },
-                    ]}>
-                    {title}
-                  </Text>
-                </Pressable>
-              )}
-              <Pressable onPress={() => setDateOpen(true)}>
-                <Text style={[styles.heroMeta, { color: colors.textSecondary }]}>
-                  {format(eventDate, 'EEEE, MMM d, yyyy')} · {format(eventTime, 'h:mm a')}
-                </Text>
-              </Pressable>
-              {location ? (
-                <View style={styles.locRow}>
-                  <Icon name="location" size={14} color={colors.textTertiary} />
-                  <Text style={[styles.locText, { color: colors.textTertiary }]}>{location}</Text>
+              {/* Hero: the plan in its colour, who it's for, and when (tap a chip to change it). */}
+              <LinearGradient
+                colors={[colorWithAlpha(tint, colors.isDark ? 0.34 : 0.2), colorWithAlpha(tint, colors.isDark ? 0.1 : 0.04)]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={[styles.hero, { borderColor: colorWithAlpha(tint, 0.3) }]}>
+                <View style={styles.heroTop}>
+                  <View style={[styles.heroIcon, { backgroundColor: colors.surface }]}>
+                    <Icon name={icon} size={26} color={tint} />
+                  </View>
+                  <View style={styles.heroPeople}>
+                    <View style={styles.heroFaces}>
+                      {people.map((person, i) => (
+                        <View key={i} style={[styles.heroFace, i > 0 && styles.heroFaceOverlap, { borderColor: colors.surface }]}>
+                          <Avatar name={person?.name} imageUrl={person?.avatar_url} size={28} />
+                        </View>
+                      ))}
+                    </View>
+                    <Text style={[styles.heroFor, { color: colors.textSecondary }]}>{forLabel}</Text>
+                  </View>
                 </View>
-              ) : null}
 
-              {user || partner ? (
-                <View style={styles.people}>
-                  {user ? <Avatar name={user.name} imageUrl={user.avatar_url} size={28} /> : null}
-                  {partner ? <Avatar name={partner.name} imageUrl={partner.avatar_url} size={28} /> : null}
-                  <Text style={{ color: colors.textTertiary, fontSize: 13, fontWeight: '600' }}>
-                    Just you two
-                  </Text>
-                </View>
-              ) : null}
+                {editingTitle ? (
+                  <TextInput
+                    value={title}
+                    onChangeText={(t) => {
+                      setTitle(t);
+                      dirty.current = true;
+                    }}
+                    onBlur={() => setEditingTitle(false)}
+                    autoFocus
+                    style={[styles.heroTitleInput, { color: colors.text }]}
+                  />
+                ) : (
+                  <Pressable onPress={() => setEditingTitle(true)} accessibilityRole="button" accessibilityHint="Rename this plan">
+                    <Text
+                      style={[styles.heroTitle, { color: colors.text, textDecorationLine: done ? 'line-through' : 'none' }]}>
+                      {title}
+                    </Text>
+                  </Pressable>
+                )}
 
-              {countdown && !done ? (
-                <View style={styles.countdown}>
-                  <Text style={[styles.countdownLabel, { color: colors.accent }]}>Countdown</Text>
-                  <Text style={[styles.countdownValue, { color: colors.accent }]}>
-                    {String(countdown.days).padStart(2, '0')} days ·{' '}
-                    {String(countdown.hours).padStart(2, '0')} hours ·{' '}
-                    {String(countdown.mins).padStart(2, '0')} mins
-                  </Text>
+                <View style={styles.chips}>
+                  <Pressable
+                    onPress={() => setDateOpen(true)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Date, ${format(eventDate, 'EEEE d MMMM')}`}
+                    style={({ pressed }) => [styles.chip, { backgroundColor: colors.surface }, pressed && styles.chipPressed]}>
+                    <Icon name="calendar" size={15} color={tint} />
+                    <Text style={[styles.chipText, { color: colors.text }]}>{format(eventDate, 'EEE, MMM d')}</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => setTimeOpen(true)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Time, ${format(eventTime, 'h:mm a')}`}
+                    style={({ pressed }) => [styles.chip, { backgroundColor: colors.surface }, pressed && styles.chipPressed]}>
+                    <Icon name="time" size={15} color={tint} />
+                    <Text style={[styles.chipText, { color: colors.text }]}>{format(eventTime, 'h:mm a')}</Text>
+                  </Pressable>
+                  {location ? (
+                    <View style={[styles.chip, styles.chipShrink, { backgroundColor: colors.surface }]}>
+                      <Icon name="location" size={15} color={tint} />
+                      <Text style={[styles.chipText, styles.chipTextShrink, { color: colors.text }]} numberOfLines={1}>
+                        {location}
+                      </Text>
+                    </View>
+                  ) : null}
                 </View>
-              ) : null}
+              </LinearGradient>
 
               {done ? (
                 <View style={[styles.doneBanner, { backgroundColor: colors.accentSoft }]}>
@@ -286,6 +318,24 @@ export function EventDetailsSheet({
                   <Pressable onPress={markUndone}>
                     <Text style={{ color: colors.accent, fontWeight: '600', fontSize: 13 }}>Undo</Text>
                   </Pressable>
+                </View>
+              ) : passed ? (
+                <View style={[styles.doneBanner, { backgroundColor: colors.surface }]}>
+                  <Icon name="time" size={16} color={colors.textSecondary} />
+                  <Text style={{ color: colors.textSecondary, fontWeight: '700', flex: 1 }}>This happened</Text>
+                </View>
+              ) : countdown ? (
+                <View style={styles.countdownRow}>
+                  {[
+                    { n: countdown.days, unit: countdown.days === 1 ? 'day' : 'days' },
+                    { n: countdown.hours, unit: countdown.hours === 1 ? 'hour' : 'hours' },
+                    { n: countdown.mins, unit: countdown.mins === 1 ? 'min' : 'mins' },
+                  ].map((part) => (
+                    <View key={part.unit} style={[styles.countTile, { backgroundColor: colors.surface }]}>
+                      <Text style={[styles.countNum, { color: tint }]}>{String(part.n).padStart(2, '0')}</Text>
+                      <Text style={[styles.countUnit, { color: colors.textSecondary }]}>{part.unit}</Text>
+                    </View>
+                  ))}
                 </View>
               ) : null}
 
@@ -387,11 +437,6 @@ export function EventDetailsSheet({
               </View>
 
               <View style={[styles.card, { backgroundColor: colors.surface }]}>
-                <Pressable onPress={() => setTimeOpen(true)} style={styles.metaRow}>
-                  <Text style={[styles.metaLabel, { color: colors.textTertiary }]}>Time</Text>
-                  <Text style={[styles.metaValue, { color: colors.text }]}>{format(eventTime, 'h:mm a')}</Text>
-                </Pressable>
-                <View style={[styles.divider, { backgroundColor: colors.border }]} />
                 <View style={styles.metaRow}>
                   <Text style={[styles.metaLabel, { color: colors.textTertiary }]}>Location</Text>
                   <TextInput
@@ -430,53 +475,57 @@ export function EventDetailsSheet({
                 />
               </View>
             </ScrollView>
+
+        {/* Pickers live inside this page's own Modal: on iPhone a second Modal
+            opened beside an open one never shows, while one opened from inside it does. */}
+        <PlanDateModal
+          visible={dateOpen}
+          value={eventDate}
+          onClose={() => setDateOpen(false)}
+          onConfirm={(day) => {
+            setEventDate(day);
+            setEventTime(() => notInPast(applyTimeParts(day, hour12, minute, ampm)));
+            setDateOpen(false);
+            dirty.current = true;
+          }}
+        />
+
+        <PlanTimeModal
+          visible={timeOpen}
+          hour12={hour12}
+          minute={minute}
+          period={ampm}
+          day={eventDate}
+          onClose={() => setTimeOpen(false)}
+          onConfirm={(h, m, p) => {
+            setEventTime(applyTimeParts(eventDate, h, m, p));
+            setTimeOpen(false);
+            dirty.current = true;
+          }}
+        />
+
+        <Modal visible={reminderOpen} transparent animationType="fade" onRequestClose={() => setReminderOpen(false)}>
+          <Pressable style={styles.reminderBackdrop} onPress={() => setReminderOpen(false)}>
+            <View style={[styles.reminderSheet, { backgroundColor: colors.backgroundElevated }]}>
+              <Text style={[styles.reminderTitle, { color: colors.text }]}>Reminder</Text>
+              {REMINDER_OPTIONS.map((opt) => (
+                <Pressable
+                  key={String(opt.mins)}
+                  onPress={() => {
+                    setReminderMins(opt.mins);
+                    setReminderOpen(false);
+                    persist(checklist, { reminderMins: opt.mins });
+                  }}
+                  style={styles.reminderRow}>
+                  <Text style={{ color: colors.text, fontSize: 16, fontWeight: '600' }}>{opt.label}</Text>
+                  {reminderMins === opt.mins ? <Icon name="check" size={18} color={colors.accent} /> : null}
+                </Pressable>
+              ))}
+            </View>
+          </Pressable>
+        </Modal>
       </DraggableSheet>
 
-      <PlanDateModal
-        visible={dateOpen}
-        value={eventDate}
-        onClose={() => setDateOpen(false)}
-        onConfirm={(day) => {
-          setEventDate(day);
-          setEventTime((t) => applyTimeParts(day, hour12, minute, ampm));
-          setDateOpen(false);
-          dirty.current = true;
-        }}
-      />
-
-      <PlanTimeModal
-        visible={timeOpen}
-        hour12={hour12}
-        minute={minute}
-        period={ampm}
-        onClose={() => setTimeOpen(false)}
-        onConfirm={(h, m, p) => {
-          setEventTime(applyTimeParts(eventDate, h, m, p));
-          setTimeOpen(false);
-          dirty.current = true;
-        }}
-      />
-
-      <Modal visible={reminderOpen} transparent animationType="fade" onRequestClose={() => setReminderOpen(false)}>
-        <Pressable style={styles.reminderBackdrop} onPress={() => setReminderOpen(false)}>
-          <View style={[styles.reminderSheet, { backgroundColor: colors.backgroundElevated }]}>
-            <Text style={[styles.reminderTitle, { color: colors.text }]}>Reminder</Text>
-            {REMINDER_OPTIONS.map((opt) => (
-              <Pressable
-                key={String(opt.mins)}
-                onPress={() => {
-                  setReminderMins(opt.mins);
-                  setReminderOpen(false);
-                  persist(checklist, { reminderMins: opt.mins });
-                }}
-                style={styles.reminderRow}>
-                <Text style={{ color: colors.text, fontSize: 16, fontWeight: '600' }}>{opt.label}</Text>
-                {reminderMins === opt.mins ? <Icon name="check" size={18} color={colors.accent} /> : null}
-              </Pressable>
-            ))}
-          </View>
-        </Pressable>
-      </Modal>
     </>
   );
 }
@@ -505,13 +554,26 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   scroll: { paddingHorizontal: 20, paddingBottom: 16, gap: 14 },
-  heroIcon: { width: 52, height: 52, borderRadius: 26, alignItems: 'center', justifyContent: 'center', marginBottom: 2 },
+  hero: { borderRadius: 24, borderWidth: StyleSheet.hairlineWidth, padding: 16, gap: 12 },
+  heroTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  heroIcon: { width: 52, height: 52, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+  heroPeople: { alignItems: 'flex-end', gap: 4 },
+  heroFaces: { flexDirection: 'row' },
+  heroFace: { borderWidth: 2, borderRadius: 16 },
+  heroFaceOverlap: { marginLeft: -10 },
+  heroFor: { fontSize: 12, fontWeight: '700' },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  chip: { flexDirection: 'row', alignItems: 'center', gap: 6, height: 34, paddingHorizontal: 12, borderRadius: 17 },
+  chipPressed: { opacity: 0.7 },
+  chipShrink: { flexShrink: 1, maxWidth: '100%' },
+  chipText: { fontSize: 14, fontWeight: '700' },
+  chipTextShrink: { flexShrink: 1 },
+  countdownRow: { flexDirection: 'row', gap: 8 },
+  countTile: { flex: 1, borderRadius: 16, paddingVertical: 12, alignItems: 'center' },
+  countNum: { fontSize: 26, fontWeight: '900', letterSpacing: -0.6, fontVariant: ['tabular-nums'] },
+  countUnit: { fontSize: 12, fontWeight: '700', marginTop: 1 },
   heroTitle: { fontSize: 28, fontWeight: '800', letterSpacing: -0.5 },
   heroTitleInput: { fontSize: 28, fontWeight: '800', letterSpacing: -0.5, padding: 0 },
-  heroMeta: { fontSize: 15, fontWeight: '500', marginTop: 4 },
-  locRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
-  locText: { fontSize: 14, fontWeight: '500' },
-  people: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 2 },
   doneBanner: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -520,9 +582,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
   },
-  countdown: { gap: 4, marginTop: 4 },
-  countdownLabel: { fontSize: 13, fontWeight: '700' },
-  countdownValue: { fontSize: 18, fontWeight: '800', letterSpacing: -0.3 },
   card: { borderRadius: 14, padding: 16, gap: 4 },
   cardHeader: {
     flexDirection: 'row',

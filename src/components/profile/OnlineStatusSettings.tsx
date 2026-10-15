@@ -1,12 +1,13 @@
 import * as Haptics from '@/lib/haptics';
 import { useCallback, useState } from 'react';
-import { Alert, StyleSheet, Switch, Text, View } from 'react-native';
+import { Alert, StyleSheet, Text, View } from 'react-native';
 
 import { Icon } from '@/components/ui/Icon';
 import { useTheme } from '@/hooks/useTheme';
 import { setLocalOnlineStatusSharing } from '@/lib/partner-presence';
 import * as api from '@/services/api';
 import { useAuthStore, useRelationshipStore } from '@/stores';
+import { AppSwitch } from '@/components/ui/AppSwitch';
 
 /** Privacy toggle: share online / last-active, or appear as Away. */
 export function OnlineStatusSettings() {
@@ -67,12 +68,10 @@ export function OnlineStatusSettings() {
             </Text>
           </View>
         </View>
-        <Switch
+        <AppSwitch
           value={enabled}
           onValueChange={(value) => void onToggle(value)}
           disabled={saving}
-          trackColor={{ false: colors.border, true: colors.accent }}
-          thumbColor="#FFFFFF"
         />
       </View>
     </View>

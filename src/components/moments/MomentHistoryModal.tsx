@@ -1,9 +1,11 @@
+import { format } from 'date-fns';
+import { Image } from 'expo-image';
+import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from '@/lib/haptics';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  BackHandler,
   Dimensions,
   FlatList,
   Pressable,
@@ -41,7 +43,7 @@ import { usePlusGate } from '@/hooks/usePlusGate';
 import { useSubscription } from '@/hooks/useSubscription';
 import { useTheme } from '@/hooks/useTheme';
 import { downloadMultipleMomentMedia } from '@/lib/download-moment-media';
-import { FREE_ALBUM_LIMIT, useMomentAlbums, type MomentAlbum } from '@/lib/moment-albums';
+import { albumCoverId, FREE_ALBUM_LIMIT, useMomentAlbums, type MomentAlbum } from '@/lib/moment-albums';
 import { markIcon, PLACE_ICONS } from '@/lib/mark-icons';
 import { groupMomentsIntoPlaces, useMomentPlaces, type MomentPlace } from '@/lib/moment-places';
 import {
@@ -55,6 +57,7 @@ import { momentChrome } from '@/lib/moment-theme';
 import { toUserFacingNetworkError } from '@/lib/network-error';
 import { useAuthStore, useRelationshipStore, useUIStore } from '@/stores';
 import type { Moment } from '@/types/database';
+import { MOMENTS_BACK, useMomentsBack } from '@/lib/moments-back';
 
 const SCREEN_W = Dimensions.get('window').width;
 const GRID_PAD = 14;
@@ -83,10 +86,10 @@ type HistoryRow =
     };
 
 type SheetState =
-  | { kind: 'create'; pendingIds: string[] | null }
+  | { kind: 'create'; pendingIds: string[] | null; back?: SheetState }
   | { kind: 'rename'; album: MomentAlbum }
   | { kind: 'picker' }
-  | { kind: 'place'; place: MomentPlace }
+  | { kind: 'place'; place: MomentPlace; back?: SheetState }
   | {
       kind: 'actions';
       title: string;
@@ -257,11 +260,22 @@ export function MomentHistoryModal() {
     longPressLockRef.current = false;
   };
 
+  /**
+   * Back to an album you were just in (after picking moments for it): it's
+   * already "open", so it appears in place. Only a real open slides in from the
+   * right; replaying that here flashed Our moments first.
+   */
+  const levelInstantRef = useRef(false);
+  const backToAlbum = (id: string) => {
+    levelInstantRef.current = true;
+    setAlbumId(id);
+  };
+
   /** Cancel in "add to album" mode goes back to that album. */
   const cancelSelection = () => {
     const target = addTarget;
     exitSelection();
-    if (target) setAlbumId(target);
+    if (target) backToAlbum(target);
   };
 
   const toggleSelect = useCallback((momentId: string) => {
@@ -385,10 +399,11 @@ export function MomentHistoryModal() {
     return false;
   };
 
-  const startNewAlbum = (pendingIds: string[] | null = null) => {
+  /** `back`: the sheet to return to if the page is closed without creating (e.g. Add to album). */
+  const startNewAlbum = (pendingIds: string[] | null = null, back?: SheetState) => {
     if (!canCreateAlbum()) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setSheet({ kind: 'create', pendingIds });
+    setSheet({ kind: 'create', pendingIds, back });
   };
 
   const onCreateAlbum = ({ name, emoji }: { name: string; emoji: string }) => {
@@ -398,12 +413,12 @@ export function MomentHistoryModal() {
       // From select mode: the album is born with the picked moments.
       const album = createAlbum({ name, emoji, momentIds: pending });
       exitSelection();
-      setAlbumId(album.id);
+      backToAlbum(album.id);
       return;
     }
     // From "New album": create it and open it, empty. "Add moments" is right there.
     const album = createAlbum({ name, emoji });
-    setAlbumId(album.id);
+    backToAlbum(album.id);
   };
 
   const startAddingToOpenAlbum = () => {
@@ -421,7 +436,7 @@ export function MomentHistoryModal() {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     const target = addTarget;
     exitSelection();
-    setAlbumId(target);
+    backToAlbum(target);
   };
 
   const addSelectionToAlbum = (album: MomentAlbum) => {
@@ -429,7 +444,7 @@ export function MomentHistoryModal() {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setSheet(null);
     exitSelection();
-    setAlbumId(album.id);
+    backToAlbum(album.id);
   };
 
   const albumMenu = () => {
@@ -559,8 +574,14 @@ export function MomentHistoryModal() {
   const onLevel = inAlbum || inMap;
   useEffect(() => {
     subLevel.set(onLevel);
-    // An album or the map slides in from the right, like a pushed page.
+    // An album or the map slides in from the right, like a pushed page
+    // (but coming back from picking moments, the album is just there).
     if (onLevel) {
+      if (levelInstantRef.current) {
+        levelInstantRef.current = false;
+        levelX.set(0);
+        return;
+      }
       levelX.set(SCREEN_W);
       levelX.set(withTiming(0, { duration: 280, easing: Easing.out(Easing.cubic) }));
     }
@@ -586,18 +607,12 @@ export function MomentHistoryModal() {
     if (returnToCamera) useUIStore.setState({ momentCameraWaking: true });
   };
 
-  useEffect(() => {
-    if (!visible) return;
-    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
-      if (sheet) setSheet(null);
-      else if (selecting) cancelSelection();
-      else if (albumId || mapOpen) backFromLevel();
-      else dismiss();
-      return true;
-    });
-    return () => sub.remove();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visible, selecting, sheet, albumId, addTarget, mapOpen]);
+  useMomentsBack(MOMENTS_BACK.history, visible, () => {
+    if (sheet) setSheet(sheet.kind === 'create' ? (sheet.back ?? null) : null);
+    else if (selecting) cancelSelection();
+    else if (albumId || mapOpen) backFromLevel();
+    else dismiss();
+  });
 
   const swipeClose = Gesture.Pan()
     // Anywhere on Our map too: the map itself keeps its own pans, and a strip
@@ -720,6 +735,45 @@ export function MomentHistoryModal() {
     headerTitle = 'Our moments';
     headerRight = <HeaderIconButton icon="camera" onPress={openCamera} accessibilityLabel="New moment" />;
   }
+
+  // An open album starts with its cover, big, like Photos: the cover photo fading to
+  // dark at the bottom, with the album's icon, name, size and the span of dates it covers.
+  const albumCover = openAlbum ? momentsById.get(albumCoverId(openAlbum) ?? '') : undefined;
+  const albumSpan = (() => {
+    if (albumMoments.length === 0) return null;
+    const times = albumMoments.map((m) => new Date(m.created_at).getTime());
+    const first = format(Math.min(...times), 'MMM yyyy');
+    const last = format(Math.max(...times), 'MMM yyyy');
+    return first === last ? first : `${first} – ${last}`;
+  })();
+  const albumHero =
+    openAlbum && albumMoments.length > 0 ? (
+      <View style={styles.albumHero}>
+        {albumCover?.media_url && albumCover.type === 'photo' ? (
+          <Image source={{ uri: albumCover.media_url }} style={StyleSheet.absoluteFill} contentFit="cover" transition={200} />
+        ) : (
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: chrome.accentSoft }]} />
+        )}
+        <LinearGradient
+          colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.62)']}
+          start={{ x: 0, y: 0.35 }}
+          end={{ x: 0, y: 1 }}
+          style={StyleSheet.absoluteFill}
+        />
+        <View style={styles.albumHeroText}>
+          <View style={styles.albumHeroBadge}>
+            <Icon name={markIcon(openAlbum.emoji, 'albums')} size={18} color="#FFFFFF" filled />
+          </View>
+          <Text style={styles.albumHeroName} numberOfLines={1}>
+            {openAlbum.name}
+          </Text>
+          <Text style={styles.albumHeroMeta} numberOfLines={1}>
+            {albumMoments.length} moment{albumMoments.length === 1 ? '' : 's'}
+            {albumSpan ? ` · ${albumSpan}` : ''}
+          </Text>
+        </View>
+      </View>
+    ) : null;
 
   const emptyAll = !isLoading && displayMoments.length === 0;
 
@@ -908,6 +962,7 @@ export function MomentHistoryModal() {
                     data={albumRows}
                     keyExtractor={(row) => row.key}
                     renderItem={renderAlbumRow}
+                    ListHeaderComponent={albumHero}
                     initialNumToRender={8}
                     contentContainerStyle={[
                       styles.scroll,
@@ -944,7 +999,7 @@ export function MomentHistoryModal() {
             title="New album"
             submitLabel="Create album"
             onSubmit={onCreateAlbum}
-            onClose={() => setSheet(null)}
+            onClose={() => setSheet(sheet.back ?? null)}
           />
         ) : sheet?.kind === 'rename' ? (
           <AlbumEditSheet
@@ -970,7 +1025,7 @@ export function MomentHistoryModal() {
               namePlace(sheet.place.key, value);
               setSheet(null);
             }}
-            onClose={() => setSheet(null)}
+            onClose={() => setSheet(sheet.back ?? null)}
           />
         ) : sheet?.kind === 'actions' ? (
           <ActionSheet
@@ -987,10 +1042,7 @@ export function MomentHistoryModal() {
             albums={albums}
             count={selectionCount}
             onPick={addSelectionToAlbum}
-            onNew={() => {
-              setSheet(null);
-              startNewAlbum([...selectedIds]);
-            }}
+            onNew={() => startNewAlbum([...selectedIds], { kind: 'picker' })}
             onClose={() => setSheet(null)}
           />
         ) : null}
@@ -1075,6 +1127,19 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     elevation: 8,
   },
+  albumHero: { height: 230, borderRadius: 24, overflow: 'hidden', marginBottom: 18, justifyContent: 'flex-end' },
+  albumHeroText: { padding: 16, gap: 3 },
+  albumHeroBadge: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: 'rgba(255,255,255,0.22)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 6,
+  },
+  albumHeroName: { color: '#FFFFFF', fontSize: 26, fontWeight: '900', letterSpacing: -0.6 },
+  albumHeroMeta: { color: 'rgba(255,255,255,0.85)', fontSize: 14, fontWeight: '700' },
   albumEmpty: {
     flex: 1,
     alignItems: 'center',

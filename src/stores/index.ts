@@ -142,12 +142,15 @@ interface UIState {
   setTabBarOverlayHeight: (height: number) => void;
 }
 
-export const useUIStore = create<UIState>((set) => ({
+/** How long a full-screen Modal takes to go away before another can open (iPhone). */
+const MODAL_HANDOFF_MS = 350;
+
+export const useUIStore = create<UIState>((set, get) => ({
   // Default until the theme-picker onboarding step runs and saves an explicit
   // choice (src/lib/theme-storage.ts) — i.e. this is what every new signup sees
   // through the whole auth/onboarding flow. Existing users' saved preference
   // always overrides this on boot (see AppProviders), so this never touches them.
-  theme: 'paper',
+  theme: 'default',
   themeReady: false,
   isOffline: false,
   showMomentCreator: false,
@@ -209,12 +212,16 @@ export const useUIStore = create<UIState>((set) => ({
       },
     });
   },
-  closeMomentViewer: () =>
+  closeMomentViewer: () => {
+    const backToProfile = !!get().momentViewer?.returnToPartnerProfile;
     set((state) => ({
       momentViewer: null,
       showMomentHistory: state.momentViewer?.returnToHistory ? true : state.showMomentHistory,
-      showPartnerProfile: state.momentViewer?.returnToPartnerProfile ? true : state.showPartnerProfile,
-    })),
+    }));
+    // The profile is its own Modal: reopen it once Moments' Modal has gone, not
+    // in the same moment (on iPhone it wouldn't show).
+    if (backToProfile) setTimeout(() => set({ showPartnerProfile: true }), MODAL_HANDOFF_MS);
+  },
   setShowWrapped: (showWrapped) => set({ showWrapped }),
   setShowMoodHistory: (showMoodHistory) => set({ showMoodHistory }),
   setChatDraft: (chatDraft) => set({ chatDraft }),

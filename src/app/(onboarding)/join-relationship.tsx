@@ -21,7 +21,9 @@ export default function JoinRelationshipScreen() {
       <JoinWithCode
         preview={preview}
         onBack={() => router.back()}
-        onJoined={() => void goNext(router, 'invite', { userId, preview })}
+        // Replaces this screen: Back from the next step goes to the invite step
+        // (which then says you're connected), not to a code you've already used.
+        onJoined={() => void goNext(router, 'invite', { userId, preview, replace: true })}
       />
     );
   }

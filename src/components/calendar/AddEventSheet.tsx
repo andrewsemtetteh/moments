@@ -3,7 +3,7 @@ import * as Haptics from '@/lib/haptics';
 import { useEffect, useMemo, useState } from 'react';
 import { Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
-import { PlanDateModal, PlanTimeModal } from '@/components/calendar/plan/PlanPickerModals';
+import { notInPast, PlanDateModal, PlanTimeModal } from '@/components/calendar/plan/PlanPickerModals';
 import { DraggableSheet } from '@/components/ui/DraggableSheet';
 import { Icon, type IconName } from '@/components/ui/Icon';
 import { PrimaryButton } from '@/components/ui/primitives';
@@ -231,7 +231,7 @@ export function AddEventSheet({
         onClose={() => setDateOpen(false)}
         onConfirm={(day) => {
           setEventDate(day);
-          setEventTime((t) => applyTimeParts(day, hour12, minute, ampm));
+          setEventTime(() => notInPast(applyTimeParts(day, hour12, minute, ampm)));
           setDateOpen(false);
         }}
       />
@@ -241,6 +241,7 @@ export function AddEventSheet({
         hour12={hour12}
         minute={minute}
         period={ampm}
+        day={eventDate}
         onClose={() => setTimeOpen(false)}
         onConfirm={(h, m, p) => {
           setEventTime(applyTimeParts(eventDate, h, m, p));

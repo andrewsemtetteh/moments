@@ -71,6 +71,9 @@ export function PlanWheelColumn({
         showsVerticalScrollIndicator={false}
         snapToInterval={ITEM_H}
         decelerationRate="fast"
+        // No rubber-band past the first/last value: that over-pull looked like the page moving.
+        bounces={false}
+        overScrollMode="never"
         nestedScrollEnabled
         onMomentumScrollEnd={onEnd}
         onScrollEndDrag={onEnd}

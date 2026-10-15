@@ -41,55 +41,75 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   });
 }
 
-async function readPositionViaWatch(timeoutMs: number): Promise<Location.LocationObject | null> {
+/** Within this many metres counts as a precise fix: stop listening early. */
+const GOOD_ACCURACY_M = 25;
+/** How long to keep listening for a better GPS reading. */
+const FIX_WINDOW_MS = 8000;
+
+/**
+ * Listen to GPS at full precision for a few seconds and keep the most accurate
+ * reading (the first ones are often rough, from Wi-Fi or cell towers); stop as
+ * soon as one is within GOOD_ACCURACY_M.
+ */
+async function readPrecisePosition(): Promise<Location.LocationObject | null> {
   return new Promise((resolve) => {
+    let best: Location.LocationObject | null = null;
     let subscription: Location.LocationSubscription | undefined;
-    const timer = setTimeout(() => {
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
       subscription?.remove();
-      resolve(null);
-    }, timeoutMs);
+      resolve(best);
+    };
+    const timer = setTimeout(finish, FIX_WINDOW_MS);
 
     void Location.watchPositionAsync(
       {
-        accuracy: Location.Accuracy.Balanced,
+        accuracy: Location.Accuracy.BestForNavigation,
         timeInterval: 500,
         distanceInterval: 0,
         mayShowUserSettingsDialog: true,
       },
       (location) => {
-        clearTimeout(timer);
-        subscription?.remove();
-        resolve(location);
+        const acc = location.coords.accuracy ?? Number.POSITIVE_INFINITY;
+        if (!best || acc < (best.coords.accuracy ?? Number.POSITIVE_INFINITY)) best = location;
+        if (acc <= GOOD_ACCURACY_M) {
+          clearTimeout(timer);
+          finish();
+        }
       },
     )
       .then((sub) => {
         subscription = sub;
+        if (done) sub.remove();
       })
       .catch(() => {
         clearTimeout(timer);
-        resolve(null);
+        finish();
       });
   });
 }
 
 async function readPosition(): Promise<Location.LocationObject | null> {
-  const lastKnown = await Location.getLastKnownPositionAsync({ maxAge: 3_600_000 }).catch(() => null);
-  if (lastKnown?.coords) return lastKnown;
+  // 1. A fresh, precise GPS fix.
+  const precise = await readPrecisePosition();
+  if (precise?.coords) return precise;
 
-  const accuracies = [Location.Accuracy.Lowest, Location.Accuracy.Low, Location.Accuracy.Balanced];
-  for (const accuracy of accuracies) {
-    try {
-      const position = await withTimeout(
-        Location.getCurrentPositionAsync({ accuracy, mayShowUserSettingsDialog: true }),
-        POSITION_TIMEOUT_MS,
-      );
-      if (position?.coords) return position;
-    } catch {
-      // Try next accuracy level.
-    }
+  // 2. One high-accuracy reading.
+  try {
+    const position = await withTimeout(
+      Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High, mayShowUserSettingsDialog: true }),
+      POSITION_TIMEOUT_MS,
+    );
+    if (position?.coords) return position;
+  } catch {
+    // Fall back to the phone's last known spot.
   }
 
-  return readPositionViaWatch(POSITION_TIMEOUT_MS);
+  // 3. Last resort: where the phone last was, if it's recent (10 minutes).
+  const lastKnown = await Location.getLastKnownPositionAsync({ maxAge: 600_000 }).catch(() => null);
+  return lastKnown?.coords ? lastKnown : null;
 }
 
 /** Already allowed? Never shows a prompt (for background refreshes). */

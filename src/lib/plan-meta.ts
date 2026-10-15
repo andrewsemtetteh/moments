@@ -72,6 +72,16 @@ export const MEMORY_TYPES: { key: MemoryType; label: string; emoji: string; icon
   { key: 'justus', label: 'Just us', emoji: '✨', icon: 'people' },
 ];
 
+/** Each kind of memory has its own colour (timeline cards, the memory page). */
+export const MEMORY_TINT: Record<MemoryType, string> = {
+  milestone: '#FF4D6D',
+  date: '#E8577A',
+  trip: '#3B82F6',
+  celebration: '#F59E0B',
+  family: '#10B981',
+  justus: '#8B5CF6',
+};
+
 export function memoryTypeMeta(type: MemoryType | undefined) {
   return MEMORY_TYPES.find((t) => t.key === type) ?? MEMORY_TYPES[MEMORY_TYPES.length - 1];
 }

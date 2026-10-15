@@ -1,4 +1,4 @@
-export type AppTheme = 'black' | 'paper' | 'crimson';
+export type AppTheme = 'default' | 'black' | 'paper' | 'crimson';
 
 export interface ThemeColors {
   /** Identity */
@@ -41,6 +41,36 @@ export interface ThemeColors {
 }
 
 export const Themes: Record<AppTheme, ThemeColors> = {
+  default: {
+    isDark: false,
+    glass: false,
+    boldBorder: true,
+    background: '#FFFFFF',
+    backgroundElevated: '#F5F5F5',
+    surface: '#FFFFFF',
+    surfaceElevated: '#FFFFFF',
+    surfaceGlass: 'rgba(0,0,0,0.04)',
+    text: '#000000',
+    textSecondary: 'rgba(0,0,0,0.68)',
+    textTertiary: 'rgba(0,0,0,0.46)',
+    onAccent: '#FFFFFF',
+    accent: '#000000',
+    accentSoft: 'rgba(0,0,0,0.08)',
+    accentMuted: '#E8E8E8',
+    gradient: ['#000000', '#2A2A2A'],
+    gradientHero: ['#FFFFFF', '#F5F5F5', '#FFFFFF'],
+    border: '#000000',
+    borderStrong: '#000000',
+    success: '#1F8A4C',
+    warning: '#B8860B',
+    error: '#D9524E',
+    chatBubbleSelf: '#000000',
+    chatBubblePartner: '#F0F0F0',
+    chatBackground: '#FFFFFF',
+    chatBubbleSelfText: '#FFFFFF',
+    chatReadReceipt: '#000000',
+    shadow: '#000000',
+  },
   /** True-black canvas with warm (not cold-gray) elevation. */
   black: {
     isDark: true,
@@ -152,6 +182,7 @@ export function resolveThemeColors(theme: AppTheme): ThemeColors {
 }
 
 export const THEME_META: { key: AppTheme; label: string; swatch: string }[] = [
+  { key: 'default', label: 'Default', swatch: Themes.default.background },
   { key: 'paper', label: 'Paper', swatch: Themes.paper.background },
   { key: 'black', label: 'Black', swatch: Themes.black.background },
   { key: 'crimson', label: 'Crimson', swatch: Themes.crimson.accent },

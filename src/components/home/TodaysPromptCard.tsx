@@ -194,11 +194,18 @@ export function TodaysPromptCard({ challenge, onOpenHistory, startComposing = fa
           accessibilityRole="button"
           style={({ pressed }) => [styles.seeAnswers, { backgroundColor: colors.accent }, pressed && styles.pressed]}>
           <View style={styles.seeFaces}>
+            {/* Both answered: each photo carries the green "answered" tick, like the status row. */}
             <View style={[styles.seeFace, { borderColor: colors.accent }]}>
               <Avatar name={user?.name} imageUrl={user?.avatar_url} size={24} />
+              <View style={[styles.seeTick, { borderColor: colors.accent, backgroundColor: colors.success }]}>
+                <Icon name="check" size={8} color="#fff" />
+              </View>
             </View>
             <View style={[styles.seeFace, styles.seeFaceOverlap, { borderColor: colors.accent }]}>
               <Avatar name={partner?.name} imageUrl={partner?.avatar_url} size={24} />
+              <View style={[styles.seeTick, { borderColor: colors.accent, backgroundColor: colors.success }]}>
+                <Icon name="check" size={8} color="#fff" />
+              </View>
             </View>
           </View>
           <Text style={[styles.seeAnswersText, { color: colors.onAccent }]}>See your answers</Text>
@@ -213,6 +220,7 @@ export function TodaysPromptCard({ challenge, onOpenHistory, startComposing = fa
       <View style={[styles.card, { backgroundColor: colors.surface }, cardBorder]}>
         {header}
         <Text style={[styles.prompt, { color: colors.text }]}>{challenge.prompt}</Text>
+        <PromptStatus challenge={challenge} />
         <Animated.View
           style={[
             styles.reveal,
@@ -332,7 +340,7 @@ export function TodaysPromptCard({ challenge, onOpenHistory, startComposing = fa
  * - Nobody answered: answer first and they get a nudge.
  * - They answered, you haven't: answer to see theirs.
  * - You answered, they haven't: waiting for them, with a Nudge.
- * (Both answered = the reveal, which shows the answers instead.)
+ * - Both answered: both ticks green, above the two answers.
  */
 export function PromptStatus({ challenge, ring }: { challenge: DailyChallenge; ring?: string }) {
   const { colors } = useTheme();
@@ -348,6 +356,8 @@ export function PromptStatus({ challenge, ring }: { challenge: DailyChallenge; r
   let nudge = false;
   if (!partner) {
     line = mine ? 'You answered · they’ll see it when they join' : 'Your partner sees it once they join';
+  } else if (mine && theirs) {
+    line = 'You both answered';
   } else if (mine && !theirs) {
     line = `You answered · waiting for ${partnerFirst}`;
     nudge = true;
@@ -463,6 +473,17 @@ const styles = StyleSheet.create({
   seeFaces: { flexDirection: 'row' },
   seeFace: { borderRadius: 14, borderWidth: 2 },
   seeFaceOverlap: { marginLeft: -9 },
+  seeTick: {
+    position: 'absolute',
+    right: -4,
+    bottom: -4,
+    width: 13,
+    height: 13,
+    borderRadius: 6.5,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   seeAnswersText: { fontSize: 16, fontWeight: '800' },
   pressed: { opacity: 0.85 },
   hideAnswers: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingTop: 2 },

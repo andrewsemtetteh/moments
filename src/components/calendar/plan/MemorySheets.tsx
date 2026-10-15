@@ -1,6 +1,7 @@
 import { format, formatDistanceToNowStrict, isToday, startOfDay } from 'date-fns';
 import * as Haptics from '@/lib/haptics';
 import { Image } from 'expo-image';
+import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
 import { useMemo, useState } from 'react';
 import {
@@ -17,15 +18,15 @@ import {
 import { ScrollView as GHScrollView } from 'react-native-gesture-handler';
 
 import { Divider, FieldRow, InlineInput, createFormStyles as form } from '@/components/calendar/plan/CreatePlanFlow';
-import { FullScreenPage, PageFooter } from '@/components/layout/FullScreenPage';
+import { FullScreenPage } from '@/components/layout/FullScreenPage';
 import { HeaderIconButton } from '@/components/ui/HeaderIconButton';
-import { PrimaryButton } from '@/components/ui/primitives';
 import { DraggableSheet } from '@/components/ui/DraggableSheet';
 import { Icon } from '@/components/ui/Icon';
+import { colorWithAlpha } from '@/components/ui/primitives';
 import { MonthCalendarPicker } from '@/components/ui/MonthCalendarPicker';
 import { useTheme } from '@/hooks/useTheme';
 import { getFirstName } from '@/lib/avatar-initial';
-import { MEMORY_TYPES, memoryTypeMeta, parsePlanMeta, planIcon, type MemoryType } from '@/lib/plan-meta';
+import { MEMORY_TINT, MEMORY_TYPES, memoryTypeMeta, parsePlanMeta, planIcon, type MemoryType } from '@/lib/plan-meta';
 import type { CalendarEvent, Moment, UserProfile } from '@/types/database';
 
 const SCREEN_W = Dimensions.get('window').width;
@@ -72,6 +73,7 @@ export function MemoryEditorSheet({
   onUploadPhoto,
   onClose,
   onSave,
+  onDelete,
 }: {
   visible: boolean;
   /** Editing an existing memory; null = a new one. */
@@ -82,6 +84,8 @@ export function MemoryEditorSheet({
   onUploadPhoto: (uri: string) => Promise<string>;
   onClose: () => void;
   onSave: (draft: MemoryDraft) => void;
+  /** Editing an existing memory: a "Delete memory" button at the end of the form. */
+  onDelete?: () => void;
 }) {
   const { colors } = useTheme();
   // The parent remounts this (new `key`) on every open, so state starts fresh.
@@ -126,6 +130,7 @@ export function MemoryEditorSheet({
   // big title field, one grouped list of label/value rows, then sections.
   return (
     <FullScreenPage
+      dismissKeyboardOnTap
       visible={visible}
       title={initial?.title ? 'Edit memory' : 'New memory'}
       avoidKeyboard={false}
@@ -282,17 +287,23 @@ export function MemoryEditorSheet({
         {photoMoments.length > 0 ? (
           <Text style={[styles.hint, { color: colors.textTertiary }]}>Tap your moments to add them</Text>
         ) : null}
+
+        {onDelete ? (
+          <Pressable
+            onPress={() =>
+              Alert.alert('Delete this memory?', 'It’s removed for both of you.', [
+                { text: 'Cancel', style: 'cancel' },
+                { text: 'Delete', style: 'destructive', onPress: onDelete },
+              ])
+            }
+            accessibilityRole="button"
+            style={({ pressed }) => [styles.deleteMemory, pressed && { opacity: 0.6 }]}>
+            <Icon name="trash" size={18} color={colors.error} />
+            <Text style={[styles.deleteMemoryText, { color: colors.error }]}>Delete memory</Text>
+          </Pressable>
+        ) : null}
       </ScrollView>
 
-      {/* Pinned under the form, always in reach — doesn't scroll away. */}
-      <PageFooter hideWhileTyping>
-        <PrimaryButton
-          label={initial?.title ? 'Save changes' : 'Save memory'}
-          onPress={save}
-          disabled={!canSave}
-          loading={saving}
-        />
-      </PageFooter>
     </FullScreenPage>
   );
 }
@@ -340,6 +351,7 @@ export function MemoryDetailSheet({
   const myReaction = me ? meta?.reactions?.[me.id] : undefined;
   const ratings = meta?.ratings ?? {};
   const photoW = SCREEN_W - 40;
+  const tint = MEMORY_TINT[meta?.memoryType ?? 'justus'] ?? colors.accent;
 
   const openMenu = () =>
     Alert.alert(entry?.title ?? 'Memory', undefined, [
@@ -361,13 +373,24 @@ export function MemoryDetailSheet({
       {entry && meta ? (
         <ScrollView contentContainerStyle={styles.detailBody}>
           <View style={styles.detailTop}>
-            <View style={[styles.tag, { backgroundColor: colors.accentSoft }]}>
-              <Icon name={type.icon} size={13} color={colors.accent} />
-              <Text style={[styles.tagText, { color: colors.accent }]}>{type.label}</Text>
+            <View style={[styles.tag, { backgroundColor: colorWithAlpha(tint, 0.16) }]}>
+              <Icon name={type.icon} size={13} color={tint} />
+              <Text style={[styles.tagText, { color: tint }]}>{type.label}</Text>
             </View>
-            <Pressable onPress={openMenu} hitSlop={8} accessibilityLabel="Memory options" style={styles.moreBtn}>
-              <Icon name="more" size={26} color={colors.text} />
-            </Pressable>
+            <View style={styles.detailActions}>
+              <Pressable
+                onPress={onEdit}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel="Edit memory"
+                style={[styles.editBtn, { backgroundColor: colors.surface }]}>
+                <Icon name="edit" size={18} color={colors.text} />
+                <Text style={[styles.editText, { color: colors.text }]}>Edit</Text>
+              </Pressable>
+              <Pressable onPress={openMenu} hitSlop={8} accessibilityLabel="Memory options" style={styles.moreBtn}>
+                <Icon name="more" size={26} color={colors.text} />
+              </Pressable>
+            </View>
           </View>
 
           {photos.length > 0 ? (
@@ -393,7 +416,20 @@ export function MemoryDetailSheet({
                 </View>
               ) : null}
             </View>
-          ) : null}
+          ) : (
+            // No photos: the same coloured postcard as the timeline, big emoji and date stamp.
+            <LinearGradient
+              colors={[colorWithAlpha(tint, colors.isDark ? 0.4 : 0.24), colorWithAlpha(tint, colors.isDark ? 0.12 : 0.05)]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={[styles.noPhotoHero, { width: photoW, borderColor: colorWithAlpha(tint, 0.3) }]}>
+              <Text style={styles.noPhotoEmoji}>{type.emoji}</Text>
+              <View style={[styles.noPhotoStamp, { borderColor: tint }]}>
+                <Text style={[styles.noPhotoDay, { color: tint }]}>{format(date, 'd')}</Text>
+                <Text style={[styles.noPhotoMonth, { color: tint }]}>{format(date, 'MMM yyyy')}</Text>
+              </View>
+            </LinearGradient>
+          )}
 
           <Text style={[styles.detailTitle, { color: colors.text }]}>{entry.title}</Text>
           <Text style={[styles.detailDate, { color: colors.textSecondary }]}>
@@ -605,6 +641,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   hint: { fontSize: 12, fontWeight: '600', marginTop: -8 },
+  deleteMemory: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 48, marginTop: 20 },
+  deleteMemoryText: { fontSize: 16, fontWeight: '700' },
   noteInput: {
     minHeight: 84,
     borderRadius: 16,
@@ -632,6 +670,30 @@ const styles = StyleSheet.create({
   },
   tagText: { fontSize: 13, fontWeight: '800' },
   moreBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', marginRight: -10 },
+  detailActions: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  editBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, height: 34, paddingHorizontal: 12, borderRadius: 17 },
+  editText: { fontSize: 14, fontWeight: '700' },
+  noPhotoHero: {
+    height: 180,
+    borderRadius: 22,
+    borderWidth: StyleSheet.hairlineWidth,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  noPhotoEmoji: { fontSize: 72 },
+  noPhotoStamp: {
+    position: 'absolute',
+    top: 14,
+    right: 14,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    alignItems: 'center',
+  },
+  noPhotoDay: { fontSize: 20, fontWeight: '900', lineHeight: 22 },
+  noPhotoMonth: { fontSize: 10, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 1 },
   hero: { height: 300, borderRadius: 28 },
   dots: { flexDirection: 'row', justifyContent: 'center', gap: 6, marginTop: 10 },
   dot: { width: 6, height: 6, borderRadius: 3 },

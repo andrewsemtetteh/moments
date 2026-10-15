@@ -4,11 +4,12 @@ import {
   ActivityIndicator,
   Pressable,
   RefreshControl,
-  ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
+// Gesture-aware ScrollView: scrolls cleanly inside the page's swipe-back gesture.
+import { ScrollView } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { MoodHistoryOverview } from '@/components/home/MoodHistoryOverview';

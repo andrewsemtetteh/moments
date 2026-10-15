@@ -7,7 +7,6 @@ import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  BackHandler,
   Dimensions,
   FlatList,
   Keyboard,
@@ -21,7 +20,7 @@ import {
   type NativeScrollEvent,
   type NativeSyntheticEvent,
 } from 'react-native';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { Gesture, GestureDetector, FlatList as PagerList } from 'react-native-gesture-handler';
 import Animated, {
   Easing,
   FadeIn,
@@ -45,6 +44,7 @@ import { momentToReplyContext } from '@/lib/moment-reply';
 import * as api from '@/services/api';
 import { useAuthStore, useRelationshipStore, useUIStore } from '@/stores';
 import type { Moment } from '@/types/database';
+import { MOMENTS_BACK, useMomentsBack } from '@/lib/moments-back';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 const THUMB = 44;
@@ -94,14 +94,7 @@ export function MomentFocusViewer() {
 
   const dismiss = useCallback(() => closeMomentViewer(), [closeMomentViewer]);
 
-  useEffect(() => {
-    if (!viewer) return;
-    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
-      dismiss();
-      return true;
-    });
-    return () => sub.remove();
-  }, [viewer, dismiss]);
+  useMomentsBack(MOMENTS_BACK.viewer, !!viewer, dismiss);
 
   // Partner's moments count as seen once opened.
   useEffect(() => {
@@ -206,8 +199,10 @@ export function MomentFocusViewer() {
 
       <GestureDetector gesture={dismissPan}>
         <Animated.View style={[StyleSheet.absoluteFill, stageStyle]}>
-          <FlatList
-            ref={listRef}
+          {/* Gesture-handler aware: paging sideways and swiping down never both fire. */}
+          <PagerList
+            // Same FlatList underneath; gesture-handler's typings just don't say so.
+            ref={listRef as never}
             data={moments}
             horizontal
             pagingEnabled

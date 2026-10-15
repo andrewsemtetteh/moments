@@ -6,7 +6,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { useState, type ReactNode } from 'react';
-import { ActivityIndicator, Alert, Linking, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ChangePasswordModal } from '@/components/profile/ChangePasswordModal';
@@ -16,6 +16,7 @@ import { EditFieldModal } from '@/components/profile/EditFieldModal';
 import { EditRelationshipTypeModal } from '@/components/profile/EditRelationshipTypeModal';
 import { LocationSharingSettings } from '@/components/profile/LocationSharingSettings';
 import { OnlineStatusSettings } from '@/components/profile/OnlineStatusSettings';
+import { SettingsToggleDivider, SettingsToggleRow } from '@/components/profile/SettingsToggleRow';
 import { VerifyEmailCodeModal } from '@/components/profile/VerifyEmailCodeModal';
 import { ScreenHeader } from '@/components/layout/ScreenHeader';
 import { RatingPage } from '@/components/layout/StoreReviewSync';
@@ -140,6 +141,7 @@ export default function SettingsScreen() {
       setRelationship(updated);
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setAnniversaryOpen(false);
+      Alert.alert('Anniversary updated');
     } catch (e) {
       Alert.alert('Could not save', toUserFacingNetworkError(e, 'Please try again.').message);
     } finally {
@@ -243,9 +245,17 @@ export default function SettingsScreen() {
       if (editField === 'name' && user) {
         const updated = await api.updateProfile(user.id, { name: trimmed });
         setUser(updated);
+        closeEdit();
+        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        Alert.alert('Name updated');
+        return;
       } else if (editField === 'space' && relationship) {
         const updated = await api.updateRelationship(relationship.id, { relationship_name: trimmed });
         setRelationship(updated);
+        closeEdit();
+        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        Alert.alert('Space name updated');
+        return;
       } else if (editField === 'email' && user && clerkUser) {
         const emailAddress = await clerkUser.createEmailAddress({ email: trimmed });
         await emailAddress.prepareVerification({ strategy: 'email_code' });
@@ -277,6 +287,7 @@ export default function SettingsScreen() {
       setUser(updated);
       closeEmailCodeModal();
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      Alert.alert('Email updated');
     } catch (e) {
       Alert.alert('Could not verify code', formatAuthError(e));
     } finally {
@@ -301,6 +312,7 @@ export default function SettingsScreen() {
       const updated = await api.updateProfile(user.id, { avatar_url: avatarUrl });
       setUser(updated);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      Alert.alert('Photo updated');
     } catch (e) {
       Alert.alert('Could not update photo', e instanceof Error ? e.message : 'Please try again.');
     } finally {
@@ -395,6 +407,7 @@ export default function SettingsScreen() {
       setRelationship(updated);
       closeRelationshipTypeModal();
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      Alert.alert('Relationship type updated');
     } catch (e) {
       Alert.alert('Could not save', e instanceof Error ? e.message : 'Please try again.');
     } finally {
@@ -482,20 +495,14 @@ export default function SettingsScreen() {
         <Section title="Preferences">
           <Group>
             <Row icon="bell" label="Notifications" onPress={() => router.push('/notification-settings')} />
-            <Row icon="phone" label="Widget" onPress={showWidgetHelp} />
-            <Row
+            <Row icon="phone" label="Widget" onPress={showWidgetHelp} last />
+            <SettingsToggleDivider />
+            <SettingsToggleRow
               icon="haptics"
-              label="Haptics"
-              onPress={() => setHapticsOn(!hapticsOn)}
-              right={
-                <Switch
-                  value={hapticsOn}
-                  onValueChange={setHapticsOn}
-                  trackColor={{ false: colors.border, true: colors.accent }}
-                  thumbColor="#FFFFFF"
-                />
-              }
-              last
+              title="Haptics"
+              subtitle={hapticsOn ? 'Gentle vibrations when you tap and send' : 'No vibrations anywhere in the app'}
+              value={hapticsOn}
+              onChange={setHapticsOn}
             />
           </Group>
           <Text style={[styles.subheading, { color: colors.textSecondary }]}>Appearance</Text>

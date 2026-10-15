@@ -1,6 +1,7 @@
 import { Image } from 'expo-image';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import MapView, { Marker, PROVIDER_DEFAULT, type Region } from 'react-native-maps';
 
 import { Icon } from '@/components/ui/Icon';
@@ -27,6 +28,8 @@ interface LocationMapPreviewProps {
   focusedIndex?: number | null;
   /** Called with the marker's index when a pin is tapped (interactive maps). */
   onMarkerPress?: (index: number) => void;
+  /** Bump to re-fit everyone (the full map's "show everyone" button). */
+  recenterKey?: number;
 }
 
 const PIN_EDGE = { top: 70, right: 50, bottom: 50, left: 50 };
@@ -59,7 +62,7 @@ function startRegion(markers: MapMarker[], focusedIndex: number | null): Region 
 
 /**
  * A map with each person as a photo pin. Native maps (Apple Maps on iPhone, Google Maps
- * on Android) via react-native-maps: smooth, no web page to load, follows light/dark.
+ * on Android) via react-native-maps, in satellite view with labels: smooth, no web page to load.
  * Non-interactive maps are a still preview (tap opens the full map via `onPress`).
  */
 export function LocationMapPreview({
@@ -70,6 +73,7 @@ export function LocationMapPreview({
   style,
   focusedIndex = null,
   onMarkerPress,
+  recenterKey = 0,
 }: LocationMapPreviewProps) {
   const { colors } = useTheme();
   const mapRef = useRef<MapView>(null);
@@ -91,7 +95,11 @@ export function LocationMapPreview({
     fit();
     // fit reads the same values listed here.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [region]);
+  }, [region, recenterKey]);
+
+  // Inside screens that swipe (profile, Moments), the map's own drag / pinch must win
+  // once it starts, or the screen's swipe steals it and the map won't move.
+  const mapGesture = useMemo(() => Gesture.Native().disallowInterruption(true), []);
 
   if (markers.length === 0) return null;
 
@@ -99,12 +107,17 @@ export function LocationMapPreview({
 
   const map = (
     <View style={[styles.wrapper, sizeStyle, { borderColor: colors.border }, style]}>
+      <GestureDetector gesture={mapGesture}>
       <MapView
         ref={mapRef}
         provider={PROVIDER_DEFAULT}
         style={StyleSheet.absoluteFill}
         initialRegion={region}
         onMapReady={fit}
+        // Satellite with street and place names on top: real buildings, trees and land,
+        // not just roads (the standard style only draws buildings when zoomed right in).
+        mapType="hybrid"
+        showsBuildings
         userInterfaceStyle={colors.isDark ? 'dark' : 'light'}
         scrollEnabled={interactive}
         zoomEnabled={interactive}
@@ -125,6 +138,7 @@ export function LocationMapPreview({
           />
         ))}
       </MapView>
+      </GestureDetector>
       {onPress && (
         <View style={styles.openHint} pointerEvents="none">
           <Icon name="expand" size={14} color="#fff" />

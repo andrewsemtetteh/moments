@@ -4,7 +4,8 @@ import * as Haptics from '@/lib/haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, type ScrollView as RNScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView } from 'react-native-gesture-handler';
 import Animated, { FadeIn, FadeInUp } from 'react-native-reanimated';
 
 import { StreakFlame } from '@/components/home/StreakFlame';
@@ -418,7 +419,7 @@ export default function WidgetPromptScreen() {
 
   // Auto slide: next page every few seconds, looping. A swipe restarts the wait,
   // and nothing moves while a finger is on it.
-  const pager = useRef<ScrollView>(null);
+  const pager = useRef<RNScrollView>(null);
   const touching = useRef(false);
   const goToPage = (i: number) => {
     pager.current?.scrollTo({ x: i * box.width, animated: true });
@@ -526,6 +527,10 @@ export default function WidgetPromptScreen() {
               ref={pager}
               horizontal
               pagingEnabled
+              // Gesture-handler aware, so flipping pages never counts as the
+              // screen's swipe back; no bounce, so a swipe right on the first
+              // page still goes back.
+              bounces={false}
               showsHorizontalScrollIndicator={false}
               onScrollBeginDrag={() => {
                 touching.current = true;

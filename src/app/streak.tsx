@@ -5,7 +5,7 @@ import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { StreakDayTracker } from '@/components/home/StreakDayTracker';
-import { StreakFlame } from '@/components/home/StreakFlame';
+import { StickerFlame } from '@/components/home/StickerFlame';
 import { DashedRing } from '@/components/ui/DashedRing';
 import { StreakRestoreBanner } from '@/components/home/StreakRestoreBanner';
 import { heroGradient } from '@/components/home/WelcomeCard';
@@ -84,11 +84,10 @@ export default function StreakScreen() {
         <LinearGradient colors={heroGradient(colors)} start={{ x: 0, y: 0 }} end={{ x: 0.6, y: 1 }} style={styles.hero}>
           {/* <View pointerEvents="none" style={styles.glow} /> */}
           <View style={styles.countRow}>
-            <StreakFlame
-              size={64}
-              tone={count === 0 ? 'idle' : atRisk ? 'risk' : 'active'}
-              effect={atRisk ? 'pulse' : 'pop'}
-            />
+            {/* The milestone screen's flame character. */}
+            <View style={count === 0 ? styles.idleFlame : undefined}>
+              <StickerFlame size={64} face animated={count > 0} />
+            </View>
             <Text style={[styles.count, { color: ink }]}>{count}</Text>
           </View>
           <Text style={[styles.countUnit, { color: ink }]}>
@@ -139,8 +138,8 @@ export default function StreakScreen() {
             <Text style={[styles.sectionTitle, { color: colors.text }]}>Next milestone</Text>
             <View style={[styles.card, styles.milestoneCard, { backgroundColor: colors.surface }]}>
               <View style={styles.milestoneHead}>
-                <View style={[styles.milestoneBadge, { backgroundColor: soft }]}>
-                  <StreakFlame size={22} tone="active" />
+                <View style={[styles.milestoneBadge, styles.stickerLit]}>
+                  <StickerFlame size={20} />
                   <Text style={[styles.milestoneBadgeDays, { color: colors.text }]}>{next.days}</Text>
                 </View>
                 <View style={styles.milestoneText}>
@@ -190,12 +189,12 @@ export default function StreakScreen() {
                   <View
                     style={[
                       styles.badgeCircle,
-                      earned
-                        ? { backgroundColor: soft, borderColor: STREAK_COLORS.active }
-                        : { borderColor: 'transparent' },
+                      earned ? styles.stickerLit : { borderColor: 'transparent' },
                     ]}>
                     {earned ? null : <DashedRing size={54} color={colors.borderStrong} />}
-                    <StreakFlame size={18} tone={earned ? 'active' : 'idle'} />
+                    <View style={earned ? undefined : styles.idleFlame}>
+                      <StickerFlame size={18} />
+                    </View>
                     <Text style={[styles.badgeDays, { color: earned ? colors.text : colors.textTertiary }]}>
                       {m.days}
                     </Text>
@@ -241,6 +240,9 @@ function CheckAvatar({
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
+  // Lit, like the milestone celebration: yellow with a bold ink outline.
+  stickerLit: { backgroundColor: '#FFE7A0', borderColor: '#000000', borderWidth: 2 },
+  idleFlame: { opacity: 0.4 },
   // Same rhythm as Home: 24 between sections, 10 between a heading and its card.
   scroll: { paddingHorizontal: 16, paddingTop: 4, gap: 24 },
   hero: {

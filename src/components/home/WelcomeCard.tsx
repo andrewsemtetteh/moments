@@ -4,7 +4,7 @@ import { router } from 'expo-router';
 import { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { StreakFlame } from '@/components/home/StreakFlame';
+import { StickerFlame } from '@/components/home/StickerFlame';
 import { Icon } from '@/components/ui/Icon';
 import { DashedRing } from '@/components/ui/DashedRing';
 import { Avatar } from '@/components/ui/primitives';
@@ -150,7 +150,7 @@ export function WelcomeCard({
                       ? { backgroundColor: STREAK_COLORS.atRiskSoftLight, shadowColor: STREAK_COLORS.atRisk }
                       : { backgroundColor: STREAK_COLORS.activeFillLight, shadowColor: STREAK_COLORS.active },
                   ]}>
-                  <StreakFlame size={18} tone={atRisk ? 'risk' : 'active'} effect={atRisk ? 'pulse' : 'flicker'} />
+                  <StickerFlame size={18} animated />
                 </View>
                 <Text style={[styles.badgeCount, { color: atRisk ? STREAK_COLORS.atRisk : STREAK_COLORS.active }]}>
                   {count}
@@ -159,7 +159,9 @@ export function WelcomeCard({
               </>
             ) : (
               <>
-                <StreakFlame size={16} tone="idle" />
+                <View style={styles.idleFlame}>
+                  <StickerFlame size={16} />
+                </View>
                 <Text style={[styles.badgeText, { color: CHIP_TEXT }]}>Start a streak</Text>
               </>
             )}
@@ -200,19 +202,20 @@ function WeekDay({ day, ink, faint }: { day: StreakDayCell; ink: string; faint: 
       <View
         style={[
           styles.dayCircle,
+          // Lit days look like the milestone screen: yellow, bold ink outline, sticker flame.
           done
-            ? { backgroundColor: CHIP_BG, borderColor: CHIP_BG }
+            ? { backgroundColor: STICKER_LIT, borderColor: '#000000', borderWidth: 2 }
             : risky
-              ? { backgroundColor: CHIP_BG, borderColor: STREAK_COLORS.atRisk }
+              ? { backgroundColor: CHIP_BG, borderColor: STREAK_COLORS.atRisk, borderWidth: 2 }
               : today
                 ? { borderColor: ink }
                 : { borderColor: 'transparent' },
         ]}>
         {!done && !risky && !today ? <DashedRing size={30} color={faint} /> : null}
         {done ? (
-          <StreakFlame size={18} tone="active" />
+          <StickerFlame size={16} />
         ) : risky ? (
-          <StreakFlame size={16} tone="risk" />
+          <StickerFlame size={14} />
         ) : today ? (
           <View style={[styles.todayDot, { backgroundColor: ink }]} />
         ) : null}
@@ -224,7 +227,11 @@ function WeekDay({ day, ink, faint }: { day: StreakDayCell; ink: string; faint: 
 /** Photo-less avatars are white with a coloured initial, so they stand out on the card (as in the first design). */
 const WHITE: [string, string] = ['#FFFFFF', '#FFFFFF'];
 
+/** A lit day, as on the milestone celebration. */
+const STICKER_LIT = '#FFE7A0';
+
 const styles = StyleSheet.create({
+  idleFlame: { opacity: 0.45 },
   card: { borderRadius: 28, padding: 20, gap: 6, overflow: 'hidden' },
   glow: {
     position: 'absolute',

@@ -8,6 +8,7 @@ import { MomentStoryViewer } from '@/components/moments/MomentStoryViewer';
 import { useUIStore } from '@/stores';
 import { ThemedStatusBar } from '@/components/ui/ThemedStatusBar';
 import { PaywallModal } from '@/components/subscription/PaywallModal';
+import { handleMomentsBack } from '@/lib/moments-back';
 
 /**
  * A native fullscreen Modal can't cleanly layer a second one on top — presenting/dismissing
@@ -27,9 +28,11 @@ export function MomentsModal() {
   // Only animate the entrance when nothing else in this shared Modal was already
   // showing — a swap between Creator/History/Viewer while it's mounted should never animate.
   const enterAnimation = showCreator || showHistory ? 'none' : 'fade';
-  // Light icons only over the camera or a photo/video; History uses the theme's
-  // background, so it follows the theme (white-on-white would hide the clock).
-  const overMedia = !!viewer || showCreator;
+  // Light icons only over an opened photo/video (always dark). The camera page, History,
+  // albums and the map all sit on the theme's background, so they follow the theme —
+  // otherwise a light theme got white-on-white icons and the status bar looked covered.
+  // (The camera can stay mounted underneath History, so it mustn't decide this.)
+  const overMedia = !!viewer;
 
   // `transparent` (over full screen): every child paints its own opaque
   // background, so this looks identical — but while History is swiped away
@@ -43,7 +46,8 @@ export function MomentsModal() {
       animationType={enterAnimation}
       presentationStyle="overFullScreen"
       statusBarTranslucent
-      onRequestClose={() => {}}>
+      // Android's back key comes here, not to BackHandler: hand it to the top layer.
+      onRequestClose={handleMomentsBack}>
       <ThemedStatusBar style={overMedia ? 'light' : undefined} />
       <GestureHandlerRootView style={styles.root}>
         {/* Camera and History stay drawn under an open moment when that's where it came

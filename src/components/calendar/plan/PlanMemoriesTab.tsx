@@ -1,13 +1,15 @@
 import { format, getYear, isToday, startOfDay, subDays } from 'date-fns';
 import { Image } from 'expo-image';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useMemo, useState } from 'react';
 import { Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { memoryPhotos } from '@/components/calendar/plan/MemorySheets';
 import { Icon } from '@/components/ui/Icon';
+import { colorWithAlpha } from '@/components/ui/primitives';
 import { StreakFlame } from '@/components/home/StreakFlame';
 import { useTheme } from '@/hooks/useTheme';
-import { MEMORY_TYPES, memoryTypeMeta, parsePlanMeta, type MemoryType } from '@/lib/plan-meta';
+import { MEMORY_TINT, MEMORY_TYPES, memoryTypeMeta, parsePlanMeta, type MemoryType } from '@/lib/plan-meta';
 import type { CalendarEvent, Moment } from '@/types/database';
 
 /** "All", the memory types, and Photos. */
@@ -256,7 +258,7 @@ function TimelineRow({
         <View style={[styles.card, styles.suggestion, { borderColor: colors.accent }]}>
           <View style={styles.cardHead}>
             <View style={styles.titleRow}>
-              <Icon name="sparkles" size={16} color={colors.accent} />
+              <Icon name="albums" size={16} color={colors.accent} />
               <Text style={[styles.cardTitle, { color: colors.text }]}>{s.moments.length} moments</Text>
             </View>
             <Text style={[styles.cardSub, { color: colors.textTertiary }]}>{format(s.date, 'MMM d')}</Text>
@@ -288,6 +290,7 @@ function TimelineRow({
   const type = memoryTypeMeta(meta.memoryType);
   const isMilestone = meta.memoryType === 'milestone';
   const cover = item.photos[0];
+  const tint = MEMORY_TINT[meta.memoryType ?? 'justus'] ?? colors.accent;
 
   return (
     <Pressable
@@ -297,7 +300,7 @@ function TimelineRow({
       <View
         style={[
           isMilestone ? styles.bigDot : styles.dot,
-          { backgroundColor: colors.accent, borderColor: isMilestone ? colors.accentSoft : 'transparent' },
+          { backgroundColor: tint, borderColor: isMilestone ? colorWithAlpha(tint, 0.25) : 'transparent' },
         ]}
       />
       {isMilestone ? (
@@ -306,10 +309,14 @@ function TimelineRow({
             <Image source={{ uri: cover }} style={styles.banner} contentFit="cover" />
           ) : (
             // No photo: a tinted band with the milestone's emoji, so it still reads as a big moment.
-            <View style={[styles.bannerEmpty, { backgroundColor: colors.accentSoft }]}>
+            <LinearGradient
+              colors={[colorWithAlpha(tint, colors.isDark ? 0.4 : 0.26), colorWithAlpha(tint, colors.isDark ? 0.12 : 0.06)]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.bannerEmpty}>
               <Text style={styles.bannerEmoji}>{type.emoji}</Text>
-              <Text style={[styles.bannerYear, { color: colors.accent }]}>{format(item.date, 'yyyy')}</Text>
-            </View>
+              <Text style={[styles.bannerYear, { color: tint }]}>{format(item.date, 'yyyy')}</Text>
+            </LinearGradient>
           )}
           <View style={styles.milestoneBody}>
             <Text style={[styles.kicker, { color: colors.accent }]}>Milestone</Text>
@@ -322,43 +329,73 @@ function TimelineRow({
             <Text style={[styles.cardSub, { color: colors.textSecondary }]}>{format(item.date, 'd MMM yyyy')}</Text>
           </View>
         </View>
-      ) : (
+      ) : cover ? (
         <View style={[styles.card, styles.memory, { backgroundColor: colors.surface }]}>
-          {/* Every memory gets the same anchor on the left: its photo, or a date stamp
-              (big day, month, the type's emoji) so text-only memories don't look empty. */}
-          {cover ? (
-            <Image source={{ uri: cover }} style={styles.memoryThumb} contentFit="cover" />
-          ) : (
-            <View style={[styles.memoryThumb, styles.stamp, { backgroundColor: colors.accentSoft }]}>
-              <Text style={[styles.stampDay, { color: colors.accent }]}>{format(item.date, 'd')}</Text>
-              <Text style={[styles.stampMonth, { color: colors.accent }]}>{format(item.date, 'MMM')}</Text>
-              <View style={[styles.stampBadge, { backgroundColor: colors.surface }]}>
-                <Text style={styles.stampEmoji}>{type.emoji}</Text>
-              </View>
-            </View>
-          )}
+          <Image source={{ uri: cover }} style={styles.memoryThumb} contentFit="cover" />
           <View style={styles.memoryText}>
             <View style={styles.titleRow}>
-              {cover ? <Icon name={type.icon} size={16} color={colors.accent} /> : null}
+              <Icon name={type.icon} size={16} color={tint} />
               <Text style={[styles.cardTitle, styles.flexShrink, { color: colors.text }]} numberOfLines={1}>
                 {item.entry.title}
               </Text>
             </View>
             <Text style={[styles.cardSub, { color: colors.textSecondary }]} numberOfLines={1}>
-              {cover ? format(item.date, 'MMM d') : type.label}
+              {format(item.date, 'MMM d')}
               {meta.placeName ? ` · ${meta.placeName}` : ''}
             </Text>
             {meta.notes ? (
-              <Text style={[styles.quote, { color: colors.text }]} numberOfLines={cover ? 1 : 2}>
+              <Text style={[styles.quote, { color: colors.text }]} numberOfLines={1}>
                 “{meta.notes}”
               </Text>
             ) : null}
           </View>
         </View>
+      ) : (
+        // No photo: a postcard in the memory's own colour — emoji badge, a date stamp,
+        // the title, the note as a handwritten-style quote, and where it happened.
+        <LinearGradient
+          colors={[colorWithAlpha(tint, colors.isDark ? 0.34 : 0.2), colorWithAlpha(tint, colors.isDark ? 0.1 : 0.05)]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={[styles.card, styles.postcard, { borderColor: colorWithAlpha(tint, 0.35) }]}>
+          <Text style={[styles.postcardQuoteMark, { color: colorWithAlpha(tint, 0.22) }]}>”</Text>
+          <View style={styles.postcardTop}>
+            <View style={[styles.postcardBadge, { backgroundColor: colors.surface }]}>
+              <Text style={styles.postcardEmoji}>{type.emoji}</Text>
+            </View>
+            <View style={[styles.postcardStamp, { borderColor: tint }]}>
+              <Text style={[styles.postcardStampDay, { color: tint }]}>{format(item.date, 'd')}</Text>
+              <Text style={[styles.postcardStampMonth, { color: tint }]}>{format(item.date, 'MMM')}</Text>
+            </View>
+          </View>
+          <Text style={[styles.postcardTitle, { color: colors.text }]} numberOfLines={2}>
+            {item.entry.title}
+          </Text>
+          {meta.notes ? (
+            <Text style={[styles.postcardNote, { color: colors.text }]} numberOfLines={3}>
+              {meta.notes}
+            </Text>
+          ) : null}
+          <View style={styles.postcardTags}>
+            <View style={[styles.postcardTag, { backgroundColor: colorWithAlpha(tint, 0.16) }]}>
+              <Icon name={type.icon} size={13} color={tint} />
+              <Text style={[styles.postcardTagText, { color: tint }]}>{type.label}</Text>
+            </View>
+            {meta.placeName ? (
+              <View style={[styles.postcardTag, { backgroundColor: colors.surface }]}>
+                <Icon name="location" size={13} color={colors.textSecondary} />
+                <Text style={[styles.postcardTagText, { color: colors.textSecondary }]} numberOfLines={1}>
+                  {meta.placeName}
+                </Text>
+              </View>
+            ) : null}
+          </View>
+        </LinearGradient>
       )}
     </Pressable>
   );
 }
+
 
 const RAIL_X = 11;
 
@@ -401,20 +438,6 @@ const styles = StyleSheet.create({
   milestoneBody: { padding: 12, gap: 3 },
   memory: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12 },
   memoryThumb: { width: 64, height: 64, borderRadius: 16 },
-  stamp: { alignItems: 'center', justifyContent: 'center' },
-  stampDay: { fontSize: 24, fontWeight: '900', lineHeight: 26, letterSpacing: -0.5 },
-  stampMonth: { fontSize: 11, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 1 },
-  stampBadge: {
-    position: 'absolute',
-    right: -6,
-    bottom: -6,
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  stampEmoji: { fontSize: 13 },
   // A note reads like a quote, in a serif: for text-only memories it's the main content.
   quote: {
     fontSize: 14,
@@ -423,6 +446,57 @@ const styles = StyleSheet.create({
     fontFamily: Platform.select({ ios: 'Georgia', android: 'serif', default: 'Georgia' }),
     marginTop: 2,
   },
+  postcard: { padding: 14, gap: 8, borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden' },
+  postcardQuoteMark: {
+    position: 'absolute',
+    right: 10,
+    bottom: -34,
+    fontSize: 120,
+    fontFamily: Platform.select({ ios: 'Georgia', android: 'serif', default: 'Georgia' }),
+  },
+  postcardTop: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' },
+  postcardBadge: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
+  },
+  postcardEmoji: { fontSize: 22 },
+  postcardStamp: {
+    minWidth: 44,
+    paddingVertical: 4,
+    paddingHorizontal: 6,
+    borderRadius: 8,
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    alignItems: 'center',
+  },
+  postcardStampDay: { fontSize: 18, fontWeight: '900', lineHeight: 20 },
+  postcardStampMonth: { fontSize: 10, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 1 },
+  postcardTitle: { fontSize: 18, fontWeight: '800', letterSpacing: -0.3, lineHeight: 23 },
+  postcardNote: {
+    fontSize: 15,
+    lineHeight: 21,
+    fontStyle: 'italic',
+    fontFamily: Platform.select({ ios: 'Georgia', android: 'serif', default: 'Georgia' }),
+  },
+  postcardTags: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 2 },
+  postcardTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    height: 26,
+    paddingHorizontal: 9,
+    borderRadius: 13,
+    maxWidth: '100%',
+  },
+  postcardTagText: { fontSize: 12, fontWeight: '700', flexShrink: 1 },
   bannerEmpty: { height: 84, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16 },
   bannerEmoji: { fontSize: 40 },
   bannerYear: { fontSize: 28, fontWeight: '900', letterSpacing: -0.5 },

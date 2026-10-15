@@ -10,6 +10,6 @@ export async function saveTheme(theme: AppTheme) {
 
 export async function getSavedTheme(): Promise<AppTheme | null> {
   const value = await AsyncStorage.getItem(THEME_KEY);
-  if (value === 'black' || value === 'paper' || value === 'crimson') return value;
+  if (value === 'default' || value === 'black' || value === 'paper' || value === 'crimson') return value;
   return null;
 }

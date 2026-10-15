@@ -1,10 +1,11 @@
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Alert, AppState, Linking, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import { Alert, AppState, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ScreenHeader } from '@/components/layout/ScreenHeader';
-import { Icon, type IconName } from '@/components/ui/Icon';
+import { SettingsToggleDivider, SettingsToggleRow } from '@/components/profile/SettingsToggleRow';
+import { Icon } from '@/components/ui/Icon';
 import { Spacing, type ThemeColors } from '@/constants/design-system';
 import { useTheme } from '@/hooks/useTheme';
 import { loadExpoNotifications } from '@/lib/expo-notifications-safe';
@@ -87,15 +88,17 @@ export default function NotificationSettingsScreen() {
 
         <View style={[styles.card, styles.group, surface(colors), off && styles.dimmed]}>
           {NOTIFICATION_CATEGORIES.map((c, i) => (
-            <ToggleRow
-              key={c.key}
-              icon={c.icon}
-              label={c.label}
-              value={prefs[c.key] !== false}
-              disabled={off}
-              onChange={(v) => void toggle(c.key, v)}
-              last={i === NOTIFICATION_CATEGORIES.length - 1}
-            />
+            <View key={c.key}>
+              {i > 0 ? <SettingsToggleDivider /> : null}
+              <SettingsToggleRow
+                icon={c.icon}
+                title={c.label}
+                subtitle={c.detail}
+                value={prefs[c.key] !== false}
+                disabled={off}
+                onChange={(v) => void toggle(c.key, v)}
+              />
+            </View>
           ))}
         </View>
       </ScrollView>
@@ -105,53 +108,6 @@ export default function NotificationSettingsScreen() {
 
 function surface(colors: ThemeColors) {
   return { backgroundColor: colors.surface, borderWidth: colors.boldBorder ? 2 : 0, borderColor: colors.border };
-}
-
-function ToggleRow({
-  icon,
-  label,
-  value,
-  disabled,
-  onChange,
-  last,
-}: {
-  icon: IconName;
-  label: string;
-  value: boolean;
-  disabled?: boolean;
-  onChange: (value: boolean) => void;
-  last?: boolean;
-}) {
-  const { colors } = useTheme();
-  return (
-    <Pressable
-      onPress={() => onChange(!value)}
-      disabled={disabled}
-      accessibilityRole="switch"
-      accessibilityState={{ checked: value, disabled }}
-      accessibilityLabel={label}
-      style={styles.row}>
-      <View style={[styles.tile, { backgroundColor: colors.boldBorder ? colors.backgroundElevated : colors.surfaceElevated }]}>
-        <Icon name={icon} size={19} color={colors.text} />
-      </View>
-      <View
-        style={[
-          styles.rowBody,
-          !last && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
-        ]}>
-        <Text style={[styles.rowLabel, { color: colors.text }]} numberOfLines={1}>
-          {label}
-        </Text>
-        <Switch
-          value={value}
-          disabled={disabled}
-          onValueChange={onChange}
-          trackColor={{ false: colors.border, true: colors.accent }}
-          thumbColor="#FFFFFF"
-        />
-      </View>
-    </Pressable>
-  );
 }
 
 const styles = StyleSheet.create({

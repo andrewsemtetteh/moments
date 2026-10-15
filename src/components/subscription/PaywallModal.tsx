@@ -7,6 +7,7 @@ import { PaywallScreen } from '@/components/subscription/PaywallScreen';
 import { SuperwallPaywall, type SuperwallPaywallOutcome } from '@/components/subscription/SuperwallPaywall';
 import { markPaywallDismissed } from '@/lib/paywall-storage';
 import { BILLING_AVAILABLE, PAYWALL_SOURCE } from '@/lib/purchases';
+import { MOMENTS_BACK, useMomentsBack } from '@/lib/moments-back';
 import { useUIStore } from '@/stores';
 
 const USE_SUPERWALL = PAYWALL_SOURCE === 'superwall' && BILLING_AVAILABLE;
@@ -33,6 +34,9 @@ export function PaywallModal({ inline = false }: { inline?: boolean } = {}) {
     void markPaywallDismissed();
     closePaywall();
   };
+
+  // Android back inside Moments closes the paywall drawn there.
+  useMomentsBack(MOMENTS_BACK.paywall, inline && visible && momentsOpen, handleClose);
 
   // Each opening tries Superwall again.
   const [wasVisible, setWasVisible] = useState(visible);

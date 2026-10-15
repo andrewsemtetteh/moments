@@ -16,6 +16,7 @@ import { inviteLink } from '@/constants/links';
 import { getPendingInvite } from '@/lib/pending-links';
 import { useAuthStore, useRelationshipStore } from '@/stores';
 import { formatInviteCode } from '@/lib/invite-code';
+import { getFirstName } from '@/lib/avatar-initial';
 
 /**
  * Step 8: bring your person in. Your space is made here (with the answers so
@@ -34,11 +35,17 @@ export default function InviteScreen() {
   const [error, setError] = useState(false);
   // Tapping the code copies it; "Copied" shows for a moment. Continue always moves on.
   const [copied, setCopied] = useState(false);
+  // Bumped by "Try again" when making the code failed.
+  const [attempt, setAttempt] = useState(0);
 
-  // Already paired (joined their code earlier): nothing to invite.
+  // Arrived already paired (joined their code before quitting): nothing to
+  // invite, so skip ahead. Replaced, so Back from the next step doesn't land here.
+  // Paired while here (joined from this screen): this screen says so instead.
+  const [pairedOnArrival] = useState(() => !preview && !!partner);
   useEffect(() => {
-    if (!preview && partner) void goNext(router, 'invite', { userId: user?.id });
-  }, [preview, partner, router, user?.id]);
+    if (pairedOnArrival) void goNext(router, 'invite', { userId: user?.id, replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Usually ready already: the space started being made two steps ago (theme step).
   useEffect(() => {
@@ -56,7 +63,7 @@ export default function InviteScreen() {
     return () => {
       cancelled = true;
     };
-  }, [preview, partner, code, user, getToken]);
+  }, [preview, partner, code, user, getToken, attempt]);
 
   // For people who'd rather send it straight to them than copy and paste.
   // Opened your partner's invite link? Go straight to joining their space.
@@ -94,6 +101,21 @@ export default function InviteScreen() {
     return () => clearTimeout(t);
   }, [copied]);
 
+  if (partner && !preview) {
+    const them = getFirstName(partner.name) ?? 'your person';
+    return (
+      <OnboardingStepScreen
+        step="invite"
+        art={<CoupleCharacters width={190} />}
+        centered
+        title={`You’re connected with ${them}`}
+        subtitle="Your space is shared now. Everything you add, they see too."
+        primaryLabel="Continue"
+        onPrimary={next}
+      />
+    );
+  }
+
   return (
     <OnboardingStepScreen
       step="invite"
@@ -118,7 +140,17 @@ export default function InviteScreen() {
             <Text style={[styles.code, { color: colors.text }]}>{formatInviteCode(code)}</Text>
           </Pressable>
         ) : error ? (
-          <Text style={[styles.err, { color: colors.textSecondary }]}>Couldn’t make your code. Check your connection.</Text>
+          <Pressable
+            onPress={() => {
+              setError(false);
+              setAttempt((n) => n + 1);
+            }}
+            hitSlop={8}
+            accessibilityRole="button">
+            <Text style={[styles.err, { color: colors.textSecondary }]}>
+              Couldn’t make your code. <Text style={[styles.retry, { color: colors.text }]}>Try again</Text>
+            </Text>
+          </Pressable>
         ) : (
           <ActivityIndicator color={colors.text} style={styles.loader} />
         )}
@@ -159,6 +191,7 @@ const styles = StyleSheet.create({
   code: { fontSize: 34, fontWeight: '900', letterSpacing: 4 },
   loader: { height: 41 },
   err: { fontSize: 14, textAlign: 'center' },
+  retry: { fontWeight: '800', textDecorationLine: 'underline' },
   shareRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   shareText: { fontSize: 14, fontWeight: '600', textDecorationLine: 'underline' },
   joinLink: { alignItems: 'center', paddingVertical: 6 },
