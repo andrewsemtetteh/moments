@@ -8,7 +8,7 @@ import { StickerFlame } from '@/components/home/StickerFlame';
 import { Icon } from '@/components/ui/Icon';
 import { DashedRing } from '@/components/ui/DashedRing';
 import { Avatar } from '@/components/ui/primitives';
-import type { ThemeColors } from '@/constants/design-system';
+import { Spacing, type ThemeColors } from '@/constants/design-system';
 import { useTheme } from '@/hooks/useTheme';
 import { getFirstName } from '@/lib/avatar-initial';
 import { STREAK_COLORS } from '@/lib/streak-colors';
@@ -42,6 +42,18 @@ export function heroGradient(colors: ThemeColors): [string, string, string] {
   return [b, a, shadeHex(a, -0.22)];
 }
 
+/** Home's header sits on the intro band: the colour at the band's top, and the text on it. */
+export function introBand(colors: ThemeColors): { background: string; ink: string; isDark: boolean } {
+  const background = heroGradient(colors)[0];
+  const ink = colors.onHero ?? colors.onGradient;
+  // Status-bar icons match the band's own text (white text → white icons), so they read on
+  // every theme, including mid-tones like Starlight's pink where brightness alone misjudges.
+  const h = ink.replace('#', '');
+  const [r, g, b] = [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16));
+  const isDark = h.length === 6 && 0.299 * r + 0.587 * g + 0.114 * b > 140;
+  return { background, ink, isDark };
+}
+
 /** The text colour on the gradient at a given opacity, for badges and panels on it. */
 function onAccentAlpha(colors: ThemeColors, alpha: number) {
   const h = (colors.onHero ?? colors.onGradient).replace('#', '');
@@ -73,6 +85,7 @@ export function WelcomeCard({
   spaceName,
   status,
   joinedAt,
+  band = false,
   onPressPartner,
 }: {
   user: UserProfile | null;
@@ -80,6 +93,11 @@ export function WelcomeCard({
   spaceName: string | null | undefined;
   status: StreakStatus | null;
   joinedAt?: string | null;
+  /**
+   * Home: the card is the top of the page, like an album's cover: edge to edge, running up
+   * under the header (which takes its colour), curved at the bottom.
+   */
+  band?: boolean;
   onPressPartner?: () => void;
 }) {
   const { colors } = useTheme();
@@ -105,14 +123,18 @@ export function WelcomeCard({
     router.navigate('/streak');
   };
 
-  return (
+  const card = (
     <LinearGradient
       colors={gradient}
+      // As a band the colour runs top to bottom, so its top edge meets the header seamlessly.
       start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
-      style={[styles.card, outlined && { borderWidth: 3, borderColor: colors.border }]}>
-      {/* <View pointerEvents="none" style={styles.glow} /> */}
-
+      end={band ? { x: 0, y: 1 } : { x: 1, y: 1 }}
+      style={[
+        styles.card,
+        band && styles.bandCard,
+        outlined && (band ? styles.bandOutline : { borderWidth: 3 }),
+        outlined && { borderColor: colors.border },
+      ]}>
       <Text style={[styles.greeting, { color: ink }]} numberOfLines={1}>
         {greeting(user?.name)}
       </Text>
@@ -120,6 +142,7 @@ export function WelcomeCard({
       <Text style={[styles.title, { color: ink }]} numberOfLines={2}>
         {spaceName?.trim() || 'Our space'}
       </Text>
+
 
       <View style={styles.couple}>
         <View style={styles.avatars}>
@@ -186,6 +209,15 @@ export function WelcomeCard({
       ) : null}
     </LinearGradient>
   );
+
+  if (!band) return card;
+  return (
+    <View style={styles.bandWrap}>
+      {/* Fills the space above when you pull to refresh, so the band never shows a gap. */}
+      <View pointerEvents="none" style={[styles.bandBleed, { backgroundColor: gradient[0] }]} />
+      {card}
+    </View>
+  );
 }
 
 /** A day on the intro card's week: lit flame when you both showed up, a ring for today (red if the streak ends tonight). */
@@ -234,6 +266,17 @@ const STICKER_PANEL = '#FFFFFF';
 const styles = StyleSheet.create({
   idleFlame: { opacity: 0.45 },
   card: { borderRadius: 28, padding: 20, gap: 6, overflow: 'hidden' },
+  bandWrap: { marginHorizontal: -Spacing.lg, marginTop: -Spacing.xs },
+  bandBleed: { position: 'absolute', left: 0, right: 0, top: -600, height: 600 },
+  bandCard: {
+    borderRadius: 0,
+    borderBottomLeftRadius: 32,
+    borderBottomRightRadius: 32,
+    paddingHorizontal: 24,
+    paddingTop: 8,
+    paddingBottom: 24,
+  },
+  bandOutline: { borderBottomWidth: 3, borderLeftWidth: 0, borderRightWidth: 0, borderTopWidth: 0 },
   glow: {
     position: 'absolute',
     width: 240,

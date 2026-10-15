@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars -- reactions and reply are commented out below, kept for when they return */
 import { formatDistanceToNowStrict } from 'date-fns';
 import * as Haptics from '@/lib/haptics';
 import { Image } from 'expo-image';
@@ -144,7 +145,7 @@ export function PartnerMomentHome({ partnerMoments }: PartnerMomentHomeProps) {
   const canSend = !!reply.trim() && !sendingReply;
 
   return (
-    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <View>
       <View style={[styles.card, { backgroundColor: colors.surface }, cardBorder]}>
         <View style={styles.head}>
           <Avatar name={authorName} imageUrl={authorAvatar} size={34} />
@@ -167,6 +168,22 @@ export function PartnerMomentHome({ partnerMoments }: PartnerMomentHomeProps) {
           </Pressable>
         </View>
 
+        {/* Where you are in the set: the story bars, in their own row above the photo (not on it). */}
+        {partnerMoments.length > 1 ? (
+          <View
+            style={styles.segments}
+            accessible
+            accessibilityRole="adjustable"
+            accessibilityLabel={`Moment ${activeIndex + 1} of ${partnerMoments.length}`}>
+            {partnerMoments.map((m, i) => (
+              <View
+                key={m.id}
+                style={[styles.segment, { backgroundColor: colors.text, opacity: i === activeIndex ? 1 : 0.22 }]}
+              />
+            ))}
+          </View>
+        ) : null}
+
         <GestureDetector gesture={swipe}>
           <Pressable onPress={openFullscreen} accessibilityRole="imagebutton" accessibilityLabel="Open moment">
             <View style={[styles.media, { backgroundColor: colors.surfaceElevated }, paperEdge(colors)]}>
@@ -182,17 +199,13 @@ export function PartnerMomentHome({ partnerMoments }: PartnerMomentHomeProps) {
                   <Icon name="play" size={14} color="#fff" filled />
                 </View>
               ) : null}
-              {partnerMoments.length > 1 ? (
-                <View style={styles.segments}>
-                  {partnerMoments.slice(0, 8).map((m, i) => (
-                    <View key={m.id} style={[styles.segment, { opacity: i === activeIndex ? 1 : 0.45 }]} />
-                  ))}
-                </View>
-              ) : null}
             </View>
           </Pressable>
         </GestureDetector>
 
+
+        {/* Reactions and reply are off here: opening the moment (full screen) offers both, and the
+            inline reply box pushed the Home layout around while typing.
         <View style={styles.reactions}>
           {QUICK_REACTIONS.map((emoji) => {
             const on = myReaction === emoji;
@@ -263,8 +276,9 @@ export function PartnerMomentHome({ partnerMoments }: PartnerMomentHomeProps) {
             <Icon name="send" size={18} color={canSend ? colors.onAccent : colors.textTertiary} filled />
           </Pressable>
         </View>
+        */}
       </View>
-    </KeyboardAvoidingView>
+    </View>
   );
 }
 
@@ -287,8 +301,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  segments: { position: 'absolute', top: 12, left: 12, right: 12, flexDirection: 'row', gap: 5 },
-  segment: { flex: 1, height: 4, borderRadius: 2, backgroundColor: '#fff' },
+  segments: { flexDirection: 'row', gap: 4, paddingHorizontal: 4, marginBottom: 2 },
+  segment: { flex: 1, height: 4, borderRadius: 2 },
   reactions: { flexDirection: 'row', gap: 8, paddingHorizontal: 2 },
   reactBtn: { flex: 1, height: 46, borderRadius: 23, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
   reactEmoji: { fontSize: 22 },

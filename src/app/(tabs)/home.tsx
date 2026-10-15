@@ -1,26 +1,27 @@
-import { useQueryClient, type InfiniteData } from '@tanstack/react-query';
-import { router, useFocusEffect } from 'expo-router';
-import { useCallback, useMemo, useRef, useState } from 'react';
-import { Platform, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { useQueryClient, type InfiniteData } from "@tanstack/react-query";
+import { router, useFocusEffect } from "expo-router";
+import { setStatusBarStyle } from "expo-status-bar";
+import { useCallback, useMemo, useRef, useState } from "react";
+import { Platform, RefreshControl, StyleSheet, Text, View } from "react-native";
 
-import { ContinueChatCard } from '@/components/home/ContinueChatCard';
+import { ContinueChatCard } from "@/components/home/ContinueChatCard";
 import {
   InviteCard,
   NextUpCard,
   OnThisDayCard,
   useOnThisDay,
-} from '@/components/home/HomeCards';
-import { MoodSnapshot } from '@/components/home/MoodSnapshot';
-import { StreakRestoreBanner } from '@/components/home/StreakRestoreBanner';
-import { ActivitiesIntroSection } from '@/components/activities/ActivitiesIntroSection';
-import { WelcomeCard } from '@/components/home/WelcomeCard';
-import { PlayPulseCard } from '@/components/games/PlayPulse';
-import { AppHeader } from '@/components/layout/AppHeader';
-import { ScreenContainer } from '@/components/layout/ScreenContainer';
-import { TabScreenScroll } from '@/components/layout/TabScreenScroll';
-import { TabSwipe } from '@/components/layout/TabSwipe';
-import { PartnerMomentHome } from '@/components/moments/PartnerMomentHome';
-import { Spacing } from '@/constants/design-system';
+} from "@/components/home/HomeCards";
+import { MoodSnapshot } from "@/components/home/MoodSnapshot";
+import { StreakRestoreBanner } from "@/components/home/StreakRestoreBanner";
+import { ActivitiesIntroSection } from "@/components/activities/ActivitiesIntroSection";
+import { introBand, WelcomeCard } from "@/components/home/WelcomeCard";
+import { PlayPulseCard } from "@/components/games/PlayPulse";
+import { AppHeader } from "@/components/layout/AppHeader";
+import { ScreenContainer } from "@/components/layout/ScreenContainer";
+import { TabScreenScroll } from "@/components/layout/TabScreenScroll";
+import { TabSwipe } from "@/components/layout/TabSwipe";
+import { PartnerMomentHome } from "@/components/moments/PartnerMomentHome";
+import { Spacing } from "@/constants/design-system";
 import {
   useDailyChallenge,
   useMemoryEntries,
@@ -30,18 +31,22 @@ import {
   useStreak,
   useUpcomingCalendarEvents,
   useUpdateMood,
-} from '@/hooks/queries';
-import { useOpenPartnerProfile } from '@/hooks/useOpenPartnerProfile';
+} from "@/hooks/queries";
+import { useOpenPartnerProfile } from "@/hooks/useOpenPartnerProfile";
 // import { useSubscription } from '@/hooks/useSubscription';
-import { useTheme } from '@/hooks/useTheme';
-import { isHiddenFrom } from '@/lib/plan-day';
-import { enrichMomentsWithAuthors, filterMediaMoments, filterMomentsForHome } from '@/lib/moment-display';
+import { useTheme } from "@/hooks/useTheme";
+import { isHiddenFrom } from "@/lib/plan-day";
+import {
+  enrichMomentsWithAuthors,
+  filterMediaMoments,
+  filterMomentsForHome,
+} from "@/lib/moment-display";
 // import { shouldShowEntryPaywall } from '@/lib/paywall-storage';
-import { openActivities, openCalendar } from '@/lib/router';
-import { emptyStreakStatus, isStreakRestoreAvailable } from '@/lib/streak';
-import { useAuthStore, useRelationshipStore, useUIStore } from '@/stores';
-import type { Moment } from '@/types/database';
-import { TourTarget } from '@/components/layout/TourTarget';
+import { openActivities, openCalendar } from "@/lib/router";
+import { emptyStreakStatus, isStreakRestoreAvailable } from "@/lib/streak";
+import { useAuthStore, useRelationshipStore, useUIStore } from "@/stores";
+import type { Moment } from "@/types/database";
+import { TourTarget } from "@/components/layout/TourTarget";
 
 const HOME_REFRESH_TIMEOUT_MS = 8_000;
 
@@ -75,10 +80,10 @@ export default function HomeScreen() {
   const { data: momentsData } = useMoments();
   const updateMood = useUpdateMood();
 
-  useRealtimeSubscription('moments');
-  useRealtimeSubscription('mood_logs');
-  useRealtimeSubscription('daily_challenges');
-  useRealtimeSubscription('messages');
+  useRealtimeSubscription("moments");
+  useRealtimeSubscription("mood_logs");
+  useRealtimeSubscription("daily_challenges");
+  useRealtimeSubscription("messages");
 
   // The weekly Home reminder now lives in PaywallMoments (with the partner joined,
   // milestone and win back moments); free limits open the paywall through requirePlus.
@@ -115,20 +120,43 @@ export default function HomeScreen() {
   }, [momentsData, partner, user]);
 
   const momentsById = useMemo(
-    () => new Map(filterMediaMoments(momentsData?.pages.flat() ?? []).map((m) => [m.id, m])),
+    () =>
+      new Map(
+        filterMediaMoments(momentsData?.pages.flat() ?? []).map((m) => [
+          m.id,
+          m,
+        ]),
+      ),
     [momentsData],
   );
 
   const relationshipId = relationship?.id;
   const streakStatus = useMemo(
-    () => streak ?? emptyStreakStatus(relationshipId ?? 'pending'),
+    () => streak ?? emptyStreakStatus(relationshipId ?? "pending"),
     [streak, relationshipId],
   );
-  const restoreStatus = streak && isStreakRestoreAvailable(streak) ? streak : null;
+  const restoreStatus =
+    streak && isStreakRestoreAvailable(streak) ? streak : null;
 
   // "Next up" is re-checked whenever Home comes back into view (and on pull
   // to refresh), so a plan that's already started drops off. Partner's
   // private plans are skipped — "Busy" isn't worth a card here.
+  // The header and intro card are one band in the theme's hero colour; the status bar
+  // icons follow it while Home is in view, then go back to the theme's.
+  // Once the card has scrolled up under the header, the header goes back to the theme's
+  // own colours (as it was before the band).
+  const band = introBand(colors);
+  const [cardHeight, setCardHeight] = useState(0);
+  const [pastBand, setPastBand] = useState(false);
+  const onBand = !pastBand;
+  useFocusEffect(
+    useCallback(() => {
+      const light = onBand ? band.isDark : colors.isDark;
+      setStatusBarStyle(light ? "light" : "dark", true);
+      return () => setStatusBarStyle(colors.isDark ? "light" : "dark", true);
+    }, [onBand, band.isDark, colors.isDark]),
+  );
+
   const [now, setNow] = useState(() => Date.now());
   useFocusEffect(
     useCallback(() => {
@@ -138,7 +166,8 @@ export default function HomeScreen() {
   const nextUp = useMemo(
     () =>
       upcoming.find(
-        (e) => new Date(e.date_time).getTime() >= now && !isHiddenFrom(e, user?.id),
+        (e) =>
+          new Date(e.date_time).getTime() >= now && !isHiddenFrom(e, user?.id),
       ) ?? null,
     [upcoming, now, user?.id],
   );
@@ -164,7 +193,7 @@ export default function HomeScreen() {
     void (async () => {
       try {
         queryClient.setQueryData<InfiniteData<Moment[]>>(
-          ['moments', relationshipId],
+          ["moments", relationshipId],
           (current) => {
             if (!current?.pages.length) return current;
             return {
@@ -175,23 +204,41 @@ export default function HomeScreen() {
         );
 
         await Promise.allSettled([
-          queryClient.refetchQueries({ queryKey: ['moods', relationshipId], type: 'active' }),
-          queryClient.refetchQueries({ queryKey: ['streak', relationshipId], type: 'active' }),
-          queryClient.refetchQueries({ queryKey: ['daily-challenge', relationshipId], type: 'active' }),
-          queryClient.refetchQueries({ queryKey: ['calendar', relationshipId], type: 'active' }),
-          queryClient.refetchQueries({ queryKey: ['calendarUpcoming', relationshipId], type: 'active' }),
-          queryClient.refetchQueries({ queryKey: ['moments', relationshipId], type: 'active' }),
           queryClient.refetchQueries({
-            queryKey: ['moodFrequency', relationshipId, user?.id],
-            type: 'active',
+            queryKey: ["moods", relationshipId],
+            type: "active",
           }),
           queryClient.refetchQueries({
-            queryKey: ['latestMessage', relationshipId, user?.id],
-            type: 'active',
+            queryKey: ["streak", relationshipId],
+            type: "active",
           }),
           queryClient.refetchQueries({
-            queryKey: ['unreadMessages', relationshipId, user?.id],
-            type: 'active',
+            queryKey: ["daily-challenge", relationshipId],
+            type: "active",
+          }),
+          queryClient.refetchQueries({
+            queryKey: ["calendar", relationshipId],
+            type: "active",
+          }),
+          queryClient.refetchQueries({
+            queryKey: ["calendarUpcoming", relationshipId],
+            type: "active",
+          }),
+          queryClient.refetchQueries({
+            queryKey: ["moments", relationshipId],
+            type: "active",
+          }),
+          queryClient.refetchQueries({
+            queryKey: ["moodFrequency", relationshipId, user?.id],
+            type: "active",
+          }),
+          queryClient.refetchQueries({
+            queryKey: ["latestMessage", relationshipId, user?.id],
+            type: "active",
+          }),
+          queryClient.refetchQueries({
+            queryKey: ["unreadMessages", relationshipId, user?.id],
+            type: "active",
           }),
         ]);
       } finally {
@@ -206,41 +253,64 @@ export default function HomeScreen() {
       <RefreshControl
         refreshing={refreshing}
         onRefresh={onRefresh}
-        tintColor={colors.accent}
+        // On the band: its own text colour (the accent can be the band's colour itself).
+        tintColor={band.ink}
         colors={[colors.accent]}
-        progressViewOffset={Platform.OS === 'android' ? 0 : undefined}
+        progressViewOffset={Platform.OS === "android" ? 0 : undefined}
       />
     ),
-    [colors.accent, onRefresh, refreshing],
+    [band.ink, colors.accent, onRefresh, refreshing],
   );
 
   return (
     // Together ← Home → Play (see TabSwipe).
-    <TabSwipe onSwipeRight={() => openCalendar()} onSwipeLeft={() => openActivities()}>
+    <TabSwipe
+      onSwipeRight={() => openCalendar()}
+      onSwipeLeft={() => openActivities()}
+    >
       <ScreenContainer padded={false}>
-        <AppHeader />
+        <AppHeader band={onBand ? band : undefined} />
         <TabScreenScroll
           showsVerticalScrollIndicator={false}
           refreshControl={refreshControl}
-          contentContainerStyle={styles.scroll}>
-          <TourTarget name="tour-space">
-            <WelcomeCard
-              user={user ?? null}
-              partner={partner}
-              spaceName={relationship?.relationship_name}
-              status={session ? streakStatus : null}
-              joinedAt={relationship?.created_at}
-              onPressPartner={() => openPartnerProfile()}
-            />
-          </TourTarget>
+          onScroll={(e) => {
+            const past =
+              cardHeight > 0 && e.nativeEvent.contentOffset.y > cardHeight - 12;
+            if (past !== pastBand) setPastBand(past);
+          }}
+          contentContainerStyle={styles.scroll}
+        >
+          <View onLayout={(e) => setCardHeight(e.nativeEvent.layout.height)}>
+            <TourTarget name="tour-space">
+              <WelcomeCard
+                user={user ?? null}
+                partner={partner}
+                spaceName={relationship?.relationship_name}
+                status={session ? streakStatus : null}
+                joinedAt={relationship?.created_at}
+                band
+                onPressPartner={() => openPartnerProfile()}
+              />
+            </TourTarget>
+          </View>
 
-          {restoreStatus ? <StreakRestoreBanner status={restoreStatus} /> : null}
+          {restoreStatus ? (
+            <StreakRestoreBanner status={restoreStatus} />
+          ) : null}
 
           {!partner ? (
             relationship ? (
               <View style={styles.section}>
-                <Text style={[styles.sectionTitle, colors.sticker && styles.sectionTitleSticker, { color: colors.text }]}
-                accessibilityRole="header">Invite your person</Text>
+                <Text
+                  style={[
+                    styles.sectionTitle,
+                    colors.sticker && styles.sectionTitleSticker,
+                    { color: colors.text },
+                  ]}
+                  accessibilityRole="header"
+                >
+                  Invite your person
+                </Text>
                 <InviteCard />
               </View>
             ) : null
@@ -249,8 +319,16 @@ export default function HomeScreen() {
           ) : null}
 
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, colors.sticker && styles.sectionTitleSticker, { color: colors.text }]}
-                accessibilityRole="header">Today</Text>
+            <Text
+              style={[
+                styles.sectionTitle,
+                colors.sticker && styles.sectionTitleSticker,
+                { color: colors.text },
+              ]}
+              accessibilityRole="header"
+            >
+              Today
+            </Text>
 
             <TourTarget name="tour-today">
               <MoodSnapshot
@@ -261,7 +339,10 @@ export default function HomeScreen() {
             </TourTarget>
 
             {challenge ? (
-              <ActivitiesIntroSection challenge={challenge} onOpenHistory={() => router.push('/question-history')} />
+              <ActivitiesIntroSection
+                challenge={challenge}
+                onOpenHistory={() => router.push("/question-history")}
+              />
             ) : null}
 
             {nextUp ? <NextUpCard event={nextUp} viewerId={user?.id} /> : null}
@@ -270,16 +351,25 @@ export default function HomeScreen() {
             {session && partner ? <ContinueChatCard /> : null}
           </View>
 
-          {onThisDay ? <OnThisDayCard entry={onThisDay} momentsById={momentsById} /> : null}
+          {onThisDay ? (
+            <OnThisDayCard entry={onThisDay} momentsById={momentsById} />
+          ) : null}
 
           {session && partner ? (
             <View style={styles.section}>
-              <Text style={[styles.sectionTitle, colors.sticker && styles.sectionTitleSticker, { color: colors.text }]}
-                accessibilityRole="header">Play</Text>
+              <Text
+                style={[
+                  styles.sectionTitle,
+                  colors.sticker && styles.sectionTitleSticker,
+                  { color: colors.text },
+                ]}
+                accessibilityRole="header"
+              >
+                Play
+              </Text>
               <PlayPulseCard />
             </View>
           ) : null}
-
         </TabScreenScroll>
       </ScreenContainer>
     </TabSwipe>
@@ -294,6 +384,6 @@ const styles = StyleSheet.create({
     gap: Spacing.xl,
   },
   section: { gap: Spacing.md },
-  sectionTitle: { fontSize: 20, fontWeight: '800', letterSpacing: -0.3 },
-  sectionTitleSticker: { fontWeight: '900', letterSpacing: -0.4 },
+  sectionTitle: { fontSize: 20, fontWeight: "800", letterSpacing: -0.3 },
+  sectionTitleSticker: { fontWeight: "900", letterSpacing: -0.4 },
 });

@@ -1,6 +1,6 @@
 import { useFocusEffect, useRouter } from 'expo-router';
 import { setStatusBarStyle } from 'expo-status-bar';
-import { useCallback, useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -59,12 +59,17 @@ export default function StreakScreen() {
   // the status bar with curved bottom corners.
   const band = colors.hero ? colors.hero[0] : colors.gradient[0];
   const ink = colors.onHero ?? colors.onGradient;
-  const bandIsDark = isDarkColor(band);
+  // Follows the band's own text: white text means white icons (Starlight's pink has dark text).
+  const bandIsDark = !isDarkColor(ink);
+  // While the band is behind the status bar its icons follow the band, then the theme.
+  const [bandHeight, setBandHeight] = useState(0);
+  const [pastBand, setPastBand] = useState(false);
   useFocusEffect(
     useCallback(() => {
-      setStatusBarStyle(bandIsDark ? 'light' : 'dark', true);
+      const light = pastBand ? colors.isDark : bandIsDark;
+      setStatusBarStyle(light ? 'light' : 'dark', true);
       return () => setStatusBarStyle(colors.isDark ? 'light' : 'dark', true);
-    }, [bandIsDark, colors.isDark]),
+    }, [pastBand, bandIsDark, colors.isDark]),
   );
   // Default: every card is a sticker (ink outline).
   const outline = colors.boldBorder && colors.hero ? { borderWidth: 2, borderColor: colors.border } : null;
@@ -94,16 +99,25 @@ export default function StreakScreen() {
     <View style={[styles.root, { backgroundColor: colors.background }]}>
       <ScrollView
         showsVerticalScrollIndicator={false}
+        // The band is pinned to the top: no pulling the page down past it.
+        bounces={false}
+        overScrollMode="never"
+        scrollEventThrottle={32}
+        onScroll={(e) => {
+          const past = bandHeight > 0 && e.nativeEvent.contentOffset.y > bandHeight - insets.top - 12;
+          if (past !== pastBand) setPastBand(past);
+        }}
         contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 16 }]}>
-        <View style={[styles.band, { backgroundColor: band, paddingTop: insets.top + 6 }]}>
-          {/* Fills the space above when you pull down, so the band never shows a gap. */}
-          <View pointerEvents="none" style={[styles.bandBleed, { backgroundColor: band }]} />
+        <View
+          onLayout={(e) => setBandHeight(e.nativeEvent.layout.height)}
+          style={[styles.band, { backgroundColor: band, paddingTop: insets.top + 6 }]}>
           <View style={styles.bandTop}>
-            <BandButton icon="chevronLeft" label="Back" onPress={() => closeStackScreen(router)} />
+            {/* Room for the floating back and ? buttons, which stay put as you scroll. */}
+            <View style={styles.bandButtonSpace} />
             <Text style={[styles.bandTitle, { color: ink }]} accessibilityRole="header">
               Streak
             </Text>
-            <BandButton icon="question" label="How streaks work" onPress={explain} />
+            <View style={styles.bandButtonSpace} />
           </View>
           <View style={styles.countRow}>
             {/* The milestone screen's flame character. */}
@@ -232,6 +246,12 @@ export default function StreakScreen() {
           </View>
         </View>
       </ScrollView>
+
+      {/* Back and help float over the page, always reachable (like an album's). */}
+      <View pointerEvents="box-none" style={[styles.floatingChips, { top: insets.top + 6 }]}>
+        <BandButton icon="chevronLeft" label="Back" onPress={() => closeStackScreen(router)} />
+        <BandButton icon="question" label="How streaks work" onPress={explain} />
+      </View>
     </View>
   );
 }
@@ -306,7 +326,28 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   bandTitle: { fontSize: 24, fontWeight: '900', letterSpacing: -0.6 },
-  bandButton: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
+  bandButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.18,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 4,
+  },
+  bandButtonSpace: { width: 44, height: 44 },
+  floatingChips: {
+    position: 'absolute',
+    left: 20,
+    right: 20,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    zIndex: 20,
+    elevation: 20,
+  },
   // The flame sits above the number, centred.
   countRow: { alignItems: 'center', gap: 2 },
   glow: {

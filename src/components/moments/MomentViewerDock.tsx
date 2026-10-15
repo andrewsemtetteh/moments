@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Dimensions, Keyboard, Pressable, StyleSheet, Text, View } from 'react-native';
 import { TextInput } from '@/components/ui/ThemedTextInput';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
+import Animated, { runOnJS, useAnimatedKeyboard, useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 
 import { LocketReactionCluster } from '@/components/moments/LocketReactionCluster';
 import { Icon } from '@/components/ui/Icon';
@@ -12,6 +12,9 @@ import { useTheme } from '@/hooks/useTheme';
 import { formatMomentDateLabel, getMomentReactionHistory, getUserReactionEmoji } from '@/lib/moment-display';
 import { momentChrome, viewerChrome } from '@/lib/moment-theme';
 import type { Moment } from '@/types/database';
+
+/** Reactions in the viewer (who reacted, and the emoji picker) are off for now. */
+const SHOW_REACTIONS = false;
 
 const CLUSTER_W = Math.min(Dimensions.get('window').width - 48, 340);
 
@@ -34,6 +37,8 @@ interface MomentViewerDockProps {
   floating?: boolean;
   /** The viewer's always-dark palette. */
   dark?: boolean;
+  /** Told when the reply field opens and closes (the viewer pauses and dims the moment). */
+  onReplyFocusChange?: (focused: boolean) => void;
 }
 
 export function MomentViewerDock({
@@ -53,6 +58,7 @@ export function MomentViewerDock({
   bottomInset,
   floating = false,
   dark = false,
+  onReplyFocusChange,
 }: MomentViewerDockProps) {
   const { colors } = useTheme();
   const chrome = dark ? viewerChrome(colors) : momentChrome(colors);
@@ -107,9 +113,14 @@ export function MomentViewerDock({
       dragY.value = withSpring(0, { damping: 26, stiffness: 300 });
     });
 
-  const dragStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: dragY.value }],
-  }));
+  // Floating (the full-screen viewer): only this bar moves, riding the keyboard frame by frame, like a
+  // story reply. Nothing else on the screen resizes, so the moment never shifts. The home-indicator
+  // space under the bar is dropped while the keyboard covers it.
+  const keyboard = useAnimatedKeyboard();
+  const dragStyle = useAnimatedStyle(() => {
+    const lift = floating ? Math.max(0, keyboard.height.value - bottomInset) : 0;
+    return { transform: [{ translateY: dragY.value - lift }] };
+  });
 
   const body = (
     <View style={[styles.inner, { paddingBottom: bottomInset + 10 }]}>
@@ -131,7 +142,10 @@ export function MomentViewerDock({
         </View>
       )}
 
-      <View style={styles.historyBlock}>
+      {/* Reactions are off in the viewer (who reacted, and the emoji picker); kept for when they return. */}
+      {SHOW_REACTIONS ? (
+        <>
+<View style={styles.historyBlock}>
         {/* <Text style={[styles.historyTitle, { color: chrome.textTertiary }]}>Reaction history</Text> */}
         {reactionHistory.length ===
         0 ? // <Text style={[styles.historyEmpty, { color: chrome.textTertiary }]}>No reactions yet. Be the first!</Text>
@@ -178,6 +192,8 @@ export function MomentViewerDock({
       {showPicker && (
         <LocketReactionCluster moment={moment} width={CLUSTER_W} onReact={handleReact} variant="preview" />
       )}
+        </>
+      ) : null}
 
       <View style={styles.replyRow}>
         <TextInput
@@ -192,15 +208,21 @@ export function MomentViewerDock({
           ]}
           returnKeyType="send"
           onSubmitEditing={onSendReply}
-          onFocus={() => setReplyFocused(true)}
-          onBlur={() => setReplyFocused(false)}
+          onFocus={() => {
+            setReplyFocused(true);
+            onReplyFocusChange?.(true);
+          }}
+          onBlur={() => {
+            setReplyFocused(false);
+            onReplyFocusChange?.(false);
+          }}
           editable={!sending}
         />
         <Pressable
           onPress={onSendReply}
           disabled={!reply.trim() || sending}
           style={[styles.sendBtn, { backgroundColor: reply.trim() && !sending ? colors.accent : chrome.surfaceSoft }]}>
-          <Icon name="send" size={18} color={reply.trim() && !sending ? colors.onAccent : chrome.textTertiary} />
+          <Icon name="send" size={22} color={reply.trim() && !sending ? colors.onAccent : chrome.textTertiary} />
         </Pressable>
       </View>
 
@@ -263,7 +285,8 @@ const styles = StyleSheet.create({
   replyRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   replyInput: {
     flex: 1,
-    borderRadius: 20,
+    minHeight: 48,
+    borderRadius: 24,
     paddingHorizontal: 14,
     paddingVertical: 12,
     fontSize: 15,
@@ -271,9 +294,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   sendBtn: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',
   },

@@ -30,9 +30,11 @@ const APP_NAME = 'Moments';
 interface AppHeaderProps {
   /** Plan (calendar) shortcut in the left slot. */
   showPlan?: boolean;
+  /** Home: the header sits on the intro card's band (its colour and text colour). */
+  band?: { background: string; ink: string };
 }
 
-export function AppHeader({ showPlan = true }: AppHeaderProps) {
+export function AppHeader({ showPlan = true, band }: AppHeaderProps) {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { colors } = useTheme();
@@ -90,7 +92,7 @@ export function AppHeader({ showPlan = true }: AppHeaderProps) {
   // const partnerFirstName = getFirstName(partner?.name);
 
   return (
-    <View style={[styles.header, { paddingTop: insets.top + 6, backgroundColor: colors.background }]}>
+    <View style={[styles.header, { paddingTop: insets.top + 6, backgroundColor: band?.background ?? colors.background }]}>
       <View style={[styles.side, styles.left]}>
         {showPlan ? (
           <HeaderIconButton
@@ -103,6 +105,7 @@ export function AppHeader({ showPlan = true }: AppHeaderProps) {
             onPress={() => openCalendar()}
             badge={openPlansToday}
             filledWhenActive={false}
+            band={band}
           />
         ) : (
           <View style={styles.iconSlot} />
@@ -132,7 +135,7 @@ export function AppHeader({ showPlan = true }: AppHeaderProps) {
               ) : null}
               */}
               {metaLine ? (
-                <Text style={[styles.title, { color: colors.text }]} numberOfLines={1}>
+                <Text style={[styles.title, { color: band?.ink ?? colors.text }]} numberOfLines={1}>
                   {metaLine}
                 </Text>
               ) : null}
@@ -140,7 +143,7 @@ export function AppHeader({ showPlan = true }: AppHeaderProps) {
           </View>
         ) : (
           // Not paired yet: the logo (mark + name) in the middle of the bar.
-          <Wordmark size={18} />
+          <Wordmark size={18} color={band?.ink} />
         )}
       </Pressable>
 
@@ -152,6 +155,7 @@ export function AppHeader({ showPlan = true }: AppHeaderProps) {
           badge={unreadNotifications}
           filledWhenActive={false}
           badgePlacement="trailing"
+          band={band}
         />
       </View>
     </View>
@@ -167,6 +171,7 @@ function HeaderIconButton({
   active = false,
   filledWhenActive = true,
   badgePlacement = 'default',
+  band,
 }: {
   icon: IconName;
   label: string;
@@ -176,6 +181,7 @@ function HeaderIconButton({
   active?: boolean;
   filledWhenActive?: boolean;
   badgePlacement?: 'default' | 'trailing';
+  band?: { background: string; ink: string };
 }) {
   const { colors } = useTheme();
   const count = Number.isFinite(badge) && badge >= 1 ? Math.floor(badge) : 0;
@@ -197,7 +203,7 @@ function HeaderIconButton({
         <Icon
           name={icon}
           size={HEADER_ICON_SIZE}
-          color={isHighlighted ? colors.accent : colors.text}
+          color={isHighlighted ? colors.accent : (band?.ink ?? colors.text)}
           filled={isHighlighted}
         />
         {showBadge ? (
@@ -207,7 +213,7 @@ function HeaderIconButton({
               badgePositionStyle,
               // "9+" needs a fixed wider pill: the icon's narrow box would otherwise squeeze it to "9…".
               count > 9 && styles.badgeWide,
-              { backgroundColor: colors.error, borderColor: colors.background },
+              { backgroundColor: colors.error, borderColor: band?.background ?? colors.background },
             ]}>
             <Text style={[styles.badgeText, { color: '#FFFFFF' }]} numberOfLines={1}>
               {formatBadgeCount(count)}

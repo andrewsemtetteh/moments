@@ -1,3 +1,4 @@
+import { useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -38,10 +39,20 @@ import { OurMapCard, OurMapView, placeTitle } from '@/components/moments/MomentP
 import { MomentTile } from '@/components/moments/MomentTile';
 import { HeaderIconButton } from '@/components/ui/HeaderIconButton';
 import { Icon, type IconName } from '@/components/ui/Icon';
+import { colorWithAlpha } from '@/components/ui/primitives';
+import { ThemedStatusBar } from '@/components/ui/ThemedStatusBar';
+import { introBand } from '@/components/home/WelcomeCard';
 import { useDeleteMoments, useMoments } from '@/hooks/queries';
 import { usePlusGate } from '@/hooks/usePlusGate';
 import { useSubscription } from '@/hooks/useSubscription';
 import { useTheme } from '@/hooks/useTheme';
+import {
+  ALBUM_UPLOAD_MAX,
+  pickAlbumMedia,
+  uploadToAlbum,
+  useAlbumUploadStore,
+  type PickedMedia,
+} from '@/lib/album-upload';
 import { downloadMultipleMomentMedia } from '@/lib/download-moment-media';
 import { albumCoverId, FREE_ALBUM_LIMIT, useMomentAlbums, type MomentAlbum } from '@/lib/moment-albums';
 import { markIcon, PLACE_ICONS } from '@/lib/mark-icons';
@@ -66,6 +77,8 @@ const COLS = 3;
 const TILE = Math.floor((SCREEN_W - GRID_PAD * 2 - GRID_GAP * (COLS - 1)) / COLS);
 /** Portrait, like the photos themselves. */
 const TILE_H = Math.round(TILE * (4 / 3));
+/** The album cover band's height below the status bar. */
+const ALBUM_HERO_H = 250;
 const DISMISS_DISTANCE = 72;
 const DISMISS_VELOCITY = 650;
 const SETTLE_SPRING = { damping: 32, stiffness: 280, mass: 0.9 };
@@ -137,7 +150,10 @@ export function MomentHistoryModal() {
   const scrollYRef = useRef(0);
   const user = useAuthStore((s) => s.user);
   const partner = useRelationshipStore((s) => s.partner);
-  const { limits } = useSubscription();
+  const relationship = useRelationshipStore((s) => s.relationship);
+  const queryClient = useQueryClient();
+  const uploadJobs = useAlbumUploadStore((s) => s.jobs);
+  const { limits, dailyMomentsUsed } = useSubscription();
   const { isPlus, requirePlus } = usePlusGate();
   const { albums, createAlbum, addMoments, removeMoment, pruneMoments, setCover, updateAlbum, deleteAlbum } =
     useMomentAlbums();
@@ -151,6 +167,15 @@ export function MomentHistoryModal() {
   const [downloading, setDownloading] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [sheet, setSheet] = useState<SheetState>(null);
+  // Whether an album's cover is still behind the status bar (white icons on it).
+  const [heroBehindStatus, setHeroBehindStatus] = useState(true);
+  const viewerOpen = useUIStore((s) => !!s.momentViewer);
+  // A newly opened album starts scrolled to the top, cover behind the status bar.
+  const [heroAlbumId, setHeroAlbumId] = useState(albumId);
+  if (heroAlbumId !== albumId) {
+    setHeroAlbumId(albumId);
+    setHeroBehindStatus(true);
+  }
   const longPressLockRef = useRef(false);
 
   const deleteMomentsMutation = useDeleteMoments();
@@ -406,7 +431,71 @@ export function MomentHistoryModal() {
     setSheet({ kind: 'create', pendingIds, back });
   };
 
-  const onCreateAlbum = ({ name, emoji }: { name: string; emoji: string }) => {
+  // Uploads into albums are moments too, so the free plan's daily moments cap them (counting
+  // any still uploading). Plus is unlimited.
+  const uploading = Object.values(uploadJobs).reduce((n, j) => n + (j.total - j.done - j.failed), 0);
+  const uploadsLeft = isPlus ? Infinity : Math.max(0, limits.dailyMoments - dailyMomentsUsed - uploading);
+
+  const showMomentLimit = () =>
+    setSheet({
+      kind: 'actions',
+      title: 'Unlimited daily moments',
+      message: `Free accounts can add ${limits.dailyMoments} moments a day, and you’ve used today’s. With Moments Plus you can upload as many as you like.`,
+      thumb: (
+        <View style={[styles.sheetThumbIcon, { backgroundColor: chrome.accentSoft }]}>
+          <Icon name="image" size={26} color={chrome.accent} filled />
+        </View>
+      ),
+      actions: [],
+      primary: {
+        label: 'Unlock unlimited moments',
+        color: '#FF4D6D',
+        icon: 'unlock',
+        onPress: () => openPlus('Unlimited daily moments'),
+      },
+    });
+
+  /** Photos and videos from the phone into an album: they upload in the background. */
+  const uploadInto = (album: { id: string; name: string }, picked: PickedMedia[]) => {
+    // Never more than today's free moments left (the picker can't always enforce it).
+    const media = Number.isFinite(uploadsLeft) ? picked.slice(0, uploadsLeft) : picked;
+    if (media.length === 0) {
+      showMomentLimit();
+      return;
+    }
+    if (media.length < picked.length) {
+      Alert.alert(
+        `Adding ${media.length} of ${picked.length}`,
+        `Free accounts can add ${limits.dailyMoments} moments a day. Get Moments Plus to upload the rest.`,
+      );
+    }
+    void uploadToAlbum({
+      albumId: album.id,
+      albumName: album.name,
+      media,
+      addMoments,
+      onMomentCreated: () => void queryClient.invalidateQueries({ queryKey: ['moments', relationship?.id] }),
+    }).then(({ added, failed }) => {
+      if (added > 0) Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      if (failed > 0) {
+        Alert.alert(
+          'Some didn’t upload',
+          `${failed} of ${added + failed} couldn’t be added. Check your connection and try those again.`,
+        );
+      }
+    });
+  };
+
+  const uploadFromLibrary = async (album: { id: string; name: string }) => {
+    if (uploadsLeft <= 0) {
+      showMomentLimit();
+      return;
+    }
+    const media = await pickAlbumMedia(Math.min(ALBUM_UPLOAD_MAX, uploadsLeft));
+    if (media.length) uploadInto(album, media);
+  };
+
+  const onCreateAlbum = ({ name, emoji, media }: { name: string; emoji: string; media?: PickedMedia[] }) => {
     const pending = sheet?.kind === 'create' ? sheet.pendingIds : null;
     setSheet(null);
     if (pending?.length) {
@@ -414,11 +503,13 @@ export function MomentHistoryModal() {
       const album = createAlbum({ name, emoji, momentIds: pending });
       exitSelection();
       backToAlbum(album.id);
+      if (media?.length) uploadInto(album, media);
       return;
     }
-    // From "New album": create it and open it, empty. "Add moments" is right there.
+    // From "New album": create it and open it; anything picked from the phone uploads into it.
     const album = createAlbum({ name, emoji });
     backToAlbum(album.id);
+    if (media?.length) uploadInto(album, media);
   };
 
   const startAddingToOpenAlbum = () => {
@@ -465,11 +556,19 @@ export function MomentHistoryModal() {
       ),
       actions: [
         {
-          label: 'Add moments',
+          label: 'Add from your moments',
           icon: 'plus',
           onPress: () => {
             setSheet(null);
             startAddingToOpenAlbum();
+          },
+        },
+        {
+          label: 'Upload photos & videos',
+          icon: 'image',
+          onPress: () => {
+            setSheet(null);
+            void uploadFromLibrary(openAlbum);
           },
         },
         { label: 'Edit album', icon: 'edit', onPress: () => setSheet({ kind: 'rename', album: openAlbum }) },
@@ -746,36 +845,102 @@ export function MomentHistoryModal() {
     const last = format(Math.max(...times), 'MMM yyyy');
     return first === last ? first : `${first} – ${last}`;
   })();
-  const albumHero =
-    openAlbum && albumMoments.length > 0 ? (
-      <View style={styles.albumHero}>
-        {albumCover?.media_url && albumCover.type === 'photo' ? (
-          <Image source={{ uri: albumCover.media_url }} style={StyleSheet.absoluteFill} contentFit="cover" transition={200} />
-        ) : (
-          <View style={[StyleSheet.absoluteFill, { backgroundColor: chrome.accentSoft }]} />
-        )}
-        <LinearGradient
-          colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.62)']}
-          start={{ x: 0, y: 0.35 }}
-          end={{ x: 0, y: 1 }}
-          style={StyleSheet.absoluteFill}
-        />
+  // The album's cover is the top of its page, like the Streak and You pages: edge to edge,
+  // up under the status bar, curved at the bottom. No photo yet: the theme's accent.
+  const coverPhoto = albumCover?.media_url && albumCover.type === 'photo' ? albumCover.media_url : null;
+  const heroHeight = insets.top + ALBUM_HERO_H;
+  // No photo: the theme's hero colour with its own text colour (as on Home, You and Streak),
+  // so it reads on every theme. Over a photo: white on a darkened image.
+  const plainBand = introBand(colors);
+  const heroBg = coverPhoto ? '#000000' : plainBand.background;
+  const heroInk = coverPhoto ? '#FFFFFF' : plainBand.ink;
+  const heroLightIcons = coverPhoto ? true : plainBand.isDark;
+  const albumHero = openAlbum ? (
+    <View style={[styles.albumHeroWrap, { height: heroHeight }]}>
+      {/* Fills the space above when you pull down, so the top never shows a gap. */}
+      <View
+        pointerEvents="none"
+        style={[styles.albumHeroBleed, { backgroundColor: heroBg }]}
+      />
+      <View style={[styles.albumHero, { backgroundColor: heroBg }]}>
+        {coverPhoto ? (
+          <Image source={{ uri: coverPhoto }} style={StyleSheet.absoluteFill} contentFit="cover" transition={200} />
+        ) : null}
+        {/* Over a photo: darkens the top for the status bar and buttons, and the bottom for the name. */}
+        {coverPhoto ? (
+          <LinearGradient
+            colors={['rgba(0,0,0,0.42)', 'rgba(0,0,0,0)', 'rgba(0,0,0,0)', 'rgba(0,0,0,0.62)']}
+            locations={[0, 0.3, 0.45, 1]}
+            style={StyleSheet.absoluteFill}
+          />
+        ) : null}
         <View style={styles.albumHeroText}>
-          <View style={styles.albumHeroBadge}>
-            <Icon name={markIcon(openAlbum.emoji, 'albums')} size={18} color="#FFFFFF" filled />
+          <View style={[styles.albumHeroBadge, { backgroundColor: colorWithAlpha(heroInk, 0.2) }]}>
+            <Icon name={markIcon(openAlbum.emoji, 'albums')} size={18} color={heroInk} filled />
           </View>
-          <Text style={styles.albumHeroName} numberOfLines={1}>
+          <Text style={[styles.albumHeroName, { color: heroInk }]} numberOfLines={1}>
             {openAlbum.name}
           </Text>
-          <Text style={styles.albumHeroMeta} numberOfLines={1}>
+          <Text style={[styles.albumHeroMeta, { color: colorWithAlpha(heroInk, 0.85) }]} numberOfLines={1}>
             {albumMoments.length} moment{albumMoments.length === 1 ? '' : 's'}
             {albumSpan ? ` · ${albumSpan}` : ''}
           </Text>
         </View>
       </View>
-    ) : null;
+    </View>
+  ) : null;
 
   const emptyAll = !isLoading && displayMoments.length === 0;
+
+  // "Add" in an album: moments you've already sent, or new ones from the phone.
+  const addToAlbumMenu = () => {
+    if (!openAlbum) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setSheet({
+      kind: 'actions',
+      title: `Add to ${openAlbum.name}`,
+      actions: [
+        {
+          label: 'Upload photos & videos',
+          icon: 'image',
+          onPress: () => {
+            setSheet(null);
+            void uploadFromLibrary(openAlbum);
+          },
+        },
+        {
+          label: 'Add from your moments',
+          icon: 'albums',
+          onPress: () => {
+            setSheet(null);
+            startAddingToOpenAlbum();
+          },
+        },
+      ],
+    });
+  };
+  const uploadJob = openAlbum ? uploadJobs[openAlbum.id] : undefined;
+  const uploadBanner = uploadJob ? (
+    <View style={[styles.uploadBanner, { backgroundColor: chrome.surfaceSoft, borderColor: chrome.border }]}>
+      <ActivityIndicator size="small" color={chrome.accent} />
+      <View style={styles.uploadText}>
+        <Text style={[styles.uploadTitle, { color: chrome.text }]}>
+          Uploading {Math.min(uploadJob.total, uploadJob.done + uploadJob.failed + 1)} of {uploadJob.total}…
+        </Text>
+        <View style={[styles.uploadTrack, { backgroundColor: chrome.border }]}>
+          <View
+            style={[
+              styles.uploadFill,
+              {
+                backgroundColor: chrome.accent,
+                width: `${Math.round(((uploadJob.done + uploadJob.failed) / uploadJob.total) * 100)}%`,
+              },
+            ]}
+          />
+        </View>
+      </View>
+    </View>
+  ) : null;
 
   return (
     <GestureDetector gesture={swipeClose}>
@@ -923,9 +1088,12 @@ export function MomentHistoryModal() {
               style={[
                 StyleSheet.absoluteFill,
                 styles.layer,
-                { paddingTop: insets.top, backgroundColor: chrome.background },
+                { paddingTop: inAlbum ? 0 : insets.top, backgroundColor: chrome.background },
                 levelStyle,
               ]}>
+              {/* White status bar icons while the cover is behind them (not under an open moment). */}
+              {inAlbum && !viewerOpen ? <ThemedStatusBar style={heroBehindStatus ? (heroLightIcons ? 'light' : 'dark') : undefined} /> : null}
+              {inMap ? (
               <View style={styles.header}>
                 <View style={[styles.side, styles.sideLeft]}>
                   <HeaderIconButton
@@ -936,15 +1104,12 @@ export function MomentHistoryModal() {
                 </View>
                 <View style={styles.center}>
                   <Text style={[styles.title, { color: chrome.text }]} numberOfLines={1}>
-                    {inMap ? 'Our map' : (openAlbum?.name ?? '')}
+                    Our map
                   </Text>
                 </View>
-                <View style={[styles.side, styles.sideRight]}>
-                  {inAlbum ? (
-                    <HeaderIconButton icon="more" onPress={albumMenu} accessibilityLabel="Album options" />
-                  ) : null}
-                </View>
+                <View style={[styles.side, styles.sideRight]} />
               </View>
+              ) : null}
 
               {inMap ? (
                 <OurMapView
@@ -962,7 +1127,20 @@ export function MomentHistoryModal() {
                     data={albumRows}
                     keyExtractor={(row) => row.key}
                     renderItem={renderAlbumRow}
-                    ListHeaderComponent={albumHero}
+                    ListHeaderComponent={
+                      <>
+                        {albumHero}
+                        {uploadBanner}
+                      </>
+                    }
+                    onScroll={(e) => {
+                      const behind = e.nativeEvent.contentOffset.y < heroHeight - insets.top - 24;
+                      if (behind !== heroBehindStatus) setHeroBehindStatus(behind);
+                    }}
+                    scrollEventThrottle={32}
+                    // The cover is pinned to the top: no pulling the page down past it.
+                    bounces={false}
+                    overScrollMode="never"
                     initialNumToRender={8}
                     contentContainerStyle={[
                       styles.scroll,
@@ -984,10 +1162,31 @@ export function MomentHistoryModal() {
                   />
                   <FloatingButton
                     icon="plus"
-                    label="Add moments"
-                    onPress={startAddingToOpenAlbum}
+                    label="Add to moments"
+                    onPress={addToAlbumMenu}
                     bottomInset={insets.bottom}
                   />
+                  {/* Back and options float over the cover (and stay put as you scroll). */}
+                  <View pointerEvents="box-none" style={[styles.albumChips, { top: insets.top + 6 }]}>
+                    {[
+                      { icon: 'chevronLeft' as const, label: 'Back to all moments', onPress: backFromLevel },
+                      { icon: 'more' as const, label: 'Album options', onPress: albumMenu },
+                    ].map((chip) => (
+                      <Pressable
+                        key={chip.icon}
+                        onPress={chip.onPress}
+                        accessibilityRole="button"
+                        accessibilityLabel={chip.label}
+                        hitSlop={6}
+                        style={({ pressed }) => [
+                          styles.albumChip,
+                          { backgroundColor: colorWithAlpha('#FFFFFF', 0.78) },
+                          pressed && { opacity: 0.8 },
+                        ]}>
+                        <Icon name={chip.icon} size={24} color="#1A1A1A" />
+                      </Pressable>
+                    ))}
+                  </View>
                 </>
               )}
             </Animated.View>
@@ -998,6 +1197,9 @@ export function MomentHistoryModal() {
           <AlbumEditSheet
             title="New album"
             submitLabel="Create album"
+            withMedia
+            mediaLimit={Number.isFinite(uploadsLeft) ? uploadsLeft : undefined}
+            freeDailyMoments={limits.dailyMoments}
             onSubmit={onCreateAlbum}
             onClose={() => setSheet(sheet.back ?? null)}
           />
@@ -1127,8 +1329,37 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     elevation: 8,
   },
-  albumHero: { height: 230, borderRadius: 24, overflow: 'hidden', marginBottom: 18, justifyContent: 'flex-end' },
-  albumHeroText: { padding: 16, gap: 3 },
+  albumHeroWrap: { marginHorizontal: -GRID_PAD, marginBottom: 18 },
+  albumHeroBleed: { position: 'absolute', left: 0, right: 0, top: -600, height: 600 },
+  albumHero: {
+    flex: 1,
+    borderBottomLeftRadius: 32,
+    borderBottomRightRadius: 32,
+    overflow: 'hidden',
+    justifyContent: 'flex-end',
+  },
+  albumHeroText: { paddingHorizontal: 20, paddingBottom: 22, gap: 3 },
+  albumChips: {
+    position: 'absolute',
+    left: 12,
+    right: 12,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    zIndex: 20,
+    elevation: 20,
+  },
+  albumChip: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.18,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 4,
+  },
   albumHeroBadge: {
     width: 34,
     height: 34,
@@ -1140,6 +1371,19 @@ const styles = StyleSheet.create({
   },
   albumHeroName: { color: '#FFFFFF', fontSize: 26, fontWeight: '900', letterSpacing: -0.6 },
   albumHeroMeta: { color: 'rgba(255,255,255,0.85)', fontSize: 14, fontWeight: '700' },
+  uploadBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    borderRadius: 16,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: 12,
+    marginBottom: 12,
+  },
+  uploadText: { flex: 1, gap: 6 },
+  uploadTitle: { fontSize: 14, fontWeight: '700' },
+  uploadTrack: { height: 4, borderRadius: 2, overflow: 'hidden' },
+  uploadFill: { height: 4, borderRadius: 2 },
   albumEmpty: {
     flex: 1,
     alignItems: 'center',

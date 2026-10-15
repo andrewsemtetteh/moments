@@ -317,7 +317,9 @@ export function isMomentWithinHomeWindow(moment: Moment, now = Date.now()): bool
 }
 
 export function filterMomentsForHome(moments: Moment[]): Moment[] {
-  return moments.filter(isMomentWithinHomeWindow);
+  // Wrapped: passed straight to filter, the item's index would arrive as `now` (1970) and drop every moment.
+  const now = Date.now();
+  return moments.filter((m) => isMomentWithinHomeWindow(m, now));
 }
 
 export function isMomentUnseenByUser(moment: Moment, userId: string): boolean {

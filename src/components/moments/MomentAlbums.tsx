@@ -19,6 +19,7 @@ import { HeaderIconButton } from '@/components/ui/HeaderIconButton';
 import { colorWithAlpha } from '@/components/ui/primitives';
 import { Icon, type IconName } from '@/components/ui/Icon';
 import { useTheme } from '@/hooks/useTheme';
+import { ALBUM_UPLOAD_MAX, pickAlbumMedia, type PickedMedia } from '@/lib/album-upload';
 import { ALBUM_ICONS, markIcon } from '@/lib/mark-icons';
 import { albumCoverId, type MomentAlbum } from '@/lib/moment-albums';
 import { momentChrome } from '@/lib/moment-theme';
@@ -162,9 +163,10 @@ function AlbumFolder({
       <Text style={[styles.cardName, { color: chrome.text }]} numberOfLines={1}>
         {album.name}
       </Text>
+      {/* The count is already on the folder.
       <Text style={[styles.cardCount, { color: chrome.textTertiary }]}>
         {count} moment{count === 1 ? '' : 's'}
-      </Text>
+      </Text> */}
     </Pressable>
   );
 }
@@ -277,6 +279,9 @@ export function AlbumEditSheet({
   initialEmoji,
   placeholder = 'Album name',
   icons = ALBUM_ICONS,
+  withMedia = false,
+  mediaLimit,
+  freeDailyMoments,
   onSubmit,
   onClose,
 }: {
@@ -287,12 +292,27 @@ export function AlbumEditSheet({
   initialEmoji?: string;
   placeholder?: string;
   icons?: readonly IconName[];
-  onSubmit: (value: { name: string; emoji: string }) => void;
+  /** New album: also pick photos and videos from the phone to upload into it. */
+  withMedia?: boolean;
+  /** Free plan: how many more moments can be added today (unset = no cap). */
+  mediaLimit?: number;
+  /** The free plan's moments a day, for the hint. */
+  freeDailyMoments?: number;
+  onSubmit: (value: { name: string; emoji: string; media?: PickedMedia[] }) => void;
   onClose: () => void;
 }) {
   const { colors } = useTheme();
   const chrome = momentChrome(colors);
   const [name, setName] = useState(initialName);
+  const [media, setMedia] = useState<PickedMedia[]>([]);
+  const maxMedia = Math.min(ALBUM_UPLOAD_MAX, mediaLimit ?? ALBUM_UPLOAD_MAX);
+  const addMedia = async () => {
+    Keyboard.dismiss();
+    const picked = await pickAlbumMedia(maxMedia - media.length);
+    if (picked.length === 0) return;
+    void Haptics.selectionAsync();
+    setMedia((current) => [...current, ...picked.filter((p) => !current.some((c) => c.uri === p.uri))].slice(0, maxMedia));
+  };
   const [icon, setIcon] = useState<IconName>(() => {
     const current = markIcon(initialEmoji, icons[0]);
     return icons.includes(current) ? current : icons[0];
@@ -303,7 +323,7 @@ export function AlbumEditSheet({
     if (!canSubmit) return;
     void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     // Stored in the `emoji` field, which now holds an icon name.
-    onSubmit({ name: name.trim(), emoji: icon });
+    onSubmit({ name: name.trim(), emoji: icon, media: withMedia && media.length ? media : undefined });
   };
 
   return (
@@ -356,6 +376,62 @@ export function AlbumEditSheet({
           );
         })}
       </View>
+
+      {withMedia ? (
+        <>
+          <View style={styles.mediaHead}>
+            <Text style={[styles.fieldLabel, { color: chrome.textSecondary }]}>Photos & videos</Text>
+            {media.length ? (
+              <Text style={[styles.mediaCount, { color: chrome.textTertiary }]}>
+                {media.length} of {maxMedia}
+              </Text>
+            ) : null}
+          </View>
+          <View style={styles.mediaGrid}>
+            {media.length < maxMedia ? (
+              <Pressable
+                onPress={() => void addMedia()}
+                accessibilityRole="button"
+                accessibilityLabel="Add photos or videos"
+                style={({ pressed }) => [
+                  styles.mediaTile,
+                  styles.mediaAdd,
+                  { borderColor: chrome.border, backgroundColor: chrome.surfaceSoft },
+                  pressed && styles.pressed,
+                ]}>
+                <Icon name="image" size={26} color={chrome.accent} />
+                <Text style={[styles.mediaAddText, { color: chrome.accent }]}>Add</Text>
+              </Pressable>
+            ) : null}
+            {media.map((item) => (
+              <View key={item.uri} style={[styles.mediaTile, { backgroundColor: chrome.surfaceSoft }]}>
+                {item.type === 'photo' ? (
+                  <Image source={{ uri: item.uri }} style={StyleSheet.absoluteFill} contentFit="cover" />
+                ) : (
+                  <View style={[StyleSheet.absoluteFill, styles.mediaVideo]}>
+                    <Icon name="play" size={24} color="#FFFFFF" filled />
+                  </View>
+                )}
+                <Pressable
+                  onPress={() => setMedia((current) => current.filter((c) => c.uri !== item.uri))}
+                  hitSlop={8}
+                  accessibilityRole="button"
+                  accessibilityLabel="Remove"
+                  style={styles.mediaRemove}>
+                  <Icon name="close" size={12} color="#FFFFFF" />
+                </Pressable>
+              </View>
+            ))}
+          </View>
+          <Text style={[styles.mediaHint, { color: chrome.textTertiary }]}>
+            {mediaLimit === undefined
+              ? 'They’re added to your moments and this album, for you both.'
+              : mediaLimit === 0
+                ? `You’ve added today’s ${freeDailyMoments ?? ''} free moments. Moments Plus is unlimited.`
+                : `Free plan: ${mediaLimit} more moment${mediaLimit === 1 ? '' : 's'} today. Moments Plus is unlimited.`}
+          </Text>
+        </>
+      ) : null}
     </Page>
   );
 }
@@ -638,6 +714,25 @@ const styles = StyleSheet.create({
   },
   ideaChip: { paddingHorizontal: 14, paddingVertical: 9, borderRadius: 999 },
   ideaChipText: { fontSize: 14, fontWeight: '700' },
+  mediaHead: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between' },
+  mediaCount: { fontSize: 13, fontWeight: '700' },
+  mediaGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  mediaTile: { width: 76, height: 76, borderRadius: 14, overflow: 'hidden' },
+  mediaAdd: { borderWidth: 1.5, borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center', gap: 2 },
+  mediaAddText: { fontSize: 12, fontWeight: '800' },
+  mediaVideo: { backgroundColor: '#1F1F24', alignItems: 'center', justifyContent: 'center' },
+  mediaRemove: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mediaHint: { fontSize: 12, fontWeight: '600' },
   pickerList: { maxHeight: 360 },
   pickerRow: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 8 },
   pickerThumb: { width: 52, height: 52, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },

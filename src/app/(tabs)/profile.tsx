@@ -156,12 +156,18 @@ export default function ProfileScreen() {
   const onBand = colors.onHero ?? colors.onGradient;
   // The band runs under the status bar: its icons follow the band (white on a dark one, e.g. Paper's black),
   // then go back to the theme's when you leave.
-  const bandIsDark = isDarkColor(band);
+  // Follows the band's own text: white text means white icons (Starlight's pink has dark text).
+  const bandIsDark = !isDarkColor(onBand);
+  // Like Home: the header sits on the band at the top, and goes back to the theme's own
+  // colours once the band has scrolled up under it.
+  const [bandHeight, setBandHeight] = useState(0);
+  const [pastBand, setPastBand] = useState(false);
   useFocusEffect(
     useCallback(() => {
-      setStatusBarStyle(bandIsDark ? 'light' : 'dark', true);
+      const light = pastBand ? colors.isDark : bandIsDark;
+      setStatusBarStyle(light ? 'light' : 'dark', true);
       return () => setStatusBarStyle(colors.isDark ? 'light' : 'dark', true);
-    }, [bandIsDark, colors.isDark]),
+    }, [pastBand, bandIsDark, colors.isDark]),
   );
   const year = new Date().getFullYear();
 
@@ -179,7 +185,16 @@ export default function ProfileScreen() {
       onSwipeRight={() => router.navigate('/(tabs)/activities')}
       onSwipeLeft={() => router.navigate('/settings')}>
       <ScreenContainer padded={false}>
-        <TabScreenScroll showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
+        <TabScreenScroll
+          showsVerticalScrollIndicator={false}
+          // The band is pinned to the top: no pulling the page down past it.
+          bounces={false}
+          overScrollMode="never"
+          onScroll={(e) => {
+            const past = bandHeight > 0 && e.nativeEvent.contentOffset.y > bandHeight - insets.top - 12;
+            if (past !== pastBand) setPastBand(past);
+          }}
+          contentContainerStyle={styles.scroll}>
           {/* The two of you, on a curved band of the theme's colour. Tapping it shares your days together;
               each photo only opens that photo, and the camera changes yours. */}
           <Pressable
@@ -187,21 +202,10 @@ export default function ProfileScreen() {
             disabled={!partner || !since}
             accessibilityRole="button"
             accessibilityLabel="Share your days together"
+            onLayout={(e) => setBandHeight(e.nativeEvent.layout.height)}
             style={[styles.band, { backgroundColor: band, paddingTop: insets.top + 6 }]}>
-            {/* Fills the space above when you pull down, so the band never shows a gap. */}
-            <View pointerEvents="none" style={[styles.bandBleed, { backgroundColor: band }]} />
-            <View style={styles.bandTop}>
-              <Text style={[styles.bandTitle, { color: onBand }]} accessibilityRole="header">
-                You
-              </Text>
-              <Pressable
-                onPress={() => router.navigate('/settings')}
-                accessibilityRole="button"
-                accessibilityLabel="Settings"
-                style={({ pressed }) => [styles.bandButton, { backgroundColor: colorWithAlpha('#FFFFFF', 0.72) }, pressed && styles.pressed]}>
-                <Icon name="settings" size={24} color={INK} />
-              </Pressable>
-            </View>
+            {/* Room for the floating gift and settings buttons, which stay put as you scroll. */}
+            <View style={styles.chipSpace} />
 
             <View style={styles.avatarsRow}>
               <View>
@@ -390,6 +394,35 @@ export default function ProfileScreen() {
           ) : null}
         </TabScreenScroll>
 
+        {/* Invite a couple and Settings float over the page, always reachable (like the
+            Streak page's and an album's buttons). */}
+        <View pointerEvents="box-none" style={[styles.floatingChips, { top: insets.top + 6 }]}>
+          <Pressable
+            onPress={() => router.push('/refer')}
+            accessibilityRole="button"
+            accessibilityLabel="Invite a couple"
+            style={({ pressed }) => [
+              styles.bandButton,
+              styles.chipShadow,
+              { backgroundColor: colorWithAlpha('#FFFFFF', 0.86) },
+              pressed && styles.pressed,
+            ]}>
+            <Icon name="gift" size={24} color={INK} />
+          </Pressable>
+          <Pressable
+            onPress={() => router.navigate('/settings')}
+            accessibilityRole="button"
+            accessibilityLabel="Settings"
+            style={({ pressed }) => [
+              styles.bandButton,
+              styles.chipShadow,
+              { backgroundColor: colorWithAlpha('#FFFFFF', 0.86) },
+              pressed && styles.pressed,
+            ]}>
+            <Icon name="settings" size={24} color={INK} />
+          </Pressable>
+        </View>
+
         {partner && since ? (
           <ShareCardModal visible={shareDays} onClose={() => setShareDays(false)} title="Share your days together">
             <DaysTogetherCard
@@ -505,6 +538,23 @@ const styles = StyleSheet.create({
   },
   bandBleed: { position: 'absolute', left: 0, right: 0, top: -600, height: 600 },
   bandTop: { alignSelf: 'stretch', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 },
+  chipSpace: { height: 50 },
+  floatingChips: {
+    position: 'absolute',
+    left: 20,
+    right: 20,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    zIndex: 20,
+    elevation: 20,
+  },
+  chipShadow: {
+    shadowColor: '#000',
+    shadowOpacity: 0.18,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 4,
+  },
   bandTitle: { fontSize: 24, fontWeight: '900', letterSpacing: -0.6 },
   bandButton: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
   avatarsRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },

@@ -9,8 +9,7 @@ import {
     ActivityIndicator,
     Alert,
     Dimensions,
-    KeyboardAvoidingView,
-    Platform,
+    Keyboard,
     Pressable,
     StyleSheet,
     Text,
@@ -18,7 +17,7 @@ import {
     type LayoutChangeEvent,
 } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
+import Animated, { FadeIn, FadeOut, runOnJS, useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { MomentVideoPlayer } from '@/components/moments/MomentVideoPlayer';
@@ -77,6 +76,8 @@ export function MomentStoryViewer() {
   const [index, setIndex] = useState(0);
   const [progress, setProgress] = useState(0);
   const [paused, setPaused] = useState(false);
+  // Replying holds the story still (timer paused) under a scrim, as in story apps.
+  const [replying, setReplying] = useState(false);
   const [reply, setReply] = useState('');
   const [width, setWidth] = useState(SCREEN_W);
   const [downloading, setDownloading] = useState(false);
@@ -172,7 +173,7 @@ export function MomentStoryViewer() {
   }, [viewer, moment?.id, user?.id, isMine, relationship?.id, queryClient]);
 
   useEffect(() => {
-    if (!viewer || !moment || isVideo || paused || isFocusMode) {
+    if (!viewer || !moment || isVideo || paused || replying || isFocusMode) {
       clearTimer();
       return;
     }
@@ -190,7 +191,7 @@ export function MomentStoryViewer() {
     // reaction/refetch, which would otherwise reset the auto-advance timer whenever an
     // unrelated field on it updates.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [viewer, moment?.id, isVideo, paused, isFocusMode, goNext, clearTimer]);
+  }, [viewer, moment?.id, isVideo, paused, replying, isFocusMode, goNext, clearTimer]);
 
   const react = useCallback(
     (emoji: string) => {
@@ -301,10 +302,9 @@ export function MomentStoryViewer() {
   return (
     <GestureDetector gesture={swipeClose}>
       <Animated.View style={[styles.root, dragStyle]}>
-        <KeyboardAvoidingView
-          style={[styles.root, { backgroundColor: chrome.background }]}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          onLayout={onLayout}>
+        {/* No keyboard avoidance on the screen: the moment stays exactly where it is while replying;
+            only the reply bar rides up on the keyboard (see MomentViewerDock). */}
+        <View style={[styles.root, { backgroundColor: chrome.background }]} onLayout={onLayout}>
           <StatusBar style="light" />
           {/* The photo itself, blurred and dimmed, fills the background (Locket / Instagram style). */}
           {backdropUri ? (
@@ -355,7 +355,7 @@ export function MomentStoryViewer() {
               {downloading ? (
                 <ActivityIndicator color={chrome.text} size="small" />
               ) : (
-                <Icon name="download" size={18} color={chrome.text} />
+                <Icon name="download" size={22} color={chrome.text} />
               )}
             </Pressable>
             {isMine && (
@@ -368,7 +368,7 @@ export function MomentStoryViewer() {
                 {deleteMomentsMutation.isPending ? (
                   <ActivityIndicator color={chrome.error} size="small" />
                 ) : (
-                  <Icon name="trash" size={17} color={chrome.error} />
+                  <Icon name="trash" size={21} color={chrome.error} />
                 )}
               </Pressable>
             )}
@@ -378,7 +378,7 @@ export function MomentStoryViewer() {
               style={[styles.roundBtn, { backgroundColor: chrome.surfaceSoft }]}
               accessibilityRole="button"
               accessibilityLabel="Close">
-              <Icon name="close" size={18} color={chrome.text} />
+              <Icon name="close" size={22} color={chrome.text} />
             </Pressable>
           </View>
 
@@ -411,6 +411,18 @@ export function MomentStoryViewer() {
             </View>
           </View>
 
+          {/* While replying: the moment dims; tapping it closes the keyboard. */}
+          {replying ? (
+            <Animated.View entering={FadeIn.duration(180)} exiting={FadeOut.duration(160)} style={[StyleSheet.absoluteFill, styles.replyScrim]}>
+              <Pressable
+                style={StyleSheet.absoluteFill}
+                onPress={() => Keyboard.dismiss()}
+                accessibilityRole="button"
+                accessibilityLabel="Close keyboard"
+              />
+            </Animated.View>
+          ) : null}
+
           <MomentViewerDock
             moment={moment}
             isMine={isMine}
@@ -428,8 +440,9 @@ export function MomentStoryViewer() {
             bottomInset={insets.bottom}
             floating
             dark
+            onReplyFocusChange={setReplying}
           />
-        </KeyboardAvoidingView>
+        </View>
       </Animated.View>
     </GestureDetector>
   );
@@ -492,6 +505,8 @@ const styles = StyleSheet.create({
   root: { flex: 1, minHeight: SCREEN_H },
   // Deep and calm behind the photo, so its colours carry the screen.
   backdropDim: { backgroundColor: 'rgba(8,8,12,0.72)' },
+  // Over the moment and its tap zones, under the reply bar (zIndex 6).
+  replyScrim: { backgroundColor: 'rgba(0,0,0,0.55)', zIndex: 5 },
   card: {
     width: CARD_W,
     height: CARD_H,
@@ -533,7 +548,7 @@ const styles = StyleSheet.create({
   authorMeta: { flex: 1, minWidth: 0, gap: 1, marginLeft: 2 },
   authorName: { fontSize: 16, fontWeight: '800' },
   authorTime: { fontSize: 12, fontWeight: '600' },
-  roundBtn: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
+  roundBtn: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
   tapLeft: { position: 'absolute', top: 0, left: 0, zIndex: 2 },
   tapRight: { position: 'absolute', top: 0, zIndex: 2 },
   stage: { flex: 1, alignItems: 'center', justifyContent: 'center', zIndex: 1 },
