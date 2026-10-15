@@ -44,6 +44,9 @@ export const PER_WEEK_USD: Record<SubscriptionPlanId, number> = {
   monthly: roundUsd((MONTHLY_PRICE_USD * 12) / WEEKS_PER_YEAR),
 };
 
+/** What a month costs on yearly, for "$5.83/month" under the yearly price. */
+export const YEARLY_PER_MONTH_USD = roundUsd(YEARLY_PRICE_USD / 12);
+
 /** Yearly vs paying weekly all year (69.99 vs 259.48 → 73%). */
 export const YEARLY_SAVING_PERCENT = Math.round((1 - YEARLY_PRICE_USD / (WEEKLY_PRICE_USD * WEEKS_PER_YEAR)) * 100);
 
@@ -60,8 +63,22 @@ export type SubscriptionPlan = {
   badge?: string;
 };
 
-/** In the order shown. Weekly is selected by default. */
+/**
+ * In the order shown. Yearly leads and is selected: a couples app is a long habit, and the
+ * yearly plan (shown as a monthly figure too) is the one most couples should pick.
+ * Monthly starts today; weekly stays for people who want the smallest step.
+ */
 export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
+  {
+    id: 'yearly',
+    name: 'Yearly',
+    priceUsd: YEARLY_PRICE_USD,
+    per: '/year',
+    perWords: 'a year',
+    trial: true,
+    badge: `${TRIAL_DAYS} days free · Save ${YEARLY_SAVING_PERCENT}%`,
+  },
+  { id: 'monthly', name: 'Monthly', priceUsd: MONTHLY_PRICE_USD, per: '/month', perWords: 'a month', trial: false },
   {
     id: 'weekly',
     name: 'Weekly',
@@ -71,19 +88,9 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
     trial: true,
     badge: `${TRIAL_DAYS} days free`,
   },
-  {
-    id: 'yearly',
-    name: 'Yearly',
-    priceUsd: YEARLY_PRICE_USD,
-    per: '/year',
-    perWords: 'a year',
-    trial: true,
-    badge: `Best value · Save ${YEARLY_SAVING_PERCENT}%`,
-  },
-  { id: 'monthly', name: 'Monthly', priceUsd: MONTHLY_PRICE_USD, per: '/month', perWords: 'a month', trial: false },
 ];
 
-export const DEFAULT_PLAN: SubscriptionPlanId = 'weekly';
+export const DEFAULT_PLAN: SubscriptionPlanId = 'yearly';
 
 export function planById(id: SubscriptionPlanId): SubscriptionPlan {
   return SUBSCRIPTION_PLANS.find((p) => p.id === id) ?? SUBSCRIPTION_PLANS[0];
@@ -99,6 +106,6 @@ export type PlusFeatureItem = {
 export const PLUS_FEATURE_ITEMS: PlusFeatureItem[] = [
   { icon: 'camera', title: 'Unlimited daily moments', freeLimit: `${FREE_DAILY_MOMENTS} per day on Free` },
   { icon: 'list', title: 'Full moment timeline', freeLimit: `${FREE_TIMELINE_MOMENTS} recent moments on Free` },
-  { icon: 'sparkles', title: 'AI games and questions', freeLimit: 'Plus only' },
+  { icon: 'bulb', title: 'AI games and questions', freeLimit: 'Plus only' },
   { icon: 'fire', title: 'Streak restore', freeLimit: 'Plus only' },
 ];

@@ -290,7 +290,8 @@ export function PartnerProfileModal() {
                 accessibilityHint={hasPartnerMoment ? 'Hold to see the profile photo' : undefined}>
                 {hasPartnerMoment ? (
                   <LinearGradient
-                    colors={['#5b8def', '#9b6bff', '#e85d75']}
+                    // Flat theme colour on the soft themes (no gradients there).
+                    colors={colors.sticker ? [colors.highlight, colors.highlight] : ['#5b8def', '#9b6bff', '#e85d75']}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 1 }}
                     style={styles.storyRing}>
@@ -482,7 +483,7 @@ export function PartnerProfileModal() {
 
 /** A card's fill, plus the theme's border where cards need one (Paper). */
 function cardSurface(colors: ThemeColors) {
-  return { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: colors.boldBorder ? 2 : 0 };
+  return { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: colors.boldBorder ? 2 : colors.sticker ? 1 : 0 };
 }
 
 function Section({ title, children }: { title: string; children: ReactNode }) {

@@ -19,12 +19,12 @@ import {
   Pressable,
   StyleSheet,
   Text,
-  TextInput,
   View,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
   type GestureResponderEvent,
 } from 'react-native';
+import { TextInput } from '@/components/ui/ThemedTextInput';
 import { FlatList } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 

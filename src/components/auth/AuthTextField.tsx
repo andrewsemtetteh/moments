@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { StyleSheet, Text, TextInput, View, type TextInputProps, type ViewStyle } from 'react-native';
+import { StyleSheet, Text, View, type TextInputProps, type ViewStyle } from 'react-native';
+import { TextInput } from '@/components/ui/ThemedTextInput';
 import Animated, {
     Easing,
     interpolate,

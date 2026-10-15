@@ -3,7 +3,7 @@ import { ScrollView, StyleSheet, useWindowDimensions } from 'react-native';
 
 import { PLAY_TONES, type ExploreModalKey } from '@/components/activities/explore/explore-catalog';
 import { Spacing } from '@/constants/design-system';
-import { activitiesWithFormat, featuredPack, getArea } from '@/lib/handpicked';
+import { activitiesWithFormat, featuredPack, getArea, packsForRail } from '@/lib/handpicked';
 
 import { PlayCard } from './PlayCard';
 
@@ -22,6 +22,8 @@ export function HandpickedRail({
   onOpen: (key: ExploreModalKey) => void;
 }) {
   const cardWidth = useRailCardWidth();
+  const router = useRouter();
+  const sets = packsForRail(format);
   return (
     <ScrollView
       horizontal
@@ -42,6 +44,23 @@ export function HandpickedRail({
           onPress={() => onOpen(a.id)}
         />
       ))}
+      {sets.map((pack) => {
+        const area = getArea(pack.area);
+        if (!area) return null;
+        return (
+          <PlayCard
+            key={pack.id}
+            width={cardWidth}
+            tone={PLAY_TONES[area.tone]}
+            art={pack.art ?? area.art}
+            badge={area.title}
+            title={pack.title}
+            sub={pack.blurb}
+            cta="Start"
+            onPress={() => router.push({ pathname: '/play/pack/[id]', params: { id: pack.id } })}
+          />
+        );
+      })}
     </ScrollView>
   );
 }

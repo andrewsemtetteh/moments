@@ -11,7 +11,6 @@ import { Avatar } from '@/components/ui/primitives';
 import type { ThemeColors } from '@/constants/design-system';
 import { useTheme } from '@/hooks/useTheme';
 import { getFirstName } from '@/lib/avatar-initial';
-import { streakSubtitle } from '@/lib/streak';
 import { STREAK_COLORS } from '@/lib/streak-colors';
 import { buildStreakWeek, type StreakDayCell } from '@/lib/streak-days';
 import { isStreakVisuallyAtRisk } from '@/lib/streak-reminder-timing';
@@ -38,13 +37,14 @@ export function shadeHex(hex: string, amount: number): string {
  * Rose, charcoal on Paper). Text on it uses `colors.onAccent`.
  */
 export function heroGradient(colors: ThemeColors): [string, string, string] {
+  if (colors.hero) return colors.hero;
   const [a, b] = colors.gradient;
   return [b, a, shadeHex(a, -0.22)];
 }
 
-/** onAccent at a given opacity, for badges and panels on the gradient. */
+/** The text colour on the gradient at a given opacity, for badges and panels on it. */
 function onAccentAlpha(colors: ThemeColors, alpha: number) {
-  const h = colors.onAccent.replace('#', '');
+  const h = (colors.onHero ?? colors.onGradient).replace('#', '');
   const r = parseInt(h.slice(0, 2), 16);
   const g = parseInt(h.slice(2, 4), 16);
   const b = parseInt(h.slice(4, 6), 16);
@@ -60,7 +60,6 @@ function greeting(name?: string | null) {
 
 /** The streak badge is a white chip on every theme so the flame's colours read. */
 const CHIP_BG = '#FFFFFF';
-const CHIP_TEXT = '#1A1008';
 
 /**
  * Home's intro card, in the Play live card's style but in the theme's own
@@ -84,10 +83,17 @@ export function WelcomeCard({
   onPressPartner?: () => void;
 }) {
   const { colors } = useTheme();
-  const ink = colors.onAccent;
-  const soft = onAccentAlpha(colors, 0.16);
+  const ink = colors.onHero ?? colors.onGradient;
+  const sticker = !!colors.sticker;
+  // Outlined themes with their own hero colour (Color) draw the hero and its parts as stickers.
+  const outlined = !!colors.boldBorder && !!colors.hero;
+  // Default / Violet: the week sits on a white sticker inside the hero.
+  const soft = sticker ? STICKER_PANEL : onAccentAlpha(colors, 0.16);
   const gradient = heroGradient(colors);
-  const ring = colors.gradient[0];
+  const ring = sticker ? ink : colors.gradient[0];
+  // On the white week panel and white avatars the text is always ink, whatever the hero's text colour.
+  const panelInk = sticker ? PANEL_INK : ink;
+  const initial = sticker ? PANEL_INK : undefined;
   const paired = !!partner;
 
   const week = useMemo(() => (status ? buildStreakWeek(status, joinedAt) : []), [status, joinedAt]);
@@ -100,7 +106,11 @@ export function WelcomeCard({
   };
 
   return (
-    <LinearGradient colors={gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.card}>
+    <LinearGradient
+      colors={gradient}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={[styles.card, outlined && { borderWidth: 3, borderColor: colors.border }]}>
       {/* <View pointerEvents="none" style={styles.glow} /> */}
 
       <Text style={[styles.greeting, { color: ink }]} numberOfLines={1}>
@@ -114,7 +124,7 @@ export function WelcomeCard({
       <View style={styles.couple}>
         <View style={styles.avatars}>
           <View style={[styles.avatarRing, { borderColor: ring }]}>
-            <Avatar name={user?.name} imageUrl={user?.avatar_url} size={38} colorsOverride={WHITE} />
+            <Avatar name={user?.name} imageUrl={user?.avatar_url} size={38} colorsOverride={WHITE} initialColor={initial} />
           </View>
           {paired ? (
             <Pressable
@@ -122,7 +132,7 @@ export function WelcomeCard({
               accessibilityRole="button"
               accessibilityLabel={`View ${partner?.name ?? 'partner'} profile`}
               style={[styles.avatarRing, styles.overlap, { borderColor: ring }]}>
-              <Avatar name={partner?.name} imageUrl={partner?.avatar_url} size={38} colorsOverride={WHITE} />
+              <Avatar name={partner?.name} imageUrl={partner?.avatar_url} size={38} colorsOverride={WHITE} initialColor={initial} />
             </Pressable>
           ) : (
             <View style={[styles.emptyAvatar, styles.overlap]}>
@@ -139,32 +149,14 @@ export function WelcomeCard({
             accessibilityLabel={
               count > 0 ? (atRisk ? `${count} day streak, ends tonight` : `${count} day streak`) : 'Start a streak'
             }
-            style={({ pressed }) => [styles.badge, { backgroundColor: CHIP_BG }, pressed && styles.pressed]}>
-            {count > 0 ? (
-              <>
-                {/* Lit: the flame glows in the streak colour (red when it ends tonight). */}
-                <View
-                  style={[
-                    styles.flameGlow,
-                    atRisk
-                      ? { backgroundColor: STREAK_COLORS.atRiskSoftLight, shadowColor: STREAK_COLORS.atRisk }
-                      : { backgroundColor: STREAK_COLORS.activeFillLight, shadowColor: STREAK_COLORS.active },
-                  ]}>
-                  <StickerFlame size={18} animated />
-                </View>
-                <Text style={[styles.badgeCount, { color: atRisk ? STREAK_COLORS.atRisk : STREAK_COLORS.active }]}>
-                  {count}
-                </Text>
-                {atRisk ? <Text style={[styles.badgeText, { color: STREAK_COLORS.atRisk }]}>Ends tonight</Text> : null}
-              </>
-            ) : (
-              <>
-                <View style={styles.idleFlame}>
-                  <StickerFlame size={16} />
-                </View>
-                <Text style={[styles.badgeText, { color: CHIP_TEXT }]}>Start a streak</Text>
-              </>
-            )}
+            style={({ pressed }) => [styles.badge, pressed && styles.pressed]}>
+            {/* Plain: the flame character and the number, straight on the card. */}
+            <View style={count > 0 ? undefined : styles.idleFlame}>
+              <StickerFlame size={40} face={count > 0} animated={count > 0} />
+            </View>
+            <Text style={[styles.badgeCount, { color: ink }]} numberOfLines={1}>
+              {count}
+            </Text>
           </Pressable>
         ) : null}
       </View>
@@ -174,17 +166,22 @@ export function WelcomeCard({
           onPress={openStreak}
           accessibilityRole="button"
           accessibilityLabel="This week's streak"
-          style={({ pressed }) => [styles.weekPanel, { backgroundColor: soft }, pressed && styles.pressed]}>
+          style={({ pressed }) => [
+            styles.weekPanel,
+            { backgroundColor: soft },
+            outlined && { borderWidth: 2, borderColor: ink },
+            pressed && styles.pressed,
+          ]}>
           <View style={styles.weekDays}>
             {week.map((d) => (
-              <WeekDay key={d.date.toISOString()} day={d} ink={ink} faint={onAccentAlpha(colors, 0.35)} />
+              <WeekDay
+                key={d.date.toISOString()}
+                day={d}
+                ink={panelInk}
+                faint={sticker ? 'rgba(26,26,26,0.35)' : onAccentAlpha(colors, 0.35)}
+              />
             ))}
           </View>
-          {paired && count === 0 && status ? (
-            <Text style={[styles.hint, { color: ink }]} numberOfLines={2}>
-              {streakSubtitle(status)}
-            </Text>
-          ) : null}
         </Pressable>
       ) : null}
     </LinearGradient>
@@ -229,6 +226,10 @@ const WHITE: [string, string] = ['#FFFFFF', '#FFFFFF'];
 
 /** A lit day, as on the milestone celebration. */
 const STICKER_LIT = '#FFE7A0';
+/** Text on that white panel and on the white avatars. */
+const PANEL_INK = '#1A1A1A';
+/** A white sticker inside the hero (white in dark mode too, as its text is ink). */
+const STICKER_PANEL = '#FFFFFF';
 
 const styles = StyleSheet.create({
   idleFlame: { opacity: 0.45 },
@@ -243,21 +244,9 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.16)',
   },
   greeting: { fontSize: 14, fontWeight: '700', opacity: 0.88 },
-  badge: { flexDirection: 'row', alignItems: 'center', gap: 4, height: 36, paddingHorizontal: 14, borderRadius: 18 },
-  badgeCount: { fontSize: 16, fontWeight: '900', letterSpacing: -0.3 },
-  // Soft halo behind a lit flame; iOS adds a coloured glow on top.
-  flameGlow: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: -6,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.7,
-    shadowRadius: 6,
-  },
-  badgeText: { fontSize: 13, fontWeight: '800' },
+  // The streak, plain on the card: flame and number side by side.
+  badge: { flexDirection: 'row', alignItems: 'center', gap: 2 },
+  badgeCount: { fontSize: 44, fontWeight: '900', letterSpacing: -1.5, lineHeight: 48 },
   title: { fontSize: 30, fontWeight: '900', letterSpacing: -0.7, lineHeight: 35 },
   couple: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginTop: 10 },
   avatars: { flexDirection: 'row', alignItems: 'center' },
@@ -284,5 +273,4 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   todayDot: { width: 8, height: 8, borderRadius: 4 },
-  hint: { fontSize: 13, fontWeight: '700', textAlign: 'center', opacity: 0.9 },
 });

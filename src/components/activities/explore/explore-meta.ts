@@ -112,7 +112,7 @@ export const EXPLORE_META: Record<ExploreModalKey, ExploreMeta> = {
     eyebrow: 'PLAY',
     title: 'Emoji Story',
     subtitle: 'Guess the night from emojis',
-    icon: 'sparkles',
+    icon: 'happy',
     emoji: '🧩',
   },
   appreciation: {
@@ -147,7 +147,7 @@ export const EXPLORE_META: Record<ExploreModalKey, ExploreMeta> = {
     eyebrow: 'PLAY',
     title: 'Love Fortune Wheel',
     subtitle: 'Spin for a tiny dare',
-    icon: 'spark',
+    icon: 'dice',
     emoji: '🎡',
   },
   dateGenerator: {
@@ -168,7 +168,7 @@ export const EXPLORE_META: Record<ExploreModalKey, ExploreMeta> = {
     eyebrow: 'QUIZ',
     title: 'Compatibility',
     subtitle: 'See where you align',
-    icon: 'sparkles',
+    icon: 'link',
     emoji: '🧭',
   },
   personality: {

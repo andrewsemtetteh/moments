@@ -16,7 +16,7 @@ export const INTRO_SLIDES: IntroSlide[] = [
     title: 'Capture',
     highlight: 'little moments',
     body: 'Share photos, voice notes, and daily glimpses that only the two of you get to keep.',
-    icons: ['camera', 'heart', 'sparkles'],
+    icons: ['camera', 'heart', 'mic'],
   },
   {
     id: 'connection',
@@ -37,6 +37,6 @@ export const INTRO_SLIDES: IntroSlide[] = [
     title: 'A space',
     highlight: 'just for two',
     body: 'No feeds, no followers. Only you and your partner in a private home built for love.',
-    icons: ['lock', 'heart', 'sparkles'],
+    icons: ['lock', 'heart', 'home'],
   },
 ];

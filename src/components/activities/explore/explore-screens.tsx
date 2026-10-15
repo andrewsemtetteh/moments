@@ -1,10 +1,11 @@
 import * as Haptics from '@/lib/haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useState } from 'react';
-import { Alert, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { Alert, Pressable, ScrollView, Text, View } from 'react-native';
+import { TextInput } from '@/components/ui/ThemedTextInput';
 
 import { Icon } from '@/components/ui/Icon';
-import { colorWithAlpha, PrimaryButton } from '@/components/ui/primitives';
+import { colorWithAlpha, PrimaryButton, paperEdge } from '@/components/ui/primitives';
 import {
     CARD_CATEGORIES,
     CARD_PROMPTS,
@@ -186,7 +187,7 @@ export function QuizScreen() {
   return (
     <View style={s.stack}>
       <View style={s.progressWrap}>
-        <View style={[s.progressTrack, { backgroundColor: colors.surfaceElevated }]}>
+        <View style={[s.progressTrack, { backgroundColor: colors.surfaceElevated }, paperEdge(colors, 1.5)]}>
           <View style={[s.progressFill, { backgroundColor: colors.accent, width: `${(answered / total) * 100}%` }]} />
         </View>
         <Text style={[s.progressLabel, { color: colors.textSecondary }]}>
@@ -385,7 +386,7 @@ export function GoalsScreen() {
               <Text style={[s.goalTitle, { color: colors.text }]}>{g.title}</Text>
               <Text style={[s.goalPct, { color: colors.accent }]}>{g.progress}%</Text>
             </View>
-            <View style={[s.goalTrack, { backgroundColor: colors.surface }]}>
+            <View style={[s.goalTrack, { backgroundColor: colors.surface }, paperEdge(colors, 1.5)]}>
               <View style={[s.goalFill, { backgroundColor: colors.accent, width: `${Math.min(100, g.progress)}%` }]} />
             </View>
             <View style={s.goalBtns}>
@@ -537,7 +538,7 @@ export function CouplesTriviaScreen() {
   return (
     <View style={s.stack}>
       <View style={s.progressWrap}>
-        <View style={[s.progressTrack, { backgroundColor: colors.surfaceElevated }]}>
+        <View style={[s.progressTrack, { backgroundColor: colors.surfaceElevated }, paperEdge(colors, 1.5)]}>
           <View
             style={[
               s.progressFill,

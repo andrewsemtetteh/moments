@@ -76,7 +76,7 @@ export default function ThemePickerScreen() {
                   styles.swatch,
                   { backgroundColor: th.background, borderColor: on ? colors.accent : colors.border, borderWidth: on ? 3 : 1 },
                 ]}>
-                <LinearGradient colors={th.gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.swatchBar} />
+                <LinearGradient colors={th.hero ?? th.gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.swatchBar} />
                 {on ? (
                   <View style={[styles.tick, { backgroundColor: colors.accent }]}>
                     <Icon name="check" size={12} color={colors.onAccent} />
@@ -109,8 +109,9 @@ const styles = StyleSheet.create({
   buttons: { flexDirection: 'row', gap: 8 },
   btn: { flex: 1, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
   btnText: { fontSize: 13, fontWeight: '800' },
-  swatches: { flexDirection: 'row', gap: 10 },
-  swatchItem: { flex: 1, alignItems: 'center', gap: 8 },
+  // Three a row, two rows.
+  swatches: { flexDirection: 'row', flexWrap: 'wrap', columnGap: 10, rowGap: 14 },
+  swatchItem: { width: '31%', flexGrow: 1, alignItems: 'center', gap: 8 },
   swatch: { alignSelf: 'stretch', height: 70, borderRadius: 16, padding: 8, justifyContent: 'flex-end', overflow: 'hidden' },
   swatchBar: { height: 22, borderRadius: 7 },
   tick: {

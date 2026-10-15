@@ -22,11 +22,12 @@ export function haversineDistanceKm(a: Coords, b: Coords): number {
 
 /**
  * Rounded hard on purpose — decimal-precision distance between partners reads
- * as surveillance, not romance. Under 5km: "same city". Under 100km: nearest
+ * as surveillance, not romance. Under 5km: "Same City". Under 100km: nearest
  * 10. Otherwise: nearest whole km with a thousands separator.
  */
 export function formatDistanceApart(km: number): string {
-  if (km < 5) return 'same city';
-  if (km < 100) return `${Math.round(km / 10) * 10} km apart`;
-  return `${Math.round(km).toLocaleString()} km apart`;
+  // Title case, like the rest of the header ("Same City", "5,712 km Apart").
+  if (km < 5) return 'Same City';
+  if (km < 100) return `${Math.round(km / 10) * 10} km Apart`;
+  return `${Math.round(km).toLocaleString()} km Apart`;
 }

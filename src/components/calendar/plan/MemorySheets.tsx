@@ -1,7 +1,6 @@
 import { format, formatDistanceToNowStrict, isToday, startOfDay } from 'date-fns';
 import * as Haptics from '@/lib/haptics';
 import { Image } from 'expo-image';
-import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
 import { useMemo, useState } from 'react';
 import {
@@ -12,9 +11,9 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
+import { TextInput } from '@/components/ui/ThemedTextInput';
 import { ScrollView as GHScrollView } from 'react-native-gesture-handler';
 
 import { Divider, FieldRow, InlineInput, createFormStyles as form } from '@/components/calendar/plan/CreatePlanFlow';
@@ -22,7 +21,7 @@ import { FullScreenPage } from '@/components/layout/FullScreenPage';
 import { HeaderIconButton } from '@/components/ui/HeaderIconButton';
 import { DraggableSheet } from '@/components/ui/DraggableSheet';
 import { Icon } from '@/components/ui/Icon';
-import { colorWithAlpha } from '@/components/ui/primitives';
+import { colorWithAlpha, paperEdge } from '@/components/ui/primitives';
 import { MonthCalendarPicker } from '@/components/ui/MonthCalendarPicker';
 import { useTheme } from '@/hooks/useTheme';
 import { getFirstName } from '@/lib/avatar-initial';
@@ -232,7 +231,7 @@ export function MemoryEditorSheet({
               <Pressable
                 key={name}
                 onPress={() => setDraft((d) => ({ ...d, placeName: name }))}
-                style={[styles.chip, { backgroundColor: colors.surface }]}>
+                style={[styles.chip, { backgroundColor: colors.surface }, paperEdge(colors)]}>
                 <Icon name="location" size={14} color={colors.textSecondary} />
                 <Text style={[styles.chipText, { color: colors.text }]}>{name}</Text>
               </Pressable>
@@ -383,7 +382,7 @@ export function MemoryDetailSheet({
                 hitSlop={8}
                 accessibilityRole="button"
                 accessibilityLabel="Edit memory"
-                style={[styles.editBtn, { backgroundColor: colors.surface }]}>
+                style={[styles.editBtn, { backgroundColor: colors.surface }, paperEdge(colors)]}>
                 <Icon name="edit" size={18} color={colors.text} />
                 <Text style={[styles.editText, { color: colors.text }]}>Edit</Text>
               </Pressable>
@@ -417,18 +416,29 @@ export function MemoryDetailSheet({
               ) : null}
             </View>
           ) : (
-            // No photos: the same coloured postcard as the timeline, big emoji and date stamp.
-            <LinearGradient
-              colors={[colorWithAlpha(tint, colors.isDark ? 0.4 : 0.24), colorWithAlpha(tint, colors.isDark ? 0.12 : 0.05)]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={[styles.noPhotoHero, { width: photoW, borderColor: colorWithAlpha(tint, 0.3) }]}>
-              <Text style={styles.noPhotoEmoji}>{type.emoji}</Text>
-              <View style={[styles.noPhotoStamp, { borderColor: tint }]}>
-                <Text style={[styles.noPhotoDay, { color: tint }]}>{format(date, 'd')}</Text>
-                <Text style={[styles.noPhotoMonth, { color: tint }]}>{format(date, 'MMM yyyy')}</Text>
+            // No photos: the timeline's story card look, bigger: a flat wash of the memory's colour, the big
+            // date, and the type's emoji large and tilted.
+            <View
+              style={[
+                styles.noPhotoHero,
+                {
+                  width: photoW,
+                  backgroundColor: colorWithAlpha(tint, colors.isDark ? 0.22 : 0.14),
+                  borderColor: colors.boldBorder ? colors.border : colorWithAlpha(tint, 0.3),
+                  borderWidth: colors.boldBorder ? 2 : StyleSheet.hairlineWidth,
+                },
+              ]}>
+              <Text style={styles.noPhotoEmoji} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+                {type.emoji}
+              </Text>
+              <View style={styles.noPhotoDate}>
+                <Text style={[styles.noPhotoDay, { color: colors.text }]}>{format(date, 'd')}</Text>
+                <View>
+                  <Text style={[styles.noPhotoMonth, { color: colors.text }]}>{format(date, 'MMMM')}</Text>
+                  <Text style={[styles.noPhotoYear, { color: colors.textSecondary }]}>{format(date, 'EEEE, yyyy')}</Text>
+                </View>
               </View>
-            </LinearGradient>
+            </View>
           )}
 
           <Text style={[styles.detailTitle, { color: colors.text }]}>{entry.title}</Text>
@@ -673,27 +683,19 @@ const styles = StyleSheet.create({
   detailActions: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   editBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, height: 34, paddingHorizontal: 12, borderRadius: 17 },
   editText: { fontSize: 14, fontWeight: '700' },
-  noPhotoHero: {
-    height: 180,
-    borderRadius: 22,
-    borderWidth: StyleSheet.hairlineWidth,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  noPhotoEmoji: { fontSize: 72 },
-  noPhotoStamp: {
+  noPhotoHero: { height: 200, borderRadius: 24, overflow: 'hidden', justifyContent: 'flex-end', padding: 18 },
+  noPhotoEmoji: {
     position: 'absolute',
-    top: 14,
-    right: 14,
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-    borderRadius: 8,
-    borderWidth: 1.5,
-    borderStyle: 'dashed',
-    alignItems: 'center',
+    right: -4,
+    top: -6,
+    fontSize: 120,
+    opacity: 0.22,
+    transform: [{ rotate: '-12deg' }],
   },
-  noPhotoDay: { fontSize: 20, fontWeight: '900', lineHeight: 22 },
-  noPhotoMonth: { fontSize: 10, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 1 },
+  noPhotoDate: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  noPhotoDay: { fontSize: 56, fontWeight: '900', letterSpacing: -2, lineHeight: 60 },
+  noPhotoMonth: { fontSize: 18, fontWeight: '800' },
+  noPhotoYear: { fontSize: 14, fontWeight: '600' },
   hero: { height: 300, borderRadius: 28 },
   dots: { flexDirection: 'row', justifyContent: 'center', gap: 6, marginTop: 10 },
   dot: { width: 6, height: 6, borderRadius: 3 },

@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 
 import { GlassSurface } from '@/components/ui/GlassSurface';
-import { Radius, Spacing, type ThemeColors } from '@/constants/design-system';
+import { Radius, Spacing, type ThemeColors, type Tint } from '@/constants/design-system';
 import { useTheme } from '@/hooks/useTheme';
 import { getAvatarInitial } from '@/lib/avatar-initial';
 
@@ -23,12 +23,15 @@ export function Card({
   onPress,
   glassy = false,
   padded = true,
+  tint,
 }: {
   children: ReactNode;
   style?: StyleProp<ViewStyle>;
   onPress?: () => void;
   glassy?: boolean;
   padded?: boolean;
+  /** Pastel fill on Default (the part of the app this card belongs to); plain surface on other themes. */
+  tint?: Tint;
 }) {
   const { colors } = useTheme();
   const useGlass = colors.glass || glassy;
@@ -49,10 +52,10 @@ export function Card({
   }
 
   const base: ViewStyle = {
-    backgroundColor: colors.surface,
+    backgroundColor: tint ? colors.tints[tint] : colors.surface,
     borderColor: colors.border,
     borderWidth: colors.boldBorder ? 2 : StyleSheet.hairlineWidth,
-    borderRadius: Radius.lg,
+    borderRadius: colors.sticker ? STICKER_RADIUS : Radius.lg,
     padding,
   };
 
@@ -60,7 +63,11 @@ export function Card({
     return (
       <Pressable
         onPress={onPress}
-        style={({ pressed }) => [base, style, pressed && { opacity: 0.85, transform: [{ scale: 0.99 }] }]}>
+        style={({ pressed }) => [
+          base,
+          style,
+          pressed && (colors.sticker ? styles.stickerPressed : { opacity: 0.85, transform: [{ scale: 0.99 }] }),
+        ]}>
         {children}
       </Pressable>
     );
@@ -87,7 +94,11 @@ export function GradientCard({
       colors={gradColors}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
-      style={[{ borderRadius: Radius.lg, padding: 18 }, style]}>
+      style={[
+        { borderRadius: colors.sticker ? STICKER_RADIUS : Radius.lg, padding: 18 },
+        colors.sticker && colors.boldBorder && { borderWidth: 2, borderColor: colors.border },
+        style,
+      ]}>
       {children}
     </LinearGradient>
   );
@@ -125,10 +136,21 @@ export function SectionTitle({
   const { colors } = useTheme();
   return (
     <View style={[styles.sectionRow, style]}>
-      <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>{children}</Text>
+      <Text
+        style={colors.sticker ? [styles.stickerSectionTitle, { color: colors.text }] : [styles.sectionTitle, { color: colors.textSecondary }]}
+        accessibilityRole="header">
+        {children}
+      </Text>
       {action && (
-        <Pressable onPress={onAction} hitSlop={8}>
-          <Text style={[styles.sectionAction, { color: colors.accent }]}>{action}</Text>
+        <Pressable onPress={onAction} hitSlop={12} accessibilityRole="button">
+          <Text
+            style={[
+              styles.sectionAction,
+              { color: colors.sticker ? colors.highlightText : colors.accent },
+              colors.sticker && styles.stickerSectionAction,
+            ]}>
+            {action}
+          </Text>
         </Pressable>
       )}
     </View>
@@ -170,7 +192,7 @@ export function Avatar({
         const normalized = c.trim().toLowerCase();
         return normalized === '#fff' || normalized === '#ffffff' || normalized === 'white';
       });
-      const textColor = initialColor ?? (isWhiteBackground ? colors.accent : colors.onAccent);
+      const textColor = initialColor ?? (isWhiteBackground ? colors.accent : colors.onGradient);
 
       return (
         <LinearGradient
@@ -227,13 +249,21 @@ export function Chip({
       style={[
         styles.chip,
         {
-          backgroundColor: active ? colors.accent : colors.surfaceElevated,
+          backgroundColor: active ? colors.accent : colors.sticker ? colors.surface : colors.surfaceElevated,
           borderColor: active ? colors.accent : colors.border,
           borderWidth: colors.boldBorder ? 2 : StyleSheet.hairlineWidth,
         },
-      ]}>
+        colors.sticker && styles.stickerChip,
+      ]}
+      accessibilityRole={onPress ? 'button' : undefined}
+      accessibilityState={onPress ? { selected: !!active } : undefined}>
       {icon}
-      <Text style={{ color: active ? colors.onAccent : colors.textSecondary, fontSize: 13, fontWeight: '600' }}>
+      <Text
+        style={{
+          color: active ? colors.onAccent : colors.sticker ? colors.text : colors.textSecondary,
+          fontSize: colors.sticker ? 14 : 13,
+          fontWeight: colors.sticker ? '800' : '600',
+        }}>
         {label}
       </Text>
     </Pressable>
@@ -260,20 +290,25 @@ export function PrimaryButton({
     <Pressable
       onPress={onPress}
       disabled={disabled || loading}
+      accessibilityRole="button"
+      accessibilityState={{ disabled: !!(disabled || loading), busy: !!loading }}
       style={({ pressed }) => [
         styles.primaryBtn,
         {
           backgroundColor: colors.accent,
           opacity: disabled ? 0.45 : pressed ? 0.9 : 1,
-          borderWidth: colors.boldBorder ? 2 : 0,
+          borderWidth: colors.boldBorder && !colors.sticker ? 2 : 0,
           borderColor: colors.text,
         },
+        colors.sticker && styles.stickerBtn,
         style,
       ]}>
       {loading ? (
         <ActivityIndicator color={colors.onAccent} />
       ) : (
-        <Text style={[styles.primaryBtnText, { color: colors.onAccent }, textStyle]}>{label}</Text>
+        <Text style={[styles.primaryBtnText, colors.sticker && styles.stickerBtnText, { color: colors.onAccent }, textStyle]}>
+          {label}
+        </Text>
       )}
     </Pressable>
   );
@@ -286,15 +321,24 @@ export function StatPill({ value, label }: { value: string | number; label: stri
       style={[
         styles.statPill,
         {
-          backgroundColor: colors.surfaceElevated,
+          backgroundColor: colors.sticker ? colors.surface : colors.surfaceElevated,
           borderColor: colors.border,
           borderWidth: colors.boldBorder ? 2 : StyleSheet.hairlineWidth,
         },
+        colors.sticker && styles.stickerStatPill,
       ]}>
-      <Text style={[styles.statValue, { color: colors.text }]}>{value}</Text>
+      <Text style={[styles.statValue, colors.sticker && styles.stickerStatValue, { color: colors.text }]}>{value}</Text>
       <Text style={[styles.statLabel, { color: colors.textSecondary }]}>{label}</Text>
     </View>
   );
+}
+
+/**
+ * Paper's outline for panels drawn in the card colour (white on a white page there). Nothing on themes
+ * without outlines.
+ */
+export function paperEdge(colors: ThemeColors, width = 2): ViewStyle | null {
+  return colors.boldBorder ? { borderWidth: width, borderColor: colors.border } : null;
 }
 
 export function colorWithAlpha(hex: string, alpha: number) {
@@ -308,7 +352,18 @@ export function colorWithAlpha(hex: string, alpha: number) {
 
 export type { ThemeColors };
 
+/** Cards on Default: the 22pt corners of the streak and Wrapped stickers. */
+const STICKER_RADIUS = 22;
+
 const styles = StyleSheet.create({
+  stickerPressed: { transform: [{ scale: 0.98 }] },
+  stickerSectionTitle: { fontSize: 20, fontWeight: '900', letterSpacing: -0.4 },
+  stickerSectionAction: { fontSize: 15, fontWeight: '800' },
+  stickerChip: { paddingHorizontal: 16, minHeight: 40, borderRadius: Radius.pill },
+  stickerBtn: { minHeight: 56, borderRadius: 28, paddingVertical: 0 },
+  stickerBtnText: { fontSize: 17, fontWeight: '800' },
+  stickerStatPill: { borderRadius: 20, paddingVertical: 16 },
+  stickerStatValue: { fontSize: 24, fontWeight: '900', letterSpacing: -0.5 },
   flex: { flex: 1 },
   sectionRow: {
     flexDirection: 'row',

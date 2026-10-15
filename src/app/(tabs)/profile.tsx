@@ -3,13 +3,14 @@ import { differenceInCalendarDays, format } from 'date-fns';
 import * as Haptics from '@/lib/haptics';
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
-import { useMemo, useState, type ReactNode } from 'react';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { setStatusBarStyle } from 'expo-status-bar';
+import { useCallback, useMemo, useState, type ReactNode } from 'react';
 import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { StreakFlame } from '@/components/home/StreakFlame';
 import { ScreenContainer } from '@/components/layout/ScreenContainer';
-import { ScreenHeader } from '@/components/layout/ScreenHeader';
 import { TabScreenScroll } from '@/components/layout/TabScreenScroll';
 import { TabSwipe } from '@/components/layout/TabSwipe';
 import { ProfileAnniversarySection } from '@/components/profile/ProfileAnniversarySection';
@@ -17,9 +18,8 @@ import { ProfileCoupleLink } from '@/components/profile/ProfileCoupleLink';
 import { DaysTogetherCard } from '@/components/share/DaysTogetherCard';
 import { ShareCardModal } from '@/components/share/ShareCardModal';
 import { FullScreenImageModal } from '@/components/ui/FullScreenImageModal';
-import { HeaderIconButton } from '@/components/ui/HeaderIconButton';
 import { Icon, type IconName } from '@/components/ui/Icon';
-import { Avatar } from '@/components/ui/primitives';
+import { Avatar, colorWithAlpha } from '@/components/ui/primitives';
 import { Spacing, type ThemeColors } from '@/constants/design-system';
 import { useStreak } from '@/hooks/queries';
 import { useOpenPartnerProfile } from '@/hooks/useOpenPartnerProfile';
@@ -55,6 +55,19 @@ const PREVIEW_RELATIONSHIP = {
 } as unknown as Relationship;
 
 const PLUS_GRADIENT: [string, string, string] = ['#FF6B7A', '#F03A55', '#C41E45'];
+/** Whether a #rrggbb colour is dark enough to need light status-bar icons. */
+function isDarkColor(hex: string) {
+  const h = hex.replace('#', '');
+  if (h.length !== 6) return false;
+  const [r, g, b] = [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16));
+  return 0.299 * r + 0.587 * g + 0.114 * b < 140;
+}
+
+/** Text and icons on the light chips over the band. */
+const INK = '#1A1A1A';
+const AVATAR = 96;
+/** Photo-less avatars are white with an ink initial, so they read on any band colour. */
+const WHITE: [string, string] = ['#FFFFFF', '#FFFFFF'];
 const PLUS_INK = '#FFFFFF';
 const PLUS_INK_SOFT = 'rgba(255,255,255,0.84)';
 /** The Try button: white with the deep red as its label. */
@@ -68,7 +81,7 @@ type AvatarPreview = {
 
 /** A card's fill, plus the theme's border where cards need one (Paper). */
 function cardSurface(colors: ThemeColors) {
-  return { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: colors.boldBorder ? 2 : 0 };
+  return { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: colors.boldBorder ? 2 : colors.sticker ? 1 : 0 };
 }
 
 /**
@@ -79,6 +92,7 @@ function cardSurface(colors: ThemeColors) {
  */
 export default function ProfileScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const storedRelationship = useRelationshipStore((s) => s.relationship);
   const storedPartner = useRelationshipStore((s) => s.partner);
@@ -104,13 +118,13 @@ export default function ProfileScreen() {
   const level = useMemo(() => levelInfo((playProgress ?? emptyProgress(todayKey())).xp), [playProgress]);
 
   const [avatarPreview, setAvatarPreview] = useState<AvatarPreview | null>(null);
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- kept for the quick actions commented out below
+   
   const [photoSaving, setPhotoSaving] = useState(false);
   const [shareDays, setShareDays] = useState(false);
 
   const waitingForPartner = !!relationship && !partner;
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- kept for the quick actions commented out below
+   
   const changePhoto = async () => {
     if (!user || previewMode) return;
     if (!(await ensurePermission('photos'))) return;
@@ -137,6 +151,18 @@ export default function ProfileScreen() {
   const daysTogether = since ? Math.max(0, differenceInCalendarDays(new Date(), since)) : 0;
   const bestStreak = Math.max(streak?.longest_streak ?? 0, streak?.current_streak ?? 0);
   const partnerFirst = getFirstName(partner?.name) ?? 'Partner';
+  // The top band: the theme's hero colour, flat, with its own text colour on it.
+  const band = colors.hero ? colors.hero[0] : colors.gradient[0];
+  const onBand = colors.onHero ?? colors.onGradient;
+  // The band runs under the status bar: its icons follow the band (white on a dark one, e.g. Paper's black),
+  // then go back to the theme's when you leave.
+  const bandIsDark = isDarkColor(band);
+  useFocusEffect(
+    useCallback(() => {
+      setStatusBarStyle(bandIsDark ? 'light' : 'dark', true);
+      return () => setStatusBarStyle(colors.isDark ? 'light' : 'dark', true);
+    }, [bandIsDark, colors.isDark]),
+  );
   const year = new Date().getFullYear();
 
   const plusLine = isPlus
@@ -153,30 +179,51 @@ export default function ProfileScreen() {
       onSwipeRight={() => router.navigate('/(tabs)/activities')}
       onSwipeLeft={() => router.navigate('/settings')}>
       <ScreenContainer padded={false}>
-        <ScreenHeader
-          title="You"
-          right={
-            <HeaderIconButton icon="settings" onPress={() => router.navigate('/settings')} accessibilityLabel="Settings" />
-          }
-        />
-
         <TabScreenScroll showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
-          {/* The two of you. Tapping the card shares your days together; each photo only opens that photo. */}
+          {/* The two of you, on a curved band of the theme's colour. Tapping it shares your days together;
+              each photo only opens that photo, and the camera changes yours. */}
           <Pressable
             onPress={() => setShareDays(true)}
             disabled={!partner || !since}
             accessibilityRole="button"
             accessibilityLabel="Share your days together"
-            style={({ pressed }) => [styles.hero, cardSurface(colors), pressed && styles.heroPressed]}>
-            <View style={styles.avatarsRow}>
+            style={[styles.band, { backgroundColor: band, paddingTop: insets.top + 6 }]}>
+            {/* Fills the space above when you pull down, so the band never shows a gap. */}
+            <View pointerEvents="none" style={[styles.bandBleed, { backgroundColor: band }]} />
+            <View style={styles.bandTop}>
+              <Text style={[styles.bandTitle, { color: onBand }]} accessibilityRole="header">
+                You
+              </Text>
               <Pressable
-                onPress={() =>
-                  setAvatarPreview({ imageUrl: user?.avatar_url, title: user?.name?.trim() || 'You', fallbackName: user?.name })
-                }
+                onPress={() => router.navigate('/settings')}
                 accessibilityRole="button"
-                accessibilityLabel="View your profile photo">
-                <Avatar name={user?.name} imageUrl={user?.avatar_url} size={92} />
+                accessibilityLabel="Settings"
+                style={({ pressed }) => [styles.bandButton, { backgroundColor: colorWithAlpha('#FFFFFF', 0.72) }, pressed && styles.pressed]}>
+                <Icon name="settings" size={24} color={INK} />
               </Pressable>
+            </View>
+
+            <View style={styles.avatarsRow}>
+              <View>
+                <Pressable
+                  onPress={() =>
+                    setAvatarPreview({ imageUrl: user?.avatar_url, title: user?.name?.trim() || 'You', fallbackName: user?.name })
+                  }
+                  accessibilityRole="button"
+                  accessibilityLabel="View your profile photo"
+                  style={[styles.avatarRing, { borderColor: colors.background }]}>
+                  <Avatar name={user?.name} imageUrl={user?.avatar_url} size={AVATAR} initialColor={INK} colorsOverride={WHITE} />
+                </Pressable>
+                <Pressable
+                  onPress={() => void changePhoto()}
+                  disabled={photoSaving}
+                  hitSlop={8}
+                  accessibilityRole="button"
+                  accessibilityLabel="Change your photo"
+                  style={({ pressed }) => [styles.cameraBadge, { borderColor: colors.background }, pressed && styles.pressed]}>
+                  {photoSaving ? <ActivityIndicator size="small" color={INK} /> : <Icon name="camera" size={14} color={INK} />}
+                </Pressable>
+              </View>
 
               <View style={styles.avatarLink} accessibilityElementsHidden>
                 <ProfileCoupleLink accent={colors.accent} ringColor={colors.text} />
@@ -192,32 +239,24 @@ export default function ProfileScreen() {
                     })
                   }
                   accessibilityRole="button"
-                  accessibilityLabel={`View ${partner.name ?? 'partner'} photo`}>
-                  <Avatar name={partner.name} imageUrl={partner.avatar_url} size={92} />
+                  accessibilityLabel={`View ${partner.name ?? 'partner'} photo`}
+                  style={[styles.avatarRing, { borderColor: colors.background }]}>
+                  <Avatar name={partner.name} imageUrl={partner.avatar_url} size={AVATAR} initialColor={INK} colorsOverride={WHITE} />
                 </Pressable>
               ) : (
-                <View style={[styles.emptyAvatar, { borderColor: colors.border }]}>
-                  <Icon name="plus" size={28} color={colors.textSecondary} />
+                <View style={[styles.emptyAvatar, { borderColor: onBand }]}>
+                  <Icon name="plus" size={28} color={onBand} />
                 </View>
               )}
             </View>
 
-            <Text style={[styles.names, { color: colors.text }]} numberOfLines={1}>
+            <Text style={[styles.names, { color: onBand }]} numberOfLines={1} adjustsFontSizeToFit>
               {getFirstName(user?.name) ?? 'You'}
               {partner ? ` & ${partnerFirst}` : ''}
             </Text>
-            <Text style={[styles.since, { color: colors.textSecondary }]}>
-              {partner && since ? `Together since ${format(since, 'd MMMM yyyy')}` : 'Waiting for your person to join'}
+            <Text style={[styles.since, { color: colorWithAlpha(onBand, 0.86) }]}>
+              {partner && since ? `Together since ${format(since, 'MMMM d, yyyy')}` : 'Waiting for your person to join'}
             </Text>
-
-            {/* Quick actions, off for now:
-            <View style={styles.heroButtons}>
-              <PillButton icon="camera" label={photoSaving ? 'Updating…' : 'Edit photo'} busy={photoSaving} onPress={() => void changePhoto()} />
-              {partner ? (
-                <PillButton icon="user" label={`${partnerFirst}’s profile`} onPress={openPartnerProfile} />
-              ) : null}
-            </View>
-            */}
           </Pressable>
 
           {waitingForPartner ? (
@@ -454,21 +493,48 @@ const styles = StyleSheet.create({
   rowPad: { padding: 14 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12 },
 
-  hero: { borderRadius: 28, paddingTop: 22, paddingHorizontal: 18, paddingBottom: 18, alignItems: 'center' },
-  heroPressed: { opacity: 0.92, transform: [{ scale: 0.99 }] },
+  // Full width: undoes the page's side and top padding.
+  band: {
+    marginHorizontal: -Spacing.lg,
+    marginTop: -Spacing.xs,
+    paddingHorizontal: 20,
+    paddingBottom: 28,
+    alignItems: 'center',
+    borderBottomLeftRadius: 32,
+    borderBottomRightRadius: 32,
+  },
+  bandBleed: { position: 'absolute', left: 0, right: 0, top: -600, height: 600 },
+  bandTop: { alignSelf: 'stretch', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 },
+  bandTitle: { fontSize: 24, fontWeight: '900', letterSpacing: -0.6 },
+  bandButton: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
   avatarsRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
+  avatarRing: { borderWidth: 4, borderRadius: AVATAR / 2 + 4 },
   avatarLink: { marginHorizontal: -10, zIndex: 2, transform: [{ translateY: -12 }] },
+  cameraBadge: {
+    position: 'absolute',
+    right: 2,
+    bottom: 2,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    borderWidth: 3,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   emptyAvatar: {
-    width: 92,
-    height: 92,
-    borderRadius: 46,
+    width: AVATAR + 8,
+    height: AVATAR + 8,
+    borderRadius: AVATAR / 2 + 4,
     borderWidth: 2,
     borderStyle: 'dashed',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  names: { fontSize: 24, fontWeight: '800', letterSpacing: -0.4, marginTop: 14 },
-  since: { fontSize: 14, fontWeight: '600', marginTop: 4 },
+  names: { fontSize: 34, fontWeight: '900', letterSpacing: -0.8, marginTop: 16, textAlign: 'center' },
+  since: { fontSize: 16, fontWeight: '600', marginTop: 6, textAlign: 'center' },
+
+
   heroButtons: { flexDirection: 'row', gap: 8, marginTop: 16, alignSelf: 'stretch' },
   pillBtn: {
     flex: 1,

@@ -3,6 +3,7 @@ import * as Clipboard from 'expo-clipboard';
 import { useState } from 'react';
 import { Alert, Modal, Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
 
+import { paperEdge } from '@/components/ui/primitives';
 import { ChatEmojiPicker } from '@/components/chat/ChatEmojiPicker';
 import { Icon, type IconName } from '@/components/ui/Icon';
 import { REACTION_EMOJI } from '@/constants/design-system';
@@ -181,7 +182,7 @@ export function ChatMessageActionSheet({
                   onPress={() => setShowMoreEmojis(true)}
                   accessibilityRole="button"
                   accessibilityLabel="More reactions"
-                  style={({ pressed }) => [styles.reactionBtn, { backgroundColor: colors.surface }, pressed && styles.pressed]}>
+                  style={({ pressed }) => [styles.reactionBtn, { backgroundColor: colors.surface }, paperEdge(colors), pressed && styles.pressed]}>
                   <Icon name="plus" size={20} color={colors.textSecondary} />
                 </Pressable>
               </View>

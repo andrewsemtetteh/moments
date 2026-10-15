@@ -219,7 +219,7 @@ const EVENT_TYPE_ICON: Record<string, IconName> = {
   date: 'heart',
   anniversary: 'balloon',
   reminder: 'bell',
-  experience: 'sparkles',
+  experience: 'compass',
   custom: 'calendar',
 };
 

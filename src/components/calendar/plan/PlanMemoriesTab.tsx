@@ -1,12 +1,12 @@
-import { format, getYear, isToday, startOfDay, subDays } from 'date-fns';
+import { format, formatDistanceToNowStrict, getYear, isToday, startOfDay, subDays } from 'date-fns';
 import { Image } from 'expo-image';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useMemo, useState } from 'react';
-import { Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { TextInput } from '@/components/ui/ThemedTextInput';
 
 import { memoryPhotos } from '@/components/calendar/plan/MemorySheets';
 import { Icon } from '@/components/ui/Icon';
-import { colorWithAlpha } from '@/components/ui/primitives';
+import { colorWithAlpha, paperEdge } from '@/components/ui/primitives';
 import { StreakFlame } from '@/components/home/StreakFlame';
 import { useTheme } from '@/hooks/useTheme';
 import { MEMORY_TINT, MEMORY_TYPES, memoryTypeMeta, parsePlanMeta, type MemoryType } from '@/lib/plan-meta';
@@ -128,7 +128,7 @@ export function PlanMemoriesTab({
   return (
     <View style={styles.root}>
       {showSearch ? (
-      <View style={[styles.search, { backgroundColor: colors.surface }]}>
+      <View style={[styles.search, { backgroundColor: colors.surface }, paperEdge(colors)]}>
         <Icon name="search" size={18} color={colors.textTertiary} />
         <TextInput
           value={query}
@@ -268,7 +268,7 @@ function TimelineRow({
               <Image key={m.id} source={{ uri: m.media_url! }} style={styles.thumb} contentFit="cover" />
             ))}
             {extra > 0 ? (
-              <View style={[styles.thumb, styles.more, { backgroundColor: colors.surface }]}>
+              <View style={[styles.thumb, styles.more, { backgroundColor: colors.surface }, paperEdge(colors)]}>
                 <Text style={[styles.moreText, { color: colors.textSecondary }]}>+{extra}</Text>
               </View>
             ) : null}
@@ -277,7 +277,7 @@ function TimelineRow({
             <Pressable onPress={() => onAccept(s)} style={[styles.pill, { backgroundColor: colors.accent }]}>
               <Text style={[styles.pillText, { color: colors.onAccent }]}>Add as memory</Text>
             </Pressable>
-            <Pressable onPress={() => onDismiss(s)} style={[styles.pill, { backgroundColor: colors.surface }]}>
+            <Pressable onPress={() => onDismiss(s)} style={[styles.pill, { backgroundColor: colors.surface }, paperEdge(colors)]}>
               <Text style={[styles.pillText, { color: colors.text }]}>Dismiss</Text>
             </Pressable>
           </View>
@@ -308,15 +308,11 @@ function TimelineRow({
           {cover ? (
             <Image source={{ uri: cover }} style={styles.banner} contentFit="cover" />
           ) : (
-            // No photo: a tinted band with the milestone's emoji, so it still reads as a big moment.
-            <LinearGradient
-              colors={[colorWithAlpha(tint, colors.isDark ? 0.4 : 0.26), colorWithAlpha(tint, colors.isDark ? 0.12 : 0.06)]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.bannerEmpty}>
+            // No photo: a flat band in the milestone's colour with its emoji and year, so it still reads big.
+            <View style={[styles.bannerEmpty, { backgroundColor: colorWithAlpha(tint, colors.isDark ? 0.3 : 0.18) }]}>
               <Text style={styles.bannerEmoji}>{type.emoji}</Text>
-              <Text style={[styles.bannerYear, { color: tint }]}>{format(item.date, 'yyyy')}</Text>
-            </LinearGradient>
+              <Text style={[styles.bannerYear, { color: colors.text }]}>{format(item.date, 'yyyy')}</Text>
+            </View>
           )}
           <View style={styles.milestoneBody}>
             <Text style={[styles.kicker, { color: colors.accent }]}>Milestone</Text>
@@ -330,7 +326,7 @@ function TimelineRow({
           </View>
         </View>
       ) : cover ? (
-        <View style={[styles.card, styles.memory, { backgroundColor: colors.surface }]}>
+        <View style={[styles.card, styles.memory, { backgroundColor: colors.surface }, paperEdge(colors)]}>
           <Image source={{ uri: cover }} style={styles.memoryThumb} contentFit="cover" />
           <View style={styles.memoryText}>
             <View style={styles.titleRow}>
@@ -351,38 +347,58 @@ function TimelineRow({
           </View>
         </View>
       ) : (
-        // No photo: a postcard in the memory's own colour — emoji badge, a date stamp,
-        // the title, the note as a handwritten-style quote, and where it happened.
-        <LinearGradient
-          colors={[colorWithAlpha(tint, colors.isDark ? 0.34 : 0.2), colorWithAlpha(tint, colors.isDark ? 0.1 : 0.05)]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={[styles.card, styles.postcard, { borderColor: colorWithAlpha(tint, 0.35) }]}>
-          <Text style={[styles.postcardQuoteMark, { color: colorWithAlpha(tint, 0.22) }]}>”</Text>
-          <View style={styles.postcardTop}>
-            <View style={[styles.postcardBadge, { backgroundColor: colors.surface }]}>
-              <Text style={styles.postcardEmoji}>{type.emoji}</Text>
+        // No photo: a story card as substantial as a photo memory (after Apple Journal / Day One): a flat
+        // wash of the memory's colour, a big date, the title, the note as a pull-quote, the tags at the
+        // foot, and the type's emoji large in the corner so even a title-only memory has presence.
+        <View
+          style={[
+            styles.card,
+            styles.story,
+            {
+              backgroundColor: colorWithAlpha(tint, colors.isDark ? 0.2 : 0.12),
+              borderColor: colors.boldBorder ? colors.border : colorWithAlpha(tint, 0.3),
+              borderWidth: colors.boldBorder ? 2 : StyleSheet.hairlineWidth,
+            },
+          ]}>
+          <Text style={styles.storyWatermark} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+            {type.emoji}
+          </Text>
+
+          <View style={styles.storyTop}>
+            <View style={styles.storyDate}>
+              <Text style={[styles.storyDay, { color: colors.text }]}>{format(item.date, 'd')}</Text>
+              <View>
+                <Text style={[styles.storyMonth, { color: colors.text }]}>{format(item.date, 'MMMM')}</Text>
+                <Text style={[styles.storyWeekday, { color: colors.textSecondary }]}>{format(item.date, 'EEEE')}</Text>
+              </View>
             </View>
-            <View style={[styles.postcardStamp, { borderColor: tint }]}>
-              <Text style={[styles.postcardStampDay, { color: tint }]}>{format(item.date, 'd')}</Text>
-              <Text style={[styles.postcardStampMonth, { color: tint }]}>{format(item.date, 'MMM')}</Text>
+            <View style={[styles.storyAgo, { backgroundColor: colors.surface }, paperEdge(colors, 1.5)]}>
+              <Text style={[styles.storyAgoText, { color: colors.textSecondary }]} numberOfLines={1}>
+                {isToday(item.date) ? 'Today' : formatDistanceToNowStrict(item.date, { addSuffix: true })}
+              </Text>
             </View>
           </View>
-          <Text style={[styles.postcardTitle, { color: colors.text }]} numberOfLines={2}>
+
+          <Text style={[styles.storyTitle, { color: colors.text }]} numberOfLines={3}>
             {item.entry.title}
           </Text>
+
           {meta.notes ? (
-            <Text style={[styles.postcardNote, { color: colors.text }]} numberOfLines={3}>
-              {meta.notes}
-            </Text>
+            <View style={styles.storyQuote}>
+              <View style={[styles.storyQuoteBar, { backgroundColor: tint }]} />
+              <Text style={[styles.storyNote, { color: colors.text }]} numberOfLines={4}>
+                {meta.notes}
+              </Text>
+            </View>
           ) : null}
-          <View style={styles.postcardTags}>
-            <View style={[styles.postcardTag, { backgroundColor: colorWithAlpha(tint, 0.16) }]}>
+
+          <View style={styles.storyTags}>
+            <View style={[styles.postcardTag, { backgroundColor: colors.surface }, paperEdge(colors, 1.5)]}>
               <Icon name={type.icon} size={13} color={tint} />
-              <Text style={[styles.postcardTagText, { color: tint }]}>{type.label}</Text>
+              <Text style={[styles.postcardTagText, { color: colors.text }]}>{type.label}</Text>
             </View>
             {meta.placeName ? (
-              <View style={[styles.postcardTag, { backgroundColor: colors.surface }]}>
+              <View style={[styles.postcardTag, { backgroundColor: colors.surface }, paperEdge(colors, 1.5)]}>
                 <Icon name="location" size={13} color={colors.textSecondary} />
                 <Text style={[styles.postcardTagText, { color: colors.textSecondary }]} numberOfLines={1}>
                   {meta.placeName}
@@ -390,7 +406,7 @@ function TimelineRow({
               </View>
             ) : null}
           </View>
-        </LinearGradient>
+        </View>
       )}
     </Pressable>
   );
@@ -446,47 +462,34 @@ const styles = StyleSheet.create({
     fontFamily: Platform.select({ ios: 'Georgia', android: 'serif', default: 'Georgia' }),
     marginTop: 2,
   },
-  postcard: { padding: 14, gap: 8, borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden' },
-  postcardQuoteMark: {
+  story: { minHeight: 176, padding: 16, gap: 10, borderRadius: 22, overflow: 'hidden' },
+  storyWatermark: {
     position: 'absolute',
-    right: 10,
-    bottom: -34,
-    fontSize: 120,
-    fontFamily: Platform.select({ ios: 'Georgia', android: 'serif', default: 'Georgia' }),
+    right: -6,
+    bottom: -14,
+    fontSize: 104,
+    opacity: 0.16,
+    transform: [{ rotate: '-12deg' }],
   },
-  postcardTop: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' },
-  postcardBadge: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOpacity: 0.08,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
-  },
-  postcardEmoji: { fontSize: 22 },
-  postcardStamp: {
-    minWidth: 44,
-    paddingVertical: 4,
-    paddingHorizontal: 6,
-    borderRadius: 8,
-    borderWidth: 1.5,
-    borderStyle: 'dashed',
-    alignItems: 'center',
-  },
-  postcardStampDay: { fontSize: 18, fontWeight: '900', lineHeight: 20 },
-  postcardStampMonth: { fontSize: 10, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 1 },
-  postcardTitle: { fontSize: 18, fontWeight: '800', letterSpacing: -0.3, lineHeight: 23 },
-  postcardNote: {
-    fontSize: 15,
-    lineHeight: 21,
+  storyTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
+  storyDate: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  storyDay: { fontSize: 40, fontWeight: '900', letterSpacing: -1.5, lineHeight: 44 },
+  storyMonth: { fontSize: 15, fontWeight: '800' },
+  storyWeekday: { fontSize: 13, fontWeight: '600' },
+  storyAgo: { height: 28, paddingHorizontal: 11, borderRadius: 14, justifyContent: 'center', maxWidth: '45%' },
+  storyAgoText: { fontSize: 12, fontWeight: '800' },
+  storyTitle: { fontSize: 22, fontWeight: '900', letterSpacing: -0.5, lineHeight: 27 },
+  storyQuote: { flexDirection: 'row', gap: 10 },
+  storyQuoteBar: { width: 3, borderRadius: 2 },
+  storyNote: {
+    flex: 1,
+    fontSize: 16,
+    lineHeight: 23,
     fontStyle: 'italic',
     fontFamily: Platform.select({ ios: 'Georgia', android: 'serif', default: 'Georgia' }),
   },
-  postcardTags: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 2 },
+  // Pinned to the foot of the card, so short memories keep their tags at the bottom.
+  storyTags: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 'auto', paddingTop: 4 },
   postcardTag: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -497,8 +500,8 @@ const styles = StyleSheet.create({
     maxWidth: '100%',
   },
   postcardTagText: { fontSize: 12, fontWeight: '700', flexShrink: 1 },
-  bannerEmpty: { height: 84, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16 },
-  bannerEmoji: { fontSize: 40 },
+  bannerEmpty: { height: 110, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 18 },
+  bannerEmoji: { fontSize: 52 },
   bannerYear: { fontSize: 28, fontWeight: '900', letterSpacing: -0.5 },
   memoryText: { flex: 1, minWidth: 0, gap: 3 },
   // Fills the space under the filters and centers in it.

@@ -1,15 +1,12 @@
-import { SUPPORT_EMAIL } from '@/constants/links';
+import { ANDROID_PACKAGE, APP_STORE_ID, SUPPORT_EMAIL } from '@/constants/links';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as StoreReview from 'expo-store-review';
-import { Alert, Linking } from 'react-native';
+import { Alert, Linking, Platform } from 'react-native';
 
 const FIRST_OPEN_KEY = 'moments_store_review_first_open_at';
-const LAST_PROMPT_KEY = 'moments_store_review_last_prompt_at';
 const REVIEWED_KEY = 'moments_store_review_completed';
 
-const THREE_DAYS_MS = 3 * 24 * 60 * 60 * 1000;
-
-/** Record first launch so the 3-day timer can start. Safe to call often. */
+/** Record first launch. Safe to call often. */
 export async function ensureStoreReviewFirstOpen(): Promise<void> {
   const existing = await AsyncStorage.getItem(FIRST_OPEN_KEY);
   if (existing) return;
@@ -20,65 +17,69 @@ async function isMarkedReviewed(): Promise<boolean> {
   return (await AsyncStorage.getItem(REVIEWED_KEY)) === '1';
 }
 
-/** Stop auto prompts (used after an intentional Settings rate action). */
+/** They went to the store to rate: never ask again. */
 export async function markStoreReviewCompleted(): Promise<void> {
   await AsyncStorage.setItem(REVIEWED_KEY, '1');
 }
 
-async function presentNativeReview(): Promise<boolean> {
-  if (!(await StoreReview.isAvailableAsync())) return false;
-  await StoreReview.requestReview();
-  return true;
-}
+/** "App Store" or "Google Play", for button labels. */
+export const STORE_NAME = Platform.OS === 'android' ? 'Google Play' : 'App Store';
 
 /**
- * Auto prompt: after ~3 days of use, then again every 3 days until the user
- * rates from Settings. The OS may still hide the sheet (limits / already rated).
+ * Opens the store's own "write a review" screen. Apps can't send a rating
+ * themselves; this takes people to where they rate. Unlike Apple's in-app sheet
+ * (which may silently not show: it's capped at 3 a year), this always opens.
+ *
+ * - iPhone: the App Store's review composer, once EXPO_PUBLIC_APP_STORE_ID is set
+ *   (the number in the App Store link). Before that, Apple's in-app sheet.
+ * - Android: the Play Store page (the review box is on it).
+ *
+ * Returns true if something opened.
  */
-export async function maybeAutoPromptStoreReview(): Promise<void> {
-  await ensureStoreReviewFirstOpen();
-  if (await isMarkedReviewed()) return;
-
-  const firstOpenRaw = await AsyncStorage.getItem(FIRST_OPEN_KEY);
-  const firstOpen = Number(firstOpenRaw);
-  if (!Number.isFinite(firstOpen)) return;
-
-  const now = Date.now();
-  if (now - firstOpen < THREE_DAYS_MS) return;
-
-  const lastPromptRaw = await AsyncStorage.getItem(LAST_PROMPT_KEY);
-  if (lastPromptRaw) {
-    const lastPrompt = Number(lastPromptRaw);
-    if (Number.isFinite(lastPrompt) && now - lastPrompt < THREE_DAYS_MS) return;
+export async function openStoreReview(): Promise<boolean> {
+  const tries: string[] =
+    Platform.OS === 'android'
+      ? [`market://details?id=${ANDROID_PACKAGE}`, `https://play.google.com/store/apps/details?id=${ANDROID_PACKAGE}`]
+      : APP_STORE_ID
+        ? [
+            `itms-apps://apps.apple.com/app/id${APP_STORE_ID}?action=write-review`,
+            `https://apps.apple.com/app/id${APP_STORE_ID}?action=write-review`,
+          ]
+        : [];
+  for (const url of tries) {
+    try {
+      await Linking.openURL(url);
+      return true;
+    } catch {
+      // Try the next form (e.g. no store app, so the web page).
+    }
   }
-
-  const shown = await presentNativeReview();
-  if (shown) {
-    await AsyncStorage.setItem(LAST_PROMPT_KEY, String(now));
+  // iPhone before the App Store id is known: Apple's sheet, if it's allowed to show.
+  if (await StoreReview.isAvailableAsync().catch(() => false)) {
+    await StoreReview.requestReview().catch(() => undefined);
+    return true;
   }
+  Alert.alert('Thank you!', `Ratings open once Moments is on the ${STORE_NAME}.`);
+  return false;
 }
 
-/** Settings: always try the native sheet, then stop auto prompts. */
-export async function requestStoreReviewFromSettings(): Promise<void> {
-  await ensureStoreReviewFirstOpen();
-  try {
-    await presentNativeReview();
-  } finally {
-    // Native APIs never confirm a review was submitted; treat Settings as intentional.
-    await markStoreReviewCompleted();
-    await AsyncStorage.setItem(LAST_PROMPT_KEY, String(Date.now()));
-  }
+/** Settings › Rate Moments: they chose to rate, so straight to the store. */
+export async function rateFromSettings(): Promise<void> {
+  if (await openStoreReview()) await markStoreReviewCompleted();
 }
 
-// ── The full-page rating ask (RatingPrompt) ──────────────────────────────────
-// Shows once they've really used the app (7 different days), then, if closed,
-// no sooner than 4 days later; never again once they've rated.
+// ── The rating ask (RatingPage) ─────────────────────────────────────────────
+// Shows once they've really used the app (7 different days). Closed or "maybe
+// later": again in 4 days. Gave feedback: not for 30 days. Rated: never again.
 
 const ACTIVE_DAYS_KEY = 'moments_rating_active_days';
+const SNOOZE_UNTIL_KEY = 'moments_rating_snooze_until';
+/** Older builds stored when it was closed; still honoured. */
 const DISMISSED_AT_KEY = 'moments_rating_dismissed_at';
 const DAY_MS = 24 * 60 * 60 * 1000;
 const MIN_ACTIVE_DAYS = 7;
-const RESHOW_AFTER_MS = 4 * DAY_MS;
+const RESHOW_AFTER_DAYS = 4;
+const AFTER_FEEDBACK_DAYS = 30;
 export const FEEDBACK_EMAIL = SUPPORT_EMAIL;
 
 function todayKey() {
@@ -101,34 +102,30 @@ export async function shouldShowRatingPage(): Promise<boolean> {
   if (await isMarkedReviewed()) return false;
   const activeDays = await recordActiveDay();
   if (activeDays < MIN_ACTIVE_DAYS) return false;
+  const now = Date.now();
+  const until = Number(await AsyncStorage.getItem(SNOOZE_UNTIL_KEY));
+  if (Number.isFinite(until) && until > now) return false;
   const dismissed = Number(await AsyncStorage.getItem(DISMISSED_AT_KEY));
-  if (Number.isFinite(dismissed) && dismissed > 0 && Date.now() - dismissed < RESHOW_AFTER_MS) return false;
+  if (Number.isFinite(dismissed) && dismissed > 0 && now - dismissed < RESHOW_AFTER_DAYS * DAY_MS) return false;
   return true;
 }
 
+async function snoozeRatingPage(days: number): Promise<void> {
+  await AsyncStorage.setItem(SNOOZE_UNTIL_KEY, String(Date.now() + days * DAY_MS));
+}
+
+/** Closed, or "maybe later": ask again in a few days. */
 export async function markRatingPageDismissed(): Promise<void> {
-  await AsyncStorage.setItem(DISMISSED_AT_KEY, String(Date.now()));
+  await snoozeRatingPage(RESHOW_AFTER_DAYS);
 }
 
-/**
- * "Rate Moments": Apple's star sheet when it's allowed to show (it's capped at
- * 3 a year), otherwise the App Store page. Either way, never ask again.
- */
-export async function rateFromPage(): Promise<void> {
-  try {
-    if (await StoreReview.isAvailableAsync()) {
-      await StoreReview.requestReview();
-    } else {
-      const url = StoreReview.storeUrl();
-      if (url) await Linking.openURL(url);
-      else Alert.alert('Thank you!', 'Ratings open once Moments is in the App Store and Google Play.');
-    }
-  } finally {
-    await markStoreReviewCompleted();
-  }
+/** They told us what's wrong: leave them be for a month. */
+export async function markRatingFeedbackGiven(): Promise<void> {
+  await snoozeRatingPage(AFTER_FEEDBACK_DAYS);
 }
 
-export async function sendFeedbackFromPage(): Promise<void> {
-  await markRatingPageDismissed();
-  await Linking.openURL(`mailto:${FEEDBACK_EMAIL}?subject=${encodeURIComponent('Moments feedback')}`).catch(() => undefined);
+export async function sendFeedbackByEmail(): Promise<void> {
+  await Linking.openURL(`mailto:${FEEDBACK_EMAIL}?subject=${encodeURIComponent('Moments feedback')}`).catch(
+    () => undefined,
+  );
 }

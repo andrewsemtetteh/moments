@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 
+import { paperEdge } from '@/components/ui/primitives';
 import { Icon } from '@/components/ui/Icon';
 import { useTheme } from '@/hooks/useTheme';
 
@@ -89,6 +90,7 @@ export function PlanToolbar({
               style={({ pressed }) => [
                 styles.arrowBtn,
                 { backgroundColor: colors.surfaceElevated, opacity: pressed ? 0.6 : 1 },
+                paperEdge(colors),
               ]}
               accessibilityLabel="Previous month">
               <Icon name="chevronLeft" size={16} color={colors.text} />
@@ -102,6 +104,7 @@ export function PlanToolbar({
               style={({ pressed }) => [
                 styles.arrowBtn,
                 { backgroundColor: colors.surfaceElevated, opacity: pressed ? 0.6 : 1 },
+                paperEdge(colors),
               ]}
               accessibilityLabel="Next month">
               <Icon name="chevronRight" size={16} color={colors.text} />

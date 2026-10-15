@@ -83,7 +83,7 @@ export function ContinueChatCard() {
       onPress={() => openChat()}
       accessibilityRole="button"
       accessibilityLabel={`${copy.title}. ${copy.preview}`}
-      style={({ pressed }) => [styles.card, { backgroundColor: colors.surface }, cardBorder, pressed && styles.pressed]}>
+      style={({ pressed }) => [styles.card, { backgroundColor: colors.tints.lilac }, cardBorder, pressed && styles.pressed]}>
       <View>
         {attachment?.type === 'location' ? (
           <LocationMapPreview
@@ -101,7 +101,12 @@ export function ContinueChatCard() {
           <Avatar name={partner.name} imageUrl={partner.avatar_url} size={44} />
         )}
         {unread ? (
-          <View style={[styles.badge, { borderColor: colors.surface, backgroundColor: colors.error }]}>
+          <View
+            style={[
+              styles.badge,
+              unreadCount > 9 && styles.badgeWide,
+              { borderColor: colors.surface, backgroundColor: colors.error },
+            ]}>
             <Text style={styles.badgeText}>{formatBadgeCount(unreadCount)}</Text>
           </View>
         ) : null}
@@ -119,7 +124,7 @@ export function ContinueChatCard() {
           {copy.preview}
         </Text>
       </View>
-      <Icon name="chevronRight" size={18} color={colors.textTertiary} />
+      <Icon name="chevronRight" size={18} color={colors.tintAccents?.lilac ?? colors.textTertiary} />
     </Pressable>
   );
 }
@@ -151,6 +156,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  badgeWide: { width: 28, paddingHorizontal: 0 },
   badgeText: { color: '#fff', fontSize: 11, fontWeight: '800' },
   attachmentThumb: { width: 44, borderRadius: 12 },
   contactThumb: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },

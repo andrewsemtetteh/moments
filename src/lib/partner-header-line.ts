@@ -33,7 +33,7 @@ export function formatPartnerClock(timezone: string | null | undefined): Partner
 }
 
 interface BuildPartnerHeaderLineArgs {
-  /** e.g. "5,712 km apart" or "same city" */
+  /** e.g. "5,712 km Apart" or "Same City" */
   location?: string | null;
   clock?: PartnerClock | null;
   statusLabel?: string | null;

@@ -36,32 +36,59 @@ export interface LevelInfo {
   nextTitle: string;
 }
 
-const TITLES = [
+/**
+ * Title tiers: each covers five levels, ranked I–V (Sweethearts III). Twenty tiers take
+ * you to level 100; past that you're Timeless, counting up for as long as you play.
+ */
+export const TITLE_TIERS = [
   'Sparks Fly',
   'Crushing',
   'Sweethearts',
+  'Lovebirds',
   'Partners in Crime',
+  'Dream Team',
   'Power Couple',
+  'Kindred Spirits',
   'Soulmates',
+  'Starcrossed',
+  'Moonlit',
+  'Golden Hearts',
   'Legends',
   'Icons',
-  'Eternal',
+  'Constellation',
+  'Evergreen',
+  'Infinite',
   'Mythic Duo',
+  'Celestial',
+  'Eternal',
 ];
 
-/** Cumulative XP needed to *reach* a level (level 1 = 0). */
+const LEVELS_PER_TIER = 5;
+const RANKS = ['I', 'II', 'III', 'IV', 'V'];
+
+/**
+ * Cumulative XP needed to *reach* a level (level 1 = 0). Quadratic, with no cap: level 10
+ * takes about a month of regular play, level 25 about half a year, level 50 a couple of
+ * years, so there is always a next level.
+ */
 export function xpForLevel(level: number): number {
-  const l = Math.max(1, Math.floor(level));
-  return 40 * (l - 1) * l;
+  const steps = Math.max(1, Math.floor(level)) - 1;
+  return 50 * steps * steps + 150 * steps;
 }
 
 export function titleForLevel(level: number): string {
-  return TITLES[Math.min(TITLES.length, Math.max(1, level)) - 1];
+  const l = Math.max(1, Math.floor(level));
+  const tier = Math.floor((l - 1) / LEVELS_PER_TIER);
+  if (tier >= TITLE_TIERS.length) return `Timeless ${l - TITLE_TIERS.length * LEVELS_PER_TIER}`;
+  return `${TITLE_TIERS[tier]} ${RANKS[(l - 1) % LEVELS_PER_TIER]}`;
 }
 
 export function levelFromXp(xp: number): number {
-  let level = 1;
-  while (xp >= xpForLevel(level + 1)) level += 1;
+  // Solve the quadratic, then nudge for rounding.
+  const safe = Math.max(0, xp);
+  let level = Math.max(1, Math.floor((-150 + Math.sqrt(22500 + 200 * safe)) / 100) + 1);
+  while (level > 1 && safe < xpForLevel(level)) level -= 1;
+  while (safe >= xpForLevel(level + 1)) level += 1;
   return level;
 }
 
@@ -116,7 +143,7 @@ export const QUEST_POOL: QuestDef[] = [
     id: 'sync_five',
     title: 'Match answers 5 times',
     emoji: '🧠',
-    icon: 'sparkles',
+    icon: 'sync',
     event: 'sync_match',
     target: 5,
     reward: 40,
@@ -131,6 +158,24 @@ export const QUEST_POOL: QuestDef[] = [
     event: 'daily_answered',
     target: 1,
     reward: 30,
+  },
+  {
+    id: 'pack_one',
+    title: 'Answer a pack question',
+    emoji: '💭',
+    icon: 'chat',
+    event: 'pack_answered',
+    target: 1,
+    reward: 25,
+  },
+  {
+    id: 'pack_five',
+    title: 'Answer 5 pack questions',
+    emoji: '📚',
+    icon: 'journal',
+    event: 'pack_answered',
+    target: 5,
+    reward: 50,
   },
   {
     id: 'send_moment',
@@ -181,141 +226,296 @@ export interface BadgeDef {
   /** App icon, for places that draw icons instead of emoji (Wrapped). */
   icon: IconName;
   hint: string;
+  /** Which ladder it sits on in the trophy room. */
+  group: string;
+  /** How far up its ladder (1 = first step); drives the trophy's colour. */
+  tier: number;
+  goal: number;
+  /** Where you are towards `goal`. */
+  value: (p: CoupleProgress, level: number) => number;
   test: (p: CoupleProgress, level: number) => boolean;
 }
 
 const stat = (p: CoupleProgress, key: string) => p.stats[key] ?? 0;
 
-export const BADGES: BadgeDef[] = [
+interface Ladder {
+  group: string;
+  key: string;
+  emoji: string;
+  icon: IconName;
+  value: (p: CoupleProgress, level: number) => number;
+  hint: (n: number) => string;
+  /** [goal, name, id?] — an explicit id keeps trophies people already earned. */
+  steps: [number, string, string?][];
+}
+
+const plural = (n: number, one: string, many: string) => `${n.toLocaleString()} ${n === 1 ? one : many}`;
+
+/**
+ * Every trophy is a step on a ladder, and every ladder keeps going well past the first
+ * few weeks (the top steps take years), so there is always a next one in sight.
+ */
+const LADDERS: Ladder[] = [
   {
-    id: 'first_game',
-    title: 'First Play',
+    group: 'Games',
+    key: 'games',
     emoji: '🎮',
     icon: 'gamepad',
-    hint: 'Play your first game',
-    test: (p) => stat(p, 'games_played') >= 1,
+    value: (p) => stat(p, 'games_played'),
+    hint: (n) => (n === 1 ? 'Play your first game' : `Play ${plural(n, 'game', 'games')}`),
+    steps: [
+      [1, 'First Play', 'first_game'],
+      [10, 'Regulars', 'ten_games'],
+      [25, 'Game Lovers'],
+      [50, 'Game Night Legends', 'fifty_games'],
+      [100, 'Centurions'],
+      [250, 'Board Barons'],
+      [500, 'Play Masters'],
+      [1000, 'Thousand Club'],
+      [2500, 'Grandmasters'],
+      [5000, 'Hall of Fame'],
+    ],
   },
   {
-    id: 'live_first',
-    title: 'Going Live',
+    group: 'Live rooms',
+    key: 'live',
     emoji: '🎧',
-    icon: 'volumeHigh',
-    hint: 'Finish a live audio room',
-    test: (p) => stat(p, 'live_games') >= 1,
+    icon: 'mic',
+    value: (p) => stat(p, 'live_games'),
+    hint: (n) => (n === 1 ? 'Finish a live audio room' : `Finish ${plural(n, 'live room', 'live rooms')}`),
+    steps: [
+      [1, 'Going Live', 'live_first'],
+      [10, 'Voice & Vibes', 'live_ten'],
+      [25, 'On Air'],
+      [50, 'Prime Time'],
+      [100, 'Broadcast Legends'],
+      [250, 'Voices of Love'],
+      [500, 'Golden Mic'],
+    ],
   },
   {
-    id: 'ten_games',
-    title: 'Regulars',
-    emoji: '🎲',
-    icon: 'dice',
-    hint: 'Play 10 games',
-    test: (p) => stat(p, 'games_played') >= 10,
-  },
-  {
-    id: 'streak_3',
-    title: 'On a Roll',
+    group: 'Play streak',
+    key: 'streak',
     emoji: '🔥',
     icon: 'fire',
-    hint: '3-day play streak',
-    test: (p) => p.bestStreak >= 3,
+    value: (p) => p.bestStreak,
+    hint: (n) => `${n}-day play streak`,
+    steps: [
+      [3, 'On a Roll', 'streak_3'],
+      [7, 'Week of Play', 'streak_7'],
+      [14, 'Fortnight Flame'],
+      [30, 'Monthly Habit', 'streak_30'],
+      [60, 'Two Month Glow'],
+      [100, 'Hundred Day Fire'],
+      [180, 'Half a Year'],
+      [365, 'Year-Round'],
+      [730, 'Unbreakable'],
+    ],
   },
   {
-    id: 'sync_10',
-    title: 'Mind Melders',
+    group: 'In sync',
+    key: 'sync',
     emoji: '🧠',
-    icon: 'sparkles',
-    hint: 'Match answers 10 times',
-    test: (p) => stat(p, 'sync_matches') >= 10,
+    icon: 'sync',
+    value: (p) => stat(p, 'sync_matches'),
+    hint: (n) => `Match answers ${plural(n, 'time', 'times')}`,
+    steps: [
+      [10, 'Mind Melders', 'sync_10'],
+      [25, 'Same Wavelength'],
+      [50, 'One Brain', 'sync_50'],
+      [100, 'Telepathic'],
+      [250, 'Twin Flames'],
+      [500, 'Hive Mind'],
+      [1000, 'One Heartbeat'],
+    ],
   },
   {
-    id: 'dares_5',
-    title: 'Fearless',
+    group: 'Dares',
+    key: 'dares',
     emoji: '😈',
     icon: 'flash',
-    hint: 'Complete 5 dares',
-    test: (p) => stat(p, 'dares_done') >= 5,
+    value: (p) => stat(p, 'dares_done'),
+    hint: (n) => (n === 1 ? 'Complete a dare' : `Complete ${plural(n, 'dare', 'dares')}`),
+    steps: [
+      [1, 'Daredevil'],
+      [5, 'Fearless', 'dares_5'],
+      [25, 'Thrill Seekers'],
+      [100, 'No Limits'],
+      [250, 'Unstoppable'],
+    ],
   },
   {
-    id: 'truths_10',
-    title: 'Open Book',
+    group: 'Truths',
+    key: 'truths',
     emoji: '📖',
     icon: 'journal',
-    hint: 'Tell 10 truths',
-    test: (p) => stat(p, 'truths_done') >= 10,
+    value: (p) => stat(p, 'truths_done'),
+    hint: (n) => (n === 1 ? 'Tell a truth' : `Tell ${plural(n, 'truth', 'truths')}`),
+    steps: [
+      [1, 'First Truth'],
+      [10, 'Open Book', 'truths_10'],
+      [50, 'Truth Tellers'],
+      [150, 'Glass Hearts'],
+      [500, 'Nothing to Hide'],
+    ],
   },
   {
-    id: 'detective',
-    title: 'Mind Reader',
+    group: 'Guessing',
+    key: 'guess',
     emoji: '🕵️',
     icon: 'search',
-    hint: 'Guess 10 answers right',
-    test: (p) => stat(p, 'guesses_correct') >= 10,
+    value: (p) => stat(p, 'guesses_correct'),
+    hint: (n) => `Guess ${plural(n, 'answer', 'answers')} right`,
+    steps: [
+      [10, 'Mind Reader', 'detective'],
+      [50, 'Psychics'],
+      [150, 'Crystal Ball'],
+      [500, 'Oracle'],
+    ],
   },
   {
-    id: 'live_ten',
-    title: 'Voice & Vibes',
-    emoji: '🎙️',
-    icon: 'mic',
-    hint: 'Finish 10 live rooms',
-    test: (p) => stat(p, 'live_games') >= 10,
-  },
-  {
-    id: 'quiz_ace',
-    title: 'Quiz Whiz',
+    group: 'Quizzes',
+    key: 'quiz',
     emoji: '🏆',
     icon: 'star',
-    hint: 'Get 25 quiz answers right',
-    test: (p) => stat(p, 'quiz_correct') >= 25,
+    value: (p) => stat(p, 'quiz_correct'),
+    hint: (n) => `Get ${plural(n, 'quiz answer', 'quiz answers')} right`,
+    steps: [
+      [25, 'Quiz Whiz', 'quiz_ace'],
+      [100, 'Top of the Class'],
+      [300, 'Quiz Royalty'],
+      [1000, 'Encyclopedia'],
+    ],
   },
   {
-    id: 'streak_7',
-    title: 'Week of Play',
-    emoji: '⚡',
-    icon: 'calendar',
-    hint: '7-day play streak',
-    test: (p) => p.bestStreak >= 7,
+    group: 'Question of the day',
+    key: 'daily',
+    emoji: '💬',
+    icon: 'chat',
+    value: (p) => stat(p, 'daily_answers'),
+    hint: (n) => (n === 1 ? 'Answer today’s question' : `Answer ${plural(n, 'daily question', 'daily questions')}`),
+    steps: [
+      [1, 'First Answer'],
+      [7, 'Week of Words'],
+      [30, 'Daily Ritual'],
+      [100, 'Hundred Days'],
+      [365, 'Year of Us'],
+      [730, 'Two Years Talking'],
+      [1000, 'Storytellers'],
+    ],
   },
   {
-    id: 'level_5',
-    title: 'Power Couple',
+    group: 'Moments',
+    key: 'moments',
+    emoji: '📸',
+    icon: 'camera',
+    value: (p) => stat(p, 'moments_sent'),
+    hint: (n) => (n === 1 ? 'Send a moment' : `Send ${plural(n, 'moment', 'moments')}`),
+    steps: [
+      [1, 'Snapshot'],
+      [10, 'Shutterbugs'],
+      [50, 'Memory Makers'],
+      [200, 'Gallery of Us'],
+      [500, 'Living Album'],
+      [1000, 'Archive of Love'],
+    ],
+  },
+  {
+    group: 'Handpicked answers',
+    key: 'packq',
+    emoji: '💭',
+    icon: 'question',
+    value: (p) => stat(p, 'pack_answers'),
+    hint: (n) => `Answer ${plural(n, 'Handpicked question', 'Handpicked questions')}`,
+    steps: [
+      [10, 'Curious'],
+      [50, 'Deep Divers'],
+      [200, 'Open Books'],
+      [500, 'Question Masters'],
+      [1000, 'Know It All'],
+    ],
+  },
+  {
+    group: 'Sets finished',
+    key: 'packs',
+    emoji: '📚',
+    icon: 'albums',
+    value: (p) => stat(p, 'packs_completed'),
+    hint: (n) => (n === 1 ? 'Finish a Handpicked set' : `Finish ${plural(n, 'Handpicked set', 'Handpicked sets')}`),
+    steps: [
+      [1, 'Pack Opener'],
+      [5, 'Collectors'],
+      [20, 'Completionists'],
+      [50, 'Library of Us'],
+      [100, 'Every Chapter'],
+    ],
+  },
+  {
+    group: 'Done together',
+    key: 'together',
+    emoji: '🌿',
+    icon: 'heart',
+    value: (p) => stat(p, 'together_done'),
+    hint: (n) => (n === 1 ? 'Do an activity together' : `Do ${plural(n, 'activity', 'activities')} together`),
+    steps: [
+      [1, 'Doers'],
+      [10, 'Adventurers'],
+      [30, 'Bucket Listers'],
+      [75, 'Life Together'],
+      [150, 'Always Up for It'],
+    ],
+  },
+  {
+    group: 'Levels',
+    key: 'level',
     emoji: '💎',
     icon: 'diamond',
-    hint: 'Reach level 5',
-    test: (_p, level) => level >= 5,
-  },
-  {
-    id: 'sync_50',
-    title: 'One Brain',
-    emoji: '🌀',
-    icon: 'heart',
-    hint: 'Match answers 50 times',
-    test: (p) => stat(p, 'sync_matches') >= 50,
-  },
-  {
-    id: 'fifty_games',
-    title: 'Game Night Legends',
-    emoji: '🏅',
-    icon: 'flag',
-    hint: 'Play 50 games',
-    test: (p) => stat(p, 'games_played') >= 50,
-  },
-  {
-    id: 'streak_30',
-    title: 'Monthly Habit',
-    emoji: '👑',
-    icon: 'gift',
-    hint: '30-day play streak',
-    test: (p) => p.bestStreak >= 30,
-  },
-  {
-    id: 'level_10',
-    title: 'Elite Duo',
-    emoji: '🌟',
-    icon: 'sparkles',
-    hint: 'Reach level 10',
-    test: (_p, level) => level >= 10,
+    value: (_p, level) => level,
+    hint: (n) => `Reach level ${n}`,
+    steps: [
+      [5, 'Power Couple', 'level_5'],
+      [10, 'Elite Duo', 'level_10'],
+      [15, 'Rising Stars'],
+      [20, 'Golden Pair'],
+      [30, 'Shining'],
+      [40, 'Radiant'],
+      [50, 'Half Century'],
+      [75, 'Living Legends'],
+      [100, 'Timeless'],
+    ],
   },
 ];
+
+export const BADGES: BadgeDef[] = LADDERS.flatMap((ladder) =>
+  ladder.steps.map(([goal, title, id], index) => ({
+    id: id ?? `${ladder.key}_${goal}`,
+    title,
+    emoji: ladder.emoji,
+    icon: ladder.icon,
+    hint: ladder.hint(goal),
+    group: ladder.group,
+    tier: index + 1,
+    goal,
+    value: ladder.value,
+    test: (p: CoupleProgress, level: number) => ladder.value(p, level) >= goal,
+  })),
+);
+
+/** The trophy groups in order, for the trophy room. */
+export const BADGE_GROUPS = LADDERS.map((l) => l.group);
+
+/** The next trophy on each ladder, closest to done first — what to chase next. */
+export function nextBadges(progress: CoupleProgress, limit = 6) {
+  const level = levelFromXp(progress.xp);
+  const owned = new Set(progress.badges);
+  const next = BADGE_GROUPS.flatMap((group) => {
+    const badge = BADGES.find((b) => b.group === group && !owned.has(b.id));
+    if (!badge) return [];
+    const value = Math.min(badge.goal, badge.value(progress, level));
+    return [{ badge, value, ratio: badge.goal > 0 ? value / badge.goal : 0 }];
+  });
+  return next.sort((a, b) => b.ratio - a.ratio).slice(0, limit);
+}
 
 export function emptyProgress(date: string): CoupleProgress {
   return {

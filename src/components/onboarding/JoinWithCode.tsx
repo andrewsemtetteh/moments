@@ -1,7 +1,8 @@
 import { useAuth } from '@clerk/expo';
 import LottieView from 'lottie-react-native';
 import { useEffect, useState } from 'react';
-import { Alert, StyleSheet, TextInput } from 'react-native';
+import { Alert, StyleSheet } from 'react-native';
+import { TextInput } from '@/components/ui/ThemedTextInput';
 
 import { OnboardingStepScreen } from '@/components/onboarding/OnboardingStepScreen';
 import { useTheme } from '@/hooks/useTheme';

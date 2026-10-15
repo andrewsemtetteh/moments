@@ -7,6 +7,7 @@ import {
   isSameMonth,
   startOfMonth,
 } from 'date-fns';
+import { paperEdge } from '@/components/ui/primitives';
 import * as Haptics from '@/lib/haptics';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
@@ -52,7 +53,7 @@ export function PlanMonthExpand({
         <Text style={[styles.title, { color: colors.text }]}>{format(currentMonth, 'MMMM yyyy')}</Text>
         <Pressable
           onPress={() => onChangeMonth(addMonths(currentMonth, 1))}
-          style={[styles.nav, { backgroundColor: colors.surfaceElevated }]}>
+          style={[styles.nav, { backgroundColor: colors.surfaceElevated }, paperEdge(colors)]}>
           <Icon name="chevronRight" size={18} color={colors.text} />
         </Pressable>
       </View>

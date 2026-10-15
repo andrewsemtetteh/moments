@@ -32,6 +32,8 @@ type LogoMarkProps = {
   /** Force the small, one-line version (used automatically below 40 px). */
   simple?: boolean;
   style?: StyleProp<ViewStyle>;
+  /** Draw the mark in one other colour (e.g. white on a vivid background). */
+  color?: string;
 };
 
 /**
@@ -39,7 +41,7 @@ type LogoMarkProps = {
  * lines that taper to a dot. Transparent and all coral, so it reads on light
  * and dark themes alike; drawn as a vector so it's crisp at any size.
  */
-export function LogoMark({ size = 72, simple, style }: LogoMarkProps) {
+export function LogoMark({ size = 72, simple, style, color = CORAL }: LogoMarkProps) {
   const clipId = `cut-${useId().replace(/[^a-zA-Z0-9_-]/g, '')}`;
   const v = simple || size < 40 ? SMALL : FULL;
 
@@ -54,12 +56,12 @@ export function LogoMark({ size = 72, simple, style }: LogoMarkProps) {
         </Defs>
         <G transform="translate(0 -6.59)">
           <G clipPath={`url(#${clipId})`}>
-            <Path d={HEART_PATH} fill={CORAL} transform="translate(50 56) scale(1.18) translate(-50 -50)" />
+            <Path d={HEART_PATH} fill={color} transform="translate(50 56) scale(1.18) translate(-50 -50)" />
           </G>
           {v.lines.map(([x1, x2, y]) => (
-            <Line key={y} x1={x1} y1={y} x2={x2} y2={y} stroke={CORAL} strokeWidth={v.stroke} strokeLinecap="round" />
+            <Line key={y} x1={x1} y1={y} x2={x2} y2={y} stroke={color} strokeWidth={v.stroke} strokeLinecap="round" />
           ))}
-          <Circle cx={50} cy={v.dot.cy} r={v.dot.r} fill={CORAL} />
+          <Circle cx={50} cy={v.dot.cy} r={v.dot.r} fill={color} />
         </G>
       </Svg>
     </View>

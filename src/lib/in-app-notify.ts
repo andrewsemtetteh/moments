@@ -61,7 +61,10 @@ const PARTNER_TYPES = new Set([
   'game_invite',
   'game_turn',
   'activity',
+  'achievement',
   'calendar',
+  'plus_unlocked',
+  'plus_suggest',
 ]);
 
 function partnerFace() {
@@ -86,6 +89,8 @@ export function islandFromNotification(n: Notification, now = Date.now()): Islan
   // The live invite sheet (or the room itself) already covers it.
   if (n.type === 'game_invite') hideOn = () => !!useGameRoomStore.getState().invite || useGameRoomStore.getState().open;
   if (n.type === 'calendar') hideOn = (p) => p.startsWith('/calendar');
+  // Shown from the shared progress itself (AchievementRelay / trophy card), so never twice.
+  if (n.type === 'achievement') hideOn = () => true;
 
   return {
     id: n.id,

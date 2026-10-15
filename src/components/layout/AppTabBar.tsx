@@ -73,7 +73,9 @@ export function AppTabBar({ state, navigation }: TabBarLikeProps) {
   const activeName = state.routes[state.index]?.name;
 
   const bottomPad = getTabBarBottomPadding(insets.bottom);
-  const fill = colors.glass ? colors.surfaceGlass : colors.surfaceElevated;
+  // The soft themes: a white bar with a visible edge and a soft shadow, so it stands off the white page.
+  const fill = colors.glass ? colors.surfaceGlass : colors.sticker ? colors.background : colors.surfaceElevated;
+  const activeColor = colors.accent;
 
   const onBarLayout = (e: LayoutChangeEvent) => {
     setBarWidth(e.nativeEvent.layout.width);
@@ -105,7 +107,7 @@ export function AppTabBar({ state, navigation }: TabBarLikeProps) {
           // The ring is always there (just transparent when unselected), so the
           // avatar never shifts or shrinks when the tab is selected — previously
           // the border was added on focus and squeezed the avatar inside it.
-          <View style={[styles.profileAvatar, { borderColor: focused ? colors.accent : 'transparent' }]}>
+          <View style={[styles.profileAvatar, { borderColor: focused ? activeColor : 'transparent' }]}>
             <Avatar name={user?.name} imageUrl={user?.avatar_url} size={TAB_ICON_SIZE - 6} />
           </View>
         ) : (
@@ -113,11 +115,12 @@ export function AppTabBar({ state, navigation }: TabBarLikeProps) {
             <Icon
               name={tab.icon}
               size={TAB_ICON_SIZE}
-              color={focused ? colors.accent : colors.textSecondary}
+              color={focused ? activeColor : colors.textSecondary}
               filled={focused}
             />
             {badge > 0 ? (
-              <View style={[styles.badge, { backgroundColor: colors.error, borderColor: colors.surfaceElevated }]}>
+              <View
+                style={[styles.badge, badge > 9 && styles.badgeWide, { backgroundColor: colors.error, borderColor: fill }]}>
                 <Text style={styles.badgeText} numberOfLines={1}>
                   {formatBadgeCount(badge)}
                 </Text>
@@ -125,7 +128,9 @@ export function AppTabBar({ state, navigation }: TabBarLikeProps) {
             ) : null}
           </View>
         )}
-        <Text style={[styles.label, { color: focused ? colors.accent : colors.textSecondary }]}>{tab.label}</Text>
+        <Text style={[styles.label, { color: focused ? activeColor : colors.textSecondary }, colors.sticker && focused && styles.labelOn]}>
+          {tab.label}
+        </Text>
       </Pressable>
     );
   };
@@ -136,14 +141,14 @@ export function AppTabBar({ state, navigation }: TabBarLikeProps) {
       pointerEvents="box-none"
       onLayout={(e) => setTabBarOverlayHeight(Math.ceil(e.nativeEvent.layout.height))}>
       <TourTarget name="tour-tabs" style={styles.barTarget}>
-        <View style={styles.bar} onLayout={onBarLayout} pointerEvents="box-none">
+        <View style={[styles.bar, colors.sticker && !colors.isDark && styles.barShadow]} onLayout={onBarLayout} pointerEvents="box-none">
           {barWidth > 0 && (
             <Svg width={barWidth} height={TAB_BAR_HEIGHT} style={StyleSheet.absoluteFill} pointerEvents="none">
               <Path
                 d={tabBarNotchPath(barWidth, TAB_BAR_HEIGHT, CUTOUT_RADIUS)}
                 fill={fill}
-                stroke={colors.border}
-                strokeWidth={StyleSheet.hairlineWidth}
+                stroke={colors.sticker ? colors.borderStrong : colors.border}
+                strokeWidth={colors.boldBorder ? 2 : colors.sticker ? 1 : StyleSheet.hairlineWidth}
               />
             </Svg>
           )}
@@ -159,9 +164,15 @@ export function AppTabBar({ state, navigation }: TabBarLikeProps) {
                 }}
                 accessibilityLabel="Create a Moment"
                 style={({ pressed }) => [styles.fabPressable, pressed && { transform: [{ scale: 0.92 }] }]}>
-                <LinearGradient colors={colors.gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.fab}>
-                  <Icon name="plus" size={TAB_ICON_SIZE} color={colors.onAccent} />
-                </LinearGradient>
+                {colors.sticker ? (
+                  <View style={[styles.fab, { backgroundColor: colors.accent }]}>
+                    <Icon name="plus" size={TAB_ICON_SIZE} color={colors.onAccent} />
+                  </View>
+                ) : (
+                  <LinearGradient colors={colors.gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.fab}>
+                    <Icon name="plus" size={TAB_ICON_SIZE} color={colors.onAccent} />
+                  </LinearGradient>
+                )}
               </Pressable>
             </TourTarget>
           </View>
@@ -199,6 +210,13 @@ const styles = StyleSheet.create({
     gap: 3,
   },
   label: { fontSize: 11, fontWeight: '700' },
+  labelOn: { fontWeight: '900' },
+  barShadow: {
+    shadowColor: '#000000',
+    shadowOpacity: 0.1,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 4 },
+  },
   badge: {
     position: 'absolute',
     top: -5,
@@ -211,6 +229,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  // "9+" needs a fixed wider pill: the icon's narrow box would otherwise squeeze it to "9…".
+  badgeWide: { width: 26, paddingHorizontal: 0 },
   badgeText: { color: '#fff', fontSize: 10, fontWeight: '800', lineHeight: 12 },
   profileAvatar: {
     width: TAB_ICON_SIZE,

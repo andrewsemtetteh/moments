@@ -19,7 +19,7 @@ import { OnlineStatusSettings } from '@/components/profile/OnlineStatusSettings'
 import { SettingsToggleDivider, SettingsToggleRow } from '@/components/profile/SettingsToggleRow';
 import { VerifyEmailCodeModal } from '@/components/profile/VerifyEmailCodeModal';
 import { ScreenHeader } from '@/components/layout/ScreenHeader';
-import { RatingPage } from '@/components/layout/StoreReviewSync';
+import { rateFromSettings } from '@/lib/store-review';
 import { Icon, type IconName } from '@/components/ui/Icon';
 import { Avatar, colorWithAlpha } from '@/components/ui/primitives';
 import { SOCIAL_LINKS, SUPPORT_EMAIL } from '@/constants/social';
@@ -96,7 +96,6 @@ export default function SettingsScreen() {
   const [verifyingEmailCode, setVerifyingEmailCode] = useState(false);
 
   const [anniversaryOpen, setAnniversaryOpen] = useState(false);
-  const [showRating, setShowRating] = useState(false);
   const hapticsOn = useHapticsPref((s) => s.enabled);
   const setHapticsOn = useHapticsPref((s) => s.setEnabled);
 
@@ -548,7 +547,7 @@ export default function SettingsScreen() {
           <Group>
             <Row icon="help" label="Contact support" onPress={() => contactSupport('Help with Moments')} />
             <Row icon="flag" label="Report a problem" onPress={() => contactSupport('Problem report')} />
-            <Row icon="star" label="Rate Moments" onPress={() => setShowRating(true)} />
+            <Row icon="star" label="Rate Moments" onPress={() => void rateFromSettings()} />
             <Row icon="lock" label="Privacy policy" onPress={() => router.push('/legal/privacy')} />
             <Row icon="document" label="Terms of service" onPress={() => router.push('/legal/terms')} last />
           </Group>
@@ -658,8 +657,6 @@ export default function SettingsScreen() {
         onClose={closeRelationshipTypeModal}
       />
 
-      {showRating ? <RatingPage onDone={() => setShowRating(false)} /> : null}
-
       {anniversaryIso ? (
         <EditAnniversaryModal
           visible={anniversaryOpen}
@@ -694,13 +691,17 @@ function Group({ children }: { children: ReactNode }) {
  */
 /** Icon tiles: a step off the card (Paper's surfaces are all white). */
 function tileColor(colors: ThemeColors) {
-  return colors.boldBorder ? colors.backgroundElevated : colors.surfaceElevated;
+  if (colors.boldBorder) return colors.backgroundElevated;
+  // Soft light themes: a white tile on the tinted card reads cleanest.
+  if (colors.sticker && !colors.isDark) return colors.background;
+  return colors.surfaceElevated;
 }
 
 function surfaceStyle(colors: ThemeColors) {
   return {
     backgroundColor: colors.surface,
-    borderWidth: colors.boldBorder ? 2 : 0,
+    // Soft themes: a crisp 1pt edge instead of Paper's 2pt line.
+    borderWidth: colors.boldBorder ? 2 : colors.sticker ? 1 : 0,
     borderColor: colors.border,
   };
 }
@@ -784,7 +785,7 @@ function ThemePreview({
           { backgroundColor: t.background },
           active ? { borderColor: colors.accent, borderWidth: 2.5 } : { borderColor: colors.border, borderWidth: 1 },
         ]}>
-        <LinearGradient colors={t.gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.mockHero} />
+        <LinearGradient colors={t.hero ?? t.gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.mockHero} />
         <View style={[styles.mockLine, { backgroundColor: t.surface }]} />
         <View style={[styles.mockLine, styles.mockShort, { backgroundColor: t.surface }]} />
         <View style={[styles.mockLine, { backgroundColor: t.surface }]} />
@@ -843,8 +844,9 @@ const styles = StyleSheet.create({
   rowValue: { maxWidth: '55%', fontSize: 14 },
   divider: { height: StyleSheet.hairlineWidth, marginLeft: 60 },
 
-  themeCard: { flexDirection: 'row', gap: 10, padding: 14 },
-  themeItem: { flex: 1, alignItems: 'center', gap: 8 },
+  // Three a row, two rows.
+  themeCard: { flexDirection: 'row', flexWrap: 'wrap', columnGap: 10, rowGap: 16, padding: 14 },
+  themeItem: { width: '31%', flexGrow: 1, alignItems: 'center', gap: 8 },
   themeMock: { alignSelf: 'stretch', height: 118, borderRadius: 18, padding: 10, gap: 6, overflow: 'hidden' },
   mockHero: { height: 34, borderRadius: 9 },
   mockLine: { height: 14, borderRadius: 5 },

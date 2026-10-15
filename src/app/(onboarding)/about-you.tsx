@@ -3,7 +3,8 @@ import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { TextInput } from '@/components/ui/ThemedTextInput';
 
 import { OnboardingStepScreen } from '@/components/onboarding/OnboardingStepScreen';
 import { Icon } from '@/components/ui/Icon';

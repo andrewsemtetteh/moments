@@ -1,5 +1,6 @@
 import { StyleSheet, Text, View } from 'react-native';
 
+import { paperEdge } from '@/components/ui/primitives';
 import { MOOD_COLORS, MOOD_EMOJI, MOOD_LABELS, type ThemeColors } from '@/constants/design-system';
 import { getFirstName } from '@/lib/avatar-initial';
 import { moodEmoji, type MoodCount, type MoodDayBucket, type MoodPartnerWeekRow } from '@/lib/mood-history';
@@ -104,7 +105,7 @@ export function MoodHistoryOverview({
             {partnerWeekly.map((week) => (
               <View key={week.weekKey} style={styles.weeklyCol}>
                 <View style={styles.weeklyBars}>
-                  <View style={[styles.weeklyTrack, { backgroundColor: colors.surfaceElevated }]}>
+                  <View style={[styles.weeklyTrack, { backgroundColor: colors.surfaceElevated }, paperEdge(colors, 1.5)]}>
                     <View
                       style={[
                         styles.weeklyBar,
@@ -115,7 +116,7 @@ export function MoodHistoryOverview({
                       ]}
                     />
                   </View>
-                  <View style={[styles.weeklyTrack, { backgroundColor: colors.surfaceElevated }]}>
+                  <View style={[styles.weeklyTrack, { backgroundColor: colors.surfaceElevated }, paperEdge(colors, 1.5)]}>
                     <View
                       style={[
                         styles.weeklyBar,
@@ -159,7 +160,7 @@ export function MoodHistoryOverview({
                     {item.count} · {Math.round(item.share * 100)}%
                   </Text>
                 </View>
-                <View style={[styles.countTrack, { backgroundColor: colors.surfaceElevated }]}>
+                <View style={[styles.countTrack, { backgroundColor: colors.surfaceElevated }, paperEdge(colors, 1.5)]}>
                   <View
                     style={[
                       styles.countFill,

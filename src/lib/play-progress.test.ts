@@ -9,25 +9,62 @@ import {
   normalizeProgress,
   questsForDate,
   questView,
+  titleForLevel,
   xpForLevel,
+  BADGES,
+  nextBadges,
 } from './play-progress';
 
 describe('levels', () => {
   it('has increasing thresholds and consistent level lookup', () => {
     expect(xpForLevel(1)).toBe(0);
-    expect(xpForLevel(2)).toBe(80);
+    expect(xpForLevel(2)).toBe(200);
+    expect(xpForLevel(3)).toBe(500);
     expect(levelFromXp(0)).toBe(1);
-    expect(levelFromXp(79)).toBe(1);
-    expect(levelFromXp(80)).toBe(2);
-    expect(levelFromXp(240)).toBe(3);
+    expect(levelFromXp(199)).toBe(1);
+    expect(levelFromXp(200)).toBe(2);
+    expect(levelFromXp(500)).toBe(3);
+    for (let l = 1; l < 300; l++) {
+      expect(levelFromXp(xpForLevel(l))).toBe(l);
+      expect(levelFromXp(xpForLevel(l + 1) - 1)).toBe(l);
+    }
   });
 
   it('reports progress within the current level', () => {
-    const info = levelInfo(120);
+    const info = levelInfo(300);
     expect(info.level).toBe(2);
-    expect(info.into).toBe(40);
-    expect(info.span).toBe(160);
-    expect(info.progress).toBeCloseTo(0.25);
+    expect(info.into).toBe(100);
+    expect(info.span).toBe(300);
+    expect(info.progress).toBeCloseTo(1 / 3);
+  });
+
+  it('names every level, with no ceiling', () => {
+    expect(titleForLevel(1)).toBe('Sparks Fly I');
+    expect(titleForLevel(5)).toBe('Sparks Fly V');
+    expect(titleForLevel(6)).toBe('Crushing I');
+    expect(titleForLevel(100)).toBe('Eternal V');
+    expect(titleForLevel(101)).toBe('Timeless 1');
+    expect(titleForLevel(250)).toBe('Timeless 150');
+  });
+});
+
+describe('trophies', () => {
+  it('has unique ids and keeps the original ones', () => {
+    const ids = BADGES.map((b) => b.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    for (const id of ['first_game', 'live_first', 'ten_games', 'streak_3', 'sync_10', 'dares_5', 'truths_10', 'detective', 'live_ten', 'quiz_ace', 'streak_7', 'level_5', 'sync_50', 'fifty_games', 'streak_30', 'level_10']) {
+      expect(ids).toContain(id);
+    }
+    expect(BADGES.length).toBeGreaterThan(80);
+  });
+
+  it('suggests the next trophy on each ladder', () => {
+    const p = { ...emptyProgress('2026-09-24'), stats: { games_played: 7 }, badges: ['first_game'] };
+    const next = nextBadges(p, 50);
+    const games = next.find((n) => n.badge.group === 'Games');
+    expect(games?.badge.id).toBe('ten_games');
+    expect(games?.value).toBe(7);
+    expect(next[0].badge.id).toBe('ten_games');
   });
 });
 
@@ -91,7 +128,7 @@ describe('applyAward', () => {
   });
 
   it('reports level-ups', () => {
-    const r = applyAward(emptyProgress(today), { xp: 100 }, today);
+    const r = applyAward(emptyProgress(today), { xp: 200 }, today);
     expect(r.levelBefore).toBe(1);
     expect(r.levelAfter).toBeGreaterThanOrEqual(2);
   });

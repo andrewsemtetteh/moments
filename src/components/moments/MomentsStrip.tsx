@@ -4,7 +4,7 @@ import * as Haptics from '@/lib/haptics';
 import type { ReactNode } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { Avatar } from '@/components/ui/primitives';
+import { Avatar, paperEdge } from '@/components/ui/primitives';
 import { Icon } from '@/components/ui/Icon';
 import { useTheme } from '@/hooks/useTheme';
 import {
@@ -71,7 +71,7 @@ export function MomentsStrip({ moments, partnerOnly = false }: MomentsStripProps
           {myLatest && momentHasVisual(myLatest) ? (
             <Image source={{ uri: myLatest.media_url! }} style={styles.ringImage} contentFit="cover" />
           ) : (
-            <View style={[styles.ringPlaceholder, { backgroundColor: colors.surfaceElevated }]}>
+            <View style={[styles.ringPlaceholder, { backgroundColor: colors.surfaceElevated }, paperEdge(colors)]}>
               {myRecent.length === 0 ? (
                 <Icon name="plus" size={26} color={colors.accent} />
               ) : (
@@ -95,7 +95,7 @@ export function MomentsStrip({ moments, partnerOnly = false }: MomentsStripProps
               {myLatest && momentHasVisual(myLatest) ? (
                 <Image source={{ uri: myLatest.media_url! }} style={styles.ringImage} contentFit="cover" />
               ) : (
-                <View style={[styles.ringPlaceholder, { backgroundColor: colors.surfaceElevated }]}>
+                <View style={[styles.ringPlaceholder, { backgroundColor: colors.surfaceElevated }, paperEdge(colors)]}>
                   <Icon name="camera" size={26} color={colors.accent} />
                 </View>
               )}
@@ -119,7 +119,7 @@ export function MomentsStrip({ moments, partnerOnly = false }: MomentsStripProps
           {partnerLatest && momentHasVisual(partnerLatest) ? (
             <Image source={{ uri: partnerLatest.media_url! }} style={styles.ringImage} contentFit="cover" />
           ) : (
-            <View style={[styles.ringPlaceholder, { backgroundColor: colors.surfaceElevated }]}>
+            <View style={[styles.ringPlaceholder, { backgroundColor: colors.surfaceElevated }, paperEdge(colors)]}>
               <Avatar name={partner.name} imageUrl={partner.avatar_url} size={INNER - 4} />
             </View>
           )}

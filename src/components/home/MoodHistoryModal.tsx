@@ -16,7 +16,7 @@ import { MoodHistoryOverview } from '@/components/home/MoodHistoryOverview';
 import { MoodHistoryTimeline } from '@/components/home/MoodHistoryTimeline';
 import { FullScreenPage } from '@/components/layout/FullScreenPage';
 import { Icon } from '@/components/ui/Icon';
-import { PrimaryButton } from '@/components/ui/primitives';
+import { PrimaryButton, paperEdge } from '@/components/ui/primitives';
 import { useMoodHistory, useMoodHistoryOverview } from '@/hooks/queries';
 import { useEnsurePartner } from '@/hooks/useEnsurePartner';
 import { useTheme } from '@/hooks/useTheme';
@@ -146,7 +146,7 @@ export function MoodHistoryModal() {
     <FullScreenPage visible={visible} title="Mood history" onBack={close}>
       <View style={styles.container}>
         {/* Overview | Timeline — the same tabs as Together's Plan | Memories. */}
-        <View style={[styles.segment, { backgroundColor: colors.surface }]}>
+        <View style={[styles.segment, { backgroundColor: colors.surface }, paperEdge(colors)]}>
           {(['overview', 'timeline'] as const).map((key) => {
             const active = tab === key;
             return (

@@ -11,7 +11,7 @@ import { useAuthStore, useRelationshipStore } from '@/stores';
 import { useGameRoomStore } from '@/stores/game-room-store';
 import { usePlayProgressStore } from '@/stores/play-progress-store';
 
-import { CelebrationHost } from './Celebration';
+import { AchievementRelay, CelebrationHost } from './Celebration';
 import { LiveRoomModal } from './LiveRoomModal';
 
 /** Your partner opened a live session: a sheet to join (optionally muted) or pass for now. */
@@ -122,6 +122,7 @@ export function GameRoomBridge() {
       <LiveRoomModal />
       <InviteSheet />
       <CelebrationHost surface="root" />
+      <AchievementRelay />
     </>
   );
 }

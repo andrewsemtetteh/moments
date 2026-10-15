@@ -5,10 +5,10 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
   type TextInputProps,
 } from 'react-native';
+import { TextInput } from '@/components/ui/ThemedTextInput';
 import * as Haptics from '@/lib/haptics';
 
 import { FullScreenPage, PageFooter } from '@/components/layout/FullScreenPage';

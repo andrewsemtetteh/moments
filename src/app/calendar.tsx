@@ -12,6 +12,7 @@ import {
   startOfDay,
   startOfMonth,
 } from 'date-fns';
+import { paperEdge } from '@/components/ui/primitives';
 import * as Haptics from '@/lib/haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useQueryClient } from '@tanstack/react-query';
@@ -608,7 +609,7 @@ export default function CalendarScreen() {
           closes toward the left: chevron on the right, or swipe left. */}
       <ScreenHeader title="Together" onClose={closePlan} />
 
-      <View style={[styles.tabs, { backgroundColor: colors.surface }]}>
+      <View style={[styles.tabs, { backgroundColor: colors.surface }, paperEdge(colors)]}>
         {(['upcoming', 'memories'] as const).map((key) => {
           const on = tab === key;
           return (

@@ -4,7 +4,10 @@ import { create } from 'zustand';
 import { isMissingTableError } from '@/lib/network-error';
 import {
   applyAward,
+  BADGES,
   emptyProgress,
+  levelFromXp,
+  questsForDate,
   normalizeProgress,
   titleForLevel,
   todayKey,
@@ -16,11 +19,15 @@ import {
 } from '@/lib/play-progress';
 import { backend } from '@/lib/backend';
 
+/**
+ * `origin`: 'self' when this phone earned it (it tells your partner and posts to chat),
+ * 'partner' when it arrived from your partner's play (just shown here).
+ */
 export type Celebration =
   | { id: string; kind: 'xp'; amount: number; label: string }
   | { id: string; kind: 'level'; level: number; title: string }
-  | { id: string; kind: 'badge'; badge: BadgeDef }
-  | { id: string; kind: 'quest'; quest: QuestDef };
+  | { id: string; kind: 'badge'; badge: BadgeDef; origin: 'self' | 'partner' }
+  | { id: string; kind: 'quest'; quest: QuestDef; origin: 'self' | 'partner' };
 
 interface PlayProgressState {
   relationshipId: string | null;
@@ -96,8 +103,8 @@ function celebrationsFor(result: AwardResult, label?: string): Celebration[] {
   if (result.gainedXp > 0) {
     out.push({ id: nextId(), kind: 'xp', amount: result.gainedXp, label: label ?? 'Nice play' });
   }
-  for (const quest of result.completedQuests) out.push({ id: nextId(), kind: 'quest', quest });
-  for (const badge of result.newBadges) out.push({ id: nextId(), kind: 'badge', badge });
+  for (const quest of result.completedQuests) out.push({ id: nextId(), kind: 'quest', quest, origin: 'self' });
+  for (const badge of result.newBadges) out.push({ id: nextId(), kind: 'badge', badge, origin: 'self' });
   if (result.levelAfter > result.levelBefore) {
     out.push({
       id: nextId(),
@@ -106,6 +113,32 @@ function celebrationsFor(result: AwardResult, label?: string): Celebration[] {
       title: titleForLevel(result.levelAfter),
     });
   }
+  return out;
+}
+
+/**
+ * What changed between the progress we had and a newer shared row: your partner finished
+ * a quest, unlocked a trophy or levelled you both up, on their phone (live, or while
+ * this app was closed).
+ */
+function partnerCelebrations(prev: CoupleProgress, next: CoupleProgress): Celebration[] {
+  const out: Celebration[] = [];
+  if (next.quests.date === todayKey()) {
+    const had = prev.quests.date === next.quests.date ? prev.quests.claimed : [];
+    for (const quest of questsForDate(next.quests.date)) {
+      if (next.quests.claimed.includes(quest.id) && !had.includes(quest.id)) {
+        out.push({ id: nextId(), kind: 'quest', quest, origin: 'partner' });
+      }
+    }
+  }
+  for (const id of next.badges) {
+    if (prev.badges.includes(id)) continue;
+    const badge = BADGES.find((b) => b.id === id);
+    if (badge) out.push({ id: nextId(), kind: 'badge', badge, origin: 'partner' });
+  }
+  const before = levelFromXp(prev.xp);
+  const after = levelFromXp(next.xp);
+  if (after > before) out.push({ id: nextId(), kind: 'level', level: after, title: titleForLevel(after) });
   return out;
 }
 
@@ -127,7 +160,9 @@ export const usePlayProgressStore = create<PlayProgressState>((set, get) => ({
 
     if (remote.ok) {
       const merged = remote.progress ?? cached ?? emptyProgress(todayKey());
-      set({ progress: merged, localOnly: false });
+      // Anything your partner unlocked since this phone last looked.
+      const missed = cached && remote.progress ? partnerCelebrations(cached, remote.progress) : [];
+      set((s) => ({ progress: merged, localOnly: false, celebrations: [...s.celebrations, ...missed] }));
       void writeLocal(relationshipId, merged);
       // Seed the shared row from any offline-earned progress.
       if (!remote.progress && cached && cached.xp > 0) void writeRemote(relationshipId, cached);
@@ -146,7 +181,10 @@ export const usePlayProgressStore = create<PlayProgressState>((set, get) => ({
             const row = (payload as { new?: unknown }).new;
             if (row && typeof row === 'object' && 'xp' in row) {
               const next = normalizeProgress(row);
-              set({ progress: next });
+              // Our own writes echo back identical, so only your partner's unlocks show here.
+              const prev = get().progress;
+              const fresh = prev ? partnerCelebrations(prev, next) : [];
+              set((s) => ({ progress: next, celebrations: [...s.celebrations, ...fresh] }));
               void writeLocal(relationshipId, next);
             }
           },

@@ -9,9 +9,9 @@ import {
   Pressable,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
+import { TextInput } from '@/components/ui/ThemedTextInput';
 
 import { Icon } from '@/components/ui/Icon';
 import { Avatar, PrimaryButton } from '@/components/ui/primitives';
@@ -153,14 +153,14 @@ export function TodaysPromptCard({ challenge, onOpenHistory, startComposing = fa
     <View style={styles.topRow}>
       <Text style={[styles.kicker, { color: colors.textSecondary }]}>Today&apos;s question</Text>
       <Pressable onPress={onOpenHistory} hitSlop={10} style={styles.historyBtn} accessibilityRole="button" accessibilityLabel="Past questions">
-        <Icon name="time" size={22} color={colors.text} />
+        <Icon name="time" size={22} color={colors.tintAccents?.butter ?? colors.text} />
       </Pressable>
     </View>
   );
 
   if (expired && phase !== 'reveal') {
     return (
-      <View style={[styles.card, { backgroundColor: colors.surface }, cardBorder]}>
+      <View style={[styles.card, { backgroundColor: colors.tints.butter }, cardBorder]}>
         {header}
         <Text style={[styles.prompt, { color: colors.text }]}>{challenge.prompt}</Text>
       </View>
@@ -169,7 +169,7 @@ export function TodaysPromptCard({ challenge, onOpenHistory, startComposing = fa
 
   if (phase === 'waiting') {
     return (
-      <View style={[styles.card, { backgroundColor: colors.surface }, cardBorder]}>
+      <View style={[styles.card, { backgroundColor: colors.tints.butter }, cardBorder]}>
         {header}
         <Text style={[styles.prompt, { color: colors.text }]}>{challenge.prompt}</Text>
         <PromptStatus challenge={challenge} />
@@ -183,7 +183,7 @@ export function TodaysPromptCard({ challenge, onOpenHistory, startComposing = fa
 
   if (phase === 'reveal' && mine && theirs && !showAnswers) {
     return (
-      <View style={[styles.card, { backgroundColor: colors.surface }, cardBorder]}>
+      <View style={[styles.card, { backgroundColor: colors.tints.butter }, cardBorder]}>
         {header}
         <Text style={[styles.prompt, { color: colors.text }]}>{challenge.prompt}</Text>
         <Pressable
@@ -217,7 +217,7 @@ export function TodaysPromptCard({ challenge, onOpenHistory, startComposing = fa
 
   if (phase === 'reveal' && mine && theirs) {
     return (
-      <View style={[styles.card, { backgroundColor: colors.surface }, cardBorder]}>
+      <View style={[styles.card, { backgroundColor: colors.tints.butter }, cardBorder]}>
         {header}
         <Text style={[styles.prompt, { color: colors.text }]}>{challenge.prompt}</Text>
         <PromptStatus challenge={challenge} />
@@ -268,7 +268,7 @@ export function TodaysPromptCard({ challenge, onOpenHistory, startComposing = fa
   }
 
   return (
-    <View style={[styles.card, { backgroundColor: colors.surface }, cardBorder]}>
+    <View style={[styles.card, { backgroundColor: colors.tints.butter }, cardBorder]}>
       {header}
       <Text style={[styles.prompt, { color: colors.text }]}>{challenge.prompt}</Text>
       <PromptStatus challenge={challenge} />

@@ -1,18 +1,39 @@
-import { LinearGradient } from 'expo-linear-gradient';
-import { useEffect, useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import Animated, { Easing, useAnimatedProps, useSharedValue, withTiming } from 'react-native-reanimated';
-import Svg, { Circle } from 'react-native-svg';
+import { LinearGradient } from "expo-linear-gradient";
+import { useRouter } from "expo-router";
+import { useEffect, useMemo, useState } from "react";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import Animated, {
+  Easing,
+  useAnimatedProps,
+  useSharedValue,
+  withTiming,
+} from "react-native-reanimated";
+import Svg, { Circle } from "react-native-svg";
 
-import { DraggableSheet, SheetScrollView } from '@/components/ui/DraggableSheet';
-import { Icon } from '@/components/ui/Icon';
-import { Avatar, colorWithAlpha } from '@/components/ui/primitives';
-import { StreakFlame } from '@/components/home/StreakFlame';
-import { Spacing } from '@/constants/design-system';
-import { useTheme } from '@/hooks/useTheme';
-import { BADGES, activeStreak, emptyProgress, levelInfo, questView, todayKey } from '@/lib/play-progress';
-import { useAuthStore, useRelationshipStore } from '@/stores';
-import { usePlayProgressStore } from '@/stores/play-progress-store';
+import {
+  DraggableSheet,
+  SheetScrollView,
+} from "@/components/ui/DraggableSheet";
+import { Icon } from "@/components/ui/Icon";
+import { Avatar, colorWithAlpha } from "@/components/ui/primitives";
+import { StreakFlame } from "@/components/home/StreakFlame";
+import { ShareCardModal } from "@/components/share/ShareCardModal";
+import { TrophyShareCard } from "@/components/share/TrophyShareCard";
+import { Spacing } from "@/constants/design-system";
+import { useTheme } from "@/hooks/useTheme";
+import {
+  BADGES,
+  BADGE_GROUPS,
+  type BadgeDef,
+  activeStreak,
+  emptyProgress,
+  levelInfo,
+  nextBadges,
+  questView,
+  todayKey,
+} from "@/lib/play-progress";
+import { useAuthStore, useRelationshipStore } from "@/stores";
+import { usePlayProgressStore } from "@/stores/play-progress-store";
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
@@ -30,17 +51,32 @@ const STROKE = 9;
 const RADIUS = (RING - STROKE) / 2;
 const CIRC = 2 * Math.PI * RADIUS;
 
-function LevelRing({ level, progress }: { level: number; progress: number }) {
+export function LevelRing({
+  level,
+  progress,
+}: {
+  level: number;
+  progress: number;
+}) {
   const { colors } = useTheme();
   const value = useSharedValue(0);
   useEffect(() => {
-    value.value = withTiming(progress, { duration: 900, easing: Easing.out(Easing.cubic) });
+    value.value = withTiming(progress, {
+      duration: 900,
+      easing: Easing.out(Easing.cubic),
+    });
   }, [progress, value]);
-  const animatedProps = useAnimatedProps(() => ({ strokeDashoffset: CIRC * (1 - value.value) }));
+  const animatedProps = useAnimatedProps(() => ({
+    strokeDashoffset: CIRC * (1 - value.value),
+  }));
 
   return (
     <View style={styles.ringWrap}>
-      <Svg width={RING} height={RING} style={{ transform: [{ rotate: '-90deg' }] }}>
+      <Svg
+        width={RING}
+        height={RING}
+        style={{ transform: [{ rotate: "-90deg" }] }}
+      >
         <Circle
           cx={RING / 2}
           cy={RING / 2}
@@ -62,8 +98,17 @@ function LevelRing({ level, progress }: { level: number; progress: number }) {
         />
       </Svg>
       <View style={styles.ringCenter}>
-        <Text style={[styles.ringLabel, { color: colorWithAlpha(colors.onAccent, 0.8) }]}>LVL</Text>
-        <Text style={[styles.ringLevel, { color: colors.onAccent }]}>{level}</Text>
+        <Text
+          style={[
+            styles.ringLabel,
+            { color: colorWithAlpha(colors.onAccent, 0.8) },
+          ]}
+        >
+          LVL
+        </Text>
+        <Text style={[styles.ringLevel, { color: colors.onAccent }]}>
+          {level}
+        </Text>
       </View>
     </View>
   );
@@ -71,6 +116,7 @@ function LevelRing({ level, progress }: { level: number; progress: number }) {
 
 export function PlayHero() {
   const { colors } = useTheme();
+  const router = useRouter();
   const user = useAuthStore((s) => s.user);
   const partner = useRelationshipStore((s) => s.partner);
   const progress = useProgress();
@@ -78,48 +124,100 @@ export function PlayHero() {
   const streak = activeStreak(progress);
 
   return (
-    <LinearGradient
-      colors={colors.gradient}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
-      style={styles.hero}>
-      <View style={[styles.heroGlow, { backgroundColor: colorWithAlpha(colors.onAccent, 0.12) }]} pointerEvents="none" />
-      <View style={styles.heroTop}>
-        <LevelRing level={info.level} progress={info.progress} />
-        <View style={styles.heroCopy}>
-          <Text style={[styles.heroEyebrow, { color: colorWithAlpha(colors.onAccent, 0.8) }]}>YOUR COUPLE LEVEL</Text>
-          <Text style={[styles.heroTitle, { color: colors.onAccent }]} numberOfLines={1}>
-            {info.title}
-          </Text>
-          <Text style={[styles.heroXp, { color: colorWithAlpha(colors.onAccent, 0.88) }]}>
-            {info.into} / {info.span} XP · {info.span - info.into} to {info.nextTitle}
-          </Text>
-        </View>
-        <View style={styles.avatars}>
-          <Avatar name={user?.name} imageUrl={user?.avatar_url} size={34} />
-          <View style={styles.avatarOverlap}>
-            <Avatar name={partner?.name} imageUrl={partner?.avatar_url} size={34} />
+    // Tap for the full picture: level road, numbers, trophies close to unlocking.
+    <Pressable
+      onPress={() => router.push("/play/progress")}
+      accessibilityRole="button"
+      accessibilityLabel={`Your progress: ${info.title}, level ${info.level}. Open details`}
+      style={({ pressed }) => pressed && styles.pressed}
+    >
+      <LinearGradient
+        colors={colors.gradient}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.hero}
+      >
+        <View
+          style={[
+            styles.heroGlow,
+            { backgroundColor: colorWithAlpha(colors.onAccent, 0.12) },
+          ]}
+          pointerEvents="none"
+        />
+        <View style={styles.heroTop}>
+          <LevelRing level={info.level} progress={info.progress} />
+          <View style={styles.heroCopy}>
+            <Text
+              style={[
+                styles.heroEyebrow,
+                { color: colorWithAlpha(colors.onAccent, 0.8) },
+              ]}
+            >
+              YOUR COUPLE LEVEL
+            </Text>
+            <Text
+              style={[styles.heroTitle, { color: colors.onAccent }]}
+              numberOfLines={1}
+            >
+              {info.title}
+            </Text>
+            <Text
+              style={[
+                styles.heroXp,
+                { color: colorWithAlpha(colors.onAccent, 0.88) },
+              ]}
+            >
+              {info.into} / {info.span} XP · {info.span - info.into} to{" "}
+              {info.nextTitle}
+            </Text>
+          </View>
+          <View style={styles.avatars}>
+            <Avatar name={user?.name} imageUrl={user?.avatar_url} size={34} />
+            <View style={styles.avatarOverlap}>
+              <Avatar
+                name={partner?.name}
+                imageUrl={partner?.avatar_url}
+                size={34}
+              />
+            </View>
           </View>
         </View>
-      </View>
 
-      <View style={styles.heroChips}>
-        <View style={[styles.heroChip, { backgroundColor: colorWithAlpha(colors.onAccent, 0.2) }]}>
-          <StreakFlame size={15} tone={streak > 0 ? 'active' : 'idle'} />
-          <Text style={[styles.heroChipText, { color: colors.onAccent }]}>
-            {streak > 0 ? `${streak} day streak` : 'Start a streak'}
-          </Text>
+        <View style={styles.heroChips}>
+          <View
+            style={[
+              styles.heroChip,
+              { backgroundColor: colorWithAlpha(colors.onAccent, 0.2) },
+            ]}
+          >
+            <StreakFlame size={15} tone={streak > 0 ? "active" : "idle"} />
+            <Text style={[styles.heroChipText, { color: colors.onAccent }]}>
+              {streak > 0 ? `${streak} day streak` : "Start a streak"}
+            </Text>
+          </View>
+          <View
+            style={[
+              styles.heroChip,
+              { backgroundColor: colorWithAlpha(colors.onAccent, 0.2) },
+            ]}
+          >
+            <Text style={[styles.heroChipText, { color: colors.onAccent }]}>
+              🏅 {progress.badges.length}/{BADGES.length} badges
+            </Text>
+          </View>
+          <View
+            style={[
+              styles.heroChip,
+              { backgroundColor: colorWithAlpha(colors.onAccent, 0.2) },
+            ]}
+          >
+            <Text style={[styles.heroChipText, { color: colors.onAccent }]}>
+              ⭐ {progress.xp.toLocaleString()} XP
+            </Text>
+          </View>
         </View>
-        <View style={[styles.heroChip, { backgroundColor: colorWithAlpha(colors.onAccent, 0.2) }]}>
-          <Text style={[styles.heroChipText, { color: colors.onAccent }]}>
-            🏅 {progress.badges.length}/{BADGES.length} badges
-          </Text>
-        </View>
-        <View style={[styles.heroChip, { backgroundColor: colorWithAlpha(colors.onAccent, 0.2) }]}>
-          <Text style={[styles.heroChipText, { color: colors.onAccent }]}>⭐ {progress.xp.toLocaleString()} XP</Text>
-        </View>
-      </View>
-    </LinearGradient>
+      </LinearGradient>
+    </Pressable>
   );
 }
 
@@ -137,42 +235,103 @@ export function QuestsCard() {
     <View style={styles.section}>
       <View style={styles.sectionHead}>
         <View style={{ flex: 1 }}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>Daily quests</Text>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>
+            Daily quests
+          </Text>
           <Text style={[styles.sectionSub, { color: colors.textSecondary }]}>
             Finish them together for bonus XP · {done}/{quests.length} done
           </Text>
         </View>
       </View>
-      <View style={[styles.questCard, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
+      <View
+        style={[
+          styles.questCard,
+          {
+            backgroundColor: colors.isDark
+              ? colors.surface
+              : colors.surfaceElevated,
+            borderColor: colors.border,
+          },
+        ]}
+      >
         {quests.map((quest, i) => {
           const pct = quest.target > 0 ? quest.count / quest.target : 0;
           return (
             <View
               key={quest.id}
-              style={[styles.questRow, i > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border }]}>
-              <View style={[styles.questIcon, { backgroundColor: quest.done ? colors.success : colors.accentSoft }]}>
-                <Icon name={quest.done ? 'check' : quest.icon} size={20} color={quest.done ? '#FFFFFF' : colors.accent} />
+              style={[
+                styles.questRow,
+                i > 0 && {
+                  borderTopWidth: StyleSheet.hairlineWidth,
+                  borderTopColor: colors.border,
+                },
+              ]}
+            >
+              <View
+                style={[
+                  styles.questIcon,
+                  {
+                    backgroundColor: quest.done
+                      ? colors.success
+                      : colors.accentSoft,
+                  },
+                ]}
+              >
+                <Icon
+                  name={quest.done ? "check" : quest.icon}
+                  size={20}
+                  color={quest.done ? "#FFFFFF" : colors.accent}
+                />
               </View>
               <View style={{ flex: 1, gap: 6 }}>
                 <Text
                   style={[
                     styles.questTitle,
-                    { color: colors.text, textDecorationLine: quest.done ? 'line-through' : 'none', opacity: quest.done ? 0.6 : 1 },
-                  ]}>
+                    {
+                      color: colors.text,
+                      textDecorationLine: quest.done ? "line-through" : "none",
+                      opacity: quest.done ? 0.6 : 1,
+                    },
+                  ]}
+                >
                   {quest.title}
                 </Text>
-                <View style={[styles.questTrack, { backgroundColor: colors.border }]}>
+                <View
+                  style={[
+                    styles.questTrack,
+                    { backgroundColor: colors.border },
+                  ]}
+                >
                   <View
                     style={[
                       styles.questFill,
-                      { width: `${Math.round((quest.done ? 1 : pct) * 100)}%`, backgroundColor: quest.done ? colors.success : colors.accent },
+                      {
+                        width: `${Math.round((quest.done ? 1 : pct) * 100)}%`,
+                        backgroundColor: quest.done
+                          ? colors.success
+                          : colors.accent,
+                      },
                     ]}
                   />
                 </View>
               </View>
-              <View style={[styles.rewardChip, { backgroundColor: quest.done ? colors.success : colors.accentSoft }]}>
-                <Text style={[styles.rewardText, { color: quest.done ? '#fff' : colors.accent }]}>
-                  {quest.done ? 'Done' : `+${quest.reward} XP`}
+              <View
+                style={[
+                  styles.rewardChip,
+                  {
+                    backgroundColor: quest.done
+                      ? colors.success
+                      : colors.accentSoft,
+                  },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.rewardText,
+                    { color: quest.done ? "#fff" : colors.accent },
+                  ]}
+                >
+                  {quest.done ? "Done" : `+${quest.reward} XP`}
                 </Text>
               </View>
             </View>
@@ -191,138 +350,389 @@ export function BadgesShelf() {
   const { colors } = useTheme();
   const progress = useProgress();
   const [open, setOpen] = useState(false);
+  // An unlocked trophy being shared, like an achievement.
+  const [sharing, setSharing] = useState<BadgeDef | null>(null);
   const owned = new Set(progress.badges);
-  // Unlocked first, then the next few to chase.
-  const ordered = [...BADGES].sort((a, b) => Number(owned.has(b.id)) - Number(owned.has(a.id)));
+  /** From the Trophy room: let its sheet close first (a second Modal wouldn't show on iPhone). */
+  const shareFromRoom = (badge: BadgeDef) => {
+    setOpen(false);
+    setTimeout(() => setSharing(badge), 380);
+  };
+  // On the shelf: the next trophy on each ladder (closest first, with how far along you
+  // are), then the ones you've won, newest first.
+  const chase = nextBadges(progress, 8);
+  const won = [...progress.badges]
+    .reverse()
+    .flatMap((id) => BADGES.find((b) => b.id === id) ?? []);
+  const shelf: { badge: BadgeDef; value?: number }[] = [
+    ...chase.map((c) => ({ badge: c.badge, value: c.value })),
+    ...won.map((badge) => ({ badge })),
+  ];
 
   return (
     <View style={styles.section}>
       <View style={styles.sectionHead}>
         <View style={{ flex: 1 }}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>Trophy shelf</Text>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>
+            Trophy shelf
+          </Text>
           <Text style={[styles.sectionSub, { color: colors.textSecondary }]}>
             {owned.size} of {BADGES.length} unlocked
           </Text>
         </View>
-        <Pressable onPress={() => setOpen(true)} hitSlop={8} accessibilityRole="button">
+        <Pressable
+          onPress={() => setOpen(true)}
+          hitSlop={8}
+          accessibilityRole="button"
+        >
           <Text style={[styles.seeAll, { color: colors.accent }]}>See all</Text>
         </Pressable>
       </View>
 
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.hBleed} contentContainerStyle={styles.tiles}>
-        {ordered.map((badge) => {
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.hBleed}
+        contentContainerStyle={styles.tiles}
+      >
+        {shelf.map(({ badge, value }) => {
           const has = owned.has(badge.id);
           return (
-            <View
+            <Pressable
               key={badge.id}
-              style={[
+              disabled={!has}
+              onPress={() => setSharing(badge)}
+              accessibilityRole={has ? "button" : undefined}
+              accessibilityLabel={
+                has ? `${badge.title}, share` : `${badge.title}, locked`
+              }
+              style={({ pressed }) => [
                 styles.badge,
-                { backgroundColor: colors.surfaceElevated, borderColor: has ? colors.accent : colors.border },
-              ]}>
+                {
+                  backgroundColor: colors.isDark
+                    ? colors.surface
+                    : colors.surfaceElevated,
+                  borderColor: has ? colors.accent : colors.border,
+                },
+                pressed && styles.pressed,
+              ]}
+            >
               {has ? (
-                <Text style={styles.badgeEmoji}>{badge.emoji}</Text>
+                <View
+                  style={[styles.shareDot, { backgroundColor: colors.accent }]}
+                >
+                  <Icon name="share" size={11} color={colors.onAccent} />
+                </View>
+              ) : null}
+              {has ? (
+                <View
+                  style={[
+                    styles.badgeMedal,
+                    { backgroundColor: colors.accentSoft },
+                  ]}
+                >
+                  <Icon
+                    name={badge.icon}
+                    size={22}
+                    color={colors.accent}
+                    filled
+                  />
+                </View>
               ) : (
                 <View style={styles.lockSlot}>
                   <Icon name="lock" size={28} color={colors.textTertiary} />
                 </View>
               )}
-              <Text style={[styles.badgeTitle, { color: has ? colors.text : colors.textTertiary }]} numberOfLines={1}>
+              <Text
+                style={[
+                  styles.badgeTitle,
+                  { color: has ? colors.text : colors.textTertiary },
+                ]}
+                numberOfLines={1}
+              >
                 {badge.title}
               </Text>
-              <Text style={[styles.badgeHint, { color: colors.textTertiary }]} numberOfLines={2}>
+              <Text
+                style={[styles.badgeHint, { color: colors.textTertiary }]}
+                numberOfLines={2}
+              >
                 {badge.hint}
               </Text>
-            </View>
+              {!has && value !== undefined ? (
+                <View style={styles.badgeProgress}>
+                  <View
+                    style={[
+                      styles.badgeTrack,
+                      { backgroundColor: colors.border },
+                    ]}
+                  >
+                    <View
+                      style={[
+                        styles.badgeFill,
+                        {
+                          backgroundColor: colors.accent,
+                          width: `${Math.round((value / badge.goal) * 100)}%`,
+                        },
+                      ]}
+                    />
+                  </View>
+                  <Text
+                    style={[styles.badgeCount, { color: colors.textSecondary }]}
+                  >
+                    {value.toLocaleString()} / {badge.goal.toLocaleString()}
+                  </Text>
+                </View>
+              ) : null}
+            </Pressable>
           );
         })}
       </ScrollView>
 
-      <DraggableSheet visible={open} onClose={() => setOpen(false)} dragAnywhere>
-        <Text style={[styles.sheetTitle, { color: colors.text }]}>Trophy room</Text>
-        <SheetScrollView contentContainerStyle={styles.trophyGrid}>
-            {ordered.map((badge) => {
-              const has = owned.has(badge.id);
-              return (
-                <View key={badge.id} style={styles.trophyItem}>
-                  <View
-                    style={[
-                      styles.trophyIcon,
-                      { backgroundColor: has ? colors.accentSoft : colors.surface, borderColor: has ? colors.accent : colors.border },
-                    ]}>
-                    {has ? (
-                      <Text style={styles.trophyEmoji}>{badge.emoji}</Text>
-                    ) : (
-                      <Icon name="lock" size={24} color={colors.textTertiary} />
-                    )}
-                  </View>
-                  <Text style={[styles.trophyName, { color: has ? colors.text : colors.textTertiary }]} numberOfLines={1}>
-                    {badge.title}
+      <DraggableSheet
+        visible={open}
+        onClose={() => setOpen(false)}
+        dragAnywhere
+      >
+        <Text style={[styles.sheetTitle, { color: colors.text }]}>
+          Trophy room
+        </Text>
+        <SheetScrollView contentContainerStyle={styles.trophyRoom}>
+          {BADGE_GROUPS.map((group) => {
+            const ladder = BADGES.filter((b) => b.group === group);
+            const got = ladder.filter((b) => owned.has(b.id)).length;
+            return (
+              <View key={group} style={styles.trophyGroup}>
+                <View style={styles.trophyGroupHead}>
+                  <Text
+                    style={[styles.trophyGroupTitle, { color: colors.text }]}
+                  >
+                    {group}
                   </Text>
-                  <Text style={[styles.trophyHint, { color: colors.textTertiary }]} numberOfLines={2}>
-                    {badge.hint}
+                  <Text
+                    style={[
+                      styles.trophyGroupCount,
+                      { color: colors.textSecondary },
+                    ]}
+                  >
+                    {got} of {ladder.length}
                   </Text>
                 </View>
-              );
-            })}
+                <View style={styles.trophyGrid}>
+                  {ladder.map((badge) => {
+                    const has = owned.has(badge.id);
+                    return (
+                      <Pressable
+                        key={badge.id}
+                        disabled={!has}
+                        onPress={() => shareFromRoom(badge)}
+                        accessibilityRole={has ? "button" : undefined}
+                        accessibilityLabel={
+                          has
+                            ? `${badge.title}, share`
+                            : `${badge.title}, locked`
+                        }
+                        style={({ pressed }) => [
+                          styles.trophyItem,
+                          pressed && styles.pressed,
+                        ]}
+                      >
+                        <View
+                          style={[
+                            styles.trophyIcon,
+                            {
+                              backgroundColor: has
+                                ? colors.accentSoft
+                                : colors.surface,
+                              borderColor: has ? colors.accent : colors.border,
+                            },
+                          ]}
+                        >
+                          {has ? (
+                            <Icon
+                              name={badge.icon}
+                              size={28}
+                              color={colors.accent}
+                              filled
+                            />
+                          ) : (
+                            <Icon
+                              name="lock"
+                              size={24}
+                              color={colors.textTertiary}
+                            />
+                          )}
+                        </View>
+                        <Text
+                          style={[
+                            styles.trophyName,
+                            { color: has ? colors.text : colors.textTertiary },
+                          ]}
+                          numberOfLines={1}
+                        >
+                          {badge.title}
+                        </Text>
+                        <Text
+                          style={[
+                            styles.trophyHint,
+                            { color: colors.textTertiary },
+                          ]}
+                          numberOfLines={2}
+                        >
+                          {badge.hint}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </View>
+            );
+          })}
         </SheetScrollView>
       </DraggableSheet>
+
+      {/* An unlocked trophy, shared like an achievement. */}
+      <ShareCardModal
+        visible={!!sharing}
+        onClose={() => setSharing(null)}
+        title="Share your trophy"
+      >
+        {sharing ? (
+          <TrophyShareCard
+            icon={sharing.icon}
+            title={sharing.title}
+            hint={sharing.hint}
+          />
+        ) : null}
+      </ShareCardModal>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  hero: { borderRadius: 28, padding: 18, gap: 16, overflow: 'hidden' },
+  hero: { borderRadius: 28, padding: 18, gap: 16, overflow: "hidden" },
   heroGlow: {
-    position: 'absolute',
+    position: "absolute",
     width: 200,
     height: 200,
     borderRadius: 100,
     top: -70,
     right: -50,
   },
-  heroTop: { flexDirection: 'row', alignItems: 'center', gap: 14 },
-  ringWrap: { width: RING, height: RING, alignItems: 'center', justifyContent: 'center' },
-  ringCenter: { position: 'absolute', alignItems: 'center' },
-  ringLabel: { fontSize: 9, fontWeight: '900', letterSpacing: 1.4 },
-  ringLevel: { fontSize: 30, fontWeight: '900', lineHeight: 34 },
+  heroTop: { flexDirection: "row", alignItems: "center", gap: 14 },
+  ringWrap: {
+    width: RING,
+    height: RING,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  ringCenter: { position: "absolute", alignItems: "center" },
+  ringLabel: { fontSize: 9, fontWeight: "900", letterSpacing: 1.4 },
+  ringLevel: { fontSize: 30, fontWeight: "900", lineHeight: 34 },
   heroCopy: { flex: 1, gap: 2 },
-  heroEyebrow: { fontSize: 10, fontWeight: '900', letterSpacing: 1.3 },
-  heroTitle: { fontSize: 24, fontWeight: '800', letterSpacing: -0.4 },
-  heroXp: { fontSize: 12, fontWeight: '700', marginTop: 2 },
-  avatars: { flexDirection: 'row', alignItems: 'center' },
+  heroEyebrow: { fontSize: 10, fontWeight: "900", letterSpacing: 1.3 },
+  heroTitle: { fontSize: 24, fontWeight: "800", letterSpacing: -0.4 },
+  heroXp: { fontSize: 12, fontWeight: "700", marginTop: 2 },
+  avatars: { flexDirection: "row", alignItems: "center" },
   avatarOverlap: { marginLeft: -12 },
-  heroChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  heroChip: { borderRadius: 999, paddingHorizontal: 12, paddingVertical: 7, flexDirection: 'row', alignItems: 'center', gap: 5 },
-  heroChipText: { fontSize: 12, fontWeight: '800' },
+  heroChips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  heroChip: {
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+  },
+  heroChipText: { fontSize: 12, fontWeight: "800" },
 
   section: { marginTop: 22, gap: 12 },
-  sectionHead: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  sectionTitle: { fontSize: 20, fontWeight: '800', letterSpacing: -0.3 },
-  sectionSub: { fontSize: 13, fontWeight: '600', marginTop: 2 },
-  seeAll: { fontSize: 14, fontWeight: '800' },
+  sectionHead: { flexDirection: "row", alignItems: "center", gap: 10 },
+  sectionTitle: { fontSize: 20, fontWeight: "800", letterSpacing: -0.3 },
+  sectionSub: { fontSize: 13, fontWeight: "600", marginTop: 2 },
+  seeAll: { fontSize: 14, fontWeight: "800" },
 
   hBleed: { marginHorizontal: -Spacing.lg },
   tiles: { gap: 12, paddingHorizontal: Spacing.lg, paddingBottom: 6 },
 
-  questCard: { borderRadius: 24, borderWidth: StyleSheet.hairlineWidth, paddingHorizontal: 14 },
-  questRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14 },
-  questIcon: { width: 42, height: 42, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
-  questTitle: { fontSize: 15, fontWeight: '800' },
-  questTrack: { height: 7, borderRadius: 4, overflow: 'hidden' },
+  questCard: {
+    borderRadius: 24,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 14,
+  },
+  questRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingVertical: 14,
+  },
+  questIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  questTitle: { fontSize: 15, fontWeight: "800" },
+  questTrack: { height: 7, borderRadius: 4, overflow: "hidden" },
   questFill: { height: 7, borderRadius: 4 },
   rewardChip: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5 },
-  rewardText: { fontSize: 12, fontWeight: '900' },
+  rewardText: { fontSize: 12, fontWeight: "900" },
 
-  badge: { width: 136, borderRadius: 20, borderWidth: 1.5, padding: 12, gap: 4, alignItems: 'center' },
-  badgeEmoji: { fontSize: 34 },
-  lockSlot: { height: 41, alignItems: 'center', justifyContent: 'center' },
-  badgeTitle: { fontSize: 13, fontWeight: '900' },
-  badgeHint: { fontSize: 11, fontWeight: '600', textAlign: 'center' },
-  sheetTitle: { fontSize: 22, fontWeight: '900', marginBottom: 12 },
-  trophyGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 14, paddingBottom: 16 },
-  trophyItem: { width: '30%', alignItems: 'center', gap: 4 },
-  trophyIcon: { width: 64, height: 64, borderRadius: 22, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
+  badge: {
+    width: 136,
+    borderRadius: 20,
+    borderWidth: 1.5,
+    padding: 12,
+    gap: 4,
+    alignItems: "center",
+  },
+  badgeMedal: {
+    width: 41,
+    height: 41,
+    borderRadius: 21,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  lockSlot: { height: 41, alignItems: "center", justifyContent: "center" },
+  badgeTitle: { fontSize: 13, fontWeight: "900" },
+  badgeHint: { fontSize: 11, fontWeight: "600", textAlign: "center" },
+  sheetTitle: { fontSize: 22, fontWeight: "900", marginBottom: 12 },
+  pressed: { opacity: 0.75 },
+  // A small share mark on an unlocked trophy: tap it to share.
+  shareDot: {
+    position: "absolute",
+    top: 8,
+    right: 8,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  trophyRoom: { gap: 22, paddingBottom: 24 },
+  trophyGroup: { gap: 12 },
+  trophyGroupHead: {
+    flexDirection: "row",
+    alignItems: "baseline",
+    justifyContent: "space-between",
+  },
+  trophyGroupTitle: { fontSize: 16, fontWeight: "900" },
+  trophyGroupCount: { fontSize: 12, fontWeight: "700" },
+  trophyGrid: { flexDirection: "row", flexWrap: "wrap", gap: 14 },
+  badgeProgress: { alignSelf: "stretch", gap: 4, marginTop: 4 },
+  badgeTrack: { height: 5, borderRadius: 3, overflow: "hidden" },
+  badgeFill: { height: 5, borderRadius: 3 },
+  badgeCount: { fontSize: 10, fontWeight: "800", textAlign: "center" },
+  trophyItem: { width: "30%", alignItems: "center", gap: 4 },
+  trophyIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: 22,
+    borderWidth: 1.5,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   trophyEmoji: { fontSize: 30 },
-  trophyName: { fontSize: 12, fontWeight: '900', textAlign: 'center' },
-  trophyHint: { fontSize: 10, fontWeight: '600', textAlign: 'center' },
+  trophyName: { fontSize: 12, fontWeight: "900", textAlign: "center" },
+  trophyHint: { fontSize: 10, fontWeight: "600", textAlign: "center" },
 });

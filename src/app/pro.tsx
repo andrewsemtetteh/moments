@@ -72,8 +72,6 @@ export default function ProScreen() {
       showClose
       swipeToClose={false}
       onClose={() => (isOnboarding ? void done() : closeStackScreen(router))}
-      onRefer={() => router.push({ pathname: '/refer', params: preview ? { preview: '1' } : undefined })}
-      onOpenLegal={(doc) => router.push(doc === 'terms' ? '/legal/terms' : '/legal/privacy')}
       // Bought (or restored): onboarding finishes; otherwise just close.
       onPurchased={() => (isOnboarding ? void done() : closeStackScreen(router))}
       onSubscribe={

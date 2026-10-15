@@ -1,3 +1,4 @@
+import { paperEdge } from '@/components/ui/primitives';
 import * as Haptics from '@/lib/haptics';
 import { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
@@ -43,13 +44,19 @@ export function PlayPulseCard() {
       style={({ pressed }) => [
         styles.card,
         {
-          backgroundColor: colors.surface,
+          backgroundColor: colors.tints.mint,
           borderColor: joinable ? accent : colors.border,
           borderWidth: joinable ? 2 : colors.boldBorder ? 2 : StyleSheet.hairlineWidth,
           opacity: pressed ? 0.92 : 1,
         },
       ]}>
-      <View style={[styles.badge, { backgroundColor: joinable ? accent : colors.accentSoft }]}>
+      <View
+        style={[
+          styles.badge,
+          { backgroundColor: joinable ? accent : colors.tintAccents ? `${colors.tintAccents.mint}38` : colors.accentSoft },
+          // Outlined themes: a white sticker badge.
+          !joinable && colors.boldBorder && { backgroundColor: colors.background, borderWidth: 2, borderColor: colors.border },
+        ]}>
         <Text style={styles.badgeEmoji}>{def ? def.emoji : '🎮'}</Text>
       </View>
       <View style={styles.copy}>
@@ -64,8 +71,13 @@ export function PlayPulseCard() {
               : `All quests done today 🎉 · ${activeStreak(progress)} day streak`}
         </Text>
         {!joinable ? (
-          <View style={[styles.track, { backgroundColor: colors.border }]}>
-            <View style={[styles.fill, { width: `${Math.round(info.progress * 100)}%`, backgroundColor: colors.accent }]} />
+          <View style={[styles.track, { backgroundColor: colors.boldBorder ? colors.background : colors.border }, paperEdge(colors, 1.5)]}>
+            <View
+              style={[
+                styles.fill,
+                { width: `${Math.round(info.progress * 100)}%`, backgroundColor: colors.tintAccents?.mint ?? colors.accent },
+              ]}
+            />
           </View>
         ) : null}
       </View>
@@ -94,7 +106,7 @@ export function CoupleLevelCard() {
       accessibilityLabel="Open Play"
       style={[
         styles.levelCard,
-        { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: colors.boldBorder ? 2 : StyleSheet.hairlineWidth },
+        { backgroundColor: colors.tints.mint, borderColor: colors.border, borderWidth: colors.boldBorder ? 2 : StyleSheet.hairlineWidth },
       ]}>
       <View style={styles.levelTop}>
         <View style={[styles.levelBubble, { backgroundColor: colors.accent }]}>
@@ -107,12 +119,12 @@ export function CoupleLevelCard() {
           </Text>
         </View>
       </View>
-      <View style={[styles.track, { backgroundColor: colors.border }]}>
+      <View style={[styles.track, { backgroundColor: colors.boldBorder ? colors.background : colors.border }, paperEdge(colors, 1.5)]}>
         <View style={[styles.fill, { width: `${Math.round(info.progress * 100)}%`, backgroundColor: colors.accent }]} />
       </View>
       <View style={styles.tiles}>
         {tiles.map((t) => (
-          <View key={t.label} style={[styles.tile, { backgroundColor: colors.surfaceElevated }]}>
+          <View key={t.label} style={[styles.tile, { backgroundColor: colors.boldBorder ? colors.background : colors.surfaceElevated }, paperEdge(colors)]}>
             {t.emoji === '🔥' ? <StreakFlame size={18} tone="active" /> : <Text style={styles.tileEmoji}>{t.emoji}</Text>}
             <Text style={[styles.tileValue, { color: colors.text }]}>{t.value}</Text>
             <Text style={[styles.tileLabel, { color: colors.textTertiary }]}>{t.label}</Text>

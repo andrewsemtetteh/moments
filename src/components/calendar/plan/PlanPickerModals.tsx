@@ -1,4 +1,5 @@
 import { format, isToday, startOfDay } from 'date-fns';
+import { paperEdge } from '@/components/ui/primitives';
 import * as Haptics from '@/lib/haptics';
 import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
@@ -40,7 +41,7 @@ function ModalHeader({
         onPress={onClose}
         hitSlop={8}
         accessibilityLabel="Close"
-        style={[styles.iconBtn, { backgroundColor: colors.surfaceElevated }]}>
+        style={[styles.iconBtn, { backgroundColor: colors.surfaceElevated }, paperEdge(colors)]}>
         <Icon name="close" size={18} color={colors.textSecondary} />
       </Pressable>
       <Text style={[styles.headerTitle, { color: colors.text }]}>{title}</Text>

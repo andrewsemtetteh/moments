@@ -1,4 +1,5 @@
 import * as Linking from 'expo-linking';
+import { router } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
@@ -130,6 +131,113 @@ export function ChatAttachmentCard({ attachment, isSelf }: Props) {
     );
   }
 
+  if (attachment.type === 'achievement') {
+    // A finished daily quest or a new trophy; opens Play, where your progress lives.
+    const quest = attachment.kind === 'quest';
+    return (
+      <Pressable
+        onPress={() => router.navigate('/(tabs)/activities')}
+        accessibilityRole="button"
+        accessibilityLabel={`${quest ? 'Quest complete' : 'Trophy unlocked'}: ${attachment.title}`}
+        style={({ pressed }) => [
+          styles.card,
+          styles.wide,
+          styles.playCard,
+          { backgroundColor: cardBg, borderColor: cardBorder },
+          pressed && styles.pressed,
+        ]}>
+        <View style={styles.playHead}>
+          <View style={[styles.achieveBadge, { backgroundColor: badgeBg }]}>
+            <Text style={styles.achieveEmoji}>{attachment.emoji}</Text>
+          </View>
+          <View style={styles.metaText}>
+            <Text style={[styles.contactKicker, { color: subColor }]}>
+              {quest ? 'DAILY QUEST COMPLETE' : 'TROPHY UNLOCKED'}
+            </Text>
+            <Text style={[styles.title, { color: textColor }]} numberOfLines={2}>
+              {attachment.title}
+            </Text>
+            <Text style={[styles.sub, { color: subColor }]} numberOfLines={2}>
+              {attachment.sub}
+            </Text>
+          </View>
+        </View>
+      </Pressable>
+    );
+  }
+
+  if (attachment.type === 'play_result' || attachment.type === 'play_answer') {
+    const openPack = () => router.push({ pathname: '/play/pack/[id]', params: { id: attachment.packId } });
+
+    if (attachment.type === 'play_result') {
+      // "You both finished…": the pack's results, one tap from the chat.
+      return (
+        <Pressable
+          onPress={openPack}
+          accessibilityRole="button"
+          accessibilityLabel={`You both finished ${attachment.title}. See your answers`}
+          style={({ pressed }) => [
+            styles.card,
+            styles.wide,
+            styles.playCard,
+            { backgroundColor: cardBg, borderColor: cardBorder },
+            pressed && styles.pressed,
+          ]}>
+          <View style={styles.playHead}>
+            <View style={[styles.iconBadge, { backgroundColor: badgeBg }]}>
+              <Icon name="gamepad" size={18} color={badgeIconColor} filled />
+            </View>
+            <View style={styles.metaText}>
+              <Text style={[styles.contactKicker, { color: subColor }]}>{attachment.area.toUpperCase()} · PLAY</Text>
+              <Text style={[styles.title, { color: textColor }]} numberOfLines={2}>
+                {attachment.title}
+              </Text>
+            </View>
+          </View>
+          <Text style={[styles.playBody, { color: textColor }]}>
+            You both answered all {attachment.count} questions 🎉
+          </Text>
+          <View style={[styles.divider, { backgroundColor: dividerColor }]} />
+          <View style={styles.playFoot}>
+            <Text style={[styles.sub, styles.playAction, { color: actionColor }]}>See your answers</Text>
+            <Icon name="chevronRight" size={16} color={actionColor} />
+          </View>
+        </Pressable>
+      );
+    }
+
+    // A reply or reaction to an answer: the question and their answer quoted, then yours.
+    return (
+      <Pressable
+        onPress={openPack}
+        accessibilityRole="button"
+        accessibilityLabel={`${attachment.reaction ?? 'Reply'} to ${attachment.answerBy}'s answer in ${attachment.packTitle}`}
+        style={({ pressed }) => [
+          styles.card,
+          styles.wide,
+          styles.playCard,
+          { backgroundColor: cardBg, borderColor: cardBorder },
+          pressed && styles.pressed,
+        ]}>
+        <Text style={[styles.contactKicker, { color: subColor }]} numberOfLines={1}>
+          {attachment.packTitle.toUpperCase()}
+        </Text>
+        <Text style={[styles.playQuestion, { color: textColor }]}>{attachment.question}</Text>
+        <View style={[styles.quote, { borderLeftColor: actionColor }]}>
+          <Text style={[styles.quoteBy, { color: subColor }]}>{attachment.answerBy}</Text>
+          <Text style={[styles.quoteText, { color: textColor }]} numberOfLines={4}>
+            {attachment.answer}
+          </Text>
+        </View>
+        {attachment.reaction ? (
+          <Text style={styles.playReaction}>{attachment.reaction}</Text>
+        ) : attachment.reply ? (
+          <Text style={[styles.playReply, { color: textColor }]}>{attachment.reply}</Text>
+        ) : null}
+      </Pressable>
+    );
+  }
+
   const openFile = () => {
     void Linking.openURL(attachment.url);
   };
@@ -223,4 +331,17 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
   },
   avatarText: { fontSize: 18, fontWeight: '800' },
+  playCard: { padding: 14, gap: 8 },
+  achieveBadge: { width: 52, height: 52, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+  achieveEmoji: { fontSize: 28 },
+  playHead: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  playBody: { fontSize: 14, fontWeight: '600', lineHeight: 20 },
+  playFoot: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: 2 },
+  playAction: { marginTop: 0 },
+  playQuestion: { fontSize: 15, fontWeight: '800', lineHeight: 20 },
+  quote: { borderLeftWidth: 3, paddingLeft: 10, gap: 2 },
+  quoteBy: { fontSize: 11, fontWeight: '800' },
+  quoteText: { fontSize: 14, lineHeight: 19, fontStyle: 'italic' },
+  playReaction: { fontSize: 34, lineHeight: 40 },
+  playReply: { fontSize: 16, fontWeight: '600', lineHeight: 22 },
 });

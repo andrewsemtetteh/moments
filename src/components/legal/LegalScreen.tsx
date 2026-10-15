@@ -10,6 +10,8 @@ import { closeStackScreen } from '@/lib/router';
 interface LegalScreenProps {
   title: string;
   children: string;
+  /** Where Back goes; defaults to the previous screen (as its own route). */
+  onBack?: () => void;
 }
 
 type LegalSection = { title: string; paragraphs: string[] };
@@ -40,13 +42,13 @@ function parseLegalContent(raw: string): LegalSection[] {
   return sections;
 }
 
-export function LegalScreen({ title, children }: LegalScreenProps) {
+export function LegalScreen({ title, children, onBack }: LegalScreenProps) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   // A real back: returns to wherever this was opened from (Settings, or the
   // sign-up screens) — it used to always jump to Home.
-  const goBack = () => closeStackScreen(router);
+  const goBack = onBack ?? (() => closeStackScreen(router));
   const sections = useMemo(() => parseLegalContent(children), [children]);
 
   return (

@@ -23,8 +23,8 @@ import {
   NeverHaveIScreen,
   PersonalityScreen,
   ThirtySixScreen,
-  WeekChallengeScreen,
 } from './explore-play-screens';
+import { GratitudeSwapScreen, WeekChallengeScreen } from './SharedActivityScreens';
 import { SOLO_XP } from './explore-catalog';
 import { EXPLORE_META } from './explore-meta';
 import { ExploreModalShell } from './ExploreModalShell';
@@ -34,7 +34,6 @@ import {
   CouplesTriviaScreen,
   GamesPlayerScreen,
   GoalsScreen,
-  GratitudeSwapScreen,
   QuestionOfDayScreen,
   QuizScreen,
 } from './explore-screens';

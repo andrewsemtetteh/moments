@@ -205,6 +205,8 @@ function HeaderIconButton({
             style={[
               styles.badge,
               badgePositionStyle,
+              // "9+" needs a fixed wider pill: the icon's narrow box would otherwise squeeze it to "9…".
+              count > 9 && styles.badgeWide,
               { backgroundColor: colors.error, borderColor: colors.background },
             ]}>
             <Text style={[styles.badgeText, { color: '#FFFFFF' }]} numberOfLines={1}>
@@ -267,6 +269,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  badgeWide: { width: 26, paddingHorizontal: 0 },
   badgeDefault: {
     top: -6,
     right: -9,

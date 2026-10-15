@@ -10,6 +10,7 @@ import {
   startOfDay,
   startOfMonth,
 } from 'date-fns';
+import { paperEdge } from '@/components/ui/primitives';
 import * as Haptics from '@/lib/haptics';
 import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
@@ -81,7 +82,7 @@ export function MonthCalendarPicker({
           onPress={() => shiftMonth(-1)}
           accessibilityLabel="Previous month"
           hitSlop={8}
-          style={[styles.navBtn, { backgroundColor: colors.surfaceElevated }]}>
+          style={[styles.navBtn, { backgroundColor: colors.surfaceElevated }, paperEdge(colors)]}>
           <Icon name="chevronLeft" size={20} color={colors.text} />
         </Pressable>
         <Text style={[styles.monthTitle, { color: colors.text }]}>{format(currentMonth, 'MMMM yyyy')}</Text>
@@ -90,7 +91,7 @@ export function MonthCalendarPicker({
           disabled={!canGoNext}
           accessibilityLabel="Next month"
           hitSlop={8}
-          style={[styles.navBtn, { backgroundColor: colors.surfaceElevated, opacity: canGoNext ? 1 : 0.35 }]}>
+          style={[styles.navBtn, { backgroundColor: colors.surfaceElevated, opacity: canGoNext ? 1 : 0.35 }, paperEdge(colors)]}>
           <Icon name="chevronRight" size={20} color={colors.text} />
         </Pressable>
       </View>

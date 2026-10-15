@@ -1,5 +1,5 @@
 import * as Haptics from '@/lib/haptics';
-import { memo, useEffect, useMemo } from 'react';
+import { memo, useEffect, useMemo, useState } from 'react';
 import { Dimensions, Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, {
   Easing,
@@ -14,9 +14,21 @@ import Animated, {
 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { ShareCardModal } from '@/components/share/ShareCardModal';
+import { Icon } from '@/components/ui/Icon';
+import { TrophyShareCard } from '@/components/share/TrophyShareCard';
 import { useTheme } from '@/hooks/useTheme';
+import { getFirstName } from '@/lib/avatar-initial';
+import { encodeAttachment } from '@/lib/chat-attachments';
+import { notifyIsland } from '@/lib/in-app-notify';
+import type { BadgeDef } from '@/lib/play-progress';
+import { sendMessage, sendPartnerNotification } from '@/services/api';
+import { useAuthStore, useRelationshipStore } from '@/stores';
 import { useGameRoomStore } from '@/stores/game-room-store';
 import { usePlayProgressStore, type Celebration } from '@/stores/play-progress-store';
+
+type BadgeCelebration = Extract<Celebration, { kind: 'badge' }>;
+type QuestCelebration = Extract<Celebration, { kind: 'quest' }>;
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 const CONFETTI_COLORS = ['#FF6B8A', '#FFD54A', '#5B8DEF', '#3DBE7A', '#B48CFF', '#FF9F5A'];
@@ -98,7 +110,7 @@ function Toast({ item }: { item: Celebration }) {
       case 'quest':
         return { emoji: item.quest.emoji, title: 'Quest complete!', sub: `${item.quest.title} · +${item.quest.reward} XP` };
       case 'badge':
-        return { emoji: item.badge.emoji, title: `Badge: ${item.badge.title}`, sub: item.badge.hint };
+        return { emoji: item.badge.emoji, title: `Trophy: ${item.badge.title}`, sub: item.badge.hint };
       case 'level':
         return { emoji: '🎉', title: `Level ${item.level}!`, sub: item.title };
     }
@@ -148,6 +160,135 @@ function LevelUp({ item }: { item: Extract<Celebration, { kind: 'level' }> }) {
   );
 }
 
+/** A trophy just unlocked: the achievement card, with confetti and a way to share it. */
+function TrophyUnlocked({ item, onShare }: { item: BadgeCelebration; onShare?: (badge: BadgeDef) => void }) {
+  const { colors } = useTheme();
+  const dismiss = usePlayProgressStore((s) => s.dismissCelebration);
+  const partner = useRelationshipStore((s) => s.partner);
+  const fromPartner = item.origin === 'partner';
+
+  return (
+    <Pressable style={styles.levelRoot} onPress={() => dismiss(item.id)} accessibilityLabel="Dismiss trophy">
+      <Confetti burstKey={item.badge.goal} />
+      <Animated.View
+        entering={ZoomIn.springify().damping(11)}
+        style={[styles.trophyCard, { backgroundColor: colors.surfaceElevated, borderColor: colors.accent }]}>
+        <Text style={[styles.levelKicker, { color: colors.accent }]}>TROPHY UNLOCKED</Text>
+        <View style={[styles.trophyMedal, { backgroundColor: colors.accentSoft, borderColor: colors.accent }]}>
+          <Icon name={item.badge.icon} size={52} color={colors.accent} filled />
+        </View>
+        <Text style={[styles.trophyTitle, { color: colors.text }]}>{item.badge.title}</Text>
+        <Text style={[styles.trophyHint, { color: colors.textSecondary }]}>
+          {fromPartner
+            ? `${getFirstName(partner?.name) ?? 'Your partner'} unlocked this for you both · ${item.badge.hint}`
+            : item.badge.hint}
+        </Text>
+        <Text style={[styles.trophyGroup, { color: colors.textTertiary }]}>
+          {item.badge.group} · Step {item.badge.tier}
+        </Text>
+        <View style={styles.trophyActions}>
+          {onShare ? (
+            <Pressable
+              onPress={() => {
+                dismiss(item.id);
+                onShare(item.badge);
+              }}
+              accessibilityRole="button"
+              style={({ pressed }) => [
+                styles.trophyBtn,
+                { backgroundColor: colors.surface, borderColor: colors.border, opacity: pressed ? 0.8 : 1 },
+              ]}>
+              <Text style={[styles.trophyBtnText, { color: colors.text }]}>Share</Text>
+            </Pressable>
+          ) : null}
+          <Pressable
+            onPress={() => dismiss(item.id)}
+            accessibilityRole="button"
+            style={({ pressed }) => [
+              styles.trophyBtn,
+              { backgroundColor: colors.accent, borderColor: colors.accent, opacity: pressed ? 0.85 : 1 },
+            ]}>
+            <Text style={[styles.trophyBtnText, { color: colors.onAccent }]}>Nice!</Text>
+          </Pressable>
+        </View>
+      </Animated.View>
+    </Pressable>
+  );
+}
+
+const relayed = new Set<string>();
+
+/** Tell your partner and post the card to your chat: something this phone just earned. */
+async function shareWithPartner(item: QuestCelebration | BadgeCelebration) {
+  const { relationship, partner } = useRelationshipStore.getState();
+  const user = useAuthStore.getState().user;
+  if (!relationship?.id || !user) return;
+  const me = getFirstName(user.name) ?? 'Your partner';
+  const quest = item.kind === 'quest';
+  const attachment = quest
+    ? {
+        type: 'achievement' as const,
+        kind: 'quest' as const,
+        emoji: item.quest.emoji,
+        title: item.quest.title,
+        sub: `Today’s quest done · +${item.quest.reward} XP for you both`,
+      }
+    : {
+        type: 'achievement' as const,
+        kind: 'trophy' as const,
+        emoji: item.badge.emoji,
+        title: item.badge.title,
+        sub: item.badge.hint,
+      };
+  await Promise.allSettled([
+    sendMessage(relationship.id, user.id, encodeAttachment(attachment)),
+    partner
+      ? sendPartnerNotification(
+          relationship.id,
+          partner.id,
+          'achievement',
+          quest
+            ? `${me} finished today’s quest “${item.quest.title}” (+${item.quest.reward} XP) ${item.quest.emoji}`
+            : `${me} unlocked the “${item.badge.title}” trophy for you both ${item.badge.emoji}`,
+        )
+      : Promise.resolve(),
+  ]);
+}
+
+/**
+ * Mounted once at the root. A finished quest pops the Dynamic Island (yours or your
+ * partner's); whatever this phone earned is also sent to your partner as a notification
+ * and posted to your chat. Trophies get the full achievement card from CelebrationHost.
+ */
+export function AchievementRelay() {
+  const queue = usePlayProgressStore((s) => s.celebrations);
+  const dismiss = usePlayProgressStore((s) => s.dismissCelebration);
+  const partnerName = useRelationshipStore((s) => s.partner?.name);
+
+  useEffect(() => {
+    for (const item of queue) {
+      if (item.kind !== 'quest' && item.kind !== 'badge') continue;
+      if (relayed.has(item.id)) continue;
+      relayed.add(item.id);
+      if (item.origin === 'self') void shareWithPartner(item);
+      if (item.kind === 'quest') {
+        notifyIsland({
+          id: `quest:${item.id}`,
+          title: item.origin === 'partner' ? `${getFirstName(partnerName) ?? 'Your partner'} finished a quest` : 'Quest complete!',
+          message: `${item.quest.title} · +${item.quest.reward} XP`,
+          icon: item.quest.icon,
+          duration: 4200,
+          target: { type: 'achievement' },
+        });
+        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        dismiss(item.id);
+      }
+    }
+  }, [queue, dismiss, partnerName]);
+
+  return null;
+}
+
 /**
  * Shows XP / quest / badge toasts and the level-up card from the shared celebration queue.
  * Rendered in one place at a time: inside the live room while it's open (so it can't be hidden
@@ -157,10 +298,13 @@ export function CelebrationHost({ surface }: { surface: 'root' | 'room' }) {
   const roomOpen = useGameRoomStore((s) => s.open);
   const queue = usePlayProgressStore((s) => s.celebrations);
   const insets = useSafeAreaInsets();
+  const [sharing, setSharing] = useState<BadgeDef | null>(null);
   if ((surface === 'root') === roomOpen) return null;
 
   const level = queue.find((c): c is Extract<Celebration, { kind: 'level' }> => c.kind === 'level');
-  const toasts = queue.filter((c) => c.kind !== 'level').slice(0, 3);
+  // Level-up first, then each new trophy in turn.
+  const trophy = level ? undefined : queue.find((c): c is BadgeCelebration => c.kind === 'badge');
+  const toasts = queue.filter((c) => c.kind === 'xp').slice(0, 3);
 
   return (
     <View pointerEvents="box-none" style={StyleSheet.absoluteFill}>
@@ -170,6 +314,19 @@ export function CelebrationHost({ surface }: { surface: 'root' | 'room' }) {
         ))}
       </View>
       {level ? <LevelUp key={level.id} item={level} /> : null}
+      {trophy ? (
+        <TrophyUnlocked
+          key={trophy.id}
+          item={trophy}
+          // Sharing opens its own sheet; inside a live room that sheet couldn't show.
+          onShare={surface === 'root' ? (badge) => setTimeout(() => setSharing(badge), 250) : undefined}
+        />
+      ) : null}
+      {surface === 'root' ? (
+        <ShareCardModal visible={!!sharing} onClose={() => setSharing(null)} title="Share your trophy">
+          {sharing ? <TrophyShareCard icon={sharing.icon} title={sharing.title} hint={sharing.hint} /> : null}
+        </ShareCardModal>
+      ) : null}
     </View>
   );
 }
@@ -201,4 +358,35 @@ const styles = StyleSheet.create({
   levelKicker: { fontSize: 13, fontWeight: '900', letterSpacing: 2 },
   levelNumber: { fontSize: 72, fontWeight: '900', lineHeight: 80 },
   levelTitle: { fontSize: 16, fontWeight: '800' },
+  trophyCard: {
+    width: Math.min(340, SCREEN_W - 48),
+    borderRadius: 32,
+    borderWidth: 2,
+    paddingVertical: 26,
+    paddingHorizontal: 22,
+    alignItems: 'center',
+    gap: 6,
+  },
+  trophyMedal: {
+    width: 108,
+    height: 108,
+    borderRadius: 54,
+    borderWidth: 3,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginVertical: 10,
+  },
+  trophyTitle: { fontSize: 26, fontWeight: '900', textAlign: 'center', letterSpacing: -0.3 },
+  trophyHint: { fontSize: 15, fontWeight: '600', textAlign: 'center', lineHeight: 21 },
+  trophyGroup: { fontSize: 12, fontWeight: '800', marginTop: 2 },
+  trophyActions: { flexDirection: 'row', gap: 10, marginTop: 16, alignSelf: 'stretch' },
+  trophyBtn: {
+    flex: 1,
+    height: 50,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  trophyBtnText: { fontSize: 16, fontWeight: '900' },
 });

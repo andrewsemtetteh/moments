@@ -10,15 +10,15 @@ import {
   Pressable,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
+import { TextInput } from '@/components/ui/ThemedTextInput';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { runOnJS } from 'react-native-reanimated';
 
 import { MomentVideoPlayer } from '@/components/moments/MomentVideoPlayer';
 import { Icon } from '@/components/ui/Icon';
-import { Avatar } from '@/components/ui/primitives';
+import { Avatar, paperEdge } from '@/components/ui/primitives';
 import { useMomentReaction, useSendMessage } from '@/hooks/queries';
 import { useTheme } from '@/hooks/useTheme';
 import { getFirstName } from '@/lib/avatar-initial';
@@ -169,7 +169,7 @@ export function PartnerMomentHome({ partnerMoments }: PartnerMomentHomeProps) {
 
         <GestureDetector gesture={swipe}>
           <Pressable onPress={openFullscreen} accessibilityRole="imagebutton" accessibilityLabel="Open moment">
-            <View style={[styles.media, { backgroundColor: colors.surfaceElevated }]}>
+            <View style={[styles.media, { backgroundColor: colors.surfaceElevated }, paperEdge(colors)]}>
               {moment.media_url ? (
                 isVideo ? (
                   <MomentVideoPlayer uri={moment.media_url} width={MEDIA_W} height={MEDIA_H} autoPlay={false} controls={false} />

@@ -105,13 +105,13 @@ export default function ActivitiesScreen() {
               <Section title="Today’s pack">
                 <FeaturedPackCard />
               </Section>
-              <Section title="Quizzes to take together">
+              <Section title="Quizzes to take together" onSeeAll={() => router.push({ pathname: '/play/format/[id]', params: { id: 'quizzes' } })}>
                 <HandpickedRail format="quizzes" onOpen={setActiveModal} />
               </Section>
-              <Section title="Prompts and cards">
+              <Section title="Prompts and cards" onSeeAll={() => router.push({ pathname: '/play/format/[id]', params: { id: 'prompts' } })}>
                 <HandpickedRail format="prompts" onOpen={setActiveModal} />
               </Section>
-              <Section title="Things to do together">
+              <Section title="Things to do together" onSeeAll={() => router.push({ pathname: '/play/format/[id]', params: { id: 'activities' } })}>
                 <HandpickedRail format="activities" onOpen={setActiveModal} />
               </Section>
             </View>

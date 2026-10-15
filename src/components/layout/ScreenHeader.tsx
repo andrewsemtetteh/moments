@@ -35,7 +35,7 @@ export function ScreenHeader({
       <View style={[styles.row, { paddingTop: insets.top + 6 }]}>
         <View style={styles.largeText}>
           <Text
-            style={[styles.largeTitle, { color: colors.text }]}
+            style={[styles.largeTitle, colors.sticker && styles.stickerTitle, { color: colors.text }]}
             numberOfLines={1}
             accessibilityRole="header">
             {title}
@@ -55,7 +55,7 @@ export function ScreenHeader({
       </View>
       <View style={styles.centerText}>
         <Text
-          style={[styles.title, { color: colors.text }]}
+          style={[styles.title, colors.sticker && styles.stickerTitle, { color: colors.text }]}
           numberOfLines={1}
           accessibilityRole="header">
           {title}
@@ -92,4 +92,6 @@ const styles = StyleSheet.create({
   title: { fontSize: 24, fontWeight: '800', letterSpacing: -0.5, textAlign: 'center' },
   largeText: { flex: 1, minWidth: 0 },
   largeTitle: { fontSize: 24, fontWeight: '800', letterSpacing: -0.5 },
+  // Default: the onboarding heading weight.
+  stickerTitle: { fontWeight: '900', letterSpacing: -0.6 },
 });

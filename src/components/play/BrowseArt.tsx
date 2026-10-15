@@ -1,6 +1,6 @@
 import Svg, { Circle, Path, Rect, Text as SvgText } from 'react-native-svg';
 
-export type BrowseArtId = 'questions' | 'quizzes' | 'prompts' | 'together' | 'games' | 'live';
+export type BrowseArtId = 'all' | 'questions' | 'quizzes' | 'prompts' | 'together' | 'games' | 'live';
 
 /** Flat illustrations for the Browse circles: one bold ink shape with white details, drawn on a 84 box. */
 export function BrowseArt({
@@ -16,6 +16,24 @@ export function BrowseArt({
 }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 84 84" accessible={false}>
+      {id === 'all' ? (
+        <>
+          <Rect x="10" y="10" width="29" height="29" rx="9" fill={ink} />
+          <Rect x="45" y="10" width="29" height="29" rx="9" fill={paper} stroke={ink} strokeWidth="3" />
+          <Rect x="10" y="45" width="29" height="29" rx="9" fill={paper} stroke={ink} strokeWidth="3" />
+          <Rect x="45" y="45" width="29" height="29" rx="9" fill={ink} />
+          <Path
+            d="M24.5 31c-5-3.5-7.5-6.2-7.5-9.4 0-2.4 1.8-4.1 4-4.1 1.5 0 2.7.8 3.5 2 .8-1.2 2-2 3.5-2 2.2 0 4 1.7 4 4.1 0 3.2-2.5 5.9-7.5 9.4Z"
+            fill="#FFFFFF"
+          />
+          <Circle cx="59.5" cy="24.5" r="5" fill={ink} />
+          <SvgText x="24.5" y="66" fontSize="17" fontWeight="900" fill={ink} textAnchor="middle">
+            ?
+          </SvgText>
+          <Path d="M53 59.5h13M59.5 53v13" stroke="#FFFFFF" strokeWidth="4" strokeLinecap="round" />
+        </>
+      ) : null}
+
       {id === 'questions' ? (
         <>
           <Path

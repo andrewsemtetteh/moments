@@ -67,7 +67,7 @@ export function ActivitiesIntroSection({ challenge, loading, onRetry, onOpenHist
   };
 
   return (
-    <View style={[styles.card, { backgroundColor: colors.surface }, cardBorder]}>
+    <View style={[styles.card, { backgroundColor: colors.tints.butter }, cardBorder]}>
       <View style={styles.head}>
         <Text style={[styles.title, { color: colors.textSecondary }]}>Today’s question</Text>
         <Pressable
@@ -76,7 +76,7 @@ export function ActivitiesIntroSection({ challenge, loading, onRetry, onOpenHist
           style={styles.historyBtn}
           accessibilityRole="button"
           accessibilityLabel="Past questions">
-          <Icon name="time" size={22} color={colors.text} />
+          <Icon name="time" size={22} color={colors.tintAccents?.butter ?? colors.text} />
         </Pressable>
       </View>
 

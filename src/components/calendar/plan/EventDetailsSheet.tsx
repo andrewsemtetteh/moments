@@ -8,16 +8,16 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
+import { TextInput } from '@/components/ui/ThemedTextInput';
 
 import { ownerColor } from '@/components/calendar/plan/PlanDayView';
 import { notInPast, PlanDateModal, PlanTimeModal } from '@/components/calendar/plan/PlanPickerModals';
 import { FullScreenPage } from '@/components/layout/FullScreenPage';
 import { HeaderIconButton } from '@/components/ui/HeaderIconButton';
 import { Icon } from '@/components/ui/Icon';
-import { Avatar, colorWithAlpha, PrimaryButton } from '@/components/ui/primitives';
+import { Avatar, colorWithAlpha, PrimaryButton, paperEdge } from '@/components/ui/primitives';
 import { LinearGradient } from 'expo-linear-gradient';
 import { getFirstName } from '@/lib/avatar-initial';
 import { planOwner } from '@/lib/plan-day';
@@ -278,7 +278,7 @@ export function EventDetailsSheet({
                     onPress={() => setDateOpen(true)}
                     accessibilityRole="button"
                     accessibilityLabel={`Date, ${format(eventDate, 'EEEE d MMMM')}`}
-                    style={({ pressed }) => [styles.chip, { backgroundColor: colors.surface }, pressed && styles.chipPressed]}>
+                    style={({ pressed }) => [styles.chip, { backgroundColor: colors.surface }, paperEdge(colors), pressed && styles.chipPressed]}>
                     <Icon name="calendar" size={15} color={tint} />
                     <Text style={[styles.chipText, { color: colors.text }]}>{format(eventDate, 'EEE, MMM d')}</Text>
                   </Pressable>
@@ -286,12 +286,12 @@ export function EventDetailsSheet({
                     onPress={() => setTimeOpen(true)}
                     accessibilityRole="button"
                     accessibilityLabel={`Time, ${format(eventTime, 'h:mm a')}`}
-                    style={({ pressed }) => [styles.chip, { backgroundColor: colors.surface }, pressed && styles.chipPressed]}>
+                    style={({ pressed }) => [styles.chip, { backgroundColor: colors.surface }, paperEdge(colors), pressed && styles.chipPressed]}>
                     <Icon name="time" size={15} color={tint} />
                     <Text style={[styles.chipText, { color: colors.text }]}>{format(eventTime, 'h:mm a')}</Text>
                   </Pressable>
                   {location ? (
-                    <View style={[styles.chip, styles.chipShrink, { backgroundColor: colors.surface }]}>
+                    <View style={[styles.chip, styles.chipShrink, { backgroundColor: colors.surface }, paperEdge(colors)]}>
                       <Icon name="location" size={15} color={tint} />
                       <Text style={[styles.chipText, styles.chipTextShrink, { color: colors.text }]} numberOfLines={1}>
                         {location}
@@ -310,7 +310,7 @@ export function EventDetailsSheet({
                   </Pressable>
                 </View>
               ) : passed ? (
-                <View style={[styles.doneBanner, { backgroundColor: colors.surface }]}>
+                <View style={[styles.doneBanner, { backgroundColor: colors.surface }, paperEdge(colors)]}>
                   <Icon name="time" size={16} color={colors.textSecondary} />
                   <Text style={{ color: colors.textSecondary, fontWeight: '700', flex: 1 }}>This happened</Text>
                 </View>
@@ -321,7 +321,7 @@ export function EventDetailsSheet({
                     { n: countdown.hours, unit: countdown.hours === 1 ? 'hour' : 'hours' },
                     { n: countdown.mins, unit: countdown.mins === 1 ? 'min' : 'mins' },
                   ].map((part) => (
-                    <View key={part.unit} style={[styles.countTile, { backgroundColor: colors.surface }]}>
+                    <View key={part.unit} style={[styles.countTile, { backgroundColor: colors.surface }, paperEdge(colors)]}>
                       <Text style={[styles.countNum, { color: tint }]}>{String(part.n).padStart(2, '0')}</Text>
                       <Text style={[styles.countUnit, { color: colors.textSecondary }]}>{part.unit}</Text>
                     </View>
@@ -329,7 +329,7 @@ export function EventDetailsSheet({
                 </View>
               ) : null}
 
-              <View style={[styles.card, { backgroundColor: colors.surface }]}>
+              <View style={[styles.card, { backgroundColor: colors.surface }, paperEdge(colors)]}>
                 <View style={styles.cardHeader}>
                   <Text style={[styles.cardTitle, { color: colors.text }]}>Checklist</Text>
                   <Text style={[styles.cardMeta, { color: colors.textTertiary }]}>
@@ -390,7 +390,7 @@ export function EventDetailsSheet({
                 </View>
               </View>
 
-              <View style={[styles.card, { backgroundColor: colors.surface }]}>
+              <View style={[styles.card, { backgroundColor: colors.surface }, paperEdge(colors)]}>
                 <Text style={[styles.cardTitle, { color: colors.text, marginBottom: 8 }]}>Notes</Text>
                 <TextInput
                   value={notes}
@@ -408,7 +408,7 @@ export function EventDetailsSheet({
                 />
               </View>
 
-              <View style={[styles.card, { backgroundColor: colors.surface }]}>
+              <View style={[styles.card, { backgroundColor: colors.surface }, paperEdge(colors)]}>
                 <Text style={[styles.cardTitle, { color: colors.text, marginBottom: 8 }]}>Shared list</Text>
                 {linkedListTitle && onOpenLinkedList ? (
                   <Pressable onPress={onOpenLinkedList} style={styles.metaRow}>
@@ -426,7 +426,7 @@ export function EventDetailsSheet({
                 )}
               </View>
 
-              <View style={[styles.card, { backgroundColor: colors.surface }]}>
+              <View style={[styles.card, { backgroundColor: colors.surface }, paperEdge(colors)]}>
                 <View style={styles.metaRow}>
                   <Text style={[styles.metaLabel, { color: colors.textTertiary }]}>Location</Text>
                   <TextInput

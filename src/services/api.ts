@@ -591,6 +591,40 @@ export async function fetchActivities(relationshipId: string) {
   return data as Activity[];
 }
 
+/** Shared couple activities of one kind (Gratitude swap, 7 day connection), newest first. */
+export async function fetchActivitiesOfType(relationshipId: string, type: string, limit = 14) {
+  const { data, error } = await backend
+    .from('activities')
+    .select('*')
+    .eq('relationship_id', relationshipId)
+    .eq('type', type)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return (data ?? []) as Activity[];
+}
+
+export async function createActivity(
+  relationshipId: string,
+  type: string,
+  payload: Record<string, unknown>,
+  status: Activity['status'] = 'in_progress',
+) {
+  const { data, error } = await backend
+    .from('activities')
+    .insert({ relationship_id: relationshipId, type, payload, status })
+    .select()
+    .single();
+  if (error) throw error;
+  return data as Activity;
+}
+
+export async function updateActivity(id: string, patch: { payload?: Record<string, unknown>; status?: Activity['status'] }) {
+  const { data, error } = await backend.from('activities').update(patch).eq('id', id).select().single();
+  if (error) throw error;
+  return data as Activity;
+}
+
 export async function fetchCalendarEvents(relationshipId: string, month?: Date) {
   const base = month ?? new Date();
   const start = new Date(base.getFullYear(), base.getMonth(), 1, 0, 0, 0, 0);
@@ -1610,6 +1644,22 @@ export async function toggleMomentReaction(momentId: string, userId: string, emo
     p_emoji: emoji,
   });
   if (error) throw error;
+}
+
+/**
+ * Claims a once-only key for a partner notification (e.g. one a day). True when this
+ * call claimed it (go ahead and send); false when it was already used. Errs on sending.
+ */
+export async function claimNotificationKey(relationshipId: string, key: string): Promise<boolean> {
+  try {
+    const { data, error } = await backend.rpc('try_notification_dedup', {
+      p_relationship_id: relationshipId,
+      p_dedup_key: key,
+    });
+    return !!error || data !== false;
+  } catch {
+    return true;
+  }
 }
 
 export async function sendPartnerNotification(

@@ -1,7 +1,9 @@
 import { format, isSameDay, startOfDay } from 'date-fns';
+import { paperEdge } from '@/components/ui/primitives';
 import * as Haptics from '@/lib/haptics';
 import { useEffect, useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { TextInput } from '@/components/ui/ThemedTextInput';
 
 import { DraggableSheet } from '@/components/ui/DraggableSheet';
 import { Icon } from '@/components/ui/Icon';
@@ -77,7 +79,7 @@ export function PlanDaySheet({
                 onClose();
               }}
               hitSlop={8}
-              style={[styles.iconBtn, { backgroundColor: colors.surfaceElevated }]}>
+              style={[styles.iconBtn, { backgroundColor: colors.surfaceElevated }, paperEdge(colors)]}>
               <Icon name="close" size={18} color={colors.textSecondary} />
             </Pressable>
           </View>
@@ -135,6 +137,7 @@ export function PlanDaySheet({
                             opacity: pressed ? 0.92 : done ? 0.78 : 1,
                             flex: 1,
                           },
+                          paperEdge(colors),
                         ]}>
                         <View style={styles.cardBody}>
                           <Text style={[styles.time, { color: colors.textSecondary }]}>

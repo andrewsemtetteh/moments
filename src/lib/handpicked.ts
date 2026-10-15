@@ -5,6 +5,8 @@ import {
   type PlayActivity,
   type PlayToneId,
 } from '@/components/activities/explore/explore-catalog';
+import { EXISTING_PACK_BLURBS, MORE_PACKS } from '@/lib/handpicked-packs';
+import { FORMAT_PACKS } from '@/lib/handpicked-sets';
 
 /**
  * Handpicked: the fixed library (question packs, quizzes, prompts, activities), organised by the
@@ -51,6 +53,15 @@ export interface QuestionPack {
   area: AreaId;
   title: string;
   depth: Depth;
+  /** One line on the pack's card saying what it's about. */
+  blurb?: string;
+  /** The card's picture; defaults to the area's. */
+  art?: ActivityArtId;
+  /**
+   * How the set plays (defaults to questions). Quizzes score how often your picks match,
+   * prompts are talk-about cards, activities are things to go and do, ticked off together.
+   */
+  format?: HandpickedFormat;
   questions: PackQuestion[];
 }
 
@@ -152,7 +163,7 @@ export const FORMATS: { id: HandpickedFormat; label: string }[] = [
 
 const q = (id: string, text: string, picks?: string[]): PackQuestion => ({ id, text, picks });
 
-export const PACKS: QuestionPack[] = [
+const BASE_PACKS: QuestionPack[] = [
   {
     id: 'comm-day',
     area: 'communication',
@@ -652,6 +663,13 @@ export const PACKS: QuestionPack[] = [
   },
 ];
 
+/** Every pack: the originals (with their card descriptions) plus the larger set in handpicked-packs. */
+export const PACKS: QuestionPack[] = [
+  ...BASE_PACKS.map((pack) => ({ ...pack, blurb: pack.blurb ?? EXISTING_PACK_BLURBS[pack.id] })),
+  ...MORE_PACKS,
+  ...FORMAT_PACKS,
+];
+
 interface CatalogTag {
   area: AreaId;
   depth: Depth;
@@ -688,7 +706,7 @@ const CATALOG_TAGS: Partial<Record<ExploreModalKey, CatalogTag>> = {
 };
 
 export type HandpickedItem =
-  | { kind: 'pack'; id: string; title: string; depth: Depth; format: 'questions'; pack: QuestionPack }
+  | { kind: 'pack'; id: string; title: string; depth: Depth; format: HandpickedFormat; pack: QuestionPack }
   | {
       kind: 'activity';
       id: ExploreModalKey;
@@ -712,7 +730,7 @@ export function itemsForArea(area: AreaId): HandpickedItem[] {
     id: pack.id,
     title: pack.title,
     depth: pack.depth,
-    format: 'questions',
+    format: pack.format ?? 'questions',
     pack,
   }));
   const activities: HandpickedItem[] = PLAY_ACTIVITIES.flatMap((activity) => {
@@ -754,8 +772,17 @@ export function packProgress(pack: QuestionPack, answeredIds: Set<string>) {
   return { answered, total: pack.questions.length, done: answered === pack.questions.length };
 }
 
+/** A day's worth of sets in one format for a rail (rotates daily so it stays fresh). */
+export function packsForRail(format: HandpickedFormat, count = 8, date = new Date()): QuestionPack[] {
+  const sets = PACKS.filter((p) => (p.format ?? 'questions') === format);
+  if (sets.length <= count) return sets;
+  const start = Math.floor(date.getTime() / 86_400_000) % sets.length;
+  return Array.from({ length: count }, (_, i) => sets[(start + i * 3) % sets.length]);
+}
+
 /** Today's featured pack: rotates daily so the "All" tab has something fresh on top. */
 export function featuredPack(date = new Date()): QuestionPack {
   const day = Math.floor(date.getTime() / 86_400_000);
-  return PACKS[day % PACKS.length];
+  const questionPacks = PACKS.filter((p) => (p.format ?? 'questions') === 'questions');
+  return questionPacks[day % questionPacks.length];
 }

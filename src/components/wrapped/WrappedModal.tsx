@@ -316,7 +316,7 @@ function WrappedStory({ onClose }: { onClose: () => void }) {
                 { icon: 'camera', label: 'Photos', n: photosN },
                 { icon: 'videocam', label: 'Videos', n: videosN },
                 { icon: 'mic', label: 'Voice notes', n: voiceN },
-                { icon: 'sparkles', label: 'Everything else', n: otherN },
+                { icon: 'more', label: 'Everything else', n: otherN },
               ]}
             />
           </>
@@ -486,7 +486,7 @@ function WrappedStory({ onClose }: { onClose: () => void }) {
                 { icon: 'star', label: 'XP earned', n: progress.xp },
                 { icon: 'dice', label: 'Games played', n: games },
                 { icon: 'volumeHigh', label: 'Live rooms', n: progress.stats.live_games ?? 0 },
-                { icon: 'sparkles', label: 'In sync', n: progress.stats.sync_matches ?? 0 },
+                { icon: 'sync', label: 'In sync', n: progress.stats.sync_matches ?? 0 },
               ]}
             />
           </>
@@ -501,7 +501,7 @@ function WrappedStory({ onClose }: { onClose: () => void }) {
         { icon: 'fire', label: 'Dares done', n: progress.stats.dares_done ?? 0 },
         { icon: 'target', label: 'Quiz answers right', n: progress.stats.quiz_correct ?? 0 },
         { icon: 'eye', label: 'Answers guessed', n: progress.stats.guesses_correct ?? 0 },
-        { icon: 'sparkles', label: 'Activities done', n: progress.stats.solo_games ?? 0 },
+        { icon: 'checkDone', label: 'Activities done', n: progress.stats.solo_games ?? 0 },
         { icon: 'calendar', label: 'Best play streak', n: progress.bestStreak },
       ] satisfies StatRow[]
     ).filter((h) => h.n > 0);
@@ -630,7 +630,7 @@ function WrappedStory({ onClose }: { onClose: () => void }) {
       },
       {
         fits: myMood === 'loved' || myMood === 'happy',
-        icon: 'sparkles',
+        icon: 'sunny',
         name: 'The Sunshine Pair',
         line: 'Good moods, good company, good year.',
         why: 'Your most shared mood was a happy one',

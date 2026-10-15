@@ -1,18 +1,16 @@
-import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
-import { useMemo } from 'react';
-import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { setStatusBarStyle } from 'expo-status-bar';
+import { useCallback, useMemo } from 'react';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { StreakDayTracker } from '@/components/home/StreakDayTracker';
 import { StickerFlame } from '@/components/home/StickerFlame';
 import { DashedRing } from '@/components/ui/DashedRing';
 import { StreakRestoreBanner } from '@/components/home/StreakRestoreBanner';
-import { heroGradient } from '@/components/home/WelcomeCard';
-import { ScreenHeader } from '@/components/layout/ScreenHeader';
-import { HeaderIconButton } from '@/components/ui/HeaderIconButton';
-import { Icon } from '@/components/ui/Icon';
-import { Avatar } from '@/components/ui/primitives';
+import { Icon, type IconName } from '@/components/ui/Icon';
+import { Avatar, colorWithAlpha, paperEdge } from '@/components/ui/primitives';
+import { ringColor } from '@/constants/design-system';
 import { useStreak } from '@/hooks/queries';
 import { useTheme } from '@/hooks/useTheme';
 import { getFirstName } from '@/lib/avatar-initial';
@@ -21,6 +19,17 @@ import { emptyStreakStatus, isStreakRestoreAvailable } from '@/lib/streak';
 import { STREAK_COLORS } from '@/lib/streak-colors';
 import { isStreakVisuallyAtRisk } from '@/lib/streak-reminder-timing';
 import { useAuthStore, useRelationshipStore } from '@/stores';
+
+/** Text and icons on the light chips over the band (same as the profile page). */
+const INK = '#1A1A1A';
+
+/** Whether a #rrggbb colour is dark enough to need light status-bar icons. */
+function isDarkColor(hex: string) {
+  const h = hex.replace('#', '');
+  if (h.length !== 6) return false;
+  const [r, g, b] = [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16));
+  return 0.299 * r + 0.587 * g + 0.114 * b < 140;
+}
 
 /** Streak milestones shown on the page (days). */
 const MILESTONES: { days: number; label: string }[] = [
@@ -46,7 +55,19 @@ export default function StreakScreen() {
   const { data: streak } = useStreak();
   const status = useMemo(() => streak ?? emptyStreakStatus(relationship?.id ?? 'pending'), [streak, relationship?.id]);
   const partnerName = getFirstName(partner?.name) ?? 'your partner';
-  const ink = colors.onAccent;
+  // The top band, like the profile page: the theme's hero colour, flat, running up under
+  // the status bar with curved bottom corners.
+  const band = colors.hero ? colors.hero[0] : colors.gradient[0];
+  const ink = colors.onHero ?? colors.onGradient;
+  const bandIsDark = isDarkColor(band);
+  useFocusEffect(
+    useCallback(() => {
+      setStatusBarStyle(bandIsDark ? 'light' : 'dark', true);
+      return () => setStatusBarStyle(colors.isDark ? 'light' : 'dark', true);
+    }, [bandIsDark, colors.isDark]),
+  );
+  // Default: every card is a sticker (ink outline).
+  const outline = colors.boldBorder && colors.hero ? { borderWidth: 2, borderColor: colors.border } : null;
   const count = status.current_streak;
   const next = MILESTONES.find((m) => m.days > count) ?? null;
   const best = Math.max(status.longest_streak, count);
@@ -71,18 +92,19 @@ export default function StreakScreen() {
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
-      <ScreenHeader
-        title="Streak"
-        onBack={() => closeStackScreen(router)}
-        right={<HeaderIconButton icon="question" onPress={explain} accessibilityLabel="How streaks work" />}
-      />
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 16 }]}>
-        {isStreakRestoreAvailable(status) ? <StreakRestoreBanner status={status} /> : null}
-
-        <LinearGradient colors={heroGradient(colors)} start={{ x: 0, y: 0 }} end={{ x: 0.6, y: 1 }} style={styles.hero}>
-          {/* <View pointerEvents="none" style={styles.glow} /> */}
+        <View style={[styles.band, { backgroundColor: band, paddingTop: insets.top + 6 }]}>
+          {/* Fills the space above when you pull down, so the band never shows a gap. */}
+          <View pointerEvents="none" style={[styles.bandBleed, { backgroundColor: band }]} />
+          <View style={styles.bandTop}>
+            <BandButton icon="chevronLeft" label="Back" onPress={() => closeStackScreen(router)} />
+            <Text style={[styles.bandTitle, { color: ink }]} accessibilityRole="header">
+              Streak
+            </Text>
+            <BandButton icon="question" label="How streaks work" onPress={explain} />
+          </View>
           <View style={styles.countRow}>
             {/* The milestone screen's flame character. */}
             <View style={count === 0 ? styles.idleFlame : undefined}>
@@ -103,11 +125,13 @@ export default function StreakScreen() {
               <Text style={[styles.bestText, { color: ink }]}>Best · {best} days</Text>
             </View>
           ) : null}
-        </LinearGradient>
+        </View>
+
+        {isStreakRestoreAvailable(status) ? <StreakRestoreBanner status={status} /> : null}
 
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: colors.text }]}>Today</Text>
-          <View style={[styles.card, styles.todayCard, { backgroundColor: colors.surface }]}>
+          <View style={[styles.card, styles.todayCard, { backgroundColor: colors.surface }, outline]}>
             <View style={styles.avatars}>
               <CheckAvatar
                 done={status.user_active_today}
@@ -136,7 +160,7 @@ export default function StreakScreen() {
         {next ? (
           <View style={styles.section}>
             <Text style={[styles.sectionTitle, { color: colors.text }]}>Next milestone</Text>
-            <View style={[styles.card, styles.milestoneCard, { backgroundColor: colors.surface }]}>
+            <View style={[styles.card, styles.milestoneCard, { backgroundColor: colors.surface }, outline]}>
               <View style={styles.milestoneHead}>
                 <View style={[styles.milestoneBadge, styles.stickerLit]}>
                   <StickerFlame size={20} />
@@ -155,7 +179,7 @@ export default function StreakScreen() {
                   </Text>
                 </View>
               </View>
-              <View style={[styles.track, { backgroundColor: colors.surfaceElevated }]}>
+              <View style={[styles.track, { backgroundColor: colors.sticker ? (colors.isDark ? 'rgba(255,255,255,0.14)' : 'rgba(26,26,26,0.10)') : colors.surfaceElevated }, paperEdge(colors, 1.5)]}>
                 <View
                   style={[
                     styles.fill,
@@ -181,7 +205,7 @@ export default function StreakScreen() {
 
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: colors.text }]}>Milestones</Text>
-          <View style={[styles.card, styles.badges, { backgroundColor: colors.surface }]}>
+          <View style={[styles.card, styles.badges, { backgroundColor: colors.surface }, outline]}>
             {MILESTONES.map((m) => {
               const earned = best >= m.days;
               return (
@@ -191,7 +215,7 @@ export default function StreakScreen() {
                       styles.badgeCircle,
                       earned ? styles.stickerLit : { borderColor: 'transparent' },
                     ]}>
-                    {earned ? null : <DashedRing size={54} color={colors.borderStrong} />}
+                    {earned ? null : <DashedRing size={54} color={ringColor(colors)} />}
                     <View style={earned ? undefined : styles.idleFlame}>
                       <StickerFlame size={18} />
                     </View>
@@ -209,6 +233,24 @@ export default function StreakScreen() {
         </View>
       </ScrollView>
     </View>
+  );
+}
+
+/** The round light chips on the band (back, help), like the profile's settings button. */
+function BandButton({ icon, label, onPress }: { icon: IconName; label: string; onPress: () => void }) {
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      hitSlop={6}
+      style={({ pressed }) => [
+        styles.bandButton,
+        { backgroundColor: colorWithAlpha('#FFFFFF', 0.72) },
+        pressed && { opacity: 0.8 },
+      ]}>
+      <Icon name={icon} size={24} color={INK} />
+    </Pressable>
   );
 }
 
@@ -244,16 +286,27 @@ const styles = StyleSheet.create({
   stickerLit: { backgroundColor: '#FFE7A0', borderColor: '#000000', borderWidth: 2 },
   idleFlame: { opacity: 0.4 },
   // Same rhythm as Home: 24 between sections, 10 between a heading and its card.
-  scroll: { paddingHorizontal: 16, paddingTop: 4, gap: 24 },
-  hero: {
-    borderRadius: 28,
-    paddingTop: 16,
-    paddingBottom: 18,
+  scroll: { paddingHorizontal: 16, gap: 24 },
+  // Same band as the profile page: edge to edge, under the status bar, curved at the bottom.
+  band: {
+    marginHorizontal: -16,
     paddingHorizontal: 20,
+    paddingBottom: 26,
     alignItems: 'center',
     gap: 2,
-    overflow: 'hidden',
+    borderBottomLeftRadius: 32,
+    borderBottomRightRadius: 32,
   },
+  bandBleed: { position: 'absolute', left: 0, right: 0, top: -600, height: 600 },
+  bandTop: {
+    alignSelf: 'stretch',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  bandTitle: { fontSize: 24, fontWeight: '900', letterSpacing: -0.6 },
+  bandButton: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
   // The flame sits above the number, centred.
   countRow: { alignItems: 'center', gap: 2 },
   glow: {

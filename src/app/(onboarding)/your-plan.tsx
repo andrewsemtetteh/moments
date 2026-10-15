@@ -2,6 +2,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
+import { paperEdge } from '@/components/ui/primitives';
 import { CoupleCharacters } from '@/components/onboarding/Characters';
 import { OnboardingStepScreen } from '@/components/onboarding/OnboardingStepScreen';
 import { Icon, type IconName } from '@/components/ui/Icon';
@@ -88,7 +89,7 @@ export default function YourPlanScreen() {
       </View>
 
       <View style={styles.compare}>
-        <View style={[styles.half, { backgroundColor: colors.surfaceElevated }]}>
+        <View style={[styles.half, { backgroundColor: colors.surfaceElevated }, paperEdge(colors)]}>
           <Text style={[styles.halfTitle, { color: colors.textSecondary }]}>Without Moments</Text>
           <Text style={[styles.halfText, { color: colors.textSecondary }]}>Missed texts, the same “how was your day”.</Text>
         </View>

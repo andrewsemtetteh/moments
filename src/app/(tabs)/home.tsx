@@ -239,7 +239,8 @@ export default function HomeScreen() {
           {!partner ? (
             relationship ? (
               <View style={styles.section}>
-                <Text style={[styles.sectionTitle, { color: colors.text }]}>Invite your person</Text>
+                <Text style={[styles.sectionTitle, colors.sticker && styles.sectionTitleSticker, { color: colors.text }]}
+                accessibilityRole="header">Invite your person</Text>
                 <InviteCard />
               </View>
             ) : null
@@ -248,7 +249,8 @@ export default function HomeScreen() {
           ) : null}
 
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>Today</Text>
+            <Text style={[styles.sectionTitle, colors.sticker && styles.sectionTitleSticker, { color: colors.text }]}
+                accessibilityRole="header">Today</Text>
 
             <TourTarget name="tour-today">
               <MoodSnapshot
@@ -272,7 +274,8 @@ export default function HomeScreen() {
 
           {session && partner ? (
             <View style={styles.section}>
-              <Text style={[styles.sectionTitle, { color: colors.text }]}>Play</Text>
+              <Text style={[styles.sectionTitle, colors.sticker && styles.sectionTitleSticker, { color: colors.text }]}
+                accessibilityRole="header">Play</Text>
               <PlayPulseCard />
             </View>
           ) : null}
@@ -292,4 +295,5 @@ const styles = StyleSheet.create({
   },
   section: { gap: Spacing.md },
   sectionTitle: { fontSize: 20, fontWeight: '800', letterSpacing: -0.3 },
+  sectionTitleSticker: { fontWeight: '900', letterSpacing: -0.4 },
 });

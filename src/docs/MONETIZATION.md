@@ -87,9 +87,9 @@ Adds:
 
 | Plan | Price | Trial | Shown |
 |---|---|---|---|
-| Weekly | $4.99/week | 7 days free | First, selected by default |
-| Yearly | $69.99/year ($1.35/week, save 73%) | 7 days free | Second, "Best value" |
-| Monthly | $9.99/month ($2.31/week) | none | Third |
+| Yearly | $69.99/year ($5.83/month, $35 each, save 73%) | 7 days free | First, selected by default |
+| Monthly | $9.99/month | none (starts today) | Second |
+| Weekly | $4.99/week | 7 days free | Third |
 
 * One free trial per person (Apple / Google rule); after that, plans start straight away.
 * The trial includes everything in Plus, AI included. AI has a monthly fair-use cap for every
@@ -110,7 +110,12 @@ Adds:
 5. Home reminder, at most once a week.
 6. The win back offer (above).
 
-Never before the partner can join, in chat, or mid game. Logic: `src/components/layout/PaywallMoments.tsx`.
+Never before the partner can join, in chat, or mid game.
+
+On the paywall: the billed price is always the largest number; "Not now" is always visible when it
+can close; "Send it to {partner}" sends a `plus_suggest` notification that opens the paywall on
+their phone. When either partner subscribes, the other gets `plus_unlocked` ("Sam unlocked Moments
+Plus for you both") from the billing webhook. Logic: `src/components/layout/PaywallMoments.tsx`.
 
 Regional adjustments (optional later):
 

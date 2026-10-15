@@ -2,6 +2,7 @@ import { format, isBefore, isSameDay, isToday, startOfDay } from 'date-fns';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 
+import { paperEdge } from '@/components/ui/primitives';
 import { Icon, type IconName } from '@/components/ui/Icon';
 import { EVENT_TYPE_META, getEventTypeColors } from '@/constants/calendar-events';
 import { Radius } from '@/constants/design-system';
@@ -166,7 +167,7 @@ function PlanCard({
           </View>
         </View>
         {done ? (
-          <View style={[styles.badge, { backgroundColor: colors.surfaceElevated }]}>
+          <View style={[styles.badge, { backgroundColor: colors.surfaceElevated }, paperEdge(colors)]}>
             <Icon name="check" size={18} color={colors.success} />
           </View>
         ) : null}

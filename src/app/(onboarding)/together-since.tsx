@@ -3,6 +3,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
+import { paperEdge } from '@/components/ui/primitives';
 import { AnniversaryWheelPicker } from '@/components/onboarding/AnniversaryWheelPicker';
 import { CalendarCharacter } from '@/components/onboarding/Characters';
 import { OnboardingStepScreen } from '@/components/onboarding/OnboardingStepScreen';
@@ -37,7 +38,7 @@ export default function TogetherSinceScreen() {
       onSecondary={() => void next(null)}
       scroll={false}>
       <AnniversaryWheelPicker value={date} onChange={setDate} surfaceColor={colors.surface} />
-      <View style={[styles.note, { backgroundColor: colors.surfaceElevated }]}>
+      <View style={[styles.note, { backgroundColor: colors.surfaceElevated }, paperEdge(colors)]}>
         <CalendarCharacter size={64} />
         <Text style={[styles.noteText, { color: colors.text }]}>
           {days > 0 ? `That’s ${days.toLocaleString()} days together. Nice.` : 'Day one. How exciting.'}

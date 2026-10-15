@@ -43,7 +43,7 @@ export async function notifyPartnerJoined(
       relatedId: joinerId,
     });
     // Deliver now rather than waiting for the next app-triggered push.
-    defer(runFunction(env, joinerId, 'send-push', {}, consumeRateLimit, defer));
+    defer(runFunction(env, joinerId, 'send-push-notification', {}, consumeRateLimit, defer));
   } catch (e) {
     console.error('partner joined notification failed', relationshipId, e);
   }

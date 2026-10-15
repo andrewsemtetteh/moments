@@ -124,7 +124,7 @@ export function MoodSnapshot({ moods, onSelectMood, onViewHistory }: MoodSnapsho
       style={[
         styles.container,
         {
-          backgroundColor: colors.surface,
+          backgroundColor: colors.tints.blush,
           borderColor: colors.border,
           borderWidth: colors.boldBorder ? 2 : StyleSheet.hairlineWidth,
         },
@@ -138,7 +138,7 @@ export function MoodSnapshot({ moods, onSelectMood, onViewHistory }: MoodSnapsho
             accessibilityRole="button"
             accessibilityLabel="Mood history"
             style={styles.historyBtn}>
-            <Icon name="time" size={22} color={colors.text} />
+            <Icon name="time" size={22} color={colors.tintAccents?.blush ?? colors.text} />
           </Pressable>
         )}
       </View>
@@ -189,10 +189,12 @@ export function MoodSnapshot({ moods, onSelectMood, onViewHistory }: MoodSnapsho
                 accessibilityLabel="More moods"
                 style={({ pressed }) => [
                   styles.moreBtn,
-                  { backgroundColor: colors.surfaceElevated, borderColor: colors.border },
+                  { backgroundColor: colors.isDark ? 'rgba(255,255,255,0.07)' : colors.surfaceElevated, borderColor: colors.border },
+                  lightCard(colors) && { backgroundColor: FROSTED, borderColor: 'transparent' },
+                  colors.boldBorder && { backgroundColor: colors.background, borderWidth: 2 },
                   pressed && styles.pressed,
                 ]}>
-                <Icon name="plus" size={22} color={colors.accent} />
+                <Icon name="plus" size={22} color={colors.tintAccents?.blush ?? colors.accent} />
                 <Text style={[styles.moreText, { color: colors.textSecondary }]} numberOfLines={1}>
                   More
                 </Text>
@@ -236,13 +238,32 @@ function MoodChip({
       style={({ pressed }) => [
         styles.moodBtn,
         {
-          backgroundColor: active ? MOOD_COLORS[mood] + '33' : colors.surfaceElevated,
+          // Dark themes: a faint see-through fill, so it takes on the card's colour instead of a grey patch.
+          backgroundColor: active ? MOOD_COLORS[mood] + '33' : colors.isDark ? 'rgba(255,255,255,0.07)' : colors.surfaceElevated,
           borderColor: active ? MOOD_COLORS[mood] : 'transparent',
+        },
+        // Light themes (the pink card): frosted white chips; the picked one solid white with an ink outline.
+        lightCard(colors) && {
+          backgroundColor: active ? '#FFFFFF' : FROSTED,
+          borderColor: active ? colors.text : 'transparent',
+          borderWidth: 2,
+        },
+        // Outlined themes (Ink, Pop): white sticker chips with black outlines; the picked mood fills with its colour.
+        colors.boldBorder && {
+          backgroundColor: active ? MOOD_COLORS[mood] : colors.background,
+          borderColor: colors.border,
+          borderWidth: 2,
         },
         pressed && styles.pressed,
       ]}>
       <Text style={styles.moodEmoji}>{MOOD_EMOJI[mood]}</Text>
-      <Text style={[styles.moodText, { color: colors.textSecondary }]} numberOfLines={1}>
+      <Text
+        style={[
+          styles.moodText,
+          { color: active && lightCard(colors) ? colors.text : colors.textSecondary },
+          active && lightCard(colors) && styles.moodTextOn,
+        ]}
+        numberOfLines={1}>
         {MOOD_LABELS[mood]}
       </Text>
     </Pressable>
@@ -277,6 +298,8 @@ function MoodBubble({
         style={[
           styles.moodCircle,
           { backgroundColor: mood ? tint + '2A' : colors.surfaceElevated, borderColor: mood ? tint : colors.border },
+          // Light themes: solid white so the emoji pops, with a strong ring in the mood's colour.
+          lightCard(colors) && { backgroundColor: mood ? '#FFFFFF' : FROSTED, borderWidth: mood ? 3 : 2, borderColor: mood ? tint : 'transparent' },
         ]}>
         <Animated.Text style={[styles.emoji, emojiStyle, hideEmoji && styles.hidden]}>
           {mood ? MOOD_EMOJI[mood] : '·'}
@@ -312,6 +335,13 @@ export function LoadingState() {
     </View>
   );
 }
+
+/** The soft light themes, where the card is a pastel (pink): see-through mood tints blend into it there. */
+function lightCard(colors: ThemeColors) {
+  return !colors.isDark && !colors.boldBorder;
+}
+/** Frosted white for chips on the pink card. */
+const FROSTED = 'rgba(255,255,255,0.62)';
 
 const styles = StyleSheet.create({
   container: {
@@ -366,6 +396,7 @@ const styles = StyleSheet.create({
   },
   moodEmoji: { fontSize: 20 },
   moodText: { fontSize: 10, marginTop: 2, fontWeight: '600', textAlign: 'center' },
+  moodTextOn: { fontWeight: '900' },
   moreBtn: {
     flex: 1,
     minWidth: 0,

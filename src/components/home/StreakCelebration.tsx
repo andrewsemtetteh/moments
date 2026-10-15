@@ -18,6 +18,7 @@ import { StickerFlame } from '@/components/home/StickerFlame';
 import { ShareCardModal } from '@/components/share/ShareCardModal';
 import { StreakShareCard } from '@/components/share/StreakShareCard';
 import { Icon } from '@/components/ui/Icon';
+import { ringColor } from '@/constants/design-system';
 import { useStreak } from '@/hooks/queries';
 import { useTheme } from '@/hooks/useTheme';
 import { getFirstName } from '@/lib/avatar-initial';
@@ -121,7 +122,14 @@ export function StreakCelebration({ count, fromCount, headline, message, onClose
           </View>
 
           <View style={styles.bottom}>
-            <View style={[styles.weekCard, { borderColor: colors.text }]}>
+            <View
+              style={[
+                styles.weekCard,
+                // Outlined themes: their 2pt line; the others: a soft card like the rest of the app.
+                colors.boldBorder
+                  ? { borderWidth: 2, borderColor: colors.border }
+                  : { borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface },
+              ]}>
               <View style={styles.weekRow}>
                 {week.map((d) => (
                   <Text
@@ -138,7 +146,7 @@ export function StreakCelebration({ count, fromCount, headline, message, onClose
                       day={d}
                       todayLit={todayLit}
                       ink={colors.text}
-                      ring={colors.borderStrong}
+                      ring={ringColor(colors)}
                       fill={colors.surface}
                       label={colors.textSecondary}
                     />
@@ -151,8 +159,8 @@ export function StreakCelebration({ count, fromCount, headline, message, onClose
               <Pressable
                 onPress={close}
                 accessibilityRole="button"
-                style={({ pressed }) => [styles.cta, { backgroundColor: colors.text }, pressed && styles.pressed]}>
-                <Text style={[styles.ctaText, { color: colors.background }]}>Continue</Text>
+                style={({ pressed }) => [styles.cta, { backgroundColor: colors.accent }, pressed && styles.pressed]}>
+                <Text style={[styles.ctaText, { color: colors.onAccent }]}>Continue</Text>
               </Pressable>
               <Pressable
                 onPress={() => {

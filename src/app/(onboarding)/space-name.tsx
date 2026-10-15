@@ -1,7 +1,8 @@
 import * as Haptics from '@/lib/haptics';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { TextInput } from '@/components/ui/ThemedTextInput';
 
 import { CoupleCharacters } from '@/components/onboarding/Characters';
 import { OnboardingStepScreen } from '@/components/onboarding/OnboardingStepScreen';

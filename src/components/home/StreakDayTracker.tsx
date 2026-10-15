@@ -1,4 +1,5 @@
 import { addMonths, format, isAfter, isBefore, isSameMonth, isSameYear, startOfMonth } from 'date-fns';
+import { paperEdge } from '@/components/ui/primitives';
 import * as Haptics from '@/lib/haptics';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View, type ViewStyle } from 'react-native';
@@ -7,7 +8,7 @@ import { AnimatedStreakFire } from '@/components/home/AnimatedStreakFire';
 import { StickerFlame } from '@/components/home/StickerFlame';
 import { DashedRing } from '@/components/ui/DashedRing';
 import { Icon } from '@/components/ui/Icon';
-import { Radius } from '@/constants/design-system';
+import { Radius, ringColor } from '@/constants/design-system';
 import { useTheme } from '@/hooks/useTheme';
 import { getFirstName } from '@/lib/avatar-initial';
 import { streakSubtitle } from '@/lib/streak';
@@ -106,7 +107,7 @@ export function StreakDayTracker({ status, joinedAt: joinedAtProp, calendarOnly 
           </View>
         )}
 
-        <View style={[styles.segment, { backgroundColor: colors.surfaceElevated }]}>
+        <View style={[styles.segment, { backgroundColor: colors.surfaceElevated }, paperEdge(colors)]}>
           <SegmentTab
             label="Week"
             selected={view === 'week'}
@@ -342,7 +343,7 @@ function DayCell({
   } else if (day.state === 'future') {
     // Upcoming: a faint short-dash circle, as on Home's intro card.
     circle = { opacity: 0.45 };
-    ring = <DashedRing size={size} color={colors.borderStrong} />;
+    ring = <DashedRing size={size} color={ringColor(colors)} />;
     content = flame ? null : <Text style={[calStyles.num, { color: colors.textTertiary }]}>{number}</Text>;
   } else {
     const faded = day.state === 'inactive';
@@ -351,9 +352,9 @@ function DayCell({
       // an ordinary day: an outlined circle.
       if (faded) {
         circle = { opacity: 0.45 };
-        ring = <DashedRing size={size} color={colors.borderStrong} />;
+        ring = <DashedRing size={size} color={ringColor(colors)} />;
       } else {
-        circle = { backgroundColor: colors.surfaceElevated, borderWidth: 2, borderColor: colors.borderStrong };
+        circle = { backgroundColor: colors.surfaceElevated, borderWidth: 2, borderColor: ringColor(colors) };
       }
       content = null;
     } else {
@@ -505,7 +506,7 @@ function StreakMonthCalendar({
           hitSlop={6}
           accessibilityRole="button"
           accessibilityLabel="Previous month"
-          style={[calStyles.navBtn, { backgroundColor: colors.surfaceElevated, opacity: canGoPrev ? 1 : 0.3 }]}>
+          style={[calStyles.navBtn, { backgroundColor: colors.surfaceElevated, opacity: canGoPrev ? 1 : 0.3 }, paperEdge(colors)]}>
           <Icon name="chevronLeft" size={18} color={colors.text} />
         </Pressable>
         <View style={calStyles.monthTitleWrap}>
@@ -519,7 +520,7 @@ function StreakMonthCalendar({
           hitSlop={6}
           accessibilityRole="button"
           accessibilityLabel="Next month"
-          style={[calStyles.navBtn, { backgroundColor: colors.surfaceElevated, opacity: canGoNext ? 1 : 0.3 }]}>
+          style={[calStyles.navBtn, { backgroundColor: colors.surfaceElevated, opacity: canGoNext ? 1 : 0.3 }, paperEdge(colors)]}>
           <Icon name="chevronRight" size={18} color={colors.text} />
         </Pressable>
       </View>

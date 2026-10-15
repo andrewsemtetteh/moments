@@ -1,4 +1,3 @@
-import { router } from 'expo-router';
 import { useState } from 'react';
 import { Modal, Platform, StyleSheet, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -57,12 +56,6 @@ export function PaywallModal({ inline = false }: { inline?: boolean } = {}) {
   if (!visible || Platform.OS === 'web') return null;
   if (inline !== momentsOpen) return null;
 
-  // Leaving the paywall for a page: inside Moments, close Moments too so the page is visible.
-  const leaveTo = (href: '/refer' | '/legal/terms' | '/legal/privacy') => {
-    closePaywall();
-    if (inline) useUIStore.setState({ showMomentHistory: false, showMomentCreator: false, momentViewer: null });
-    setTimeout(() => router.push(href), inline ? 450 : 250);
-  };
   if (!useNative) {
     return (
       <SuperwallPaywall
@@ -83,9 +76,6 @@ export function PaywallModal({ inline = false }: { inline?: boolean } = {}) {
           offer={offer}
           placement={placement}
           showClose
-          // Leaving the overlay for a page: close it, then open the page.
-          onRefer={() => leaveTo('/refer')}
-          onOpenLegal={(doc) => leaveTo(doc === 'terms' ? '/legal/terms' : '/legal/privacy')}
         />
       </GestureHandlerRootView>
   );

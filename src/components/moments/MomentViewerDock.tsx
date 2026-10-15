@@ -1,6 +1,7 @@
 import { isToday } from 'date-fns';
 import { useEffect, useRef, useState } from 'react';
-import { Dimensions, Keyboard, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Dimensions, Keyboard, Pressable, StyleSheet, Text, View } from 'react-native';
+import { TextInput } from '@/components/ui/ThemedTextInput';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 

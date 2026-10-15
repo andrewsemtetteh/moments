@@ -599,6 +599,9 @@ function pushTitle(type: string): string {
       return 'You’re connected';
     case 'referral_credit':
       return 'You earned Plus';
+    case 'plus_unlocked':
+    case 'plus_suggest':
+      return 'Moments Plus';
     default:
       return 'Moments';
   }

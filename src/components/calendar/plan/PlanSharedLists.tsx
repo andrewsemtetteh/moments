@@ -1,5 +1,6 @@
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { paperEdge } from '@/components/ui/primitives';
 import { listProgress, type PlanList } from '@/lib/plan-local';
 import { useTheme } from '@/hooks/useTheme';
 
@@ -72,7 +73,7 @@ export function PlanSharedLists({
                 key={list.id}
                 onPress={() => onOpenList(list.id)}
                 onLongPress={() => quickActions(list)}
-                style={[styles.card, { backgroundColor: colors.surface }]}>
+                style={[styles.card, { backgroundColor: colors.surface }, paperEdge(colors)]}>
                 <View style={styles.cardTop}>
                   <Text style={styles.emoji}>{list.emoji}</Text>
                   <View style={styles.cardBody}>
@@ -88,7 +89,7 @@ export function PlanSharedLists({
                     </Text>
                   </View>
                 </View>
-                <View style={[styles.track, { backgroundColor: colors.surfaceElevated }]}>
+                <View style={[styles.track, { backgroundColor: colors.surfaceElevated }, paperEdge(colors, 1.5)]}>
                   <View style={[styles.fill, { width: `${pct}%`, backgroundColor: colors.accent }]} />
                 </View>
               </Pressable>

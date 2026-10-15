@@ -3,7 +3,9 @@ import type { Href } from 'expo-router';
 import { PACKS } from '@/lib/handpicked';
 import { openActivities, openCalendar, openChat } from '@/lib/router';
 import * as api from '@/services/api';
-import { useAuthStore, useUIStore } from '@/stores';
+import { getFirstName } from '@/lib/avatar-initial';
+import { getEffectiveTier } from '@/lib/subscription';
+import { useAuthStore, useRelationshipStore, useUIStore } from '@/stores';
 import { useGameRoomStore } from '@/stores/game-room-store';
 import type { Notification } from '@/types/database';
 
@@ -135,6 +137,10 @@ export async function openFromNotification(target: NotificationNavTarget, router
       }
       return;
 
+    case 'achievement':
+      openActivities();
+      return;
+
     case 'game_invite':
       reopenLiveInvite();
       return;
@@ -145,6 +151,22 @@ export async function openFromNotification(target: NotificationNavTarget, router
       } else {
         openActivities();
       }
+      return;
+
+    // "Sam unlocked Plus for you both": it's already on, so just land Home.
+    case 'plus_unlocked':
+      goHome(router);
+      return;
+
+    // "Sam wants to try Plus with you": the paywall, unless one of you already has it.
+    case 'plus_suggest':
+      goHome(router);
+      afterNavigate(() => {
+        const { relationship } = useRelationshipStore.getState();
+        if (getEffectiveTier(useAuthStore.getState().user, relationship) === 'plus') return;
+        const them = getFirstName(useRelationshipStore.getState().partner?.name) ?? 'Your person';
+        useUIStore.getState().openPaywall(undefined, { headline: `${them} wants Plus with you` });
+      });
       return;
 
     default:

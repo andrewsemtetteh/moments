@@ -1,4 +1,5 @@
 import { CameraView, useCameraPermissions, useMicrophonePermissions } from 'expo-camera';
+import { paperEdge } from '@/components/ui/primitives';
 import * as Haptics from '@/lib/haptics';
 import { Image } from 'expo-image';
 import { useEffect, useRef, useState } from 'react';
@@ -280,7 +281,7 @@ export function ChatCameraModal({ visible, onClose, onCapture }: Props) {
               )}
             </View>
 
-            <View style={[styles.viewfinder, { backgroundColor: colors.surface }]}>
+            <View style={[styles.viewfinder, { backgroundColor: colors.surface }, paperEdge(colors)]}>
               {previewUri ? (
                 previewIsVideo ? (
                   <MomentVideoPlayer uri={previewUri} fill autoPlay />
@@ -336,7 +337,7 @@ export function ChatCameraModal({ visible, onClose, onCapture }: Props) {
                     onPress={resetPreview}
                     disabled={sending}
                     accessibilityRole="button"
-                    style={({ pressed }) => [styles.retakeBtn, { backgroundColor: colors.surface }, pressed && styles.pressed]}>
+                    style={({ pressed }) => [styles.retakeBtn, { backgroundColor: colors.surface }, paperEdge(colors), pressed && styles.pressed]}>
                     <Text style={[styles.retakeText, { color: colors.text }]}>Retake</Text>
                   </Pressable>
                   <Pressable

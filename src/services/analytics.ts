@@ -64,6 +64,8 @@ export const AnalyticsEvents = {
   TRIAL_STARTED: 'trial_started',
   PURCHASED: 'purchased',
   PARTNER_JOINED: 'partner_joined',
+  /** "Send it to Sam" on the paywall. */
+  PAYWALL_SENT_TO_PARTNER: 'paywall_sent_to_partner',
 } as const;
 
 /** Logs an event for the signed in user's couple (skipped before a couple exists). */

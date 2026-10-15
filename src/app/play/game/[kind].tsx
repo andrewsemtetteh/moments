@@ -10,9 +10,9 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
+import { TextInput } from '@/components/ui/ThemedTextInput';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { PLAY_TONES } from '@/components/activities/explore/explore-catalog';

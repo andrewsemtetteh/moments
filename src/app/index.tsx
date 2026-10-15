@@ -1,9 +1,10 @@
-import { Image } from 'expo-image';
 import { useRouter, type Href } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
+import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
+import { LogoMark } from '@/components/ui/Logo';
 import { useTheme } from '@/hooks/useTheme';
 // eslint-disable-next-line @typescript-eslint/no-unused-vars -- used by the commented-out restore path below
 import { isIntroCompleted } from '@/lib/intro-storage';
@@ -13,8 +14,8 @@ import { needsProfileSetup } from '@/lib/profile-setup';
 import { useAuthStore, useRelationshipStore, useUIStore } from '@/stores';
 
 /** The heart alone, no name: same as the native splash it follows. */
-const LOGO_SIZE = 180;
-const SPLASH_LOGO = require('../../assets/images/splash-logo-rounded.png');
+/** The plain mark; same size as the native splash (imageWidth in app.json). */
+const LOGO_SIZE = 160;
 /** The launch screen: the logo, still (no animation), for 5 seconds from when
  * it's actually on screen, then straight on to the next screen (no fade). */
 const MIN_VISIBLE_MS = 5000;
@@ -32,6 +33,8 @@ export default function IndexScreen() {
   // Keep the native splash up until the saved theme is known, so the logo and
   // "moments" are drawn in the right colours from the first frame.
   const themeReady = useUIStore((s) => s.themeReady);
+  // The theme's own colour: violet on Violet, black on Dark, cream on Cream, white on Default.
+  const splash = colors.splash ?? colors.background;
 
   const [minVisibleDone, setMinVisibleDone] = useState(false);
   // When this screen is actually on screen: after the native splash has gone,
@@ -130,15 +133,24 @@ export default function IndexScreen() {
   }, [isLoading, minVisibleDone, session, relationship, user, router, replaceWithExit]);
 
   return (
-    <View style={[styles.screen, { backgroundColor: colors.background }]}>
+    <View style={[styles.screen, { backgroundColor: splash }]}>
+      <StatusBar style={isDarkColor(splash) ? 'light' : 'dark'} />
       {themeReady ? (
         <View style={styles.center}>
-          {/* Same rounded logo, same size as the native splash, so the hand-off doesn't jump. */}
-          <Image source={SPLASH_LOGO} style={styles.logo} contentFit="contain" />
+          {/* The plain logo on the theme's own background, same size as the native splash, so the hand-off doesn't jump. */}
+          <LogoMark size={LOGO_SIZE} color={colors.splashMark} />
         </View>
       ) : null}
     </View>
   );
+}
+
+/** Whether a #rrggbb colour needs light status-bar icons. */
+function isDarkColor(hex: string) {
+  const h = hex.replace('#', '');
+  if (h.length !== 6) return false;
+  const [r, g, b] = [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16));
+  return 0.299 * r + 0.587 * g + 0.114 * b < 140;
 }
 
 const styles = StyleSheet.create({

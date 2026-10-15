@@ -26,7 +26,7 @@ export function NoMomentCard({ partnerName }: { partnerName?: string | null }) {
   const setShowMomentCreator = useUIStore((s) => s.setShowMomentCreator);
   const name = getFirstName(partnerName) ?? 'your partner';
   return (
-    <View style={[styles.card, styles.momentCard, { backgroundColor: colors.surface }, cardBorder]}>
+    <View style={[styles.card, styles.momentCard, { backgroundColor: colors.tints.peach }, cardBorder]}>
       <View style={[styles.emptyArea, { borderColor: colors.border }]}>
         <View style={[styles.emptyIcon, { backgroundColor: colors.accentSoft }]}>
           <Icon name="camera" size={30} color={colors.accent} />
@@ -96,7 +96,7 @@ export function InviteCard({ from }: { from?: 'profile' } = {}) {
   };
 
   return (
-    <View style={[styles.card, styles.inviteCard, { backgroundColor: colors.surface }, cardBorder]}>
+    <View style={[styles.card, styles.inviteCard, { backgroundColor: colors.tints.lilac }, cardBorder]}>
       <Text style={[styles.emptyBody, { color: colors.textSecondary }]}>
         Moments is made for two. Share your code and you’ll be connected the second they join.
       </Text>
@@ -157,9 +157,9 @@ export function NextUpCard({ event, viewerId }: { event: CalendarEvent; viewerId
     <Pressable
       onPress={() => openCalendar({ dateISO: event.date_time })}
       accessibilityRole="button"
-      style={({ pressed }) => [styles.card, styles.row, { backgroundColor: colors.surface }, cardBorder, pressed && styles.pressed]}>
+      style={({ pressed }) => [styles.card, styles.row, { backgroundColor: colors.tints.sky }, cardBorder, pressed && styles.pressed]}>
       <View style={[styles.rowIcon, { backgroundColor: colors.accentSoft }]}>
-        <Icon name={planIcon(event)} size={22} color={colors.accent} />
+        <Icon name={planIcon(event)} size={22} color={colors.tintAccents?.sky ?? colors.accent} />
       </View>
       <View style={styles.rowText}>
         <Text style={[styles.kicker, { color: colors.textSecondary }]}>Next up</Text>
@@ -200,12 +200,12 @@ export function OnThisDayCard({ entry, momentsById }: { entry: CalendarEvent; mo
     <Pressable
       onPress={() => router.navigate({ pathname: '/calendar', params: { tab: 'memories' } })}
       accessibilityRole="button"
-      style={({ pressed }) => [styles.card, styles.row, { backgroundColor: colors.surface }, cardBorder, pressed && styles.pressed]}>
+      style={({ pressed }) => [styles.card, styles.row, { backgroundColor: colors.tints.peach }, cardBorder, pressed && styles.pressed]}>
       {photos[0] ? (
         <Image source={{ uri: photos[0] }} style={styles.memoryThumb} contentFit="cover" />
       ) : (
         <View style={[styles.memoryThumb, styles.memoryThumbEmpty, { backgroundColor: colors.accentSoft }]}>
-          <Icon name="heart" size={28} color={colors.accent} />
+          <Icon name="heart" size={28} color={colors.tintAccents?.peach ?? colors.accent} />
         </View>
       )}
       <View style={styles.rowText}>

@@ -190,6 +190,9 @@ export function titleForType(type: string): string {
       return 'Live game invite';
     case 'game_turn':
       return 'Your move';
+    case 'plus_unlocked':
+    case 'plus_suggest':
+      return 'Moments Plus';
     default:
       return 'Moments';
   }

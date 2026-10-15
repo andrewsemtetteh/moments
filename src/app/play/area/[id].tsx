@@ -167,10 +167,10 @@ export default function AreaScreen() {
                 <PlayCard
                   key={`${item.kind}-${item.id}`}
                   tone={tone}
-                  art={item.kind === 'pack' ? area.art : item.activity.art}
+                  art={item.kind === 'pack' ? item.pack.art ?? area.art : item.activity.art}
                   badge={badge ?? `${FORMAT_LABEL[item.format]} · ${depthLabel}`}
                   title={item.title}
-                  sub={item.kind === 'pack' ? undefined : item.activity.tagline}
+                  sub={item.kind === 'pack' ? item.pack.blurb : item.activity.tagline}
                   cta={progress?.done ? 'See answers' : progress && progress.answered > 0 ? 'Continue' : 'Start'}
                   onPress={() => open(item)}
                 />
@@ -178,7 +178,7 @@ export default function AreaScreen() {
             })}
             {visible.length === 0 ? (
               <EmptyState
-                icon={status === 'answered' ? 'checkDone' : status === 'unanswered' ? 'sparkles' : 'filter'}
+                icon={status === 'answered' ? 'checkDone' : status === 'unanswered' ? 'flag' : 'filter'}
                 title={
                   status === 'answered'
                     ? 'No answered packs yet'

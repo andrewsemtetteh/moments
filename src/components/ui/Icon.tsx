@@ -41,6 +41,9 @@ export type IconName =
   | 'lock'
   | 'time'
   | 'sparkles'
+  | 'sync'
+  | 'link'
+  | 'bulb'
   | 'question'
   | 'moon'
   | 'eye'
@@ -137,6 +140,12 @@ const ICON_MAP: Record<IconName, { outline: IoniconName; filled: IoniconName }> 
   lock: { outline: 'lock-closed-outline', filled: 'lock-closed' },
   time: { outline: 'time-outline', filled: 'time' },
   sparkles: { outline: 'sparkles-outline', filled: 'sparkles' },
+  /** Answers that matched, being in sync. */
+  sync: { outline: 'sync-outline', filled: 'sync' },
+  /** Where two things line up (compatibility). */
+  link: { outline: 'link-outline', filled: 'link' },
+  /** Smart, generated content (AI games and questions). */
+  bulb: { outline: 'bulb-outline', filled: 'bulb' },
   question: { outline: 'help-circle-outline', filled: 'help-circle' },
   moon: { outline: 'moon-outline', filled: 'moon' },
   eye: { outline: 'eye-outline', filled: 'eye' },

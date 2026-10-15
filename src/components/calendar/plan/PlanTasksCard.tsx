@@ -1,6 +1,7 @@
 import * as Haptics from '@/lib/haptics';
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { TextInput } from '@/components/ui/ThemedTextInput';
 import Animated, { FadeIn, LinearTransition } from 'react-native-reanimated';
 
 import { Icon } from '@/components/ui/Icon';

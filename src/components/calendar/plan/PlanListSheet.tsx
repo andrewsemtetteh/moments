@@ -1,6 +1,8 @@
+import { paperEdge } from '@/components/ui/primitives';
 import * as Haptics from '@/lib/haptics';
 import { useEffect, useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { TextInput } from '@/components/ui/ThemedTextInput';
 
 import { DraggableSheet } from '@/components/ui/DraggableSheet';
 import { Icon } from '@/components/ui/Icon';
@@ -147,13 +149,13 @@ export function PlanListSheet({
             </View>
             <Pressable
               onPress={onClose}
-              style={[styles.close, { backgroundColor: colors.surfaceElevated }]}>
+              style={[styles.close, { backgroundColor: colors.surfaceElevated }, paperEdge(colors)]}>
               <Icon name="close" size={18} color={colors.textSecondary} />
             </Pressable>
           </View>
 
           {progress && progress.total > 0 ? (
-            <View style={[styles.track, { backgroundColor: colors.surfaceElevated }]}>
+            <View style={[styles.track, { backgroundColor: colors.surfaceElevated }, paperEdge(colors, 1.5)]}>
               <View
                 style={[styles.fill, { width: `${progress.pct}%`, backgroundColor: colors.accent }]}
               />

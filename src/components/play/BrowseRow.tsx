@@ -11,9 +11,11 @@ import type { HandpickedFormat } from '@/lib/handpicked';
 import { BrowseArt, type BrowseArtId } from './BrowseArt';
 import { openLiveSession } from './LiveStrip';
 
-type BrowseItem = { id: BrowseArtId; label: string; tone: PlayToneId; format?: HandpickedFormat | 'games' };
+type BrowseItem = { id: BrowseArtId; label: string; tone: PlayToneId; format?: HandpickedFormat | 'games' | 'all' };
 
 const ITEMS: BrowseItem[] = [
+  // Everything in one place: every question, quiz, card, thing to do and game.
+  { id: 'all', label: 'Activities', tone: 'berry', format: 'all' },
   { id: 'questions', label: 'Questions', tone: 'plum', format: 'questions' },
   { id: 'games', label: 'Games', tone: 'sky', format: 'games' },
   { id: 'prompts', label: 'Cards', tone: 'coral', format: 'prompts' },

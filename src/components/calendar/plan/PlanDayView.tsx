@@ -2,7 +2,7 @@ import { format } from 'date-fns';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Icon } from '@/components/ui/Icon';
-import { Avatar } from '@/components/ui/primitives';
+import { Avatar, paperEdge } from '@/components/ui/primitives';
 import { useTheme } from '@/hooks/useTheme';
 import { getFirstName } from '@/lib/avatar-initial';
 import { displayTitle, isHiddenFrom, planOwner } from '@/lib/plan-day';
@@ -65,7 +65,8 @@ export function PlanDayView({
 
   return (
     <View style={styles.root}>
-      {freeLabel ? (
+      {/* Only alongside plans: an empty day shows just its empty state. */}
+      {freeLabel && sorted.length > 0 ? (
         <Pressable
           onPress={onPlanFree}
           accessibilityRole="button"
@@ -90,7 +91,7 @@ export function PlanDayView({
           }
         />
       ) : (
-      <View style={[styles.list, { backgroundColor: colors.surface }]}>
+      <View style={[styles.list, { backgroundColor: colors.surface }, paperEdge(colors)]}>
         {(
           sorted.map((event, i) => {
             const hidden = isHiddenFrom(event, me?.id);

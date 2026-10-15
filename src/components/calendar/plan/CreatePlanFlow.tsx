@@ -1,4 +1,5 @@
 import { format, setHours, setMilliseconds, setMinutes, setSeconds, startOfDay } from 'date-fns';
+import { paperEdge } from '@/components/ui/primitives';
 import * as Haptics from '@/lib/haptics';
 import { useEffect, useMemo, useState } from 'react';
 import {
@@ -9,9 +10,9 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
+import { TextInput } from '@/components/ui/ThemedTextInput';
 import { ScrollView as GHScrollView } from 'react-native-gesture-handler';
 
 import { notInPast, PlanDateModal, PlanTimeModal } from '@/components/calendar/plan/PlanPickerModals';
@@ -294,7 +295,7 @@ export function CreatePlanFlow({
                   })}
                 </GHScrollView>
 
-                <View style={[styles.whoRow, { backgroundColor: colors.surface }]}>
+                <View style={[styles.whoRow, { backgroundColor: colors.surface }, paperEdge(colors)]}>
                   {(['together', 'me'] as const).map((who) => {
                     const on = forWhom === who;
                     return (

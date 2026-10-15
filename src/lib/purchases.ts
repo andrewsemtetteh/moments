@@ -78,10 +78,16 @@ type PurchasesState = {
   prices: Partial<Record<SubscriptionPlanId, string>>;
   /** What a week costs on each plan, in the local currency. */
   perWeek: Partial<Record<SubscriptionPlanId, string>>;
+  /** What a month costs on each plan, in the local currency ("$5.83" on yearly). */
+  perMonth: Partial<Record<SubscriptionPlanId, string>>;
+  /** Each plan's price split between the two of you ("$35.00" on yearly). */
+  perPerson: Partial<Record<SubscriptionPlanId, string>>;
   /** Whether this account can still get the free trial (one per subscription group). */
   trialEligible: boolean;
   /** The discounted first year, if the win back product exists in the store. */
   winbackPrice: string | null;
+  /** Nothing, in the store's currency ("$0.00", "AED 0.00"), for "Try 7 days for $0.00". */
+  zeroPrice: string | null;
   /** Product id of the active subscription (Play's manage page links straight to it). */
   activeProductId: string | null;
 };
@@ -92,8 +98,11 @@ export const usePurchasesStore = create<PurchasesState>(() => ({
   entitlement: NO_ENTITLEMENT,
   prices: {},
   perWeek: {},
+  perMonth: {},
+  perPerson: {},
   trialEligible: true,
   winbackPrice: null,
+  zeroPrice: null,
   activeProductId: null,
 }));
 
@@ -183,6 +192,21 @@ export async function resetPurchases() {
   }
 }
 
+/** An amount in a store's currency ("$35.00"); null if it can't be formatted. */
+function formatMoney(amount: number, currency: string | null | undefined, locale: string | undefined): string | null {
+  if (!currency) return null;
+  try {
+    return new Intl.NumberFormat(locale?.replace('_', '-'), { style: 'currency', currency }).format(amount);
+  } catch {
+    return null;
+  }
+}
+
+/** Half of a store price, in its own currency ("$35.00"); null if it can't be formatted. */
+function halfPrice(price: number, currency: string | null | undefined, locale: string | undefined): string | null {
+  return price > 0 ? formatMoney(price / 2, currency, locale) : null;
+}
+
 /** Local store prices for the paywall (falls back to the USD constants until they load). */
 export async function loadPrices() {
   if (!superwall) return;
@@ -192,16 +216,23 @@ export async function loadPrices() {
     const byId = new Map(products.map((p) => [p.productIdentifier, p]));
     const prices: PurchasesState['prices'] = {};
     const perWeek: PurchasesState['perWeek'] = {};
+    const perMonth: PurchasesState['perMonth'] = {};
+    const perPerson: PurchasesState['perPerson'] = {};
     for (const plan of plans) {
       const product = byId.get(PRODUCT_IDS[plan]);
       if (!product) continue;
       prices[plan] = product.localizedPrice;
       if (product.weeklyPrice) perWeek[plan] = product.weeklyPrice;
+      if (product.monthlyPrice) perMonth[plan] = product.monthlyPrice;
+      const half = halfPrice(product.price, product.currencyCode, product.locale);
+      if (half) perPerson[plan] = half;
     }
     // The win back product's introductory price is the discounted first year.
     const winback = byId.get(WINBACK_PRODUCT_ID);
     const winbackPrice = winback && winback.trialPeriodPrice > 0 ? winback.localizedTrialPeriodPrice : null;
-    usePurchasesStore.setState({ prices, perWeek, winbackPrice });
+    const any = byId.get(PRODUCT_IDS.yearly) ?? products[0];
+    const zeroPrice = any ? formatMoney(0, any.currencyCode, any.locale) : null;
+    usePurchasesStore.setState({ prices, perWeek, perMonth, perPerson, winbackPrice, zeroPrice });
   } catch (e) {
     console.warn('[purchases] prices failed', e);
   }

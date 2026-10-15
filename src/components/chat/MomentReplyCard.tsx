@@ -2,7 +2,7 @@ import { Image } from 'expo-image';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Icon } from '@/components/ui/Icon';
-import { colorWithAlpha } from '@/components/ui/primitives';
+import { colorWithAlpha, paperEdge } from '@/components/ui/primitives';
 import { useTheme } from '@/hooks/useTheme';
 import { resolveMomentForReply } from '@/lib/moment-reply';
 import { useAuthStore, useRelationshipStore, useUIStore } from '@/stores';
@@ -42,7 +42,7 @@ export function MomentReplyCard({ message, isSelf }: MomentReplyCardProps) {
         {previewUrl ? (
           <Image source={{ uri: previewUrl }} style={styles.thumb} contentFit="cover" />
         ) : (
-          <View style={[styles.thumb, styles.thumbPlaceholder, { backgroundColor: colors.surface }]}>
+          <View style={[styles.thumb, styles.thumbPlaceholder, { backgroundColor: colors.surface }, paperEdge(colors)]}>
             <ActivityIndicator size="small" color={colors.textTertiary} />
           </View>
         )}

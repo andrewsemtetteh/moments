@@ -15,11 +15,11 @@ import {
   Pressable,
   StyleSheet,
   Text,
-  TextInput,
   View,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
 } from 'react-native';
+import { TextInput } from '@/components/ui/ThemedTextInput';
 import { Gesture, GestureDetector, FlatList as PagerList } from 'react-native-gesture-handler';
 import Animated, {
   Easing,

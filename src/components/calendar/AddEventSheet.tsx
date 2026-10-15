@@ -1,12 +1,13 @@
 import { format, setHours, setMilliseconds, setMinutes, setSeconds, startOfDay } from 'date-fns';
 import * as Haptics from '@/lib/haptics';
 import { useEffect, useMemo, useState } from 'react';
-import { Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { TextInput } from '@/components/ui/ThemedTextInput';
 
 import { notInPast, PlanDateModal, PlanTimeModal } from '@/components/calendar/plan/PlanPickerModals';
 import { DraggableSheet } from '@/components/ui/DraggableSheet';
 import { Icon, type IconName } from '@/components/ui/Icon';
-import { PrimaryButton } from '@/components/ui/primitives';
+import { PrimaryButton, paperEdge } from '@/components/ui/primitives';
 import { getEventTypeColors } from '@/constants/calendar-events';
 import { Radius, type ThemeColors } from '@/constants/design-system';
 import { useTheme } from '@/hooks/useTheme';
@@ -137,7 +138,7 @@ export function AddEventSheet({
                 <Pressable
                   onPress={onClose}
                   hitSlop={8}
-                  style={[styles.closeBtn, { backgroundColor: colors.surfaceElevated }]}>
+                  style={[styles.closeBtn, { backgroundColor: colors.surfaceElevated }, paperEdge(colors)]}>
                   <Icon name="close" size={18} color={colors.textSecondary} />
                 </Pressable>
               </View>

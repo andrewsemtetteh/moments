@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 
-import { ApiError, emitRow } from './core';
+import { ApiError, consumeRateLimit, createPartnerNotification, displayName, emitRow, partnerOf } from './core';
+import { runFunction } from './functions';
 import { nowIso } from './db';
 import './env';
 
@@ -216,6 +217,30 @@ async function activeRelationshipId(env: Env, userId: string): Promise<string | 
   return rel?.id ?? null;
 }
 
+/**
+ * "Sam unlocked Moments Plus for you both": one plan covers the couple, so the
+ * partner who didn't pay hears about it (in the app and as a push). Never throws.
+ */
+async function notifyPartnerUnlocked(env: Env, relationshipId: string, payerId: string, trial: boolean) {
+  try {
+    const partnerId = await partnerOf(env, relationshipId, payerId);
+    if (!partnerId) return;
+    const name = await displayName(env, payerId);
+    await createPartnerNotification(env, {
+      relationshipId,
+      recipientId: partnerId,
+      type: 'plus_unlocked',
+      content: trial
+        ? `${name} started a free Moments Plus trial for you both. Everything is unlocked.`
+        : `${name} unlocked Moments Plus for you both. Everything is unlocked.`,
+      relatedId: payerId,
+    });
+    await runFunction(env, payerId, 'send-push-notification', {}, consumeRateLimit, (task) => void task.catch(() => undefined));
+  } catch (e) {
+    console.error('plus unlocked notification failed', relationshipId, e);
+  }
+}
+
 /** Applies one event. Returns the Clerk user it was about (for the audit row), or null if skipped. */
 async function applyEvent(env: Env, type: string, data: SuperwallEventData): Promise<string | null> {
   if (NO_CHANGE_EVENTS.has(type)) return null;
@@ -249,6 +274,8 @@ async function applyEvent(env: Env, type: string, data: SuperwallEventData): Pro
         .first<Record<string, unknown>>();
       // Realtime: the partner's app unlocks straight away.
       if (row) await emitRow(env, 'relationships', 'UPDATE', row);
+      // A new subscription (not a renewal): tell the partner it's theirs too.
+      if (row && type === 'initial_purchase') await notifyPartnerUnlocked(env, relId, userId, period === 'trial');
     }
     return userId;
   }
