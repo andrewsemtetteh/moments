@@ -4,7 +4,6 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Modal,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -15,7 +14,8 @@ import {
 
 import { ownerColor } from '@/components/calendar/plan/PlanDayView';
 import { notInPast, PlanDateModal, PlanTimeModal } from '@/components/calendar/plan/PlanPickerModals';
-import { DraggableSheet } from '@/components/ui/DraggableSheet';
+import { FullScreenPage } from '@/components/layout/FullScreenPage';
+import { HeaderIconButton } from '@/components/ui/HeaderIconButton';
 import { Icon } from '@/components/ui/Icon';
 import { Avatar, colorWithAlpha, PrimaryButton } from '@/components/ui/primitives';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -213,33 +213,23 @@ export function EventDetailsSheet({
 
   return (
     <>
-      <DraggableSheet visible={visible && !!eventProp} onClose={closeSheet} avoidKeyboard style={styles.sheet}>
-            <View style={styles.topBar}>
-              <Pressable
-                onPress={closeSheet}
-                hitSlop={8}
-                style={[styles.iconBtn, { backgroundColor: colors.surfaceElevated }]}>
-                <Icon name="chevronLeft" size={18} color={colors.textSecondary} />
-              </Pressable>
-              <View style={styles.topActions}>
-                <Pressable
-                  onPress={() => persist()}
-                  hitSlop={8}
-                  style={[styles.iconBtn, { backgroundColor: colors.accentSoft }]}>
-                  <Icon name="check" size={18} color={colors.accent} />
-                </Pressable>
-                <Pressable
-                  onPress={confirmDelete}
-                  hitSlop={8}
-                  style={[styles.iconBtn, { backgroundColor: colors.surfaceElevated }]}>
-                  <Icon name="trash" size={18} color={colors.error} />
-                </Pressable>
-              </View>
-            </View>
-
+      {/* A page of its own (slides in, back arrow, swipe right to go back), not a drawer. */}
+      <FullScreenPage
+        visible={visible && !!eventProp}
+        title="Plan"
+        onBack={closeSheet}
+        avoidKeyboard={false}
+        dismissKeyboardOnTap={false}
+        right={
+          <View style={styles.topActions}>
+            <HeaderIconButton icon="trash" onPress={confirmDelete} accessibilityLabel="Delete plan" />
+            <HeaderIconButton icon="check" onPress={() => persist()} accessibilityLabel="Save plan" />
+          </View>
+        }>
             <ScrollView
               showsVerticalScrollIndicator={false}
               keyboardShouldPersistTaps="handled"
+              automaticallyAdjustKeyboardInsets
               contentContainerStyle={styles.scroll}>
               {/* Hero: the plan in its colour, who it's for, and when (tap a chip to change it). */}
               <LinearGradient
@@ -524,36 +514,15 @@ export function EventDetailsSheet({
             </View>
           </Pressable>
         </Modal>
-      </DraggableSheet>
+      </FullScreenPage>
 
     </>
   );
 }
 
 const styles = StyleSheet.create({
-  sheet: {
-    maxHeight: '94%',
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    paddingHorizontal: 0,
-    paddingBottom: Platform.OS === 'ios' ? 28 : 20,
-  },
-  topBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    marginBottom: 4,
-  },
   topActions: { flexDirection: 'row', gap: 8 },
-  iconBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  scroll: { paddingHorizontal: 20, paddingBottom: 16, gap: 14 },
+  scroll: { paddingHorizontal: 20, paddingTop: 4, paddingBottom: 40, gap: 14 },
   hero: { borderRadius: 24, borderWidth: StyleSheet.hairlineWidth, padding: 16, gap: 12 },
   heroTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   heroIcon: { width: 52, height: 52, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },

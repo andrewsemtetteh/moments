@@ -95,7 +95,7 @@ export function RatingPage({ onDone }: { onDone: () => void }) {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={[
           styles.root,
-          { backgroundColor: colors.background, paddingTop: insets.top + 8, paddingBottom: insets.bottom + 32 },
+          { backgroundColor: colors.background, paddingTop: insets.top + 8, paddingBottom: insets.bottom + 56 },
         ]}>
         <Pressable
           onPress={close}
@@ -210,6 +210,6 @@ const styles = StyleSheet.create({
   },
   rate: { height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center' },
   rateText: { fontSize: 17, fontWeight: '800' },
-  feedback: { height: 44, alignItems: 'center', justifyContent: 'center', marginTop: 4 },
+  feedback: { height: 44, alignItems: 'center', justifyContent: 'center', marginTop: 4, marginBottom: 8 },
   feedbackText: { fontSize: 15, fontWeight: '700' },
 });

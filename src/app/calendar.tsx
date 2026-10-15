@@ -72,7 +72,6 @@ import {
 } from '@/lib/plan-day';
 import {
   parsePlanMeta,
-  planIcon,
   serializePlanMeta,
   type PlanKindKey,
   type PlanMeta,
