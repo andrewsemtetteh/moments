@@ -113,8 +113,22 @@ export function PlanDayView({
                   pressed && styles.pressed,
                 ]}>
                 <View style={styles.time}>
-                  <Text style={[styles.timeMain, { color: colors.text }]}>{format(at, 'h:mm')}</Text>
-                  <Text style={[styles.timeAmPm, { color: colors.textTertiary }]}>{format(at, 'a')}</Text>
+                  <Text
+                    style={[styles.timeMain, { color: colors.text }]}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.75}
+                    maxFontSizeMultiplier={1.2}>
+                    {format(at, 'h:mm')}
+                  </Text>
+                  <Text
+                    style={[styles.timeAmPm, { color: colors.textTertiary }]}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.75}
+                    maxFontSizeMultiplier={1.2}>
+                    {format(at, 'a')}
+                  </Text>
                 </View>
                 <View style={[styles.bar, { backgroundColor: tint }]} />
                 <View style={styles.body}>
@@ -163,7 +177,8 @@ const styles = StyleSheet.create({
   freeAction: { fontSize: 13, fontWeight: '800' },
   list: { borderRadius: 18, overflow: 'hidden' },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingVertical: 12, minHeight: 64 },
-  time: { width: 46, alignItems: 'flex-end' },
+  // Fixed width for the longest time ("12:45" / "PM"), so every row's bar lines up.
+  time: { width: 60, flexShrink: 0, alignItems: 'flex-end' },
   timeMain: { fontSize: 15, fontWeight: '800', fontVariant: ['tabular-nums'] },
   timeAmPm: { fontSize: 11, fontWeight: '700', textTransform: 'uppercase' },
   bar: { width: 3, alignSelf: 'stretch', borderRadius: 2 },

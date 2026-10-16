@@ -7,7 +7,15 @@ export type ChatAttachment =
   /** Posted when you've both answered every question in a Play pack. */
   | { type: 'play_result'; packId: string; title: string; area: string; count: number }
   /** A daily quest finished or a trophy unlocked, posted for you both. */
-  | { type: 'achievement'; kind: 'quest' | 'trophy'; emoji: string; title: string; sub: string }
+  | {
+      type: 'achievement';
+      kind: 'quest' | 'trophy';
+      /** The trophy or quest id, so tapping the card opens that exact one (older cards lack it). */
+      id?: string;
+      emoji: string;
+      title: string;
+      sub: string;
+    }
   /** A reply or reaction to your partner's answer in a Play pack (Paired-style). */
   | {
       type: 'play_answer';

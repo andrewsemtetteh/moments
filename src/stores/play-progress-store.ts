@@ -5,6 +5,7 @@ import { isMissingTableError } from '@/lib/network-error';
 import {
   applyAward,
   BADGES,
+  earnedButLocked,
   emptyProgress,
   levelFromXp,
   questsForDate,
@@ -168,6 +169,13 @@ export const usePlayProgressStore = create<PlayProgressState>((set, get) => ({
       if (!remote.progress && cached && cached.xp > 0) void writeRemote(relationshipId, cached);
     } else {
       set({ progress: cached ?? emptyProgress(todayKey()), localOnly: remote.missing });
+    }
+
+    // Catch up: any trophy already earned but never unlocked (added later, or reached
+    // between awards) unlocks now, celebrated and saved like any other.
+    const loaded = get().progress;
+    if (loaded && earnedButLocked(loaded).length > 0) {
+      void get().award(relationshipId, { xp: 0 }, 'Trophy unlocked');
     }
 
     if (!subscription || subscription.relationshipId !== relationshipId) {

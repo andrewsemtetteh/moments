@@ -28,7 +28,6 @@ import {
 } from '@/lib/daily-prompt';
 import { getErrorMessage } from '@/lib/network-error';
 import { getCachedPromptDraft, loadStoredPromptDraft, savePromptDraft } from '@/lib/prompt-draft';
-import { openChat } from '@/lib/router';
 import * as api from '@/services/api';
 import { useAuthStore, useRelationshipStore } from '@/stores';
 import type { DailyChallenge } from '@/types/database';
@@ -333,6 +332,15 @@ export function TodaysPromptCard({ challenge, onOpenHistory, startComposing = fa
   );
 }
 
+/** One nudge per question every 30 minutes, so it stays a nudge and not a nag. */
+const NUDGE_COOLDOWN_MS = 30 * 60_000;
+/** Question id → when this phone last nudged for it (kept across remounts). */
+const lastNudged = new Map<string, number>();
+
+function canNudge(challengeId: string) {
+  return Date.now() - (lastNudged.get(challengeId) ?? 0) >= NUDGE_COOLDOWN_MS;
+}
+
 /**
  * Who has answered today's question, plus one line saying what happens next.
  * Shared by Home and Play so every state reads the same:
@@ -351,6 +359,35 @@ export function PromptStatus({ challenge, ring }: { challenge: DailyChallenge; r
   const theirs = partnerPromptResponse(challenge, user?.id, relationship);
   const partnerFirst = getFirstName(partner?.name) ?? 'Your partner';
   const ringColor = ring ?? colors.surface;
+  // Whether the Nudge was just sent (shows "Nudged" until the cooldown is over).
+  const [nudged, setNudged] = useState(() => !canNudge(challenge.id));
+  const [sending, setSending] = useState(false);
+
+  /**
+   * Tells your partner you're waiting: a notification in their inbox, a push on their
+   * phone (if they allow Daily question alerts), and the Dynamic Island if Moments is open.
+   */
+  const sendNudge = async () => {
+    if (!partner || !relationship?.id || !user || sending || !canNudge(challenge.id)) return;
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setSending(true);
+    try {
+      await api.sendPartnerNotification(
+        relationship.id,
+        partner.id,
+        'challenge',
+        `${getFirstName(user.name) ?? 'Your partner'} answered today’s question and is waiting for yours 💞`,
+        { relatedId: challenge.id },
+      );
+      lastNudged.set(challenge.id, Date.now());
+      setNudged(true);
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch {
+      Alert.alert('Couldn’t send the nudge', 'Check your connection and try again.');
+    } finally {
+      setSending(false);
+    }
+  };
 
   let line: string;
   let nudge = false;
@@ -384,13 +421,19 @@ export function PromptStatus({ challenge, ring }: { challenge: DailyChallenge; r
       </Text>
       {nudge ? (
         <Pressable
-          onPress={() => {
-            void Haptics.selectionAsync();
-            openChat(`Answer today’s question when you get a sec 💞`);
-          }}
+          onPress={() => void sendNudge()}
+          disabled={nudged || sending}
           accessibilityRole="button"
-          style={({ pressed }) => [styles.nudge, { backgroundColor: colors.accentSoft }, pressed && { opacity: 0.8 }]}>
-          <Text style={[styles.nudgeText, { color: colors.accent }]}>Nudge</Text>
+          accessibilityLabel={nudged ? `${partnerFirst} was nudged` : `Nudge ${partnerFirst}`}
+          style={({ pressed }) => [
+            styles.nudge,
+            styles.nudgeRow,
+            { backgroundColor: colors.accentSoft, opacity: sending ? 0.6 : 1 },
+            pressed && { opacity: 0.8 },
+          ]}>
+          <Text style={[styles.nudgeText, { color: colors.accent }]}>{nudged ? 'Nudged' : 'Nudge'}</Text>
+          {/* A paper plane after "Nudge" (it's sent to them); a tick once it's gone. */}
+          <Icon name={nudged ? 'check' : 'paperPlane'} size={14} color={colors.accent} filled />
         </Pressable>
       ) : null}
     </View>
@@ -499,6 +542,7 @@ const styles = StyleSheet.create({
   emptySlot: { width: 30, height: 30, borderRadius: 15, borderWidth: 2, borderStyle: 'dashed' },
   statusText: { flex: 1, fontSize: 13, fontWeight: '600' },
   nudge: { height: 34, paddingHorizontal: 14, borderRadius: 17, justifyContent: 'center' },
+  nudgeRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   nudgeText: { fontSize: 13, fontWeight: '800' },
   answeredAvatar: { borderWidth: 2, borderRadius: 15 },
   answeredBadge: {

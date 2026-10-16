@@ -112,7 +112,7 @@ export default function ProgressScreen() {
               <StreakFlame size={18} tone={streak > 0 ? 'active' : 'idle'} />
               <Text style={[styles.trioValue, { color: colors.text }]}>{streak}</Text>
               <Text style={[styles.trioLabel, { color: colors.textSecondary }]}>
-                Play streak · best {progress.bestStreak}
+                Days played in a row · best {progress.bestStreak}
               </Text>
             </View>
             <View style={[styles.trioCell, card]}>

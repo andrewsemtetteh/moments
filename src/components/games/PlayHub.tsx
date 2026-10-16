@@ -16,7 +16,8 @@ import {
 } from "@/components/ui/DraggableSheet";
 import { Icon } from "@/components/ui/Icon";
 import { Avatar, colorWithAlpha } from "@/components/ui/primitives";
-import { StreakFlame } from "@/components/home/StreakFlame";
+import { StickerFlame } from "@/components/home/StickerFlame";
+import { useStreak } from "@/hooks/queries";
 import { ShareCardModal } from "@/components/share/ShareCardModal";
 import { TrophyShareCard } from "@/components/share/TrophyShareCard";
 import { Spacing } from "@/constants/design-system";
@@ -25,7 +26,6 @@ import {
   BADGES,
   BADGE_GROUPS,
   type BadgeDef,
-  activeStreak,
   emptyProgress,
   levelInfo,
   nextBadges,
@@ -121,7 +121,8 @@ export function PlayHero() {
   const partner = useRelationshipStore((s) => s.partner);
   const progress = useProgress();
   const info = useMemo(() => levelInfo(progress.xp), [progress.xp]);
-  const streak = activeStreak(progress);
+  const { data: streakStatus } = useStreak();
+  const coupleStreak = streakStatus?.current_streak ?? 0;
 
   return (
     // Tap for the full picture: level road, numbers, trophies close to unlocking.
@@ -190,10 +191,13 @@ export function PlayHero() {
               { backgroundColor: colorWithAlpha(colors.onAccent, 0.2) },
             ]}
           >
-            <StreakFlame size={15} tone={streak > 0 ? "active" : "idle"} />
+            {/* Your couple streak, the same number as Home, You and the streak page. */}
             <Text style={[styles.heroChipText, { color: colors.onAccent }]}>
-              {streak > 0 ? `${streak} day streak` : "Start a streak"}
+              {coupleStreak > 0 ? coupleStreak : "Start a streak"}
             </Text>
+            <View style={coupleStreak > 0 ? undefined : styles.idleChipFlame}>
+              <StickerFlame size={16} />
+            </View>
           </View>
           <View
             style={[
@@ -678,13 +682,15 @@ const styles = StyleSheet.create({
   rewardChip: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5 },
   rewardText: { fontSize: 12, fontWeight: "900" },
 
+  // A trophy on the shelf: everything centred, both ways (the share mark stays in its corner).
   badge: {
-    width: 136,
+    width: 152,
     borderRadius: 20,
     borderWidth: 1.5,
     padding: 12,
     gap: 4,
     alignItems: "center",
+    justifyContent: "center",
   },
   badgeMedal: {
     width: 41,
@@ -694,10 +700,11 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   lockSlot: { height: 41, alignItems: "center", justifyContent: "center" },
-  badgeTitle: { fontSize: 13, fontWeight: "900" },
+  badgeTitle: { fontSize: 13, fontWeight: "900", textAlign: "center" },
   badgeHint: { fontSize: 11, fontWeight: "600", textAlign: "center" },
   sheetTitle: { fontSize: 22, fontWeight: "900", marginBottom: 12 },
   pressed: { opacity: 0.75 },
+  idleChipFlame: { opacity: 0.5 },
   // A small share mark on an unlocked trophy: tap it to share.
   shareDot: {
     position: "absolute",

@@ -18,8 +18,11 @@ export function ScreenHeader({
   onBack,
   onClose,
   right,
+  tint,
 }: {
   title: string;
+  /** The header sits on a coloured band: the title takes this colour, buttons become light chips. */
+  tint?: string;
   /** Back chevron on the left (screens that slide in from the right). */
   onBack?: () => void;
   /** Close chevron on the right (screens that slide in from the left). */
@@ -50,12 +53,12 @@ export function ScreenHeader({
     <View style={[styles.row, { paddingTop: insets.top + 6 }]}>
       <View style={[styles.slot, styles.leftEdge]}>
         {onBack ? (
-          <HeaderIconButton icon="chevronLeft" onPress={onBack} accessibilityLabel="Go back" />
+          <HeaderIconButton icon="chevronLeft" onPress={onBack} accessibilityLabel="Go back" chip={!!tint} />
         ) : null}
       </View>
       <View style={styles.centerText}>
         <Text
-          style={[styles.title, colors.sticker && styles.stickerTitle, { color: colors.text }]}
+          style={[styles.title, colors.sticker && styles.stickerTitle, { color: tint ?? colors.text }]}
           numberOfLines={1}
           accessibilityRole="header">
           {title}
@@ -63,7 +66,7 @@ export function ScreenHeader({
       </View>
       <View style={[styles.slot, styles.rightEdge]}>
         {onClose ? (
-          <HeaderIconButton icon="chevronRight" onPress={onClose} accessibilityLabel="Close" />
+          <HeaderIconButton icon="chevronRight" onPress={onClose} accessibilityLabel="Close" chip={!!tint} />
         ) : (
           right
         )}

@@ -501,6 +501,17 @@ export const BADGES: BadgeDef[] = LADDERS.flatMap((ladder) =>
   })),
 );
 
+/**
+ * Trophies whose goal is already met but which were never unlocked. Unlocking only
+ * happens when progress is awarded, so a trophy added after you passed its goal, or
+ * one reached some other way, could show 1/1 and stay locked. Load checks this.
+ */
+export function earnedButLocked(progress: CoupleProgress): BadgeDef[] {
+  const level = levelFromXp(progress.xp);
+  const owned = new Set(progress.badges);
+  return BADGES.filter((b) => !owned.has(b.id) && b.test(progress, level));
+}
+
 /** The trophy groups in order, for the trophy room. */
 export const BADGE_GROUPS = LADDERS.map((l) => l.group);
 

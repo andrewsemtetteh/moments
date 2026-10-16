@@ -188,6 +188,23 @@ function todayStr(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+/**
+ * Today as a calendar date where this person is (their synced timezone), so streak days
+ * line up with the week and month the app draws in local time. UTC when unknown.
+ */
+async function localToday(env: Env, userId: string | null | undefined): Promise<string> {
+  if (!userId) return todayStr();
+  const row = await env.DB.prepare('SELECT timezone FROM users WHERE id = ?1').bind(userId).first<{ timezone: string | null }>();
+  const timeZone = row?.timezone?.trim();
+  if (!timeZone) return todayStr();
+  try {
+    // en-CA formats as YYYY-MM-DD.
+    return new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+  } catch {
+    return todayStr();
+  }
+}
+
 function shiftDay(day: string, delta: number): string {
   const d = new Date(`${day}T00:00:00Z`);
   d.setUTCDate(d.getUTCDate() + delta);
@@ -229,9 +246,8 @@ async function notifyBoth(env: Env, relationshipId: string, type: string, conten
   }
 }
 
-async function normalizeStreakIfBroken(env: Env, relationshipId: string) {
+async function normalizeStreakIfBroken(env: Env, relationshipId: string, today: string) {
   const row = await ensureStreakRow(env, relationshipId);
-  const today = todayStr();
 
   if (row.last_active_date && row.last_active_date < shiftDay(today, -1) && row.current_streak > 0) {
     await env.DB.batch([
@@ -241,6 +257,8 @@ async function normalizeStreakIfBroken(env: Env, relationshipId: string) {
       ).bind(row.current_streak, nowIso(), relationshipId),
       env.DB.prepare('UPDATE relationships SET streak_count = 0 WHERE id = ?1').bind(relationshipId),
     ]);
+    // Both phones drop to 0 together, not just the one that noticed.
+    await emitStreakRow(env, relationshipId);
     if (await tryNotificationDedup(env, relationshipId, `streak_lost:${relationshipId}:${today}`)) {
       await notifyBoth(
         env,
@@ -260,19 +278,33 @@ async function normalizeStreakIfBroken(env: Env, relationshipId: string) {
     .run();
 }
 
-/** Records qualifying couple activity for `userId` (or both partners when null). */
+/** Tells both phones the streak row changed (realtime), so every screen shows the same number. */
+async function emitStreakRow(env: Env, relationshipId: string) {
+  const row = await env.DB.prepare('SELECT * FROM streaks WHERE relationship_id = ?1')
+    .bind(relationshipId)
+    .first<Record<string, unknown>>();
+  if (row) await emitRow(env, 'streaks', 'UPDATE', row);
+}
+
+/**
+ * Records qualifying couple activity for `userId` (or both partners when null). A day
+ * joins the streak once you've BOTH shown up that day: the same rule the app shows
+ * ("Waiting on your partner", today lit only when you both did). One of you alone
+ * just marks your half.
+ */
 export async function updateStreak(env: Env, relationshipId: string, userId: string | null) {
   const rel = await relationshipMembers(env, relationshipId);
   if (!rel || rel.status !== 'active') return;
   if (userId && userId !== rel.user_1_id && userId !== rel.user_2_id) return;
 
   const row = await ensureStreakRow(env, relationshipId);
-  const today = todayStr();
+  const today = await localToday(env, userId ?? rel.user_1_id);
 
   const markUser1 = userId === null || userId === rel.user_1_id;
   const markUser2 = userId === null || userId === rel.user_2_id;
   if (markUser1) row.user_1_last_active_date = today;
   if (markUser2) row.user_2_last_active_date = today;
+  const bothToday = row.user_1_last_active_date === today && row.user_2_last_active_date === today;
 
   let current = row.current_streak;
   let longest = row.longest_streak;
@@ -280,18 +312,16 @@ export async function updateStreak(env: Env, relationshipId: string, userId: str
   let restorable = row.restorable_streak;
   let lostAt = row.restorable_lost_at;
 
-  if (!last || last < shiftDay(today, -1)) {
-    current = 1;
-    longest = Math.max(longest, 1);
-    last = today;
-    restorable = null;
-    lostAt = null;
-  } else if (last === shiftDay(today, -1)) {
-    current += 1;
+  if (bothToday && last !== today) {
+    if (last === shiftDay(today, -1)) {
+      current += 1;
+    } else {
+      current = 1;
+      restorable = null;
+      lostAt = null;
+    }
     longest = Math.max(longest, current);
     last = today;
-  } else {
-    longest = Math.max(longest, current);
   }
 
   await env.DB.batch([
@@ -304,7 +334,8 @@ export async function updateStreak(env: Env, relationshipId: string, userId: str
     env.DB.prepare('UPDATE relationships SET streak_count = ?1 WHERE id = ?2').bind(current, relationshipId),
   ]);
 
-  if (row.user_1_last_active_date === today || row.user_2_last_active_date === today) {
+  // The calendar's lit days: only days you both showed up.
+  if (bothToday) {
     await env.DB.prepare('INSERT OR IGNORE INTO streak_active_days (relationship_id, activity_date) VALUES (?1, ?2)')
       .bind(relationshipId, today)
       .run();
@@ -317,10 +348,10 @@ export async function updateStreak(env: Env, relationshipId: string, userId: str
 }
 
 export async function getStreakStatus(env: Env, relationshipId: string, userId: string) {
-  await normalizeStreakIfBroken(env, relationshipId);
+  const today = await localToday(env, userId);
+  await normalizeStreakIfBroken(env, relationshipId, today);
   const rel = await relationshipMembers(env, relationshipId);
   const row = await ensureStreakRow(env, relationshipId);
-  const today = todayStr();
 
   const atRisk = row.last_active_date === shiftDay(today, -1) && row.current_streak > 0;
   const canRestore =
@@ -365,7 +396,8 @@ export async function restoreStreak(env: Env, relationshipId: string, userId: st
   const { getPlusState } = await import('./billing');
   if (!(await getPlusState(env, relationshipId)).plus) throw new ApiError('Plus required to restore streaks', 403);
 
-  await normalizeStreakIfBroken(env, relationshipId);
+  const today = await localToday(env, userId);
+  await normalizeStreakIfBroken(env, relationshipId, today);
   const row = await ensureStreakRow(env, relationshipId);
   if (row.current_streak !== 0 || !row.restorable_streak || row.restorable_streak <= 0) {
     throw new ApiError('No restorable streak available', 400);
@@ -379,9 +411,11 @@ export async function restoreStreak(env: Env, relationshipId: string, userId: st
     env.DB.prepare(
       `UPDATE streaks SET current_streak = ?1, last_active_date = ?2, restorable_streak = NULL, restorable_lost_at = NULL,
          longest_streak = MAX(longest_streak, ?1), updated_at = ?3 WHERE relationship_id = ?4`,
-    ).bind(restored, shiftDay(todayStr(), -1), nowIso(), relationshipId),
+    ).bind(restored, shiftDay(today, -1), nowIso(), relationshipId),
     env.DB.prepare('UPDATE relationships SET streak_count = ?1 WHERE id = ?2').bind(restored, relationshipId),
   ]);
+  // Restored on one phone: the other shows it straight away too.
+  await emitStreakRow(env, relationshipId);
   return getStreakStatus(env, relationshipId, userId);
 }
 

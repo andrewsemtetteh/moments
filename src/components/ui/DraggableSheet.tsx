@@ -12,6 +12,7 @@ import {
   type ScrollViewProps,
 } from 'react-native';
 import { Gesture, GestureDetector, type NativeGesture } from 'react-native-gesture-handler';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, {
   Easing,
   runOnJS,
@@ -95,6 +96,17 @@ interface DraggableSheetProps {
 }
 
 /**
+ * A sheet's content outlives its prop by one slide: when the page sets `entry` to
+ * null, the sheet still shows the last one while it slides away, instead of
+ * collapsing to an empty handle mid-close.
+ */
+export function useKeptWhileClosing<T>(value: T | null | undefined): T | null {
+  const [kept, setKept] = useState<T | null>(value ?? null);
+  if (value != null && value !== kept) setKept(value);
+  return value ?? kept;
+}
+
+/**
  * Bottom sheet with a real drag-to-dismiss handle: rubber-bands past its rest
  * position, snaps back under threshold, and finishes the slide off-screen
  * (rather than jump-cutting) before unmounting on both gesture and
@@ -112,6 +124,7 @@ export function DraggableSheet({
   inline = false,
 }: DraggableSheetProps) {
   const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
   const [mounted, setMounted] = useState(visible);
   const translateY = useSharedValue(SCREEN_HEIGHT);
   const backdropOpacity = useSharedValue(0);
@@ -205,7 +218,9 @@ export function DraggableSheet({
   return (
     <Shell onRequestClose={() => animateOut(0)}>
       <Container style={styles.overlay} {...containerProps}>
-        <Animated.View style={[StyleSheet.absoluteFill, backdropStyle]}>
+        {/* The dim fades with the sheet (it used to sit on the container: full strength
+            the whole time, then gone in one frame after closing — the blink). */}
+        <Animated.View style={[StyleSheet.absoluteFill, styles.dim, backdropStyle]}>
           <Pressable
             style={StyleSheet.absoluteFill}
             onPress={closeOnBackdropPress ? () => animateOut(0) : undefined}
@@ -215,7 +230,7 @@ export function DraggableSheet({
         <Animated.View
           style={[
             styles.sheet,
-            { backgroundColor: colors.surfaceElevated },
+            { backgroundColor: colors.surfaceElevated, paddingBottom: Math.max(32, insets.bottom + 20) },
             sheetStyle,
             style,
           ]}>
@@ -248,7 +263,8 @@ export function DraggableSheet({
 
 function ModalShell({ onRequestClose, children }: { onRequestClose: () => void; children: ReactNode }) {
   return (
-    <Modal visible transparent animationType="none" onRequestClose={onRequestClose}>
+    // Edge to edge on Android too, so the dim also covers the status bar (no band of colour left at the top).
+    <Modal visible transparent animationType="none" statusBarTranslucent navigationBarTranslucent onRequestClose={onRequestClose}>
       {children}
     </Modal>
   );
@@ -260,13 +276,13 @@ function InlineShell({ children }: { onRequestClose: () => void; children: React
 }
 
 const styles = StyleSheet.create({
-  overlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.45)' },
+  overlay: { flex: 1, justifyContent: 'flex-end' },
+  dim: { backgroundColor: 'rgba(0,0,0,0.45)' },
   sheet: {
     maxHeight: '84%',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     paddingHorizontal: 24,
-    paddingBottom: 32,
   },
   dragArea: { flexShrink: 1 },
   handleTouchTarget: {

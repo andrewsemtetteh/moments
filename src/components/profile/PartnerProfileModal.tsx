@@ -11,13 +11,14 @@ import { Pressable, ScrollView } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { PartnerStatusLine } from '@/components/chat/PartnerStatusLine';
+import { MomentsModal } from '@/components/moments/MomentsModal';
 import { StreakFlame } from '@/components/home/StreakFlame';
 import { FullScreenPage } from '@/components/layout/FullScreenPage';
 import { LocationMapPreview } from '@/components/moments/LocationMapPreview';
 import { FullScreenLocationMapModal } from '@/components/profile/FullScreenLocationMapModal';
 import { FullScreenImageModal } from '@/components/ui/FullScreenImageModal';
 import { Icon, type IconName } from '@/components/ui/Icon';
-import { Avatar } from '@/components/ui/primitives';
+import { Avatar, colorWithAlpha } from '@/components/ui/primitives';
 import { MOOD_COLORS, MOOD_EMOJI, MOOD_LABELS, type ThemeColors } from '@/constants/design-system';
 import { useMoods, useStreak } from '@/hooks/queries';
 import { usePartnerActiveMoments } from '@/hooks/usePartnerActiveMoments';
@@ -121,15 +122,15 @@ export function PartnerProfileModal() {
     leaveProfile(() => router.push('/chat'));
   };
 
+  // Moments open right over the profile (it hosts them while it's open): no stop at
+  // Home on the way, and closing them comes back here.
   const openMomentsHistory = () => {
-    leaveProfile(() => {
-      setMomentHistoryReturnToCamera(false);
-      setShowMomentHistory(true);
-    });
+    setMomentHistoryReturnToCamera(false);
+    setShowMomentHistory(true);
   };
 
   const sendMoment = () => {
-    leaveProfile(() => setShowMomentCreator(true));
+    setShowMomentCreator(true);
   };
 
   const openFullMap = () => {
@@ -155,15 +156,11 @@ export function PartnerProfileModal() {
       return;
     }
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    // Like Chat and Our moments: the profile closes first, or the moment (its own
-    // Modal) can't open over it on iPhone. Closing the moment brings the profile back.
-    leaveProfile(() =>
-      openMomentViewer(recentPartnerMoments, 0, {
-        playback: 'story',
-        sectionLabel: `${getFirstName(partnerName) ?? 'Partner'}'s moment`,
-        returnToPartnerProfile: true,
-      }),
-    );
+    // Opens over the profile (which hosts Moments while it's open); closing it lands back here.
+    openMomentViewer(recentPartnerMoments, 0, {
+      playback: 'story',
+      sectionLabel: `${getFirstName(partnerName) ?? 'Partner'}'s moment`,
+    });
   };
 
   const viewProfilePhoto = () => {
@@ -241,6 +238,11 @@ export function PartnerProfileModal() {
   const firstName = getFirstName(partnerName) ?? 'Partner';
   const surface = cardSurface(colors);
   const tileBg = colors.boldBorder ? colors.backgroundElevated : colors.surfaceElevated;
+  // The top, like the You page: a band of the theme's hero colour with its own text colour.
+  const band = colors.hero ? colors.hero[0] : colors.gradient[0];
+  const onBand = colors.onHero ?? colors.onGradient;
+  const onBandSoft = colorWithAlpha(onBand, 0.82);
+  const bandChip = { backgroundColor: colorWithAlpha(onBand, 0.16) };
 
   return (
     <>
@@ -250,15 +252,21 @@ export function PartnerProfileModal() {
         visible={visible}
         title=""
         onBack={close}
+        floatingBack={!!profile}
+        headerTint={profile ? onBand : undefined}
        
         overlay={
-          <FullScreenLocationMapModal
-            inline
-            visible={showMap}
-            markers={locationMarkers}
-            title={mapTitle}
-            onClose={() => setShowMap(false)}
-          />
+          <>
+            <FullScreenLocationMapModal
+              inline
+              visible={showMap}
+              markers={locationMarkers}
+              title={mapTitle}
+              onClose={() => setShowMap(false)}
+            />
+            {/* Moments, presented from inside this page so they open over it (see AppModals). */}
+            <MomentsModal />
+          </>
         }>
         {!profile && isLoadingPartner ? (
           <View style={styles.loadingState}>
@@ -278,9 +286,12 @@ export function PartnerProfileModal() {
           <ScrollView
             style={styles.flex}
             showsVerticalScrollIndicator={false}
+            // The band meets the header: no pulling the page down to open a gap between them.
+            bounces={false}
+            overScrollMode="never"
             contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 16 }]}>
             {/* Who: photo (story ring when they've posted today), name, status, their time + distance. */}
-            <View style={styles.hero}>
+            <View style={[styles.hero, { backgroundColor: band, paddingTop: insets.top + 56 }]}>
               <Pressable
                 onPress={hasPartnerMoment ? viewPartnerMoment : onAvatarPress}
                 onLongPress={viewProfilePhoto}
@@ -295,7 +306,7 @@ export function PartnerProfileModal() {
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 1 }}
                     style={styles.storyRing}>
-                    <View style={[styles.storyGap, { backgroundColor: colors.background }]}>
+                    <View style={[styles.storyGap, { backgroundColor: band }]}>
                       {storyPreviewUrl ? (
                         <Image source={{ uri: storyPreviewUrl }} style={styles.storyImage} contentFit="cover" />
                       ) : (
@@ -304,17 +315,19 @@ export function PartnerProfileModal() {
                     </View>
                   </LinearGradient>
                 ) : (
-                  <Avatar name={profile.name} imageUrl={profile.avatar_url} size={120} />
+                  <View style={[styles.avatarRing, { borderColor: colors.background }]}>
+                    <Avatar name={profile.name} imageUrl={profile.avatar_url} size={112} />
+                  </View>
                 )}
                 {isOnline ? (
-                  <View style={[styles.onlineDot, { backgroundColor: colors.success, borderColor: colors.background }]} />
+                  <View style={[styles.onlineDot, { backgroundColor: colors.success, borderColor: band }]} />
                 ) : null}
               </Pressable>
               {hasPartnerMoment ? (
-                <Text style={[styles.hint, { color: colors.textTertiary }]}>Tap for today’s moment · hold for photo</Text>
+                <Text style={[styles.hint, { color: onBandSoft }]}>Tap for today’s moment · hold for photo</Text>
               ) : null}
 
-              <Text style={[styles.name, { color: colors.text }]} numberOfLines={1}>
+              <Text style={[styles.name, { color: onBand }]} numberOfLines={1}>
                 {partnerName}
               </Text>
               <PartnerStatusLine
@@ -322,21 +335,21 @@ export function PartnerProfileModal() {
                 isOnline={isOnline}
                 lastSeenAt={lastSeenAt}
                 statusHidden={statusHidden}
-                textStyle={{ fontSize: 14, fontWeight: '700', color: isOnline ? colors.success : colors.textSecondary }}
+                textStyle={{ fontSize: 14, fontWeight: '700', color: onBandSoft }}
               />
 
               {clock || distanceApart ? (
                 <View style={styles.chips}>
                   {clock ? (
-                    <View style={[styles.chip, surface]}>
-                      <Icon name={clock.isOvernight ? 'moon' : 'time'} size={15} color={colors.textSecondary} />
-                      <Text style={[styles.chipText, { color: colors.textSecondary }]}>{clock.time} their time</Text>
+                    <View style={[styles.chip, bandChip]}>
+                      <Icon name={clock.isOvernight ? 'moon' : 'time'} size={15} color={onBand} />
+                      <Text style={[styles.chipText, { color: onBand }]}>{clock.time} their time</Text>
                     </View>
                   ) : null}
                   {distanceApart ? (
-                    <View style={[styles.chip, surface]}>
-                      <Icon name="location" size={15} color={colors.textSecondary} />
-                      <Text style={[styles.chipText, { color: colors.textSecondary }]}>{distanceApart}</Text>
+                    <View style={[styles.chip, bandChip]}>
+                      <Icon name="location" size={15} color={onBand} />
+                      <Text style={[styles.chipText, { color: onBand }]}>{distanceApart}</Text>
                     </View>
                   ) : null}
                 </View>
@@ -557,7 +570,18 @@ const styles = StyleSheet.create({
   rowPad: { padding: 14 },
   list: { overflow: 'hidden', paddingVertical: 2 },
 
-  hero: { alignItems: 'center', gap: 6 },
+  // Full width (undoes the page's side and top padding), curved at the bottom like the You page.
+  hero: {
+    alignItems: 'center',
+    gap: 6,
+    marginHorizontal: -16,
+    marginTop: -4,
+    paddingHorizontal: 20,
+    paddingBottom: 26,
+    borderBottomLeftRadius: 32,
+    borderBottomRightRadius: 32,
+  },
+  avatarRing: { borderWidth: 4, borderRadius: 60 },
   storyRing: { width: 128, height: 128, borderRadius: 64, alignItems: 'center', justifyContent: 'center' },
   storyGap: { width: 120, height: 120, borderRadius: 60, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
   storyImage: { width: 112, height: 112, borderRadius: 56 },

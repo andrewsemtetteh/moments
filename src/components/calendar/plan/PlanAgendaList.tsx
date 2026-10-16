@@ -125,10 +125,17 @@ function PlanCard({
       accessibilityRole="button"
       accessibilityLabel={`${event.title}, ${format(at, 'h:mm a')}${done ? ', done' : ''}`}>
       <View style={styles.timeCol}>
-        <Text style={[styles.time, { color: done ? colors.textTertiary : colors.text }]}>
+        <Text
+          style={[styles.time, { color: done ? colors.textTertiary : colors.text }]}
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          minimumFontScale={0.75}
+          maxFontSizeMultiplier={1.2}>
           {format(at, 'h:mm')}
         </Text>
-        <Text style={[styles.ampm, { color: colors.textTertiary }]}>{format(at, 'a')}</Text>
+        <Text style={[styles.ampm, { color: colors.textTertiary }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75} maxFontSizeMultiplier={1.2}>
+          {format(at, 'a')}
+        </Text>
       </View>
 
       <View
@@ -202,7 +209,8 @@ const styles = StyleSheet.create({
   group: { gap: 10 },
   groupLabel: { fontSize: 13, fontWeight: '700', paddingHorizontal: 2 },
   row: { flexDirection: 'row', alignItems: 'stretch', gap: 12 },
-  timeCol: { width: 48, alignItems: 'flex-end', paddingTop: 14 },
+  // Fixed width for the longest time ("12:45"), so every card lines up.
+  timeCol: { width: 60, flexShrink: 0, alignItems: 'flex-end', paddingTop: 14 },
   time: { fontSize: 15, fontWeight: '800', letterSpacing: -0.3, fontVariant: ['tabular-nums'] },
   ampm: { fontSize: 11, fontWeight: '700', marginTop: 1 },
   card: {

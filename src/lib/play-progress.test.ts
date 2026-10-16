@@ -13,6 +13,7 @@ import {
   xpForLevel,
   BADGES,
   nextBadges,
+  earnedButLocked,
 } from './play-progress';
 
 describe('levels', () => {
@@ -149,5 +150,21 @@ describe('helpers', () => {
     expect(n.playStreak).toBe(3);
     expect(n.stats).toEqual({ a: 1 });
     expect(n.badges).toEqual(['x']);
+  });
+});
+
+describe('earnedButLocked', () => {
+  it('finds trophies whose goal is met but were never unlocked, and applyAward unlocks them', () => {
+    const base = emptyProgress('2026-10-16');
+    // Reached a goal without an award evaluating it (e.g. a trophy added later).
+    const stale = { ...base, stats: { games_played: 1 } };
+    const missing = earnedButLocked(stale);
+    expect(missing.map((b) => b.id)).toContain('first_game');
+
+    const result = applyAward(stale, { xp: 0 }, '2026-10-16');
+    expect(result.progress.badges).toContain('first_game');
+    expect(earnedButLocked(result.progress)).toHaveLength(0);
+    // Unlocking alone doesn't count as playing.
+    expect(result.progress.playStreak).toBe(base.playStreak);
   });
 });

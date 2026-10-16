@@ -3,7 +3,6 @@ import * as Haptics from '@/lib/haptics';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
-  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -16,6 +15,7 @@ import { ownerColor } from '@/components/calendar/plan/PlanDayView';
 import { notInPast, PlanDateModal, PlanTimeModal } from '@/components/calendar/plan/PlanPickerModals';
 import { FullScreenPage } from '@/components/layout/FullScreenPage';
 import { HeaderIconButton } from '@/components/ui/HeaderIconButton';
+import { DraggableSheet } from '@/components/ui/DraggableSheet';
 import { Icon } from '@/components/ui/Icon';
 import { Avatar, colorWithAlpha, PrimaryButton, paperEdge } from '@/components/ui/primitives';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -310,9 +310,10 @@ export function EventDetailsSheet({
                   </Pressable>
                 </View>
               ) : passed ? (
-                <View style={[styles.doneBanner, { backgroundColor: colors.surface }, paperEdge(colors)]}>
-                  <Icon name="time" size={16} color={colors.textSecondary} />
-                  <Text style={{ color: colors.textSecondary, fontWeight: '700', flex: 1 }}>This happened</Text>
+                // Green like a past day with plans on the calendar.
+                <View style={[styles.doneBanner, { backgroundColor: colorWithAlpha(colors.success, 0.14) }]}>
+                  <Icon name="checkDone" size={16} color={colors.success} />
+                  <Text style={{ color: colors.success, fontWeight: '700', flex: 1 }}>This happened</Text>
                 </View>
               ) : countdown ? (
                 <View style={styles.countdownRow}>
@@ -494,26 +495,24 @@ export function EventDetailsSheet({
           }}
         />
 
-        <Modal visible={reminderOpen} transparent animationType="fade" onRequestClose={() => setReminderOpen(false)}>
-          <Pressable style={styles.reminderBackdrop} onPress={() => setReminderOpen(false)}>
-            <View style={[styles.reminderSheet, { backgroundColor: colors.backgroundElevated }]}>
-              <Text style={[styles.reminderTitle, { color: colors.text }]}>Reminder</Text>
-              {REMINDER_OPTIONS.map((opt) => (
-                <Pressable
-                  key={String(opt.mins)}
-                  onPress={() => {
-                    setReminderMins(opt.mins);
-                    setReminderOpen(false);
-                    persist(checklist, { reminderMins: opt.mins });
-                  }}
-                  style={styles.reminderRow}>
-                  <Text style={{ color: colors.text, fontSize: 16, fontWeight: '600' }}>{opt.label}</Text>
-                  {reminderMins === opt.mins ? <Icon name="check" size={18} color={colors.accent} /> : null}
-                </Pressable>
-              ))}
-            </View>
-          </Pressable>
-        </Modal>
+        <DraggableSheet visible={reminderOpen} onClose={() => setReminderOpen(false)} dragAnywhere>
+          <Text style={[styles.reminderTitle, { color: colors.text }]}>Reminder</Text>
+          {REMINDER_OPTIONS.map((opt) => (
+            <Pressable
+              key={String(opt.mins)}
+              onPress={() => {
+                setReminderMins(opt.mins);
+                setReminderOpen(false);
+                persist(checklist, { reminderMins: opt.mins });
+              }}
+              accessibilityRole="button"
+              accessibilityState={{ selected: reminderMins === opt.mins }}
+              style={({ pressed }) => [styles.reminderRow, pressed && { opacity: 0.6 }]}>
+              <Text style={{ color: colors.text, fontSize: 16, fontWeight: '600' }}>{opt.label}</Text>
+              {reminderMins === opt.mins ? <Icon name="check" size={18} color={colors.accent} /> : null}
+            </Pressable>
+          ))}
+        </DraggableSheet>
       </FullScreenPage>
 
     </>
@@ -601,13 +600,6 @@ const styles = StyleSheet.create({
   },
   messageLabel: { fontSize: 15, fontWeight: '700' },
   doneBtn: { flex: 1.2 },
-  reminderBackdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.45)',
-    justifyContent: 'flex-end',
-    padding: 16,
-  },
-  reminderSheet: { borderRadius: 20, padding: 16, gap: 4 },
   reminderTitle: { fontSize: 17, fontWeight: '700', marginBottom: 8 },
   reminderRow: {
     flexDirection: 'row',

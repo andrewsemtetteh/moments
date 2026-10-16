@@ -42,6 +42,7 @@ export type IconName =
   | 'time'
   | 'sparkles'
   | 'sync'
+  | 'paperPlane'
   | 'link'
   | 'bulb'
   | 'question'
@@ -140,6 +141,8 @@ const ICON_MAP: Record<IconName, { outline: IoniconName; filled: IoniconName }> 
   lock: { outline: 'lock-closed-outline', filled: 'lock-closed' },
   time: { outline: 'time-outline', filled: 'time' },
   sparkles: { outline: 'sparkles-outline', filled: 'sparkles' },
+  /** A paper plane flying up and to the right (about 2 o'clock): sending a nudge. */
+  paperPlane: { outline: 'paper-plane-outline', filled: 'paper-plane' },
   /** Answers that matched, being in sync. */
   sync: { outline: 'sync-outline', filled: 'sync' },
   /** Where two things line up (compatibility). */

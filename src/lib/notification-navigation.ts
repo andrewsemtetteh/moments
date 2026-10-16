@@ -1,6 +1,7 @@
 import type { Href } from 'expo-router';
 
 import { PACKS } from '@/lib/handpicked';
+import { BADGES } from '@/lib/play-progress';
 import { openActivities, openCalendar, openChat } from '@/lib/router';
 import * as api from '@/services/api';
 import { getFirstName } from '@/lib/avatar-initial';
@@ -89,10 +90,9 @@ export async function openFromNotification(target: NotificationNavTarget, router
       return;
 
     case 'moment':
-      goHome(router);
-      afterNavigate(() => {
-        void openMomentFromNotification(target.relatedId);
-      });
+      // The moment opens right over where you are (Moments is a modal over the whole app),
+      // so closing it brings you back here, e.g. to the notifications list. No stop at Home.
+      void openMomentFromNotification(target.relatedId);
       return;
 
     case 'mood':
@@ -137,8 +137,14 @@ export async function openFromNotification(target: NotificationNavTarget, router
       }
       return;
 
+    // A trophy your partner unlocked opens that trophy; a quest (no id) opens Play.
     case 'achievement':
-      openActivities();
+      if (target.relatedId && BADGES.some((b) => b.id === target.relatedId)) {
+        const id = target.relatedId;
+        afterNavigate(() => useUIStore.getState().openTrophy(id));
+      } else {
+        openActivities();
+      }
       return;
 
     case 'game_invite':

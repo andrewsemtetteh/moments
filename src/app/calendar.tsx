@@ -450,15 +450,6 @@ export default function CalendarScreen() {
     }
   };
 
-  const saveDescription = async (event: CalendarEvent, patch: Partial<PlanMeta>) => {
-    const meta = parsePlanMeta(event.description);
-    const updated = await api.updateCalendarEvent(event.id, {
-      description: serializePlanMeta({ ...meta, ...patch, v: 1 }),
-    });
-    void invalidate();
-    return updated;
-  };
-
   const momentPhotoUrlsFor = (ids: string[]) =>
     Object.fromEntries(
       ids.map((id) => [id, momentsById.get(id)?.media_url]).filter(([, u]) => !!u),
@@ -563,19 +554,6 @@ export default function CalendarScreen() {
       void invalidate();
     } catch (e) {
       Alert.alert('Could not delete', getErrorMessage(e) ?? 'Please try again.');
-    }
-  };
-
-  const reactToMemory = async (entry: CalendarEvent, emoji: string) => {
-    if (!me) return;
-    const reactions = { ...parsePlanMeta(entry.description).reactions };
-    if (reactions[me.id] === emoji) delete reactions[me.id];
-    else reactions[me.id] = emoji;
-    try {
-      const updated = await saveDescription(entry, { reactions });
-      setOpenMemory((cur) => (cur?.id === updated.id ? updated : cur));
-    } catch {
-      /* the next refresh shows the real state */
     }
   };
 
@@ -890,7 +868,6 @@ export default function CalendarScreen() {
         me={me ?? null}
         partner={partner}
         onClose={() => setOpenMemory(null)}
-        onReact={(emoji) => openMemory && void reactToMemory(openMemory, emoji)}
         onEdit={() => openMemory && editMemory(openMemory)}
         onDelete={() => openMemory && void deleteMemory(openMemory)}
       />

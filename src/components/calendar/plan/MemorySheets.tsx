@@ -9,6 +9,7 @@ import {
   Dimensions,
   Pressable,
   ScrollView,
+  Share,
   StyleSheet,
   Text,
   View,
@@ -19,10 +20,12 @@ import { ScrollView as GHScrollView } from 'react-native-gesture-handler';
 import { Divider, FieldRow, InlineInput, createFormStyles as form } from '@/components/calendar/plan/CreatePlanFlow';
 import { FullScreenPage } from '@/components/layout/FullScreenPage';
 import { HeaderIconButton } from '@/components/ui/HeaderIconButton';
-import { DraggableSheet } from '@/components/ui/DraggableSheet';
+import { DraggableSheet, useKeptWhileClosing } from '@/components/ui/DraggableSheet';
 import { Icon } from '@/components/ui/Icon';
 import { colorWithAlpha, paperEdge } from '@/components/ui/primitives';
+import { ActionSheet, type SheetAction } from '@/components/moments/MomentAlbums';
 import { MonthCalendarPicker } from '@/components/ui/MonthCalendarPicker';
+import { downloadMultipleMomentMedia } from '@/lib/download-moment-media';
 import { useTheme } from '@/hooks/useTheme';
 import { getFirstName } from '@/lib/avatar-initial';
 import { MEMORY_TINT, MEMORY_TYPES, memoryTypeMeta, parsePlanMeta, planIcon, type MemoryType } from '@/lib/plan-meta';
@@ -40,7 +43,6 @@ export const RATINGS = [
   { emoji: '😍', label: 'Loved it' },
   { emoji: '🔥', label: 'Best ever' },
 ] as const;
-const REACTIONS = ['💞', '🥹', '😂', '🔥'] as const;
 
 export type MemoryDraft = {
   title: string;
@@ -226,7 +228,11 @@ export function MemoryEditorSheet({
           />
         </View>
         {placeNames.length > 0 && !draft.placeName ? (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.bleedRow}
+            contentContainerStyle={styles.chips}>
             {placeNames.map((name) => (
               <Pressable
                 key={name}
@@ -242,7 +248,11 @@ export function MemoryEditorSheet({
         <Text style={[form.sectionLabel, { color: colors.accent }]}>
           Photos{photoCount ? ` · ${photoCount}` : ''}
         </Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.photoRow}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.bleedRow}
+          contentContainerStyle={styles.photoRow}>
           <Pressable
             onPress={() => void addFromGallery()}
             accessibilityRole="button"
@@ -322,12 +332,11 @@ function emptyDraft(): MemoryDraft {
 // ── A memory ────────────────────────────────────────────────────────────
 
 export function MemoryDetailSheet({
-  entry,
+  entry: entryProp,
   photos,
   me,
   partner,
   onClose,
-  onReact,
   onEdit,
   onDelete,
 }: {
@@ -336,62 +345,98 @@ export function MemoryDetailSheet({
   me: UserProfile | null;
   partner: UserProfile | null;
   onClose: () => void;
-  onReact: (emoji: string) => void;
   onEdit: () => void;
   onDelete: () => void;
 }) {
   const { colors } = useTheme();
+  // Still the same memory while the page slides away.
+  const entry = useKeptWhileClosing(entryProp);
   const [page, setPage] = useState(0);
+  const [menu, setMenu] = useState<'actions' | 'delete' | null>(null);
+  const [savingPhotos, setSavingPhotos] = useState(false);
   const meta = entry ? parsePlanMeta(entry.description) : null;
   const type = memoryTypeMeta(meta?.memoryType);
   const date = entry ? new Date(entry.date_time) : new Date();
   const partnerName = getFirstName(partner?.name) ?? 'Partner';
-  const partnerReaction = partner ? meta?.reactions?.[partner.id] : undefined;
-  const myReaction = me ? meta?.reactions?.[me.id] : undefined;
   const ratings = meta?.ratings ?? {};
-  const photoW = SCREEN_W - 40;
+  const photoW = SCREEN_W - 32;
   const tint = MEMORY_TINT[meta?.memoryType ?? 'justus'] ?? colors.accent;
+  const ratingLabel = (emoji: string | undefined) => RATINGS.find((r) => r.emoji === emoji)?.label ?? emoji;
 
-  const openMenu = () =>
-    Alert.alert(entry?.title ?? 'Memory', undefined, [
-      { text: 'Edit memory', onPress: onEdit },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: () =>
-          Alert.alert('Delete this memory?', 'It’s removed for both of you. Photos stay in Moments.', [
-            { text: 'Cancel', style: 'cancel' },
-            { text: 'Delete', style: 'destructive', onPress: onDelete },
-          ]),
-      },
-      { text: 'Cancel', style: 'cancel' },
-    ]);
+  const share = async () => {
+    if (!entry || !meta) return;
+    const lines = [
+      entry.title,
+      `${format(date, 'd MMMM yyyy')}${meta.placeName ? ` · ${meta.placeName}` : ''}`,
+      meta.notes ? `“${meta.notes}”` : null,
+    ].filter(Boolean);
+    try {
+      await Share.share({ message: lines.join('\n') });
+    } catch {
+      // Dismissed or unavailable: nothing to do.
+    }
+  };
+
+  const savePhotos = async () => {
+    if (photos.length === 0 || savingPhotos) return;
+    setSavingPhotos(true);
+    try {
+      await downloadMultipleMomentMedia(photos.map((url) => ({ url, isVideo: false })));
+    } finally {
+      setSavingPhotos(false);
+    }
+  };
+
+  const actions: SheetAction[] = [
+    { label: 'Edit memory', icon: 'edit', onPress: () => { setMenu(null); onEdit(); } },
+    { label: 'Share', icon: 'share', onPress: () => { setMenu(null); void share(); } },
+    ...(photos.length > 0
+      ? [
+          {
+            label: photos.length === 1 ? 'Save photo' : `Save ${photos.length} photos`,
+            icon: 'download' as const,
+            onPress: () => {
+              setMenu(null);
+              void savePhotos();
+            },
+          },
+        ]
+      : []),
+    { label: 'Delete memory', icon: 'trash', destructive: true, onPress: () => setMenu('delete') },
+  ];
 
   return (
-    <DraggableSheet visible={!!entry} onClose={onClose} style={styles.sheet}>
+    <FullScreenPage
+      visible={!!entryProp}
+      title={type.label}
+      onBack={onClose}
+      right={
+        <HeaderIconButton icon="more" onPress={() => setMenu('actions')} accessibilityLabel="Memory options" />
+      }
+      overlay={
+        menu === 'actions' && entry ? (
+          <ActionSheet title={entry.title} subtitle={format(date, 'd MMM yyyy')} actions={actions} onClose={() => setMenu(null)} />
+        ) : menu === 'delete' ? (
+          <ActionSheet
+            title="Delete this memory?"
+            message="It’s removed for both of you. Photos stay in Moments."
+            actions={[
+              {
+                label: 'Delete memory',
+                icon: 'trash',
+                destructive: true,
+                onPress: () => {
+                  setMenu(null);
+                  onDelete();
+                },
+              },
+            ]}
+            onClose={() => setMenu(null)}
+          />
+        ) : null
+      }>
       {entry && meta ? (
-        <ScrollView contentContainerStyle={styles.detailBody}>
-          <View style={styles.detailTop}>
-            <View style={[styles.tag, { backgroundColor: colorWithAlpha(tint, 0.16) }]}>
-              <Icon name={type.icon} size={13} color={tint} />
-              <Text style={[styles.tagText, { color: tint }]}>{type.label}</Text>
-            </View>
-            <View style={styles.detailActions}>
-              <Pressable
-                onPress={onEdit}
-                hitSlop={8}
-                accessibilityRole="button"
-                accessibilityLabel="Edit memory"
-                style={[styles.editBtn, { backgroundColor: colors.surface }, paperEdge(colors)]}>
-                <Icon name="edit" size={18} color={colors.text} />
-                <Text style={[styles.editText, { color: colors.text }]}>Edit</Text>
-              </Pressable>
-              <Pressable onPress={openMenu} hitSlop={8} accessibilityLabel="Memory options" style={styles.moreBtn}>
-                <Icon name="more" size={26} color={colors.text} />
-              </Pressable>
-            </View>
-          </View>
-
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.detailBody}>
           {photos.length > 0 ? (
             <View>
               <ScrollView
@@ -417,7 +462,7 @@ export function MemoryDetailSheet({
             </View>
           ) : (
             // No photos: the timeline's story card look, bigger: a flat wash of the memory's colour, the big
-            // date, and the type's emoji large and tilted.
+            // date, and the type's icon large and tilted.
             <View
               style={[
                 styles.noPhotoHero,
@@ -428,9 +473,9 @@ export function MemoryDetailSheet({
                   borderWidth: colors.boldBorder ? 2 : StyleSheet.hairlineWidth,
                 },
               ]}>
-              <Text style={styles.noPhotoEmoji} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-                {type.emoji}
-              </Text>
+              <View style={styles.noPhotoEmoji} pointerEvents="none" accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+                <Icon name={type.icon} size={120} color={colorWithAlpha(tint, 0.24)} filled />
+              </View>
               <View style={styles.noPhotoDate}>
                 <Text style={[styles.noPhotoDay, { color: colors.text }]}>{format(date, 'd')}</Text>
                 <View>
@@ -441,56 +486,63 @@ export function MemoryDetailSheet({
             </View>
           )}
 
-          <Text style={[styles.detailTitle, { color: colors.text }]}>{entry.title}</Text>
-          <Text style={[styles.detailDate, { color: colors.textSecondary }]}>
-            {format(date, 'd MMM yyyy')} · {isToday(date) ? 'today' : formatDistanceToNowStrict(date, { addSuffix: true })}
-          </Text>
-          {meta.placeName ? (
-            <View style={styles.placeRow}>
-              <Icon name="location" size={16} color={colors.textSecondary} />
-              <Text style={[styles.detailPlace, { color: colors.text }]}>{meta.placeName}</Text>
+          {/* Title block: type, title, when. */}
+          <View style={styles.detailHead}>
+            <View style={[styles.tag, { backgroundColor: colorWithAlpha(tint, 0.16) }]}>
+              <Icon name={type.icon} size={13} color={tint} />
+              <Text style={[styles.tagText, { color: tint }]}>{type.label}</Text>
+            </View>
+            <Text style={[styles.detailTitle, { color: colors.text }]}>{entry.title}</Text>
+            <Text style={[styles.detailDate, { color: colors.textSecondary }]}>
+              {format(date, 'EEEE, d MMMM yyyy')} · {isToday(date) ? 'today' : formatDistanceToNowStrict(date, { addSuffix: true })}
+            </Text>
+          </View>
+
+          {/* The details, in one grouped card like the plan pages. */}
+          {meta.placeName || meta.notes || Object.keys(ratings).length > 0 ? (
+            <View style={[styles.detailCard, { backgroundColor: colors.surface }, paperEdge(colors)]}>
+              {meta.placeName ? (
+                <View style={styles.detailRow}>
+                  <Icon name="location" size={18} color={colors.textSecondary} />
+                  <Text style={[styles.detailRowText, { color: colors.text }]}>{meta.placeName}</Text>
+                </View>
+              ) : null}
+              {meta.notes ? (
+                <View style={[styles.detailRow, meta.placeName ? styles.detailRowDivided : null, { borderTopColor: colors.border }]}>
+                  <Icon name="journal" size={18} color={colors.textSecondary} />
+                  <Text style={[styles.detailRowText, { color: colors.text }]}>{meta.notes}</Text>
+                </View>
+              ) : null}
+              {Object.keys(ratings).length > 0 ? (
+                <View
+                  style={[
+                    styles.detailRow,
+                    meta.placeName || meta.notes ? styles.detailRowDivided : null,
+                    { borderTopColor: colors.border },
+                  ]}>
+                  <Icon name="heart" size={18} color={colors.textSecondary} />
+                  <Text style={[styles.detailRowText, { color: colors.text }]}>
+                    {[
+                      me && ratings[me.id] ? `You: ${ratingLabel(ratings[me.id])}` : null,
+                      partner && ratings[partner.id] ? `${partnerName}: ${ratingLabel(ratings[partner.id])}` : null,
+                    ]
+                      .filter(Boolean)
+                      .join(' · ')}
+                  </Text>
+                </View>
+              ) : null}
             </View>
           ) : null}
-          {meta.notes ? <Text style={[styles.detailNote, { color: colors.text }]}>{meta.notes}</Text> : null}
-
-          {Object.keys(ratings).length > 0 ? (
-            <Text style={[styles.detailDate, { color: colors.textSecondary }]}>
-              {[me && ratings[me.id] ? `You ${ratings[me.id]}` : null, partner && ratings[partner.id] ? `${partnerName} ${ratings[partner.id]}` : null]
-                .filter(Boolean)
-                .join(' · ')}
-            </Text>
-          ) : null}
-
-          <View style={styles.reactRow}>
-            <Text style={[styles.reactLabel, { color: colors.textSecondary }]} numberOfLines={1}>
-              {partnerReaction ? `${partnerName} reacted ${partnerReaction}` : 'React'}
-            </Text>
-            {REACTIONS.map((r) => (
-              <Pressable
-                key={r}
-                onPress={() => {
-                  void Haptics.selectionAsync();
-                  onReact(r);
-                }}
-                accessibilityLabel={`React ${r}`}
-                style={[
-                  styles.reactBtn,
-                  { backgroundColor: myReaction === r ? colors.accentSoft : colors.surface },
-                ]}>
-                <Text style={styles.reactEmoji}>{r}</Text>
-              </Pressable>
-            ))}
-          </View>
         </ScrollView>
       ) : null}
-    </DraggableSheet>
+    </FullScreenPage>
   );
 }
 
 // ── How was it? ────────────────────────────────────────────────────────
 
 export function HowWasItSheet({
-  plan,
+  plan: planProp,
   dayMoments,
   saving,
   onSave,
@@ -510,12 +562,14 @@ export function HowWasItSheet({
   const [picked, setPicked] = useState<string[]>(() => photos.slice(0, 3).map((m) => m.id));
   const [note, setNote] = useState('');
 
+  // Still the same plan while the sheet slides away.
+  const plan = useKeptWhileClosing(planProp);
   if (!plan) return null;
   const at = new Date(plan.date_time);
   const icon = planIcon(plan);
 
   return (
-    <DraggableSheet visible={!!plan} onClose={onSkip} avoidKeyboard style={styles.sheet}>
+    <DraggableSheet visible={!!planProp} onClose={onSkip} avoidKeyboard style={styles.sheet}>
       <ScrollView contentContainerStyle={styles.editorBody} keyboardShouldPersistTaps="handled">
         <View style={styles.howHead}>
           <View style={[styles.howIcon, { backgroundColor: colors.accentSoft }]}>
@@ -552,7 +606,7 @@ export function HowWasItSheet({
         {photos.length > 0 ? (
           <>
             <Text style={[styles.label, { color: colors.textSecondary }]}>From that day’s moments</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.photoRow}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.photoRowPlain}>
               {photos.map((m) => {
                 const on = picked.includes(m.id);
                 return (
@@ -608,7 +662,9 @@ const styles = StyleSheet.create({
   sheet: { maxHeight: '94%' },
   editorBody: { paddingHorizontal: 20, paddingBottom: 30, gap: 14 },
   sheetTitle: { fontSize: 20, fontWeight: '800', letterSpacing: -0.3 },
-  chips: { gap: 8 },
+  // Sideways rows run edge to edge (like the type chips) but start on the form's 20pt edge.
+  bleedRow: { flexGrow: 0, marginHorizontal: -20 },
+  chips: { gap: 8, paddingHorizontal: 20 },
   chip: form.chip,
   chipText: form.chipText,
   titleInput: {
@@ -626,7 +682,8 @@ const styles = StyleSheet.create({
   placeInput: { flex: 1, fontSize: 15, fontWeight: '600', padding: 0 },
   datePicker: { paddingHorizontal: 8, paddingBottom: 8 },
   label: { fontSize: 14, fontWeight: '800' },
-  photoRow: { gap: 10 },
+  photoRow: { gap: 10, paddingHorizontal: 20 },
+  photoRowPlain: { gap: 10 },
   // Bigger tiles on New memory so photos are easy to see and tap.
   addTile: {
     width: PHOTO_TILE,
@@ -668,8 +725,13 @@ const styles = StyleSheet.create({
   primaryText: { fontSize: 16, fontWeight: '800' },
   secondary: { height: 44, alignItems: 'center', justifyContent: 'center' },
   secondaryText: { fontSize: 15, fontWeight: '700' },
-  detailBody: { paddingHorizontal: 20, paddingBottom: 30, gap: 12 },
-  detailTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  // Lined up on one 16pt edge: photos, title block and the details card.
+  detailBody: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 40, gap: 18 },
+  detailHead: { gap: 6 },
+  detailCard: { borderRadius: 22, paddingHorizontal: 16 },
+  detailRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, paddingVertical: 14 },
+  detailRowDivided: { borderTopWidth: StyleSheet.hairlineWidth },
+  detailRowText: { flex: 1, fontSize: 15, fontWeight: '600', lineHeight: 21 },
   tag: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -679,17 +741,11 @@ const styles = StyleSheet.create({
     borderRadius: 999,
   },
   tagText: { fontSize: 13, fontWeight: '800' },
-  moreBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', marginRight: -10 },
-  detailActions: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  editBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, height: 34, paddingHorizontal: 12, borderRadius: 17 },
-  editText: { fontSize: 14, fontWeight: '700' },
   noPhotoHero: { height: 200, borderRadius: 24, overflow: 'hidden', justifyContent: 'flex-end', padding: 18 },
   noPhotoEmoji: {
     position: 'absolute',
     right: -4,
     top: -6,
-    fontSize: 120,
-    opacity: 0.22,
     transform: [{ rotate: '-12deg' }],
   },
   noPhotoDate: { flexDirection: 'row', alignItems: 'center', gap: 12 },
@@ -700,15 +756,8 @@ const styles = StyleSheet.create({
   dots: { flexDirection: 'row', justifyContent: 'center', gap: 6, marginTop: 10 },
   dot: { width: 6, height: 6, borderRadius: 3 },
   dotOn: { width: 18 },
-  detailTitle: { fontSize: 24, fontWeight: '800', letterSpacing: -0.5, marginTop: 4 },
+  detailTitle: { fontSize: 26, fontWeight: '900', letterSpacing: -0.5 },
   detailDate: { fontSize: 14, fontWeight: '600' },
-  detailPlace: { fontSize: 15, fontWeight: '700' },
-  placeRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  detailNote: { fontSize: 16, lineHeight: 23 },
-  reactRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6 },
-  reactLabel: { flex: 1, fontSize: 14, fontWeight: '600' },
-  reactBtn: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
-  reactEmoji: { fontSize: 18 },
   howHead: { alignItems: 'center', gap: 4 },
   howIcon: { width: 64, height: 64, borderRadius: 32, alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
   ratingRow: { flexDirection: 'row', gap: 8 },

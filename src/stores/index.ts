@@ -95,6 +95,10 @@ interface UIState {
   partnerLocationMap: PartnerLocationMapState | null;
   streakMilestoneCount: number | null;
   streakSpark: { count: number; fromCount: number } | null;
+  /** A trophy opened from chat or a notification (its id, or title on older cards). */
+  trophyView: string | null;
+  openTrophy: (idOrTitle: string) => void;
+  closeTrophy: () => void;
   chatDraft: string | null;
   chatMomentReply: MomentReplyContext | null;
   paywallShownThisSession: boolean;
@@ -171,6 +175,9 @@ export const useUIStore = create<UIState>((set, get) => ({
   partnerLocationMap: null,
   streakMilestoneCount: null,
   streakSpark: null,
+  trophyView: null,
+  openTrophy: (trophyView) => set({ trophyView }),
+  closeTrophy: () => set({ trophyView: null }),
   chatDraft: null,
   chatMomentReply: null,
   paywallShownThisSession: false,

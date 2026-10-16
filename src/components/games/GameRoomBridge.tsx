@@ -3,7 +3,7 @@ import { useEffect } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { PLAY_TONES } from '@/components/activities/explore/explore-catalog';
-import { DraggableSheet } from '@/components/ui/DraggableSheet';
+import { DraggableSheet, useKeptWhileClosing } from '@/components/ui/DraggableSheet';
 import { useTheme } from '@/hooks/useTheme';
 import { gameRoom } from '@/lib/game-room/manager';
 import { getGameDefinition } from '@/lib/game-room/types';
@@ -17,7 +17,9 @@ import { LiveRoomModal } from './LiveRoomModal';
 /** Your partner opened a live session: a sheet to join (optionally muted) or pass for now. */
 function InviteSheet() {
   const { colors } = useTheme();
-  const invite = useGameRoomStore((s) => s.invite);
+  const liveInvite = useGameRoomStore((s) => s.invite);
+  // Still the same invite while the sheet slides away.
+  const invite = useKeptWhileClosing(liveInvite);
   const open = useGameRoomStore((s) => s.open);
   const room = useGameRoomStore((s) => s.state);
   const def = invite ? getGameDefinition(invite.game) : null;
@@ -31,7 +33,7 @@ function InviteSheet() {
   };
 
   return (
-    <DraggableSheet visible={!!invite && !open} onClose={() => gameRoom.dismissInvite()}>
+    <DraggableSheet visible={!!liveInvite && !open} onClose={() => gameRoom.dismissInvite()}>
       {invite && def && tone ? (
         <View style={styles.sheet}>
           <View style={[styles.liveBadge, { backgroundColor: colors.success }]}>

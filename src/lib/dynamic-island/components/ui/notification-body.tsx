@@ -17,10 +17,10 @@ const NotificationBody = memo<INotificationBody>(({ notification }: INotificatio
   return (
     <View style={styles.body}>
       {notification.avatar || notification.avatarName ? (
-        <Avatar name={notification.avatarName} imageUrl={notification.avatar} size={46} />
+        <Avatar name={notification.avatarName} imageUrl={notification.avatar} size={38} />
       ) : (
         <View style={[styles.iconBubble, { backgroundColor: colors.accentSoft }]}>
-          <Icon name={notification.icon ?? "bell"} size={22} color={accent} />
+          <Icon name={notification.icon ?? "bell"} size={19} color={accent} />
         </View>
       )}
 
@@ -36,7 +36,7 @@ const NotificationBody = memo<INotificationBody>(({ notification }: INotificatio
       </View>
 
       {notification.icon && (notification.avatar || notification.avatarName) ? (
-        <Icon name={notification.icon} size={24} color={accent} />
+        <Icon name={notification.icon} size={20} color={accent} />
       ) : null}
     </View>
   );
@@ -48,14 +48,14 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
-    paddingLeft: 13,
-    paddingRight: 20,
-    gap: 12,
+    paddingLeft: 11,
+    paddingRight: 18,
+    gap: 10,
   },
   iconBubble: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -63,13 +63,13 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   title: {
-    fontSize: 17,
+    fontSize: 15,
     fontWeight: "700",
-    letterSpacing: -0.35,
+    letterSpacing: -0.25,
   },
   message: {
     marginTop: 1,
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "500",
     letterSpacing: -0.2,
   },

@@ -7,6 +7,7 @@ import {
   isSameDay,
   isSameMonth,
   isToday,
+  startOfDay,
   startOfMonth,
   startOfWeek,
   subWeeks,
@@ -26,6 +27,7 @@ import {
 
 import type { ThemeColors } from '@/constants/design-system';
 import { getEventTypeColors } from '@/constants/calendar-events';
+import { colorWithAlpha } from '@/components/ui/primitives';
 import { useTheme } from '@/hooks/useTheme';
 import type { CalendarEvent } from '@/types/database';
 
@@ -75,6 +77,10 @@ function DayCell({
 }) {
   const { colors } = useTheme();
   const today = isToday(day);
+  // A day that's gone by and had plans: a soft green "done" circle (like today's circle,
+  // in its own colour so it never looks like today) instead of dots.
+  const pastPlans = dots.length > 0 && !today && day < startOfDay(new Date());
+  const pastTint = pastPlans ? colors.success : null;
 
   return (
     <Pressable
@@ -86,7 +92,7 @@ function DayCell({
       style={styles.dayInner}
       accessibilityRole="button"
       accessibilityState={{ selected }}
-      accessibilityLabel={`${format(day, 'EEEE, MMMM d')}${dots.length ? ', has plans' : ''}`}>
+      accessibilityLabel={`${format(day, 'EEEE, MMMM d')}${dots.length ? (pastPlans ? ', had plans' : ', has plans') : ''}`}>
       <View
         style={[
           styles.circle,
@@ -94,7 +100,14 @@ function DayCell({
             ? { backgroundColor: colors.accent }
             : today
               ? { backgroundColor: colors.accentSoft }
-              : null,
+              : pastTint
+                ? {
+                    backgroundColor: colorWithAlpha(pastTint, 0.16),
+                    borderWidth: 1.5,
+                    borderColor: colorWithAlpha(pastTint, 0.55),
+                  }
+                : null,
+          muted && pastTint ? { opacity: 0.5 } : null,
         ]}>
         <Text
           style={[
@@ -107,14 +120,14 @@ function DayCell({
                   : muted
                     ? colors.textTertiary
                     : colors.text,
-              fontWeight: selected || today ? '800' : '500',
+              fontWeight: selected || today ? '800' : pastTint ? '700' : '500',
             },
           ]}>
           {format(day, 'd')}
         </Text>
       </View>
       <View style={styles.dots}>
-        {dots.map((color) => (
+        {(pastPlans ? [] : dots).map((color) => (
           <View key={color} style={[styles.dot, { backgroundColor: color, opacity: muted ? 0.4 : 1 }]} />
         ))}
       </View>

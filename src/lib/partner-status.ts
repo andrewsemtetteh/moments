@@ -9,7 +9,7 @@ export interface PartnerStatus {
 
 /**
  * - Away: you or your partner turned off online status (reciprocal)
- * - Online / last seen: both share status and presence / last_seen_at is known
+ * - Online / Active …ago: both share status and presence / last_seen_at is known
  * - Typing always wins (in-chat activity, not presence history)
  */
 export function formatPartnerStatus(
@@ -23,8 +23,8 @@ export function formatPartnerStatus(
   if (isOnline) return { label: 'online', variant: 'online' };
   if (lastSeenAt) {
     return {
-      // "last seen 5 minutes ago": no "active about…".
-      label: `last seen ${formatDistanceToNowStrict(new Date(lastSeenAt), { addSuffix: true })}`,
+      // "Active 5 minutes ago" (chat header and the partner's profile).
+      label: `Active ${formatDistanceToNowStrict(new Date(lastSeenAt), { addSuffix: true })}`,
       variant: 'lastSeen',
     };
   }

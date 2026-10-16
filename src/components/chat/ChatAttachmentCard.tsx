@@ -8,6 +8,7 @@ import { FullScreenLocationMapModal } from '@/components/profile/FullScreenLocat
 import { Icon } from '@/components/ui/Icon';
 import { useTheme } from '@/hooks/useTheme';
 import type { ChatAttachment } from '@/lib/chat-attachments';
+import { useUIStore } from '@/stores';
 
 interface Props {
   attachment: ChatAttachment;
@@ -132,11 +133,16 @@ export function ChatAttachmentCard({ attachment, isSelf }: Props) {
   }
 
   if (attachment.type === 'achievement') {
-    // A finished daily quest or a new trophy; opens Play, where your progress lives.
+    // A new trophy opens the trophy itself (the achievement card, to share); a finished
+    // daily quest opens Play, where today's quests live.
     const quest = attachment.kind === 'quest';
     return (
       <Pressable
-        onPress={() => router.navigate('/(tabs)/activities')}
+        onPress={() =>
+          quest
+            ? router.navigate('/(tabs)/activities')
+            : useUIStore.getState().openTrophy(attachment.id ?? attachment.title)
+        }
         accessibilityRole="button"
         accessibilityLabel={`${quest ? 'Quest complete' : 'Trophy unlocked'}: ${attachment.title}`}
         style={({ pressed }) => [

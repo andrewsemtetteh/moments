@@ -1,15 +1,20 @@
 import * as Haptics from '@/lib/haptics';
 import { router, usePathname } from 'expo-router';
 import { useEffect, useRef, type ReactNode } from 'react';
-import { Platform } from 'react-native';
+import { Platform, useWindowDimensions } from 'react-native';
 
 import { useTheme } from '@/hooks/useTheme';
 import { DynamicNotifications, useDynamicNotifications } from '@/lib/dynamic-island';
 import { subscribeIsland } from '@/lib/in-app-notify';
 import { openFromNotification } from '@/lib/notification-navigation';
 
-/** How long one island stays open before it tucks back up (long enough to read twice). */
+/** How long one island stays open before it tucks back up: every pop, always 5 seconds. */
 const ISLAND_MS = 5000;
+/** A compact pill, close under the island, like the system's own. */
+const CARD_HEIGHT = 60;
+const CARD_MAX_WIDTH = 360;
+const CARD_SIDE_MARGIN = 20;
+const CARD_GAP = 12;
 
 /** Turns app events into island pops, skipping ones for the screen you're already on. */
 function IslandListener() {
@@ -40,7 +45,7 @@ function IslandListener() {
           icon: event.icon,
           avatar: event.avatar,
           avatarName: event.avatarName,
-          duration: event.duration ?? ISLAND_MS,
+          duration: ISLAND_MS,
           onPress: target
             ? () => {
                 dismiss();
@@ -58,8 +63,14 @@ function IslandListener() {
 /** Dynamic Island style in-app notifications, drawn over every screen and sheet. */
 export function DynamicIslandHost({ children }: { children: ReactNode }) {
   const { colors } = useTheme();
+  const { width } = useWindowDimensions();
   return (
     <DynamicNotifications
+      cardWidth={Math.min(width - CARD_SIDE_MARGIN * 2, CARD_MAX_WIDTH)}
+      cardHeight={CARD_HEIGHT}
+      cardRadius={CARD_HEIGHT / 2}
+      gap={CARD_GAP}
+      duration={ISLAND_MS}
       cardColor={colors.surfaceElevated}
       accent={colors.accent}
       shadowColor={colors.isDark ? 'rgba(0,0,0,0.55)' : 'rgba(16,19,28,0.20)'}>

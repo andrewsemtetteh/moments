@@ -4,7 +4,6 @@ import * as Haptics from '@/lib/haptics';
 import { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -18,6 +17,7 @@ import { ScrollView as GHScrollView } from 'react-native-gesture-handler';
 import { notInPast, PlanDateModal, PlanTimeModal } from '@/components/calendar/plan/PlanPickerModals';
 import { FullScreenPage } from '@/components/layout/FullScreenPage';
 import { HeaderIconButton } from '@/components/ui/HeaderIconButton';
+import { DraggableSheet } from '@/components/ui/DraggableSheet';
 import { Icon } from '@/components/ui/Icon';
 import { useTheme } from '@/hooks/useTheme';
 import {
@@ -549,25 +549,23 @@ export function CreatePlanFlow({
           }}
         />
 
-        <Modal visible={reminderOpen} transparent animationType="fade" onRequestClose={() => setReminderOpen(false)}>
-          <Pressable style={styles.reminderBackdrop} onPress={() => setReminderOpen(false)}>
-            <View style={[styles.reminderSheet, { backgroundColor: colors.backgroundElevated }]}>
-              <Text style={[styles.reminderTitle, { color: colors.text }]}>Reminder</Text>
-              {REMINDER_OPTIONS.map((opt) => (
-                <Pressable
-                  key={String(opt.mins)}
-                  onPress={() => {
-                    setReminderMins(opt.mins);
-                    setReminderOpen(false);
-                  }}
-                  style={styles.reminderRow}>
-                  <Text style={{ color: colors.text, fontSize: 16, fontWeight: '600' }}>{opt.label}</Text>
-                  {reminderMins === opt.mins ? <Icon name="check" size={18} color={colors.accent} /> : null}
-                </Pressable>
-              ))}
-            </View>
-          </Pressable>
-        </Modal>
+        <DraggableSheet visible={reminderOpen} onClose={() => setReminderOpen(false)} dragAnywhere>
+          <Text style={[styles.reminderTitle, { color: colors.text }]}>Reminder</Text>
+          {REMINDER_OPTIONS.map((opt) => (
+            <Pressable
+              key={String(opt.mins)}
+              onPress={() => {
+                setReminderMins(opt.mins);
+                setReminderOpen(false);
+              }}
+              accessibilityRole="button"
+              accessibilityState={{ selected: reminderMins === opt.mins }}
+              style={({ pressed }) => [styles.reminderRow, pressed && { opacity: 0.6 }]}>
+              <Text style={{ color: colors.text, fontSize: 16, fontWeight: '600' }}>{opt.label}</Text>
+              {reminderMins === opt.mins ? <Icon name="check" size={18} color={colors.accent} /> : null}
+            </Pressable>
+          ))}
+        </DraggableSheet>
       </FullScreenPage>
 
     </>
@@ -763,13 +761,6 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   checkInput: { flex: 1, fontSize: 15, fontWeight: '600', padding: 0 },
-  reminderBackdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.45)',
-    justifyContent: 'flex-end',
-    padding: 16,
-  },
-  reminderSheet: { borderRadius: 20, padding: 16, gap: 4 },
   reminderTitle: { fontSize: 17, fontWeight: '700', marginBottom: 8 },
   reminderRow: {
     flexDirection: 'row',

@@ -229,6 +229,7 @@ async function shareWithPartner(item: QuestCelebration | BadgeCelebration) {
     ? {
         type: 'achievement' as const,
         kind: 'quest' as const,
+        id: item.quest.id,
         emoji: item.quest.emoji,
         title: item.quest.title,
         sub: `Today’s quest done · +${item.quest.reward} XP for you both`,
@@ -236,6 +237,7 @@ async function shareWithPartner(item: QuestCelebration | BadgeCelebration) {
     : {
         type: 'achievement' as const,
         kind: 'trophy' as const,
+        id: item.badge.id,
         emoji: item.badge.emoji,
         title: item.badge.title,
         sub: item.badge.hint,
@@ -250,6 +252,8 @@ async function shareWithPartner(item: QuestCelebration | BadgeCelebration) {
           quest
             ? `${me} finished today’s quest “${item.quest.title}” (+${item.quest.reward} XP) ${item.quest.emoji}`
             : `${me} unlocked the “${item.badge.title}” trophy for you both ${item.badge.emoji}`,
+          // Tapping the notification opens this trophy (quests open Play, where they live).
+          quest ? undefined : { relatedId: item.badge.id },
         )
       : Promise.resolve(),
   ]);
@@ -277,7 +281,6 @@ export function AchievementRelay() {
           title: item.origin === 'partner' ? `${getFirstName(partnerName) ?? 'Your partner'} finished a quest` : 'Quest complete!',
           message: `${item.quest.title} · +${item.quest.reward} XP`,
           icon: item.quest.icon,
-          duration: 4200,
           target: { type: 'achievement' },
         });
         void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);

@@ -1,4 +1,13 @@
-import { format, formatDistanceToNowStrict, getYear, isToday, startOfDay, subDays } from 'date-fns';
+import {
+  differenceInCalendarDays,
+  format,
+  formatDistanceToNowStrict,
+  getYear,
+  intervalToDuration,
+  isToday,
+  startOfDay,
+  subDays,
+} from 'date-fns';
 import { Image } from 'expo-image';
 import { useMemo, useState } from 'react';
 import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -6,9 +15,11 @@ import { TextInput } from '@/components/ui/ThemedTextInput';
 
 import { memoryPhotos } from '@/components/calendar/plan/MemorySheets';
 import { Icon } from '@/components/ui/Icon';
-import { colorWithAlpha, paperEdge } from '@/components/ui/primitives';
+import { Avatar, colorWithAlpha, paperEdge } from '@/components/ui/primitives';
 import { StreakFlame } from '@/components/home/StreakFlame';
 import { useTheme } from '@/hooks/useTheme';
+import { getAnniversaryCountdown } from '@/lib/anniversary';
+import { useAuthStore, useRelationshipStore } from '@/stores';
 import { MEMORY_TINT, MEMORY_TYPES, memoryTypeMeta, parsePlanMeta, type MemoryType } from '@/lib/plan-meta';
 import type { CalendarEvent, Moment } from '@/types/database';
 
@@ -207,6 +218,104 @@ export function PlanMemoriesTab({
   );
 }
 
+/** "2 years, 3 months · 823 days" and the next anniversary, for the Together since card. */
+function togetherFacts(since: Date) {
+  const now = new Date();
+  const days = Math.max(0, differenceInCalendarDays(now, since));
+  const d = intervalToDuration({ start: since, end: now });
+  const parts = [
+    d.years ? `${d.years} year${d.years === 1 ? '' : 's'}` : null,
+    d.months ? `${d.months} month${d.months === 1 ? '' : 's'}` : null,
+  ].filter(Boolean);
+  const span = parts.length ? parts.join(', ') : `${days} day${days === 1 ? '' : 's'}`;
+  const { daysUntil, anniversaryDate } = getAnniversaryCountdown(since);
+  const next =
+    days < 1 ? null : daysUntil === 0 ? 'Happy anniversary!' : `Anniversary in ${daysUntil} day${daysUntil === 1 ? '' : 's'}`;
+  return { span, days, next, nextDate: anniversaryDate, showDays: parts.length > 0 };
+}
+
+/** The first memory on the timeline: you two, the day it started and how long it's been. */
+function TogetherSinceCard({ date }: { date: Date }) {
+  const { colors } = useTheme();
+  const me = useAuthStore((s) => s.user);
+  const partner = useRelationshipStore((s) => s.partner);
+  const facts = togetherFacts(date);
+  const tint = colors.accent;
+  return (
+    <View
+      style={[
+        styles.card,
+        styles.togetherCard,
+        {
+          backgroundColor: colorWithAlpha(tint, colors.isDark ? 0.2 : 0.1),
+          borderColor: colors.boldBorder ? colors.border : colorWithAlpha(tint, 0.3),
+          borderWidth: colors.boldBorder ? 2 : StyleSheet.hairlineWidth,
+        },
+      ]}>
+      {/* A big soft heart behind the content, like the story cards' watermark. */}
+      <View style={styles.togetherWatermark} pointerEvents="none">
+        <Icon name="heart" size={150} color={colorWithAlpha(tint, 0.1)} filled />
+      </View>
+
+      <View style={styles.togetherHead}>
+        <View style={styles.togetherFaces}>
+          <View style={[styles.togetherFace, { borderColor: colors.surface }]}>
+            <Avatar name={me?.name} imageUrl={me?.avatar_url} size={40} />
+          </View>
+          <View style={[styles.togetherHeart, { backgroundColor: tint, borderColor: colors.surface }]}>
+            <Icon name="heart" size={12} color={colors.onAccent} filled />
+          </View>
+          <View style={[styles.togetherFace, styles.togetherFaceRight, { borderColor: colors.surface }]}>
+            <Avatar name={partner?.name} imageUrl={partner?.avatar_url} size={40} />
+          </View>
+        </View>
+        <View style={[styles.togetherBadge, { backgroundColor: colors.surface }, paperEdge(colors, 1.5)]}>
+          <Icon name="flag" size={12} color={tint} filled />
+          <Text style={[styles.togetherBadgeText, { color: tint }]} numberOfLines={1}>
+            Where it began
+          </Text>
+        </View>
+      </View>
+
+      <View style={styles.togetherCopy}>
+        <Text style={[styles.togetherLabel, { color: colors.textSecondary }]}>Together since</Text>
+        <Text style={[styles.togetherDate, { color: colors.text }]}>{format(date, 'd MMMM yyyy')}</Text>
+        <Text style={[styles.togetherLabel, { color: colors.textSecondary }]}>{format(date, 'EEEE')}</Text>
+      </View>
+
+      {/* Full-width rows, so nothing is ever cut off in the timeline's narrow column. */}
+      <View style={[styles.togetherStats, { backgroundColor: colors.surface }, paperEdge(colors, 1.5)]}>
+        <View style={styles.togetherStat}>
+          <View style={[styles.togetherStatIcon, { backgroundColor: colorWithAlpha(tint, 0.14) }]}>
+            <Icon name="heart" size={14} color={tint} filled />
+          </View>
+          <View style={styles.togetherStatText}>
+            <Text style={[styles.togetherStatValue, { color: colors.text }]}>{facts.span} together</Text>
+            {facts.showDays ? (
+              <Text style={[styles.togetherStatSub, { color: colors.textSecondary }]}>
+                {facts.days.toLocaleString()} days and counting
+              </Text>
+            ) : null}
+          </View>
+        </View>
+        {facts.next ? (
+          <View style={[styles.togetherStat, styles.togetherStatDivided, { borderTopColor: colors.border }]}>
+            <View style={[styles.togetherStatIcon, { backgroundColor: colorWithAlpha(tint, 0.14) }]}>
+              <Icon name="calendar" size={14} color={tint} />
+            </View>
+            <View style={styles.togetherStatText}>
+              <Text style={[styles.togetherStatValue, { color: colors.text }]}>{facts.next}</Text>
+              <Text style={[styles.togetherStatSub, { color: colors.textSecondary }]}>
+                {format(facts.nextDate, 'EEEE, d MMMM yyyy')}
+              </Text>
+            </View>
+          </View>
+        ) : null}
+      </View>
+    </View>
+  );
+}
+
 function TimelineRow({
   item,
   onOpen,
@@ -236,14 +345,7 @@ function TimelineRow({
     return (
       <View style={styles.row}>
         <View style={[styles.bigDot, { backgroundColor: colors.accent, borderColor: colors.accentSoft }]} />
-        <View style={[styles.card, { backgroundColor: colors.surface }]}>
-          <Text style={[styles.kicker, { color: colors.accent }]}>Milestone</Text>
-          <View style={styles.titleRow}>
-            <Icon name="heart" size={16} color={colors.accent} filled />
-            <Text style={[styles.cardTitle, { color: colors.text }]}>Together since</Text>
-          </View>
-          <Text style={[styles.cardSub, { color: colors.textSecondary }]}>{format(item.date, 'd MMMM yyyy')}</Text>
-        </View>
+        <TogetherSinceCard date={item.date} />
       </View>
     );
   }
@@ -308,9 +410,11 @@ function TimelineRow({
           {cover ? (
             <Image source={{ uri: cover }} style={styles.banner} contentFit="cover" />
           ) : (
-            // No photo: a flat band in the milestone's colour with its emoji and year, so it still reads big.
+            // No photo: a flat band in the milestone's colour with its icon and year, so it still reads big.
             <View style={[styles.bannerEmpty, { backgroundColor: colorWithAlpha(tint, colors.isDark ? 0.3 : 0.18) }]}>
-              <Text style={styles.bannerEmoji}>{type.emoji}</Text>
+              <View style={[styles.bannerIcon, { backgroundColor: colorWithAlpha(tint, 0.22) }]}>
+                <Icon name={type.icon} size={30} color={tint} filled />
+              </View>
               <Text style={[styles.bannerYear, { color: colors.text }]}>{format(item.date, 'yyyy')}</Text>
             </View>
           )}
@@ -360,9 +464,9 @@ function TimelineRow({
               borderWidth: colors.boldBorder ? 2 : StyleSheet.hairlineWidth,
             },
           ]}>
-          <Text style={styles.storyWatermark} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-            {type.emoji}
-          </Text>
+          <View style={styles.storyWatermark} pointerEvents="none" accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+            <Icon name={type.icon} size={104} color={colorWithAlpha(tint, 0.22)} filled />
+          </View>
 
           <View style={styles.storyTop}>
             <View style={styles.storyDate}>
@@ -467,10 +571,45 @@ const styles = StyleSheet.create({
     position: 'absolute',
     right: -6,
     bottom: -14,
-    fontSize: 104,
-    opacity: 0.16,
     transform: [{ rotate: '-12deg' }],
   },
+  bannerIcon: { width: 60, height: 60, borderRadius: 30, alignItems: 'center', justifyContent: 'center' },
+  togetherCard: { padding: 16, gap: 14, borderRadius: 22, overflow: 'hidden' },
+  togetherWatermark: { position: 'absolute', right: -24, bottom: -34, transform: [{ rotate: '-12deg' }] },
+  togetherHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
+  togetherFaces: { flexDirection: 'row', alignItems: 'center' },
+  togetherFace: { borderWidth: 2, borderRadius: 22 },
+  togetherFaceRight: { marginLeft: -8 },
+  togetherHeart: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: -8,
+    zIndex: 2,
+  },
+  togetherBadge: {
+    flexShrink: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  togetherBadgeText: { fontSize: 12, fontWeight: '800' },
+  togetherCopy: { gap: 2 },
+  togetherLabel: { fontSize: 13, fontWeight: '700' },
+  togetherDate: { fontSize: 24, fontWeight: '900', letterSpacing: -0.5, lineHeight: 29 },
+  togetherStats: { borderRadius: 16, paddingHorizontal: 12 },
+  togetherStat: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 11 },
+  togetherStatDivided: { borderTopWidth: StyleSheet.hairlineWidth },
+  togetherStatIcon: { width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
+  togetherStatText: { flex: 1, minWidth: 0, gap: 1 },
+  togetherStatValue: { fontSize: 15, fontWeight: '800', lineHeight: 20 },
+  togetherStatSub: { fontSize: 12, fontWeight: '600', lineHeight: 16 },
   storyTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
   storyDate: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   storyDay: { fontSize: 40, fontWeight: '900', letterSpacing: -1.5, lineHeight: 44 },
@@ -501,7 +640,6 @@ const styles = StyleSheet.create({
   },
   postcardTagText: { fontSize: 12, fontWeight: '700', flexShrink: 1 },
   bannerEmpty: { height: 110, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 18 },
-  bannerEmoji: { fontSize: 52 },
   bannerYear: { fontSize: 28, fontWeight: '900', letterSpacing: -0.5 },
   memoryText: { flex: 1, minWidth: 0, gap: 3 },
   // Fills the space under the filters and centers in it.

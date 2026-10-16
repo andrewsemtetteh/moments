@@ -4,13 +4,13 @@ import { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { TextInput } from '@/components/ui/ThemedTextInput';
 
-import { DraggableSheet } from '@/components/ui/DraggableSheet';
+import { DraggableSheet, useKeptWhileClosing } from '@/components/ui/DraggableSheet';
 import { Icon } from '@/components/ui/Icon';
 import { listProgress, type PlanList, type PlanListItem } from '@/lib/plan-local';
 import { useTheme } from '@/hooks/useTheme';
 
 export function PlanListSheet({
-  list,
+  list: listProp,
   visible,
   linkedPlanTitle,
   onClose,
@@ -23,6 +23,8 @@ export function PlanListSheet({
   onChange: (next: PlanList) => void;
 }) {
   const { colors } = useTheme();
+  // Still the same list while the sheet slides away.
+  const list = useKeptWhileClosing(listProp);
   const [draft, setDraft] = useState('');
   const [activeSectionId, setActiveSectionId] = useState<string | null>(null);
   const [editingSectionId, setEditingSectionId] = useState<string | null>(null);

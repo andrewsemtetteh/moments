@@ -9,7 +9,7 @@ import { useCallback, useMemo, useState, type ReactNode } from 'react';
 import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { StreakFlame } from '@/components/home/StreakFlame';
+import { StickerFlame } from '@/components/home/StickerFlame';
 import { ScreenContainer } from '@/components/layout/ScreenContainer';
 import { TabScreenScroll } from '@/components/layout/TabScreenScroll';
 import { TabSwipe } from '@/components/layout/TabSwipe';
@@ -501,10 +501,16 @@ function Stat({
       accessibilityRole={onPress ? 'button' : undefined}
       style={({ pressed }) => [styles.stat, cardSurface(colors), pressed && styles.pressed]}>
       <View style={styles.statValueRow}>
+        {/* The streak page's flame character (faded until there's a streak): flame first,
+            then the number, as everywhere else in the app. */}
+        {flame ? (
+          <View style={value !== '0' ? undefined : styles.idleFlame}>
+            <StickerFlame size={24} />
+          </View>
+        ) : null}
         <Text style={[styles.statValue, { color: colors.text }]} numberOfLines={1} adjustsFontSizeToFit>
           {value}
         </Text>
-        {flame ? <StreakFlame size={20} tone={value !== '0' ? 'active' : 'idle'} /> : null}
       </View>
       <Text style={[styles.statLabel, { color: colors.textSecondary }]} numberOfLines={1}>
         {label}
@@ -514,6 +520,7 @@ function Stat({
 }
 
 const styles = StyleSheet.create({
+  idleFlame: { opacity: 0.4 },
   flex: { flex: 1, minWidth: 0 },
   pressed: { opacity: 0.8 },
   pressedScale: { opacity: 0.92, transform: [{ scale: 0.99 }] },

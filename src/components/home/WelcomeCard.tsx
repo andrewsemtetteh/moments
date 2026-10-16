@@ -173,13 +173,13 @@ export function WelcomeCard({
               count > 0 ? (atRisk ? `${count} day streak, ends tonight` : `${count} day streak`) : 'Start a streak'
             }
             style={({ pressed }) => [styles.badge, pressed && styles.pressed]}>
-            {/* Plain: the flame character and the number, straight on the card. */}
-            <View style={count > 0 ? undefined : styles.idleFlame}>
-              <StickerFlame size={40} face={count > 0} animated={count > 0} />
-            </View>
+            {/* Plain: the number, then the flame character, straight on the card. */}
             <Text style={[styles.badgeCount, { color: ink }]} numberOfLines={1}>
               {count}
             </Text>
+            <View style={count > 0 ? undefined : styles.idleFlame}>
+              <StickerFlame size={40} face={count > 0} animated={count > 0} />
+            </View>
           </Pressable>
         ) : null}
       </View>
@@ -303,7 +303,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   pressed: { opacity: 0.8 },
-  weekPanel: { marginTop: 14, borderRadius: 20, paddingVertical: 12, paddingHorizontal: 10, gap: 10 },
+  // Same corners as every card on Home.
+  weekPanel: { marginTop: 14, borderRadius: 22, paddingVertical: 12, paddingHorizontal: 10, gap: 10 },
   weekDays: { flexDirection: 'row', justifyContent: 'space-between' },
   weekDay: { alignItems: 'center', gap: 6, flex: 1 },
   weekLetter: { fontSize: 11, fontWeight: '800' },

@@ -5,6 +5,7 @@ import { MoodHistoryModal } from '@/components/home/MoodHistoryModal';
 import { MomentsModal } from '@/components/moments/MomentsModal';
 import { FullScreenLocationMapModal } from '@/components/profile/FullScreenLocationMapModal';
 import { PartnerProfileModal } from '@/components/profile/PartnerProfileModal';
+import { TrophyViewHost } from '@/components/games/TrophyViewHost';
 import { PaywallModal } from '@/components/subscription/PaywallModal';
 import { StreakMilestoneModal } from '@/components/home/StreakMilestoneModal';
 import { StreakSparkModal } from '@/components/home/StreakSparkModal';
@@ -38,19 +39,31 @@ function PartnerLocationMapModal() {
   );
 }
 
+/**
+ * Moments at the root, except while the partner's profile is open: then the profile
+ * hosts it (inside its own Modal), so the camera, History or a moment opens straight
+ * over the profile instead of the profile closing to Home first.
+ */
+function RootMomentsModal() {
+  const profileOpen = useUIStore((s) => s.showPartnerProfile);
+  return profileOpen ? null : <MomentsModal />;
+}
+
 /** Global overlays mounted once at the app root (native only). */
 export function AppModals() {
   if (Platform.OS === 'web') return null;
 
   return (
     <>
-      <MomentsModal />
+      <RootMomentsModal />
       {/* Root level, so it opens over Chat or any other screen, not behind it. */}
       <PartnerProfileModal />
       <PartnerLocationMapModal />
       <WrappedModal />
       <MoodHistoryModal />
       <PaywallModal />
+      {/* A trophy opened from its chat card or notification. */}
+      <TrophyViewHost />
       <StreakMilestoneModal />
       <StreakSparkModal />
       <GameRoomBridge />
