@@ -135,3 +135,6 @@ export function streakFireColor(
   if (active) return STREAK_COLORS.active;
   return inactive;
 }
+
+/** The second ring on a day you both checked in (a "together" day). */
+export const TOGETHER_RING = '#FF5C8A';

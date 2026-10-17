@@ -3,7 +3,8 @@ import { Hono } from 'hono';
 
 import { deleteAccount } from './account';
 import { requireAuth, type AuthVariables } from './auth';
-import { billingWebhooks, carryPersonalPlus, ensureBillingUserId } from './billing';
+import { assertMomentAllowance, billingWebhooks, carryPersonalPlus, ensureBillingUserId } from './billing';
+import { ApiError, publicProfile } from './core';
 import { compat } from './compat';
 import { links } from './links';
 import { coupleDocs } from './couple-docs';
@@ -11,7 +12,8 @@ import { stockBanks } from './functions';
 import { verifyToken } from '@clerk/backend';
 import { buildUpdate, generateId, isRelationshipMember, nowIso, parseJson } from './db';
 import { onPaired } from './pairing';
-import { resolveImageType } from './media-type';
+import { isPrivateMediaKey, signedMediaUrl, signMediaInText, verifyMediaSignature } from './media-sign';
+import { isInlineMediaType, resolveImageType } from './media-type';
 import { rateLimit } from './rate-limit';
 import { claimReferral, referralSummary } from './referrals';
 import './env';
@@ -20,24 +22,50 @@ const USERNAME_PATTERN = /^[a-z0-9_]{4,64}$/;
 
 const app = new Hono<{ Bindings: Env; Variables: AuthVariables }>();
 
+// Every JSON answer (tables, functions, profiles…) goes out with its moment and chat media
+// links signed, so the app never needs to build one (see media-sign.ts).
+app.use('*', async (c, next) => {
+  await next();
+  if (!(c.res.headers.get('Content-Type') ?? '').includes('application/json')) return;
+  const text = await c.res.clone().text();
+  const signed = await signMediaInText(c.env, text);
+  if (signed !== text) c.res = new Response(signed, { status: c.res.status, headers: c.res.headers });
+});
+
 app.get('/health', async (c) => {
   const row = await c.env.DB.prepare('SELECT 1 AS ok').first<{ ok: number }>();
   return c.json({ status: 'ok', d1: row?.ok === 1, r2: Boolean(c.env.STORAGE) });
 });
 
-/** Public — serves uploaded media (avatars, moments, chat attachments) straight from R2. */
+/**
+ * Serves uploaded media (avatars, moments, chat attachments) from R2. A link works for whoever
+ * has it, like a private share link: new files have unguessable names (see the app's
+ * unguessablePath) and deleting a moment or message removes its file. Only real media is shown
+ * inline; anything else downloads, so a file can never run as a page on this domain.
+ */
 app.get('/media/*', async (c) => {
-  const key = c.req.path.replace(/^\/media\//, '');
+  const key = decodeURIComponent(c.req.path.replace(/^\/media\//, ''));
+  if (!/^(moments|chat|profiles|avatars)\//.test(key) || key.includes('..')) return c.notFound();
+  // Moments and chat files need a signed, unexpired link; avatars are public.
+  if (isPrivateMediaKey(key) && !(await verifyMediaSignature(c.env, key, c.req.query('e'), c.req.query('s')))) {
+    return c.text('This link has expired', 403);
+  }
   const object = await c.env.STORAGE.get(key);
   if (!object) return c.notFound();
 
-  return new Response(object.body, {
-    headers: {
-      'Content-Type': object.httpMetadata?.contentType ?? 'application/octet-stream',
-      'Cache-Control': 'public, max-age=31536000, immutable',
-      ETag: object.httpEtag,
-    },
-  });
+  const stored = object.httpMetadata?.contentType ?? 'application/octet-stream';
+  const inline = isInlineMediaType(stored);
+  const headers: Record<string, string> = {
+    'Content-Type': inline ? stored : 'application/octet-stream',
+    // Private to the viewer's device (no shared caches keep a copy).
+    'Cache-Control': 'private, max-age=31536000, immutable',
+    'X-Content-Type-Options': 'nosniff',
+    'Content-Security-Policy': "default-src 'none'; sandbox",
+    'Referrer-Policy': 'no-referrer',
+    ETag: object.httpEtag,
+  };
+  if (!inline) headers['Content-Disposition'] = 'attachment';
+  return new Response(object.body, { headers });
 });
 
 /** Realtime hub: one Durable Object per relationship. Token rides the query string (WebSockets can't set headers). */
@@ -71,6 +99,18 @@ app.route('/webhooks', billingWebhooks);
 
 app.use('*', requireAuth);
 
+/** A signed link for a file this person just uploaded (or any file in their space). */
+app.post('/media/sign', rateLimit('media-sign', 300, 600), async (c) => {
+  const userId = c.get('userId');
+  const { key } = await c.req.json<{ key?: string }>().catch(() => ({ key: undefined }));
+  const clean = String(key ?? '');
+  if (!isPrivateMediaKey(clean) || clean.includes('..')) return c.json({ error: 'Invalid file' }, 400);
+  const relationshipId = clean.split('/')[1];
+  if (!(await isRelationshipMember(c.env.DB, userId, relationshipId))) return c.json({ error: 'Not allowed' }, 403);
+  const origin = new URL(c.req.url).origin;
+  return c.json({ signedUrl: await signedMediaUrl(c.env, origin, clean) });
+});
+
 // Shared albums / place names (versioned, synced between both phones).
 app.route('/', coupleDocs);
 
@@ -90,8 +130,7 @@ app.get('/me', async (c) => {
 /** Creates the app-owned profile row for a Clerk user the first time they're seen. Idempotent. */
 app.post('/users', async (c) => {
   const userId = c.get('userId');
-  const body = await c.req.json<{ email: string; name?: string }>();
-  if (!body.email) return c.json({ error: 'email is required' }, 400);
+  const body = await c.req.json<{ email?: string; name?: string }>().catch((): { email?: string; name?: string } => ({}));
 
   const existing = await c.env.DB.prepare('SELECT * FROM users WHERE id = ?1').bind(userId).first();
   if (existing) {
@@ -99,9 +138,22 @@ app.post('/users', async (c) => {
     return c.json(existing);
   }
 
+  // The email comes from Clerk (verified at sign-up), never from the app: emails are unique, so
+  // trusting the request let anyone take someone else's address and block their account.
+  const clerk = createClerkClient({ secretKey: c.env.CLERK_SECRET_KEY });
+  const clerkUser = await clerk.users.getUser(userId).catch(() => null);
+  const verified =
+    clerkUser?.emailAddresses.find((e) => e.id === clerkUser.primaryEmailAddressId)?.emailAddress ??
+    clerkUser?.emailAddresses[0]?.emailAddress ??
+    null;
+  // Sign-ins without an email (some phone / Apple relay setups): a private placeholder.
+  let email = (verified ?? `${userId}@users.moments-app`).toLowerCase();
+  const clash = await c.env.DB.prepare('SELECT id FROM users WHERE email = ?1 AND id <> ?2').bind(email, userId).first();
+  if (clash) email = `${userId}@users.moments-app`;
+
   // Location sharing starts off: turning it on is what asks for location permission.
   await c.env.DB.prepare('INSERT INTO users (id, email, name, location_sharing_enabled) VALUES (?1, ?2, ?3, 0)')
-    .bind(userId, body.email, body.name ?? null)
+    .bind(userId, email, typeof body.name === 'string' ? body.name.slice(0, 80) : null)
     .run();
   await ensureBillingUserId(c.env, userId, null);
 
@@ -123,6 +175,20 @@ const USER_UPDATE_FIELDS = [
   'last_seen_at',
   'timezone',
 ] as const;
+
+/** After changing email in Clerk: copy the new verified primary address onto the profile. */
+app.post('/me/email-sync', rateLimit('email-sync', 10, 3600), async (c) => {
+  const userId = c.get('userId');
+  const clerk = createClerkClient({ secretKey: c.env.CLERK_SECRET_KEY });
+  const clerkUser = await clerk.users.getUser(userId).catch(() => null);
+  const verified = clerkUser?.emailAddresses.find((e) => e.id === clerkUser.primaryEmailAddressId);
+  if (!verified || verified.verification?.status !== 'verified') return c.json({ error: 'No verified email' }, 400);
+  const email = verified.emailAddress.toLowerCase();
+  const clash = await c.env.DB.prepare('SELECT id FROM users WHERE email = ?1 AND id <> ?2').bind(email, userId).first();
+  if (clash) return c.json({ error: 'That email is already used by another account' }, 409);
+  await c.env.DB.prepare('UPDATE users SET email = ?1 WHERE id = ?2').bind(email, userId).run();
+  return c.json(await c.env.DB.prepare('SELECT * FROM users WHERE id = ?1').bind(userId).first());
+});
 
 app.patch('/me', async (c) => {
   const userId = c.get('userId');
@@ -211,8 +277,15 @@ app.post('/me/avatar', rateLimit('avatar', 10, 600), async (c) => {
 app.post('/me/push-token', async (c) => {
   const userId = c.get('userId');
   const body = await c.req.json<{ token: string | null }>();
+  const token = typeof body.token === 'string' && body.token ? body.token : null;
+  // One phone, one account (see register_push_token).
+  if (token) {
+    await c.env.DB.prepare('UPDATE users SET expo_push_token = NULL WHERE expo_push_token = ?1 AND id <> ?2')
+      .bind(token, userId)
+      .run();
+  }
   await c.env.DB.prepare('UPDATE users SET expo_push_token = ?1, expo_push_token_updated_at = ?2 WHERE id = ?3')
-    .bind(body.token ?? null, nowIso(), userId)
+    .bind(token, nowIso(), userId)
     .run();
   return c.json({ ok: true });
 });
@@ -232,9 +305,10 @@ app.get('/me/relationship', async (c) => {
   if (!relationship) return c.json({ relationship: null, partner: null });
 
   const partnerId = relationship.user_1_id === userId ? relationship.user_2_id : relationship.user_1_id;
-  const partner = partnerId
-    ? await c.env.DB.prepare('SELECT * FROM users WHERE id = ?1').bind(partnerId).first()
+  const partnerRow = partnerId
+    ? await c.env.DB.prepare('SELECT * FROM users WHERE id = ?1').bind(partnerId).first<Record<string, unknown>>()
     : null;
+  const partner = partnerRow ? publicProfile(partnerRow) : null;
 
   return c.json({ relationship, partner });
 });
@@ -360,6 +434,12 @@ app.post('/relationships/:id/moments', rateLimit('moment', 30, 60), async (c) =>
   const userId = c.get('userId');
   const relationshipId = c.req.param('id');
   if (!(await isRelationshipMember(c.env.DB, userId, relationshipId))) return c.json({ error: 'Forbidden' }, 403);
+  try {
+    await assertMomentAllowance(c.env, relationshipId, userId);
+  } catch (e) {
+    if (e instanceof ApiError) return c.json({ error: e.message, code: e.code }, 402);
+    throw e;
+  }
 
   const body = await c.req.json<{ type: string; media_url?: string; content?: string; mood?: string }>();
   const id = generateId();

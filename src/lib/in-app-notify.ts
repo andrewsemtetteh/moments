@@ -91,6 +91,8 @@ export function islandFromNotification(n: Notification, now = Date.now()): Islan
   if (n.type === 'calendar') hideOn = (p) => p.startsWith('/calendar');
   // Shown from the shared progress itself (AchievementRelay / trophy card), so never twice.
   if (n.type === 'achievement') hideOn = () => true;
+  // The call screen itself rings in the app.
+  if (n.type === 'call') hideOn = () => true;
 
   return {
     id: n.id,

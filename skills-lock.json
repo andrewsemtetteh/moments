@@ -54,6 +54,24 @@
       "sourceType": "github",
       "skillPath": "SKILL.md",
       "computedHash": "9e9d17f9df4712080eb2a602071328e3d76f25541248d29e2f7c93b2f8f7f606"
+    },
+    "superwall": {
+      "source": "superwall/skills",
+      "sourceType": "github",
+      "skillPath": "skills/superwall/SKILL.md",
+      "computedHash": "d161f7fc31fd3831796e2022f84d17bc5f6dc79df3a235fa0dbf04b7af295262"
+    },
+    "superwall-editor": {
+      "source": "superwall/skills",
+      "sourceType": "github",
+      "skillPath": "skills/superwall-editor/SKILL.md",
+      "computedHash": "c09a66c28f1e078d000912e32606240739cb33f16595d2430fffb2290294d301"
+    },
+    "wwdc": {
+      "source": "superwall/skills",
+      "sourceType": "github",
+      "skillPath": "skills/wwdc/SKILL.md",
+      "computedHash": "76f56add18663876a628578324c0e536d0d50340ae6527bfac952e6a3e6576c2"
     }
   }
 }

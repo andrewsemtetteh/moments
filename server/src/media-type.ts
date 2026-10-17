@@ -35,6 +35,34 @@ export function normalizeContentType(header: string | undefined | null): string 
   return t;
 }
 
+/**
+ * Types shown inline (photos, videos, voice notes, PDFs). Anything else, and above all
+ * HTML, SVG or scripts, is only ever handed over as a download, so an uploaded file can't
+ * act as a web page on our domain (phishing, stealing a signed-in session).
+ */
+const INLINE_TYPES = new Set([
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/heic',
+  'image/gif',
+  'video/mp4',
+  'video/quicktime',
+  'video/webm',
+  'audio/mpeg',
+  'audio/mp4',
+  'audio/m4a',
+  'audio/x-m4a',
+  'audio/aac',
+  'audio/wav',
+  'audio/webm',
+  'application/pdf',
+]);
+
+export function isInlineMediaType(type: string | null | undefined): boolean {
+  return INLINE_TYPES.has(normalizeContentType(type));
+}
+
 /** The type to store an image as, and its file extension (null if it isn't an image we take). */
 export function resolveImageType(body: ArrayBuffer, header: string | undefined | null) {
   const type = sniffImageType(body) ?? normalizeContentType(header);

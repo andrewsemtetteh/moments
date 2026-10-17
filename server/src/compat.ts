@@ -12,6 +12,7 @@ import {
   getStreakStatus,
   moodLabel,
   partnerOf,
+  publicProfile,
   restoreStreak,
   shapeRow,
   toBind,
@@ -19,7 +20,7 @@ import {
   updateStreak,
 } from './core';
 import { generateId, isRelationshipMember, nowIso, parseJson, relationshipIdsForUser } from './db';
-import { stripProtected } from './billing';
+import { assertMomentAllowance, stripProtected } from './billing';
 import { runFunction } from './functions';
 import { normalizeContentType, sniffImageType } from './media-type';
 import { onPaired } from './pairing';
@@ -78,6 +79,112 @@ const POLICIES: Record<string, Policy> = {
   analytics_events: { scope: 'none', ops: ['insert'], forceMe: 'user_id' },
   experiences: { scope: 'none', ops: ['select'] },
 };
+
+/**
+ * "Already exists" on save may only match a row by its id, or (couple_progress) by the
+ * couple. Any other unique column (e.g. a relationship's invite code) let a save overwrite
+ * someone else's row.
+ */
+const UPSERT_KEYS: Record<string, string[]> = {
+  couple_progress: ['relationship_id'],
+};
+
+/** Columns a client can never change on an existing row (who it belongs to / who wrote it). */
+const IMMUTABLE_COLUMNS = new Set(['id', 'relationship_id', 'user_id', 'sender_id', 'user_1_id', 'user_2_id', 'created_at']);
+
+/** Profile columns only the server writes (identity, referrals, push routing). */
+const USER_SERVER_COLUMNS = new Set([
+  'email',
+  'referral_code',
+  'referred_by',
+  'expo_push_token',
+  'expo_push_token_updated_at',
+  'revenuecat_customer_id',
+  'revenuecat_subscription_id',
+]);
+
+const INVITE_CODE = /^[A-Z0-9]{6,12}$/;
+
+/** Same as MESSAGE_EDIT_WINDOW_MS in the app (src/services/api.ts). */
+const MESSAGE_EDIT_WINDOW_MS = 15 * 60_000;
+
+/** The kinds of notification the app sends to a partner (anything else is refused). */
+const PARTNER_NOTIFICATION_TYPES = new Set([
+  'moment',
+  'message',
+  'mood',
+  'mood_update',
+  'challenge',
+  'streak',
+  'activity',
+  'achievement',
+  'gratitude',
+  'game_invite',
+  'game_turn',
+  'call',
+  'calendar',
+  'plus_suggest',
+  'plus_unlocked',
+]);
+/** Per sender: plenty for real use, but no flooding a partner's phone. */
+const PARTNER_NOTIFICATIONS_PER_HOUR = 60;
+const PARTNER_NOTIFICATION_MAX_CHARS = 300;
+
+/** XP can only grow by a game's worth per save (blocks a client writing itself a huge level). */
+const MAX_XP_STEP = 5000;
+
+/** SQL that the *existing* row (on an upsert's conflict) belongs to the caller. */
+function ownsExistingRow(table: string, policy: Policy, userId: string, binds: unknown[]): string {
+  const p = (v: unknown) => {
+    binds.push(v);
+    return `?${binds.length}`;
+  };
+  const parts: string[] = [];
+  switch (policy.scope) {
+    case 'rel': {
+      const u = p(userId);
+      parts.push(
+        `${table}.relationship_id IN (SELECT id FROM relationships WHERE status <> 'ended' AND (user_1_id = ${u} OR user_2_id = ${u}))`,
+      );
+      break;
+    }
+    case 'user':
+      parts.push(`${table}.${policy.userCol} = ${p(userId)}`);
+      break;
+    case 'relationships': {
+      const u = p(userId);
+      parts.push(`(${table}.user_1_id = ${u} OR ${table}.user_2_id = ${u})`);
+      break;
+    }
+    case 'users':
+      parts.push(`${table}.id = ${p(userId)}`);
+      break;
+    default:
+      parts.push('1 = 0');
+  }
+  if (policy.owner) parts.push(`${table}.${policy.owner} = ${p(userId)}`);
+  return parts.join(' AND ');
+}
+
+/** What a client may write on a profile or a space (billing + server-only columns removed). */
+function cleanProtected(table: string, values: Record<string, unknown>): Record<string, unknown> {
+  if (table !== 'users' && table !== 'relationships') return { ...values };
+  const out: Record<string, unknown> = stripProtected({ ...values });
+  if (table === 'users') for (const k of Object.keys(out)) if (USER_SERVER_COLUMNS.has(k)) delete out[k];
+  return out;
+}
+
+async function checkProgressStep(env: Env, relationshipId: unknown, nextXp: unknown) {
+  if (nextXp === undefined || nextXp === null) return;
+  const xp = Number(nextXp);
+  if (!Number.isFinite(xp) || xp < 0) throw new ApiError('Invalid progress', 400);
+  const current = await env.DB.prepare('SELECT xp FROM couple_progress WHERE relationship_id = ?1')
+    .bind(relationshipId)
+    .first<{ xp: number }>();
+  // A first save can carry progress earned offline before the couple's row existed.
+  const step = current ? MAX_XP_STEP : MAX_XP_STEP * 10;
+  if (xp > (current?.xp ?? 0) + step) throw new ApiError('Invalid progress', 400);
+}
 
 const columnCache = new Map<string, Set<string>>();
 
@@ -196,7 +303,12 @@ compat.post('/db', async (c) => {
     const cols = await columnsFor(env, req.table);
     const myRelIds = policy.scope === 'rel' || req.table === 'analytics_events' ? await relationshipIdsForUser(env.DB, userId) : [];
 
-    const shape = (rows: Record<string, unknown>[]) => rows.map((r) => shapeRow(r));
+    // Someone else's profile (your partner's) comes back without its private columns.
+    const shape = (rows: Record<string, unknown>[]) =>
+      rows.map((r) => {
+        const shaped = shapeRow(r);
+        return req.table === 'users' && shaped.id !== userId ? publicProfile(shaped) : shaped;
+      });
     const finish = (rows: Record<string, unknown>[], count?: number) => {
       const shaped = shape(rows);
       if (req.single) {
@@ -221,9 +333,17 @@ compat.post('/db', async (c) => {
       const inserted: Record<string, unknown>[] = [];
       for (const raw of list) {
         // Plus is granted only by the Superwall webhook.
-        const values: Record<string, unknown> =
-          req.table === 'users' || req.table === 'relationships' ? stripProtected({ ...raw }) : { ...raw };
+        const values = cleanProtected(req.table, raw);
         if (policy.forceMe) values[policy.forceMe] = userId;
+        // A new space is always yours alone and waiting: only joining with its code adds a
+        // partner and makes it active (join_relationship_by_invite).
+        if (req.table === 'relationships') {
+          values.user_2_id = null;
+          values.status = 'pending';
+          const code = typeof values.invite_code === 'string' ? values.invite_code.toUpperCase() : '';
+          values.invite_code = INVITE_CODE.test(code) ? code : null;
+        }
+        if (req.table === 'couple_progress') await checkProgressStep(env, values.relationship_id, values.xp);
         if (cols.has('id') && !values.id) values.id = generateId();
         if (cols.has('relationship_id') && typeof values.relationship_id === 'string' && policy.scope === 'rel') {
           if (!myRelIds.includes(values.relationship_id)) throw new ApiError('Not allowed', 403, '42501');
@@ -233,17 +353,19 @@ compat.post('/db', async (c) => {
         if (req.table === 'analytics_events' && typeof values.relationship_id === 'string' && !myRelIds.includes(values.relationship_id)) {
           values.relationship_id = null;
         }
-        if (req.table === 'relationships' && !values.invite_code) values.invite_code = null;
         if (req.table === 'users' && values.id !== userId) throw new ApiError('Not allowed', 403, '42501');
 
         const keys = Object.keys(values).filter((k) => IDENT.test(k) && cols.has(k));
         const binds = keys.map((k) => toBind(k, values[k]));
         let sql = `INSERT INTO ${req.table} (${keys.join(', ')}) VALUES (${keys.map((_, i) => `?${i + 1}`).join(', ')})`;
         if (req.op === 'upsert') {
-          const conflict = req.onConflict && cols.has(req.onConflict) ? req.onConflict : 'id';
-          const updates = keys.filter((k) => k !== conflict);
+          const allowed = UPSERT_KEYS[req.table] ?? [];
+          const conflict = req.onConflict && allowed.includes(req.onConflict) && cols.has(req.onConflict) ? req.onConflict : 'id';
+          // Never rewrite who a row belongs to, and only ever update a row that's already yours
+          // (the WHERE): matching someone else's row now changes nothing.
+          const updates = keys.filter((k) => k !== conflict && !IMMUTABLE_COLUMNS.has(k) && !(req.table === 'relationships' && k === 'status'));
           sql += updates.length
-            ? ` ON CONFLICT (${conflict}) DO UPDATE SET ${updates.map((k) => `${k} = excluded.${k}`).join(', ')}`
+            ? ` ON CONFLICT (${conflict}) DO UPDATE SET ${updates.map((k) => `${k} = excluded.${k}`).join(', ')} WHERE ${ownsExistingRow(req.table, policy, userId, binds)}`
             : ` ON CONFLICT (${conflict}) DO NOTHING`;
         }
         sql += ' RETURNING *';
@@ -303,24 +425,66 @@ compat.post('/db', async (c) => {
     }
 
     if (op === 'update') {
-      const patch =
-        req.table === 'users' || req.table === 'relationships'
-          ? stripProtected({ ...(req.values as Record<string, unknown>) })
-          : { ...(req.values as Record<string, unknown>) };
-      delete patch.id;
-      const keys = Object.keys(patch).filter((k) => IDENT.test(k) && cols.has(k));
-      if (keys.length === 0) throw new ApiError('No columns to update', 400);
-      if (req.table === 'relationships' && Object.keys(patch).some((k) => k === 'user_1_id' || k === 'user_2_id')) {
+      const asked = (req.values ?? {}) as Record<string, unknown>;
+      if (req.table === 'relationships' && Object.keys(asked).some((k) => k === 'user_1_id' || k === 'user_2_id')) {
         throw new ApiError('Not allowed', 403, '42501');
       }
+      const patch = cleanProtected(req.table, asked);
+      // Who a row belongs to never changes (moving it into another couple, or making a message
+      // look like your partner wrote it).
+      for (const k of Object.keys(patch)) if (IMMUTABLE_COLUMNS.has(k)) delete patch[k];
+
+      if (req.table === 'relationships') {
+        // A space can be left (ended), never made active from here: only joining does that.
+        if ('status' in patch && patch.status !== 'ended') throw new ApiError('Not allowed', 403, '42501');
+        if (typeof patch.invite_code === 'string') {
+          const code = patch.invite_code.toUpperCase();
+          if (!INVITE_CODE.test(code)) throw new ApiError('Invalid invite code', 400);
+          patch.invite_code = code;
+          // A code only for a space still waiting for its partner.
+          where.push(`user_2_id IS NULL AND status = 'pending'`);
+        }
+      }
+      // A message's words can only be changed in its first 15 minutes (the app's edit window),
+      // plus a minute's grace for a slow connection.
+      // ("Delete for everyone" clears the words too, at any age.)
+      const deleting = patch.deleted_for_all === true || patch.deleted_for_all === 1;
+      if (req.table === 'messages' && 'content' in patch && !deleting) {
+        binds.push(new Date(Date.now() - MESSAGE_EDIT_WINDOW_MS - 60_000).toISOString());
+        where.push(`created_at >= ?${binds.length}`);
+      }
+      if (req.table === 'couple_progress' && 'xp' in patch) {
+        const target = (req.filters ?? []).find((f) => f.col === 'relationship_id' && f.op === 'eq')?.val;
+        if (typeof target !== 'string') throw new ApiError('Invalid progress', 400);
+        await checkProgressStep(env, target, patch.xp);
+      }
+
+      const keys = Object.keys(patch).filter((k) => IDENT.test(k) && cols.has(k));
+      if (keys.length === 0) throw new ApiError('No columns to update', 400);
+      const updateWhere = where.join(' AND ');
 
       const oldRows =
         req.table === 'daily_challenges'
-          ? (await env.DB.prepare(`SELECT * FROM daily_challenges WHERE ${whereSql}`).bind(...binds).all<Record<string, unknown>>()).results
+          ? (await env.DB.prepare(`SELECT * FROM daily_challenges WHERE ${updateWhere}`).bind(...binds).all<Record<string, unknown>>()).results
           : [];
 
+      // Today's question: you write your own answer. Your partner's can only be cleared, and
+      // only when the question is being swapped (a skipped one).
+      if (req.table === 'daily_challenges') {
+        for (const old of oldRows) {
+          const rel = await env.DB.prepare('SELECT user_1_id FROM relationships WHERE id = ?1')
+            .bind(old.relationship_id)
+            .first<{ user_1_id: string }>();
+          const theirs = rel?.user_1_id === userId ? 'user_2_response' : 'user_1_response';
+          if (theirs in patch) {
+            const clearing = patch[theirs] === null && old.type === 'skipped';
+            if (!clearing) throw new ApiError('Not allowed', 403, '42501');
+          }
+        }
+      }
+
       const setBinds = keys.map((k) => toBind(k, patch[k]));
-      const shifted = whereSql.replace(/\?(\d+)/g, (_m, n) => `?${Number(n) + setBinds.length}`);
+      const shifted = updateWhere.replace(/\?(\d+)/g, (_m, n) => `?${Number(n) + setBinds.length}`);
       const sql = `UPDATE ${req.table} SET ${keys.map((k, i) => `${k} = ?${i + 1}`).join(', ')} WHERE ${shifted} RETURNING *`;
       const { results } = await env.DB.prepare(sql).bind(...setBinds, ...binds).all<Record<string, unknown>>();
 
@@ -351,9 +515,9 @@ async function afterInsert(env: Env, table: string, row: Record<string, unknown>
   const relId = row.relationship_id;
   if (typeof relId !== 'string') return;
 
-  if (table === 'messages' || table === 'moments') {
-    await updateStreak(env, relId, userId);
-  } else if (table === 'journal_entries' && row.is_private === 0) {
+  // Daily check-ins that keep your streak: a moment, a mood, or your answer to today's
+  // question (below). Chat messages and journal entries don't count.
+  if (table === 'moments') {
     await updateStreak(env, relId, userId);
   } else if (table === 'mood_logs') {
     await updateStreak(env, relId, userId);
@@ -392,7 +556,9 @@ async function afterUpdate(
   const newly2 = !before.user_2_response && !!row.user_2_response;
   const both = !!row.user_1_response && !!row.user_2_response;
 
-  if (both && (newly1 || newly2)) await updateStreak(env, relId, null);
+  // Answering today's question is your check-in (each of you, for your own streak).
+  if (newly1) await updateStreak(env, relId, rel.user_1_id);
+  if (newly2 && rel.user_2_id) await updateStreak(env, relId, rel.user_2_id);
 
   const responder = newly1 ? rel.user_1_id : newly2 ? rel.user_2_id : null;
   if (!responder) return;
@@ -462,7 +628,8 @@ const RPC: Record<string, RpcHandler> = {
     )
       .bind(a.p_user_id, userId)
       .first<Record<string, unknown>>();
-    return row ? shapeRow(row) : null;
+    if (!row) return null;
+    return row.id === userId ? shapeRow(row) : publicProfile(shapeRow(row));
   },
 
   async join_relationship_by_invite(env, userId, a) {
@@ -503,6 +670,7 @@ const RPC: Record<string, RpcHandler> = {
 
   async create_moment(env, userId, a) {
     await requireMember(env, userId, a.p_relationship_id);
+    await assertMomentAllowance(env, a.p_relationship_id, userId);
     // Optional pin for "Our map" — only kept when both are real coordinates.
     const lat = Number(a.p_latitude);
     const lng = Number(a.p_longitude);
@@ -629,11 +797,14 @@ const RPC: Record<string, RpcHandler> = {
   async create_partner_notification(env, userId, a) {
     await requireMember(env, userId, a.p_relationship_id);
     if (a.p_recipient_id === userId) return null;
+    const type = String(a.p_type ?? '');
+    if (!PARTNER_NOTIFICATION_TYPES.has(type)) throw new ApiError('Unknown notification type', 400);
+    await consumeRateLimit(env, `partner-notify:${userId}`, PARTNER_NOTIFICATIONS_PER_HOUR, 3600);
     return createPartnerNotification(env, {
       relationshipId: a.p_relationship_id,
       recipientId: a.p_recipient_id,
-      type: String(a.p_type ?? ''),
-      content: String(a.p_content ?? ''),
+      type,
+      content: String(a.p_content ?? '').slice(0, PARTNER_NOTIFICATION_MAX_CHARS),
       mediaUrl: a.p_media_url,
       relatedId: a.p_related_id,
     });
@@ -658,8 +829,16 @@ const RPC: Record<string, RpcHandler> = {
   },
 
   async register_push_token(env, userId, a) {
+    const token = typeof a.p_token === 'string' && a.p_token ? a.p_token : null;
+    // One phone, one account: whoever signs in here takes the token, so the last account
+    // on this phone stops getting pushes on it.
+    if (token) {
+      await env.DB.prepare('UPDATE users SET expo_push_token = NULL WHERE expo_push_token = ?1 AND id <> ?2')
+        .bind(token, userId)
+        .run();
+    }
     await env.DB.prepare('UPDATE users SET expo_push_token = ?1, expo_push_token_updated_at = ?2 WHERE id = ?3')
-      .bind(a.p_token ?? null, nowIso(), userId)
+      .bind(token, nowIso(), userId)
       .run();
     return null;
   },

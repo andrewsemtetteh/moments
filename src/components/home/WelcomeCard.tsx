@@ -5,6 +5,7 @@ import { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { StickerFlame } from '@/components/home/StickerFlame';
+import { partnerStreakCount } from '@/lib/streak';
 import { Icon } from '@/components/ui/Icon';
 import { DashedRing } from '@/components/ui/DashedRing';
 import { Avatar } from '@/components/ui/primitives';
@@ -115,7 +116,9 @@ export function WelcomeCard({
   const paired = !!partner;
 
   const week = useMemo(() => (status ? buildStreakWeek(status, joinedAt) : []), [status, joinedAt]);
+  // Your streak (the big number) and your partner's (on their photo).
   const count = status?.current_streak ?? 0;
+  const partnerStreak = partnerStreakCount(status);
   const atRisk = !!status && count > 0 && isStreakVisuallyAtRisk(status);
 
   const openStreak = () => {
@@ -156,6 +159,13 @@ export function WelcomeCard({
               accessibilityLabel={`View ${partner?.name ?? 'partner'} profile`}
               style={[styles.avatarRing, styles.overlap, { borderColor: ring }]}>
               <Avatar name={partner?.name} imageUrl={partner?.avatar_url} size={38} colorsOverride={WHITE} initialColor={initial} />
+              {/* Their own streak, on their photo. */}
+              {partnerStreak > 0 ? (
+                <View style={styles.partnerStreak} accessibilityLabel={`${partner?.name ?? 'Partner'}’s streak: ${partnerStreak} days`}>
+                  <Text style={styles.partnerStreakText}>{partnerStreak}</Text>
+                  <StickerFlame size={11} />
+                </View>
+              ) : null}
             </Pressable>
           ) : (
             <View style={[styles.emptyAvatar, styles.overlap]}>
@@ -241,6 +251,9 @@ function WeekDay({ day, ink, faint }: { day: StreakDayCell; ink: string; faint: 
                 : { borderColor: 'transparent' },
         ]}>
         {!done && !risky && !today ? <DashedRing size={30} color={faint} /> : null}
+        {/* Second ring on days you both checked in — off for now (it doubled the lit day's border):
+        {done && day.together ? <View pointerEvents="none" style={[styles.togetherRing, { borderColor: TOGETHER_RING }]} /> : null}
+        */}
         {done ? (
           <StickerFlame size={16} />
         ) : risky ? (
@@ -265,6 +278,23 @@ const STICKER_PANEL = '#FFFFFF';
 
 const styles = StyleSheet.create({
   idleFlame: { opacity: 0.45 },
+  togetherRing: { position: 'absolute', top: -5, left: -5, right: -5, bottom: -5, borderRadius: 20, borderWidth: 2 },
+  partnerStreak: {
+    position: 'absolute',
+    right: -10,
+    bottom: -6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 1,
+    paddingLeft: 5,
+    paddingRight: 3,
+    height: 18,
+    borderRadius: 9,
+    borderWidth: 1.5,
+    borderColor: '#000000',
+    backgroundColor: '#FFFFFF',
+  },
+  partnerStreakText: { fontSize: 11, fontWeight: '900', color: '#1A1A1A' },
   card: { borderRadius: 28, padding: 20, gap: 6, overflow: 'hidden' },
   bandWrap: { marginHorizontal: -Spacing.lg, marginTop: -Spacing.xs },
   bandBleed: { position: 'absolute', left: 0, right: 0, top: -600, height: 600 },

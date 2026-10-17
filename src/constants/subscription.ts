@@ -7,11 +7,13 @@ import { FREE_DAILY_MOMENTS, FREE_TIMELINE_MOMENTS } from '@/constants/design-sy
  * paywall once Superwall loads them; these are the fallbacks and the basis for the per week maths.
  */
 export const WEEKLY_PRICE_USD = 4.99;
-export const YEARLY_PRICE_USD = 69.99;
+export const YEARLY_PRICE_USD = 59.99;
 export const MONTHLY_PRICE_USD = 9.99;
 
-/** Free trial on weekly and yearly (monthly has none). Set the same on the store products. */
+/** Free trial on yearly only. Set the same introductory offer on the store product. */
 export const TRIAL_DAYS = 7;
+/** Weekly's introductory offer: the first week at this price (pay as you go, one week). */
+export const WEEKLY_INTRO_PRICE_USD = 0.99;
 /** The day before the trial ends, when we remind them. */
 export const TRIAL_REMINDER_DAY = 5;
 
@@ -47,8 +49,11 @@ export const PER_WEEK_USD: Record<SubscriptionPlanId, number> = {
 /** What a month costs on yearly, for "$5.83/month" under the yearly price. */
 export const YEARLY_PER_MONTH_USD = roundUsd(YEARLY_PRICE_USD / 12);
 
-/** Yearly vs paying weekly all year (69.99 vs 259.48 → 73%). */
+/** Yearly vs paying weekly all year (59.99 vs 259.48 → 77%). */
 export const YEARLY_SAVING_PERCENT = Math.round((1 - YEARLY_PRICE_USD / (WEEKLY_PRICE_USD * WEEKS_PER_YEAR)) * 100);
+
+/** How a plan starts for someone who hasn't had an introductory offer yet (one per person). */
+export type PlanIntro = { kind: 'free'; days: number } | { kind: 'paid'; days: number; priceUsd: number };
 
 export type SubscriptionPlan = {
   id: SubscriptionPlanId;
@@ -59,14 +64,15 @@ export type SubscriptionPlan = {
   per: string;
   /** "a week", "a year", "a month" for sentences. */
   perWords: string;
-  trial: boolean;
+  /** Introductory offer (fallback; the store's local intro price replaces a paid one). */
+  intro: PlanIntro | null;
   badge?: string;
 };
 
 /**
  * In the order shown. Yearly leads and is selected: a couples app is a long habit, and the
  * yearly plan (shown as a monthly figure too) is the one most couples should pick.
- * Monthly starts today; weekly stays for people who want the smallest step.
+ * Monthly starts today; weekly stays for people who want the smallest step ($0.99 first week).
  */
 export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
   {
@@ -75,18 +81,18 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
     priceUsd: YEARLY_PRICE_USD,
     per: '/year',
     perWords: 'a year',
-    trial: true,
+    intro: { kind: 'free', days: TRIAL_DAYS },
     badge: `${TRIAL_DAYS} days free · Save ${YEARLY_SAVING_PERCENT}%`,
   },
-  { id: 'monthly', name: 'Monthly', priceUsd: MONTHLY_PRICE_USD, per: '/month', perWords: 'a month', trial: false },
+  { id: 'monthly', name: 'Monthly', priceUsd: MONTHLY_PRICE_USD, per: '/month', perWords: 'a month', intro: null },
   {
     id: 'weekly',
     name: 'Weekly',
     priceUsd: WEEKLY_PRICE_USD,
     per: '/week',
     perWords: 'a week',
-    trial: true,
-    badge: `${TRIAL_DAYS} days free`,
+    intro: { kind: 'paid', days: 7, priceUsd: WEEKLY_INTRO_PRICE_USD },
+    badge: `${formatUsd(WEEKLY_INTRO_PRICE_USD)} first week`,
   },
 ];
 

@@ -6,17 +6,18 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { StreakDayTracker } from '@/components/home/StreakDayTracker';
 import { StickerFlame } from '@/components/home/StickerFlame';
+import { StickerHeart } from '@/components/home/StickerHeart';
 import { DashedRing } from '@/components/ui/DashedRing';
 import { StreakRestoreBanner } from '@/components/home/StreakRestoreBanner';
 import { Icon, type IconName } from '@/components/ui/Icon';
-import { Avatar, colorWithAlpha, paperEdge } from '@/components/ui/primitives';
+import { Avatar, colorWithAlpha, paperEdge, separatorColor } from '@/components/ui/primitives';
 import { ringColor } from '@/constants/design-system';
 import { useStreak } from '@/hooks/queries';
 import { useTheme } from '@/hooks/useTheme';
 import { getFirstName } from '@/lib/avatar-initial';
 import { closeStackScreen } from '@/lib/router';
-import { emptyStreakStatus, isStreakRestoreAvailable } from '@/lib/streak';
-import { STREAK_COLORS } from '@/lib/streak-colors';
+import { emptyStreakStatus, isStreakRestoreAvailable, partnerStreakCount, togetherStreakCount } from '@/lib/streak';
+import { STREAK_COLORS, TOGETHER_RING } from '@/lib/streak-colors';
 import { isStreakVisuallyAtRisk } from '@/lib/streak-reminder-timing';
 import { useAuthStore, useRelationshipStore } from '@/stores';
 
@@ -80,19 +81,32 @@ export default function StreakScreen() {
   const dark = colors.isDark;
   const soft = dark ? STREAK_COLORS.activeSoftDark : STREAK_COLORS.activeSoftLight;
 
-  const todayLine =
-    status.user_active_today && status.partner_active_today
-      ? `You both showed up · day ${count} is safe`
-      : status.user_active_today
-        ? `You’re in · waiting on ${partnerName}`
-        : status.partner_active_today
-          ? `${partnerName} is in · your turn`
-          : 'Neither of you has shown up yet today';
+  // Each of you keeps your own streak; "together" is the days in a row you both checked in.
+  // The lines between you, your partner and together: the theme's text at low strength,
+  // which shows on every theme (its border colour vanished on the card's surface).
+  const divider = separatorColor(colors);
+  const theirCount = partnerStreakCount(status);
+  const together = togetherStreakCount(status);
+  const togetherBest = Math.max(status.together_longest_streak ?? 0, together);
+  const myLine = status.user_active_today
+    ? `Checked in today · day ${count} is safe`
+    : atRisk
+      ? 'Ends tonight · check in to keep it'
+      : count > 0
+        ? 'Not yet today'
+        : 'Check in today to start';
+  const theirLine = status.partner_active_today
+    ? 'Checked in today'
+    : status.partner_at_risk
+      ? 'Ends tonight'
+      : theirCount > 0
+        ? 'Not yet today'
+        : 'No streak going';
 
   const explain = () =>
     Alert.alert(
       'How streaks work',
-      'Your streak grows every day you both show up in Moments. Miss a day and it starts over. With Plus, you can restore it within 24 hours.',
+      'Each of you has your own streak. It grows every day you check in: send a moment, share your mood or answer today’s question. Miss a day and it starts over (with Plus you can restore it within 24 hours).\n\nDays you both check in count towards your together streak.',
     );
 
   return (
@@ -131,8 +145,8 @@ export default function StreakScreen() {
           </Text>
           <Text style={[styles.heroSub, { color: ink }]}>
             {count > 0
-              ? `You and ${partnerName} have shown up ${count} day${count === 1 ? '' : 's'} in a row.`
-              : `Show up together today to start day 1.`}
+              ? `You’ve shown up ${count} day${count === 1 ? '' : 's'} in a row.`
+              : 'Check in today to start day 1.'}
           </Text>
           {best > 0 ? (
             <View style={[styles.bestPill, { borderColor: ink }]}>
@@ -144,30 +158,77 @@ export default function StreakScreen() {
         {isStreakRestoreAvailable(status) ? <StreakRestoreBanner status={status} /> : null}
 
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>Today</Text>
-          <View style={[styles.card, styles.todayCard, { backgroundColor: colors.surface }, outline]}>
-            <View style={styles.avatars}>
-              <CheckAvatar
-                done={status.user_active_today}
-                name={user?.name}
-                url={user?.avatar_url}
-                ring={colors.surface}
-              />
-              <View style={styles.overlap}>
-                <CheckAvatar
-                  done={status.partner_active_today}
-                  name={partner?.name}
-                  url={partner?.avatar_url}
-                  ring={colors.surface}
-                />
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>You two</Text>
+          <View style={[styles.card, styles.peopleCard, { backgroundColor: colors.surface }, outline]}>
+            {/* You */}
+            <View style={styles.personRow}>
+              <View style={styles.personLead}>
+                <CheckAvatar done={status.user_active_today} name={user?.name} url={user?.avatar_url} ring={colors.surface} size={44} />
+              </View>
+              <View style={styles.todayText}>
+                <Text style={[styles.cardTitle, { color: colors.text }]}>You</Text>
+                <Text style={[styles.cardSub, { color: atRisk && !status.user_active_today ? STREAK_COLORS.atRisk : colors.textSecondary }]}>
+                  {myLine}
+                </Text>
+              </View>
+              <View style={styles.personCount}>
+                <Text style={[styles.personNum, { color: colors.text }]}>{count}</Text>
+                <View style={[styles.personIcon, count > 0 ? undefined : styles.idleFlame]}>
+                  <StickerFlame size={28} />
+                </View>
               </View>
             </View>
-            <View style={styles.todayText}>
-              <Text style={[styles.cardTitle, { color: colors.text }]}>
-                {status.both_active_today ? 'Today counts' : 'Today'}
-              </Text>
-              <Text style={[styles.cardSub, { color: colors.textSecondary }]}>{todayLine}</Text>
-            </View>
+            {/* Your partner */}
+            {partner ? (
+              <View style={[styles.personRow, styles.personDivider, { borderTopColor: divider }]}>
+                <View style={styles.personLead}>
+                  <CheckAvatar done={status.partner_active_today} name={partner.name} url={partner.avatar_url} ring={colors.surface} size={44} />
+                </View>
+                <View style={styles.todayText}>
+                  <Text style={[styles.cardTitle, { color: colors.text }]}>{partnerName}</Text>
+                  <Text
+                    style={[
+                      styles.cardSub,
+                      { color: status.partner_at_risk && !status.partner_active_today ? STREAK_COLORS.atRisk : colors.textSecondary },
+                    ]}>
+                    {theirLine}
+                  </Text>
+                </View>
+                <View style={styles.personCount}>
+                  <Text style={[styles.personNum, { color: colors.text }]}>{theirCount}</Text>
+                  <View style={[styles.personIcon, theirCount > 0 ? undefined : styles.idleFlame]}>
+                    <StickerFlame size={28} />
+                  </View>
+                </View>
+              </View>
+            ) : null}
+            {/* Together */}
+            {partner ? (
+              <View style={[styles.personRow, styles.personDivider, { borderTopColor: divider }]}>
+                <View style={styles.personLead}>
+                  <View style={[styles.togetherBadge, { borderColor: TOGETHER_RING }]}>
+                    <Icon name="people" size={24} color={TOGETHER_RING} />
+                  </View>
+                </View>
+                <View style={styles.todayText}>
+                  <Text style={[styles.cardTitle, { color: colors.text }]}>Together</Text>
+                  <Text style={[styles.cardSub, { color: colors.textSecondary }]}>
+                    {status.both_active_today
+                      ? 'You both checked in today'
+                      : togetherBest > 0
+                        ? `Days in a row you both checked in · best ${togetherBest}`
+                        : 'Days in a row you both check in'}
+                  </Text>
+                </View>
+                <View style={styles.personCount}>
+                  <Text style={[styles.personNum, { color: colors.text }]}>{together}</Text>
+                  {/* Same width as the flames above, so the three numbers line up. */}
+                  <View style={[styles.personIcon, together > 0 ? undefined : styles.idleFlame]}>
+                    <StickerHeart size={30} />
+                  </View>
+                </View>
+              </View>
+            ) : null}
           </View>
         </View>
 
@@ -181,7 +242,7 @@ export default function StreakScreen() {
                   <Text style={[styles.milestoneBadgeDays, { color: colors.text }]}>{next.days}</Text>
                 </View>
                 <View style={styles.milestoneText}>
-                  <Text style={[styles.milestoneTitle, { color: colors.text }]}>{next.label} together</Text>
+                  <Text style={[styles.milestoneTitle, { color: colors.text }]}>{next.label}</Text>
                   <Text style={[styles.cardSub, { color: colors.textSecondary }]}>
                     {next.days - count === 1 ? 'Just 1 more day' : `${next.days - count} more days`}
                     {count > 0 ? ' in a row' : ' to get there'}
@@ -279,16 +340,18 @@ function CheckAvatar({
   name,
   url,
   ring,
+  size = 32,
 }: {
   done: boolean;
   name?: string | null;
   url?: string | null;
   ring: string;
+  size?: number;
 }) {
   const { colors } = useTheme();
   return (
     <View style={[styles.checkAvatar, { borderColor: ring }]}>
-      <Avatar name={name} imageUrl={url} size={32} />
+      <Avatar name={name} imageUrl={url} size={size} />
       <View
         style={[
           styles.checkBadge,
@@ -301,6 +364,15 @@ function CheckAvatar({
 }
 
 const styles = StyleSheet.create({
+  // "You two": padded inside the card; every row is lead (44) · text · number + icon.
+  peopleCard: { paddingHorizontal: 16, paddingVertical: 4 },
+  personRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12 },
+  personDivider: { borderTopWidth: 1 },
+  personLead: { width: 52, alignItems: 'center', justifyContent: 'center' },
+  personCount: { flexDirection: 'row', alignItems: 'center', gap: 4, flexShrink: 0 },
+  personNum: { fontSize: 28, fontWeight: '900', letterSpacing: -0.8, minWidth: 32, textAlign: 'right' },
+  personIcon: { width: 32, alignItems: 'center', justifyContent: 'center' },
+  togetherBadge: { width: 48, height: 48, borderRadius: 24, borderWidth: 2.5, alignItems: 'center', justifyContent: 'center' },
   root: { flex: 1 },
   // Lit, like the milestone celebration: yellow with a bold ink outline.
   stickerLit: { backgroundColor: '#FFE7A0', borderColor: '#000000', borderWidth: 2 },
@@ -368,7 +440,7 @@ const styles = StyleSheet.create({
   todayCard: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16 },
   avatars: { flexDirection: 'row' },
   overlap: { marginLeft: -10 },
-  checkAvatar: { borderWidth: 2, borderRadius: 18 },
+  checkAvatar: { borderWidth: 2, borderRadius: 999 },
   checkBadge: {
     position: 'absolute',
     right: -4,
@@ -380,7 +452,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  todayText: { flex: 1, gap: 2 },
+  todayText: { flex: 1, gap: 2, minWidth: 0 },
   cardTitle: { fontSize: 15, fontWeight: '800' },
   cardSub: { fontSize: 13, fontWeight: '600' },
   milestoneCard: { padding: 16, gap: 12 },

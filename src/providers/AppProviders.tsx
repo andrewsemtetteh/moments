@@ -16,7 +16,7 @@ import {
   WORDMARK_FONT_ITALIC_ASSET,
 } from '@/constants/fonts';
 import { clearAuthSession, hydrateAuthSession } from '@/lib/auth-session';
-import { getRememberMe } from '@/lib/remember-me-storage';
+import { clearLegacyRememberMe } from '@/lib/remember-me-storage';
 import { getSavedTheme } from '@/lib/theme-storage';
 import { BillingProvider } from '@/providers/BillingProvider';
 import { CallProvider } from '@/providers/CallProvider';
@@ -103,16 +103,11 @@ function AuthSync({ children }: { children: ReactNode }) {
 
     void (async () => {
       try {
-        // "Remember me" opt-out: sign out a session Clerk restored from the
-        // keychain if the user asked not to be kept signed in. Only checked once.
+        // You stay signed in until you sign out: the session Clerk keeps in the keychain is
+        // always restored. (Clears the old "Remember me" choice once, so it can't sign anyone out.)
         if (!checkedRememberMeRef.current) {
           checkedRememberMeRef.current = true;
-          if (isSignedIn && !(await getRememberMe())) {
-            forgetCache();
-            await clearAuthSession();
-            await signOut().catch(() => undefined);
-            return;
-          }
+          void clearLegacyRememberMe();
         }
 
         if (isSignedIn && userId) {

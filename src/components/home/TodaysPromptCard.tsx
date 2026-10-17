@@ -87,7 +87,8 @@ export function TodaysPromptCard({ challenge, onOpenHistory, startComposing = fa
       [],
     ),
   );
-  const revealAnim = useRef(new Animated.Value(0)).current;
+  // Made once and kept (state, not a ref, so render never reads a ref).
+  const [revealAnim] = useState(() => new Animated.Value(0));
 
   const phase = promptPhase(challenge, user?.id, relationship);
   const expired = isPromptExpired(challenge);

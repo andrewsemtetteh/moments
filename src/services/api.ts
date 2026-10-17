@@ -1,7 +1,7 @@
 import { isValidAnniversaryIso } from '@/lib/anniversary';
 import { extractChatStoragePath } from '@/lib/chat-media';
 import { challengeResponseField } from '@/lib/daily-prompt';
-import { localCalendarDate } from '@/lib/db-time';
+import { spaceCalendarDate } from '@/lib/db-time';
 import { extractMomentsStoragePath, hydrateMomentsMedia } from '@/lib/moment-media';
 import {
     buildOverviewFromLogs,
@@ -35,6 +35,7 @@ import type {
     UserProfile,
 } from '@/types/database';
 import { format, startOfDay } from 'date-fns';
+import * as Crypto from 'expo-crypto';
 
 import { isConvertiblePhoto, prepareImageForUpload, readUriAsArrayBuffer } from '@/lib/prepare-image';
 
@@ -1084,7 +1085,7 @@ export async function fetchStreak(relationshipId: string) {
 }
 
 export async function fetchDailyChallenge(relationshipId: string, challengeDate?: string) {
-  const today = challengeDate ?? localCalendarDate();
+  const today = challengeDate ?? spaceCalendarDate();
   const { data, error } = await backend
     .from('daily_challenges')
     .select('*')
@@ -1098,7 +1099,7 @@ export async function fetchDailyChallenge(relationshipId: string, challengeDate?
 
 /** Ensure today's prompt exists (edge function, then client fallback). */
 export async function ensureDailyChallenge(relationshipId: string): Promise<DailyChallenge> {
-  const today = localCalendarDate();
+  const today = spaceCalendarDate();
   const existing = await fetchDailyChallenge(relationshipId, today);
   if (existing && existing.type !== 'skipped') return existing;
   if (existing?.type === 'skipped') {
@@ -1409,12 +1410,26 @@ export async function dispatchPendingPushNotifications(limit = 10) {
   }
 }
 
+/**
+ * Media links work for whoever has them, like a private share link, so a file's name
+ * must be impossible to guess: a random 128-bit part goes before the extension
+ * ("…/1718000000000-3f9c….jpg"). Without it, the couple and user ids plus a timestamp were
+ * enough to find someone's photos.
+ */
+export function unguessablePath(path: string): string {
+  const token = Crypto.randomUUID().replace(/-/g, '');
+  const dot = path.lastIndexOf('.');
+  const slash = path.lastIndexOf('/');
+  return dot > slash ? `${path.slice(0, dot)}-${token}${path.slice(dot)}` : `${path}-${token}`;
+}
+
 export async function uploadMedia(
   bucket: string,
-  path: string,
+  rawPath: string,
   uri: string,
   contentType: string,
 ) {
+  const path = unguessablePath(rawPath);
   const file = await readForUpload(uri, contentType);
 
   const { data, error } = await backend.storage.from(bucket).upload(path, file.body, {
@@ -1428,13 +1443,28 @@ export async function uploadMedia(
   });
 }
 
+/**
+ * A file uploaded for a moment that then couldn't be created (offline, over the free limit…):
+ * delete it, so storage doesn't fill with files nothing points to. Best effort.
+ */
+export async function discardMomentUpload(mediaUrl: string | null | undefined): Promise<void> {
+  const path = extractMomentsStoragePath(mediaUrl);
+  if (!path) return;
+  try {
+    await backend.storage.from('moments').remove([path]);
+  } catch {
+    // Left for a later clean-up; never blocks the person.
+  }
+}
+
 /** Upload moment media to the private `moments` bucket; returns a long-lived signed URL. */
 export async function uploadMomentMedia(path: string, uri: string, contentType: string) {
   return uploadMedia('moments', path, uri, contentType);
 }
 
 /** Upload chat media to the private `chat` bucket; returns a long-lived signed URL. */
-export async function uploadChatMedia(path: string, uri: string, contentType: string) {
+export async function uploadChatMedia(rawPath: string, uri: string, contentType: string) {
+  const path = unguessablePath(rawPath);
   const file = await readForUpload(uri, contentType);
 
   const { data, error } = await backend.storage.from('chat').upload(path, file.body, {
@@ -1448,7 +1478,7 @@ export async function uploadChatMedia(path: string, uri: string, contentType: st
 
 /** Upload avatar to private profiles bucket; returns a long-lived signed URL. */
 export async function uploadProfileAvatar(userId: string, uri: string) {
-  const path = `${userId}/avatar-${Date.now()}.jpg`;
+  const path = unguessablePath(`${userId}/avatar-${Date.now()}.jpg`);
   // Avatars are small on screen: 1024px is plenty and keeps uploads quick.
   const file = await readForUpload(uri, 'image/jpeg', 1024);
 

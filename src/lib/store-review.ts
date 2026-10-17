@@ -119,6 +119,12 @@ export async function markRatingPageDismissed(): Promise<void> {
   await snoozeRatingPage(RESHOW_AFTER_DAYS);
 }
 
+/** The store's prompt was asked for: not again for two months (the stores cap it too). */
+export async function markReviewPromptAsked(): Promise<void> {
+  await snoozeRatingPage(REVIEW_PROMPT_EVERY_DAYS);
+}
+const REVIEW_PROMPT_EVERY_DAYS = 60;
+
 /** They told us what's wrong: leave them be for a month. */
 export async function markRatingFeedbackGiven(): Promise<void> {
   await snoozeRatingPage(AFTER_FEEDBACK_DAYS);

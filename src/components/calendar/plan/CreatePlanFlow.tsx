@@ -1,7 +1,7 @@
 import { format, setHours, setMilliseconds, setMinutes, setSeconds, startOfDay } from 'date-fns';
 import { paperEdge } from '@/components/ui/primitives';
 import * as Haptics from '@/lib/haptics';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Platform,
@@ -144,8 +144,14 @@ export function CreatePlanFlow({
   const [isPrivate, setIsPrivate] = useState(false);
 
   const kind = resolveKind(kindKey);
-  useEffect(() => {
-    if (!visible) return;
+  // Fresh form each time it opens (reset while rendering, keyed on what it opened with).
+  const openKey = visible ? `${selectedDate.getTime()}|${initialKind ?? ''}|${skipTypePicker}` : null;
+  const [lastOpenKey, setLastOpenKey] = useState<string | null>(null);
+  if (openKey !== lastOpenKey) {
+    setLastOpenKey(openKey);
+    if (openKey !== null) resetForm();
+  }
+  function resetForm() {
     const base = selectedDate;
     setEventDate(base);
     setEventTime(defaultEventTime(base));
@@ -166,21 +172,21 @@ export function CreatePlanFlow({
     setCreateSharedList(
       nextKind === 'trip' || nextKind === 'celebration' || nextKind === 'checklist',
     );
-    if (initialKind) {
-      setStep('form');
-    } else {
-      setStep('form');
-    }
-  }, [visible, selectedDate, initialKind, skipTypePicker]);
+    setStep('form');
+  }
 
-  useEffect(() => {
-    if (!visible) return;
-    setCreateSharedList((prev) =>
-      checklist.length > 0
-        ? true
-        : kindKey === 'trip' || kindKey === 'celebration' || kindKey === 'checklist' || prev,
-    );
-  }, [checklist.length, kindKey, visible]);
+  // A checklist, or a trip / celebration / checklist plan, turns on "make a shared list"
+  // (never turns it off): adjusted while rendering when those change.
+  const listKey = visible ? `${checklist.length > 0}|${kindKey}` : null;
+  const [lastListKey, setLastListKey] = useState<string | null>(null);
+  if (listKey !== lastListKey) {
+    setLastListKey(listKey);
+    if (listKey !== null) {
+      setCreateSharedList((prev) =>
+        checklist.length > 0 ? true : kindKey === 'trip' || kindKey === 'celebration' || kindKey === 'checklist' || prev,
+      );
+    }
+  }
 
   const resolvedDateTime = useMemo(() => {
     const day = startOfDay(eventDate);

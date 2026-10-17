@@ -6,11 +6,10 @@ import { StyleSheet, View } from 'react-native';
 
 import { LogoMark } from '@/components/ui/Logo';
 import { useTheme } from '@/hooks/useTheme';
-// eslint-disable-next-line @typescript-eslint/no-unused-vars -- used by the commented-out restore path below
 import { isIntroCompleted } from '@/lib/intro-storage';
-import { isAvatarPromptDone, isOnboardingPaywallDone } from '@/lib/onboarding-storage';
+import { isOnboardingPaywallDone } from '@/lib/onboarding-storage';
 import { getOnboardingStep, setOnboardingStep, stepRoute } from '@/lib/onboarding-v2';
-import { needsProfileSetup } from '@/lib/profile-setup';
+import { needsProfileName } from '@/lib/profile-setup';
 import { useAuthStore, useRelationshipStore, useUIStore } from '@/stores';
 
 /** The heart alone, no name: same as the native splash it follows. */
@@ -19,6 +18,11 @@ const LOGO_SIZE = 160;
 /** The launch screen: the logo, still (no animation), for 5 seconds from when
  * it's actually on screen, then straight on to the next screen (no fade). */
 const MIN_VISIBLE_MS = 5000;
+/**
+ * The hold is for the cold start only. Coming back here in the same run (an invite or
+ * referral link routes through this screen) goes straight on, no 5-second wait.
+ */
+let shownThisRun = false;
 
 export default function IndexScreen() {
   const router = useRouter();
@@ -36,7 +40,7 @@ export default function IndexScreen() {
   // The theme's own colour: violet on Violet, black on Dark, cream on Cream, white on Default.
   const splash = colors.splash ?? colors.background;
 
-  const [minVisibleDone, setMinVisibleDone] = useState(false);
+  const [minVisibleDone, setMinVisibleDone] = useState(shownThisRun);
   // When this screen is actually on screen: after the native splash has gone,
   // a frame has painted, and app start-up work (sign-in check, fonts, data)
   // has settled. The hold below counts from here, not from when the code
@@ -68,8 +72,11 @@ export default function IndexScreen() {
   }, [router]);
 
   useEffect(() => {
-    if (!visible) return;
-    const timer = setTimeout(() => setMinVisibleDone(true), MIN_VISIBLE_MS);
+    if (!visible || shownThisRun) return;
+    const timer = setTimeout(() => {
+      shownThisRun = true;
+      setMinVisibleDone(true);
+    }, MIN_VISIBLE_MS);
     return () => clearTimeout(timer);
   }, [visible]);
 
@@ -84,11 +91,10 @@ export default function IndexScreen() {
       if (cancelled) return;
 
       if (!session) {
-        // TEMP: forcing welcome for brand preview. To restore real behavior,
-        // delete this line and uncomment the two below it.
-        await replaceWithExit('/(auth)/welcome');
-        // const hasUsedAuthBefore = await isIntroCompleted();
-        // await replaceWithExit(hasUsedAuthBefore ? '/(auth)/login' : '/(auth)/welcome');
+        // First time on this phone: the welcome slides. Someone who's signed in here
+        // before (and signed out): straight to Log in.
+        const hasUsedAuthBefore = await isIntroCompleted();
+        await replaceWithExit(hasUsedAuthBefore ? '/(auth)/login' : '/(auth)/welcome');
         return;
       }
       // Onboarding (lib/onboarding-v2): resume at the saved step, so leaving
@@ -109,8 +115,12 @@ export default function IndexScreen() {
           // name/photo from Apple or Google is filled in there, not skipped.
           step = 'about-you';
         } else {
-          const avatarDone = await isAvatarPromptDone(user.id);
-          step = needsProfileSetup(user, avatarDone) ? 'about-you' : 'theme-picker';
+          // An account that's already set up and paired, signing in on a new phone or
+          // after reinstalling (this phone has no saved step): straight into the app.
+          // Only a missing name sends it back to the first step (the photo prompt's
+          // "asked already" flag lives on the old phone, and a photo is optional).
+          step = needsProfileName(user) ? 'about-you' : 'done';
+          if (step === 'done') await setOnboardingStep(user.id, 'done');
         }
       }
       if (step !== 'done') {

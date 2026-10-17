@@ -4,8 +4,13 @@ import { StyleSheet, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { runOnJS } from 'react-native-reanimated';
 
-const TRIGGER_DISTANCE = 60;
+const TRIGGER_DISTANCE = 70;
 const TRIGGER_VELOCITY = 500;
+/**
+ * A fast flick still needs to have travelled this far. Speed alone used to switch tabs
+ * when someone quickly scrolled a sideways row (Play's rails, the moments on Home).
+ */
+const FLICK_MIN_DISTANCE = 45;
 /**
  * A swipe has to travel 25pt before it counts — a little more than the moments
  * card's own 20pt swipe, so dragging on the card flips photos first.
@@ -44,9 +49,13 @@ export function TabSwipe({
     .activeOffsetX([canLeft ? -ACTIVATE_AFTER : -10_000, canRight ? ACTIVATE_AFTER : 10_000])
     .failOffsetY([-20, 20])
     .onEnd((e) => {
-      if (canRight && (e.translationX > TRIGGER_DISTANCE || e.velocityX > TRIGGER_VELOCITY)) {
+      // Mostly sideways, and either far enough or a real flick that's travelled a bit.
+      if (Math.abs(e.translationY) > Math.abs(e.translationX) * 0.6) return;
+      const flickRight = e.velocityX > TRIGGER_VELOCITY && e.translationX > FLICK_MIN_DISTANCE;
+      const flickLeft = e.velocityX < -TRIGGER_VELOCITY && e.translationX < -FLICK_MIN_DISTANCE;
+      if (canRight && (e.translationX > TRIGGER_DISTANCE || flickRight)) {
         runOnJS(right)();
-      } else if (canLeft && (e.translationX < -TRIGGER_DISTANCE || e.velocityX < -TRIGGER_VELOCITY)) {
+      } else if (canLeft && (e.translationX < -TRIGGER_DISTANCE || flickLeft)) {
         runOnJS(left)();
       }
     });

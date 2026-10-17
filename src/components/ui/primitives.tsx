@@ -350,6 +350,14 @@ export function colorWithAlpha(hex: string, alpha: number) {
   return `rgba(${r},${g},${b},${alpha})`;
 }
 
+/**
+ * The line between rows inside a card (Settings, lists): the theme's text at low strength.
+ * The theme's border colour is nearly the card's own colour, so hairlines in it vanished.
+ */
+export function separatorColor(colors: { text: string; isDark: boolean }) {
+  return colorWithAlpha(colors.text, colors.isDark ? 0.18 : 0.12);
+}
+
 export type { ThemeColors };
 
 /** Cards on Default: the 22pt corners of the streak and Wrapped stickers. */

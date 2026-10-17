@@ -11,7 +11,7 @@ import { Icon } from '@/components/ui/Icon';
 import { Radius, ringColor } from '@/constants/design-system';
 import { useTheme } from '@/hooks/useTheme';
 import { getFirstName } from '@/lib/avatar-initial';
-import { streakSubtitle } from '@/lib/streak';
+import { streakSubtitle, partnerStreakCount } from '@/lib/streak';
 import { STREAK_COLORS, streakToneFromStatus, streakWellColors } from '@/lib/streak-colors';
 import {
   buildStreakMonth,
@@ -145,8 +145,9 @@ export function StreakDayTracker({ status, joinedAt: joinedAtProp, calendarOnly 
           <CheckInChip
             label={partnerFirst}
             done={status.partner_active_today}
-            waiting={active && !status.partner_active_today}
-            atRisk={atRisk && !status.partner_active_today}
+            // Their own streak: waiting while theirs is going, red when theirs ends tonight.
+            waiting={partnerStreakCount(status) > 0 && !status.partner_active_today}
+            atRisk={!!status.partner_at_risk && !status.partner_active_today}
             isDark={colors.isDark}
             colors={{
               text: colors.text,
@@ -176,6 +177,13 @@ export function StreakDayTracker({ status, joinedAt: joinedAtProp, calendarOnly 
           joinedAt={joinedAt}
         />
       )}
+
+      {/* What the second ring means — off along with the ring:
+      <View style={calStyles.key}>
+        <View style={[calStyles.keyDot, { borderColor: TOGETHER_RING }]} />
+        <Text style={[calStyles.keyText, { color: colors.textSecondary }]}>Days you both checked in</Text>
+      </View>
+      */}
     </View>
   );
 }
@@ -384,6 +392,14 @@ function DayCell({
           {ring}
           {content}
           {badge}
+          {/* Second ring on days you both checked in — off for now (it doubled the lit day's border):
+          {active && day.together ? (
+            <View
+              pointerEvents="none"
+              style={[calStyles.togetherRing, { borderRadius: size / 2 + 5, borderColor: TOGETHER_RING }]}
+            />
+          ) : null}
+          */}
         </View>
       </View>
     </View>
@@ -553,6 +569,10 @@ const calStyles = StyleSheet.create({
   slot: { alignSelf: 'stretch', alignItems: 'center', justifyContent: 'center' },
   band: { position: 'absolute', top: 0, bottom: 0 },
   circle: { alignItems: 'center', justifyContent: 'center' },
+  togetherRing: { position: 'absolute', top: -5, left: -5, right: -5, bottom: -5, borderWidth: 2 },
+  key: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 10 },
+  keyDot: { width: 14, height: 14, borderRadius: 7, borderWidth: 2 },
+  keyText: { fontSize: 12, fontWeight: '700' },
   num: { fontSize: 14, fontWeight: '600', letterSpacing: -0.2 },
   numActive: { fontWeight: '900' },
   // Small corner badge: ✕ on a missed day, flame on a streak day (month).

@@ -127,6 +127,15 @@ export async function clearAuthSession() {
  * 2. Revoke the Clerk session
  */
 export async function signOutUser(): Promise<void> {
+  // First, while still signed in: stop this phone getting this account's pushes. Otherwise
+  // the next person to sign in here kept receiving them. Capped so a slow network can't
+  // hold up signing out (the server also drops the token when another account claims it).
+  const { clearPushTokenRegistration } = await import('@/lib/push-notifications');
+  await Promise.race([clearPushTokenRegistration(), new Promise((resolve) => setTimeout(resolve, 2500))]);
+  // And no reminders about this account's plans for whoever signs in next.
+  const { cancelPlanReminders } = await import('@/lib/plan-reminders');
+  await cancelPlanReminders();
+
   const { queryClient } = await import('@/providers/AppProviders');
   queryClient.clear();
   await clearAuthSession();

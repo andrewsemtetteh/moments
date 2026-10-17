@@ -12,6 +12,15 @@ export const NOTIFICATION_CATEGORIES: { key: string; label: string; detail: stri
   { key: 'dailyQuestion', label: 'Daily question', detail: 'When they answer today’s question', icon: 'question', types: ['challenge'] },
   { key: 'streaks', label: 'Streak reminders', detail: 'Before your streak runs out', icon: 'fire', types: ['streak'] },
   { key: 'games', label: 'Game invites', detail: 'When they start a game or it’s your turn', icon: 'gamepad', types: ['game_invite', 'game_turn'] },
+  {
+    key: 'activities',
+    label: 'Activities and trophies',
+    detail: 'Answers, reactions, gratitude, quests and trophies',
+    icon: 'star',
+    types: ['activity', 'gratitude', 'achievement'],
+  },
+  { key: 'plans', label: 'Plans', detail: 'When they add or change a plan', icon: 'calendar', types: ['calendar'] },
+  { key: 'plus', label: 'Moments Plus', detail: 'When your partner suggests Plus', icon: 'diamond', types: ['plus_suggest'] },
 ];
 
 export type NotificationPrefs = Record<string, boolean>;

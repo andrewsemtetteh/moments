@@ -10,6 +10,8 @@ export type TextInput = RNTextInput;
  * react-native's TextInput with the theme's keyboard (dark on dark themes), cursor and placeholder
  * colours. Anything passed explicitly still wins.
  */
+// A value and its type share the name on purpose, like react-native's own TextInput.
+// eslint-disable-next-line @typescript-eslint/no-redeclare
 export function TextInput({ ref, ...props }: TextInputProps & { ref?: Ref<RNTextInput> }) {
   const { colors } = useTheme();
   return (

@@ -47,7 +47,8 @@ export function WidgetSync() {
       daysTogether: since ? Math.max(0, differenceInCalendarDays(new Date(), since)) : 0,
       since: since ? since.toISOString() : null,
       streak: streak?.current_streak ?? 0,
-      streakSafeToday: !!streak?.both_active_today,
+      // Your streak is safe once you've checked in today.
+      streakSafeToday: !!streak?.user_active_today,
       momentImageUrl: mediaUrl ? imageUrl : null,
       momentCaption: latest?.content?.trim() || null,
       momentAt: latest?.created_at ?? null,

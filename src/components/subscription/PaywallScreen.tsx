@@ -17,7 +17,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 // import { CoupleCharacters, FloatingArt } from '@/components/onboarding/Characters';
 import { Icon, type IconName } from '@/components/ui/Icon';
-import { Avatar, colorWithAlpha } from '@/components/ui/primitives';
+import { Avatar, colorWithAlpha, separatorColor } from '@/components/ui/primitives';
 import { FREE_DAILY_MOMENTS, FREE_TIMELINE_MOMENTS } from '@/constants/design-system';
 import {
   BILLING_CONNECTED,
@@ -27,12 +27,15 @@ import {
   SUBSCRIPTION_PLANS,
   TRIAL_DAYS,
   TRIAL_REMINDER_DAY,
+  type SubscriptionPlan,
   type SubscriptionPlanId,
   REFERRAL_DAYS,
   YEARLY_PER_MONTH_USD,
+  YEARLY_SAVING_PERCENT,
 } from '@/constants/subscription';
 import { useTheme } from '@/hooks/useTheme';
 import { getFirstName } from '@/lib/avatar-initial';
+import { FREE_ALBUM_LIMIT } from '@/lib/moment-albums';
 import { purchasePlan, restorePlus, usePurchasesStore, WINBACK_OFFER } from '@/lib/purchases';
 import { PaywallDetour, type PaywallDetourPage } from '@/components/subscription/PaywallDetour';
 import { AnalyticsEvents, trackForCouple } from '@/services/analytics';
@@ -54,12 +57,18 @@ function isLightColor(hex: string) {
 
 /** The first three show; the rest sit behind "See all". */
 const PERKS_SHOWN = 3;
+/**
+ * Everything Moments Plus unlocks, in the order people care about. Only what the
+ * app really gates: promising something free users already have backfires.
+ */
 const PERKS: { icon: IconName; title: string; free: string; tint: string }[] = [
   { icon: 'camera', title: 'Unlimited moments', free: `Free: ${FREE_DAILY_MOMENTS} a day`, tint: '#FFD9CC' },
-  { icon: 'cards', title: 'Every conversation deck', free: 'Free: a few to try', tint: '#DCEBFF' },
-  { icon: 'time', title: 'Your whole history', free: `Free: last ${FREE_TIMELINE_MOMENTS} moments`, tint: '#D7F2E3' },
-  { icon: 'albums', title: 'Albums, map and Wrapped', free: 'Plus only', tint: '#FFE7A0' },
-  { icon: 'fire', title: 'Save a broken streak', free: 'Plus only', tint: '#FFD6DC' },
+  { icon: 'time', title: 'Your whole history', free: `Free: your last ${FREE_TIMELINE_MOMENTS} moments`, tint: '#D7F2E3' },
+  { icon: 'albums', title: 'Unlimited albums', free: `Free: ${FREE_ALBUM_LIMIT} albums`, tint: '#FFE7A0' },
+  { icon: 'cards', title: 'Unlimited games and conversations', free: 'New ones made just for you two, every time', tint: '#E3DDFF' },
+  { icon: 'volumeHigh', title: 'Live game nights with voice', free: 'Play together in real time, wherever you are', tint: '#DCEBFF' },
+  { icon: 'fire', title: 'Save a broken streak', free: 'Bring it back within 24 hours', tint: '#FFD6DC' },
+  { icon: 'people', title: 'One plan, both of you', free: 'Your person gets everything too, at no extra cost', tint: '#D7F2E3' },
 ];
 
 const TIMELINE: { day: string; text: string; icon: IconName }[] = [
@@ -121,7 +130,6 @@ export function PaywallScreen({
   const [loading, setLoading] = useState(false);
   const storePrices = usePurchasesStore((s) => s.prices);
   const storePerMonth = usePurchasesStore((s) => s.perMonth);
-  const storePerPerson = usePurchasesStore((s) => s.perPerson);
   const me = useAuthStore((s) => s.user);
   const partner = useRelationshipStore((s) => s.partner);
   const relationship = useRelationshipStore((s) => s.relationship);
@@ -131,26 +139,43 @@ export function PaywallScreen({
   const [detour, setDetour] = useState<PaywallDetourPage | null>(null);
   // "Send to Sam": idle, sending, then sent (once per open).
   const [suggest, setSuggest] = useState<'idle' | 'sending' | 'sent'>('idle');
-  // Apple and Google give one free trial per person; after that, plans start straight away.
+  // Apple and Google give one introductory offer per person; after that, plans start at full price.
   const trialEligible = usePurchasesStore((s) => s.trialEligible);
+  const storeIntroPrices = usePurchasesStore((s) => s.introPrices);
   const plan = planById(selectedPlan);
-  const hasTrial = !winback && plan.trial && trialEligible;
+  const introOf = (p: SubscriptionPlan) => (!winback && trialEligible ? p.intro : null);
+  const intro = introOf(plan);
+  // Free days (yearly) vs a cheap first period (weekly's $0.99 first week).
+  const hasTrial = intro?.kind === 'free';
+  const introPriceOf = (p: SubscriptionPlan) => {
+    const i = introOf(p);
+    return i?.kind === 'paid' ? (storeIntroPrices[p.id] ?? formatUsd(i.priceUsd)) : null;
+  };
+  const introPrice = introPriceOf(plan);
+  const introSpan = (days: number) => (days === 7 ? 'week' : `${days} days`);
   const shownPlans = winback ? SUBSCRIPTION_PLANS.filter((p) => p.id === 'yearly') : SUBSCRIPTION_PLANS;
   const priceOf = (id: SubscriptionPlanId) => storePrices[id] ?? formatUsd(planById(id).priceUsd);
-  // Yearly, as a month and split between the two of you ("$5.83/month · $35.00 each").
+  // Yearly as a monthly rate ("$5.83" per month).
   const yearlyPerMonth = storePerMonth.yearly ?? formatUsd(YEARLY_PER_MONTH_USD);
-  const yearlyEach = storePerPerson.yearly ?? (storePrices.yearly ? null : formatUsd(planById('yearly').priceUsd / 2));
   // "Try 7 days for $0.00": free, said as a price, in their own currency. The real
   // price sits right under it in the pinned footer.
   const zeroPrice = usePurchasesStore((s) => s.zeroPrice) ?? '$0.00';
-  const cta = winback ? 'Claim my offer' : hasTrial ? `Try ${TRIAL_DAYS} days for ${zeroPrice}` : 'Subscribe';
+  const cta = winback
+    ? 'Claim my offer'
+    : hasTrial
+      ? `Try ${TRIAL_DAYS} days for ${zeroPrice}`
+      : introPrice && intro
+        ? `Try your first ${introSpan(intro.days)} for ${introPrice}`
+        : 'Subscribe';
   // The pinned footer's height, so the end of the page scrolls clear of it.
   const [footerH, setFooterH] = useState(0);
   const fine = winback
-    ? `${winbackPrice} for your first year, then ${priceOf('yearly')} a year for both of you. Cancel any time.`
+    ? `${winbackPrice} for your first year, then ${priceOf('yearly')} a year for both of you.`
     : hasTrial
-      ? `${TRIAL_DAYS} days free, then ${priceOf(plan.id)} ${plan.perWords} for both of you. Cancel any time before day ${TRIAL_DAYS}.`
-      : `${priceOf(plan.id)} ${plan.perWords} for both of you. Renews automatically, cancel any time.`;
+      ? `${TRIAL_DAYS} days free, then ${priceOf(plan.id)} ${plan.perWords} for both of you.`
+      : introPrice && intro
+        ? `${introPrice} for your first ${introSpan(intro.days)}, then ${priceOf(plan.id)} ${plan.perWords} for both of you.`
+        : `${priceOf(plan.id)} ${plan.perWords} for both of you. Renews automatically.`;
 
   // Funnel: shown (and where).
   useEffect(() => {
@@ -177,7 +202,7 @@ export function PaywallScreen({
         void trackForCouple(hasTrial ? AnalyticsEvents.TRIAL_STARTED : AnalyticsEvents.PURCHASED, {
           plan: selectedPlan,
           placement,
-          offer: winback ? 'winback' : null,
+          offer: winback ? 'winback' : introPrice ? 'intro_price' : null,
         });
         (onPurchased ?? onClose)?.();
       } else if (result === 'pending') {
@@ -389,9 +414,10 @@ export function PaywallScreen({
                       key={p.title}
                       style={[
                         styles.perk,
-                        (i < shown.length - 1 || !allPerks) && {
-                          borderBottomWidth: StyleSheet.hairlineWidth,
-                          borderBottomColor: colors.border,
+                        // A line under every row: the See all / Show less button follows.
+                        {
+                          borderBottomWidth: 1,
+                          borderBottomColor: separatorColor(colors),
                         },
                       ]}>
                       <View style={[styles.perkTile, { backgroundColor: p.tint }]}>
@@ -404,34 +430,35 @@ export function PaywallScreen({
                       <Icon name="check" size={18} color={colors.success} />
                     </View>
                   ))}
-                  {allPerks ? null : (
-                    <Pressable
-                      onPress={() => setAllPerks(true)}
-                      accessibilityRole="button"
-                      style={({ pressed }) => [styles.morePerks, pressed && styles.pressed]}>
-                      <Text style={[styles.morePerksText, { color: colors.text }]}>
-                        See all {PERKS.length} Plus features
-                      </Text>
+                  {/* Opens the rest, then folds them away again. */}
+                  <Pressable
+                    onPress={() => {
+                      void Haptics.selectionAsync();
+                      setAllPerks((v) => !v);
+                    }}
+                    accessibilityRole="button"
+                    accessibilityState={{ expanded: allPerks }}
+                    style={({ pressed }) => [styles.morePerks, pressed && styles.pressed]}>
+                    <Text style={[styles.morePerksText, { color: colors.text }]}>
+                      {allPerks ? 'Show less' : `See all ${PERKS.length} Plus features`}
+                    </Text>
+                    <View style={allPerks ? styles.flipped : undefined}>
                       <Icon name="chevronDown" size={16} color={colors.text} />
-                    </Pressable>
-                  )}
+                    </View>
+                  </Pressable>
                 </View>
 
                 <View style={styles.plans} accessibilityRole="radiogroup">
                   {shownPlans.map((p) => {
                     const on = p.id === selectedPlan;
-                    const badge = winback
-                      ? 'One time offer'
-                      : p.id === 'yearly'
-                        ? p.badge
-                        : p.trial && trialEligible
-                          ? p.badge
-                          : undefined;
-                    const sub = winback
-                      ? `Your first year, then ${priceOf('yearly')} a year`
-                      : p.trial && trialEligible
-                        ? `${TRIAL_DAYS} days free, then billed ${p.perWords}`
-                        : `Starts today, billed ${p.perWords}`;
+                    const yearly = p.id === 'yearly';
+                    const trial = introOf(p)?.kind === 'free';
+                    const pIntro = introOf(p);
+                    const pIntroPrice = introPriceOf(p);
+                    // Corner badge: only the plan we recommend (or the one-time offer).
+                    const badge = winback ? 'One-time offer' : yearly ? `Best value · Save ${YEARLY_SAVING_PERCENT}%` : null;
+                    // "/year", "/month", "/week" (yearly is shown as its monthly rate).
+                    const period = yearly && !winback ? '/month' : p.per;
                     return (
                       <Pressable
                         key={p.id}
@@ -441,37 +468,56 @@ export function PaywallScreen({
                         }}
                         accessibilityRole="radio"
                         accessibilityState={{ selected: on }}
-                        style={[
+                        style={({ pressed }) => [
                           styles.plan,
                           {
-                            backgroundColor: colors.surface,
-                            borderColor: on ? colors.text : colors.border,
-                            borderWidth: on ? 3 : 2,
+                            // Selected: the accent outline and a light accent wash.
+                            backgroundColor: on ? colorWithAlpha(colors.accent, colors.isDark ? 0.16 : 0.07) : colors.surface,
+                            borderColor: on ? colors.accent : colors.border,
+                            borderWidth: on ? 2.5 : 1.5,
                           },
+                          pressed && styles.pressed,
                         ]}>
                         {badge ? (
                           <View style={[styles.badge, { backgroundColor: colors.accent }]}>
                             <Text style={[styles.badgeText, { color: colors.onAccent }]}>{badge}</Text>
                           </View>
                         ) : null}
-                        <View style={[styles.radio, { borderColor: colors.text }]}>
-                          {on ? <View style={[styles.radioDot, { backgroundColor: colors.text }]} /> : null}
+                        {/* Check: filled when chosen. */}
+                        <View
+                          style={[
+                            styles.radio,
+                            on ? { backgroundColor: colors.accent, borderColor: colors.accent } : { borderColor: colors.border },
+                          ]}>
+                          {on ? <Icon name="check" size={14} color={colors.onAccent} /> : null}
                         </View>
-                        <View style={styles.flex}>
+                        {/* Left: what it is, and how it starts. */}
+                        <View style={styles.planInfo}>
                           <Text style={[styles.planName, { color: colors.text }]}>{p.name}</Text>
-                          <Text style={[styles.planSub, { color: colors.textSecondary }]}>{sub}</Text>
+                          <Text style={[styles.planSub, { color: colors.textSecondary }]}>
+                            {winback
+                              ? `Your first year, then ${priceOf('yearly')} a year`
+                              : yearly
+                                ? // Yearly: what you're billed, in words, under the monthly rate.
+                                  trial
+                                  ? `${TRIAL_DAYS} days free, then ${priceOf('yearly')} a year`
+                                  : `${priceOf('yearly')} billed once a year`
+                                : trial
+                                  ? `${TRIAL_DAYS} days free, then billed ${p.perWords}`
+                                  : pIntroPrice && pIntro
+                                    ? `${pIntroPrice} your first ${introSpan(pIntro.days)}, then billed ${p.perWords}`
+                                    : `Starts today, billed ${p.perWords}`}
+                          </Text>
                         </View>
+                        {/* Right: the price. Yearly reads as its monthly rate; the yearly charge is
+                            spelled out beside it and in the line under the button. */}
                         <View style={styles.priceCol}>
                           <Text style={[styles.price, { color: colors.text }]}>
-                            {winback ? winbackPrice : priceOf(p.id)}
-                            <Text style={[styles.per, { color: colors.textSecondary }]}>{p.per}</Text>
+                            {winback ? winbackPrice : yearly ? yearlyPerMonth : priceOf(p.id)}
                           </Text>
-                          {/* The billed price stays the biggest number (App Review checks this). */}
-                          {p.id === 'yearly' && !winback ? (
-                            <Text style={[styles.priceSub, { color: colors.textSecondary }]}>
-                              {yearlyPerMonth}/month{yearlyEach ? ` · ${yearlyEach} each` : ''}
-                            </Text>
-                          ) : null}
+                          <Text style={[styles.per, { color: colors.textSecondary }]}>
+                            {period}
+                          </Text>
                         </View>
                       </Pressable>
                     );
@@ -509,9 +555,9 @@ export function PaywallScreen({
 
                 {showRefer ? (
                   <View style={styles.orRow}>
-                    <View style={[styles.orLine, { backgroundColor: colors.border }]} />
+                    <View style={[styles.orLine, { backgroundColor: separatorColor(colors) }]} />
                     <Text style={[styles.orText, { color: colors.textTertiary }]}>or</Text>
-                    <View style={[styles.orLine, { backgroundColor: colors.border }]} />
+                    <View style={[styles.orLine, { backgroundColor: separatorColor(colors) }]} />
                   </View>
                 ) : null}
 
@@ -586,8 +632,15 @@ export function PaywallScreen({
             onLayout={(e) => setFooterH(e.nativeEvent.layout.height)}
             style={[
               styles.footer,
-              { paddingBottom: insets.bottom + 10, backgroundColor: colors.background, borderTopColor: colors.border },
+              { paddingBottom: insets.bottom + 10, backgroundColor: colors.background, borderTopColor: separatorColor(colors) },
             ]}>
+            {/* With a free trial, nothing is charged today: say so right above the button. */}
+            {hasTrial ? (
+              <View style={styles.noPayment}>
+                <Icon name="checkDone" size={16} color={colors.success} />
+                <Text style={[styles.noPaymentText, { color: colors.text }]}>No payment due now</Text>
+              </View>
+            ) : null}
             <Pressable
               onPress={() => void handleSubscribe()}
               disabled={loading}
@@ -664,6 +717,7 @@ const styles = StyleSheet.create({
   coupleRing: { borderWidth: 3, borderRadius: 32 },
   coupleSecond: { marginLeft: -14 },
   couplePlaceholder: { width: 52, height: 52, borderRadius: 26, alignItems: 'center', justifyContent: 'center' },
+  flipped: { transform: [{ rotate: '180deg' }] },
   morePerks: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingVertical: 12 },
   morePerksText: { fontSize: 14, fontWeight: '800' },
   suggest: { flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 2, borderRadius: 18, padding: 14 },
@@ -675,36 +729,35 @@ const styles = StyleSheet.create({
   perkTile: { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   perkTitle: { fontSize: 15, fontWeight: '800' },
   perkFree: { fontSize: 12, marginTop: 1 },
-  // Room for the badge that sits on each plan's top edge.
-  plans: { gap: 20, marginTop: 10 },
+  // Only the first card (Yearly) wears a badge on its top edge, so the room is above it, not between.
+  plans: { gap: 10, marginTop: 12 },
   plan: {
-    minHeight: 70,
-    borderRadius: 18,
+    minHeight: 68,
+    borderRadius: 20,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    paddingHorizontal: 14,
-    paddingTop: 18,
-    paddingBottom: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
   },
+  // The recommended plan's corner badge, sitting on the card's top edge at the right.
   badge: {
     position: 'absolute',
     top: -11,
-    left: 14,
+    right: 14,
     height: 22,
-    paddingHorizontal: 9,
+    paddingHorizontal: 10,
     borderRadius: 11,
     justifyContent: 'center',
   },
-  badgeText: { fontSize: 11, fontWeight: '900' },
-  radio: { width: 22, height: 22, borderRadius: 11, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
-  radioDot: { width: 12, height: 12, borderRadius: 6 },
-  planName: { fontSize: 16, fontWeight: '900' },
-  planSub: { fontSize: 12, marginTop: 1 },
-  priceCol: { alignItems: 'flex-end', flexShrink: 0 },
-  price: { fontSize: 17, fontWeight: '900', textAlign: 'right' },
+  badgeText: { fontSize: 11, fontWeight: '900', letterSpacing: 0.3, textTransform: 'uppercase' },
+  radio: { width: 24, height: 24, borderRadius: 12, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
+  planInfo: { flex: 1, minWidth: 0, gap: 4, alignItems: 'flex-start' },
+  planName: { fontSize: 17, fontWeight: '900', letterSpacing: -0.2 },
+  planSub: { fontSize: 13, fontWeight: '600' },
+  priceCol: { alignItems: 'flex-end', flexShrink: 0, gap: 1 },
+  price: { fontSize: 20, fontWeight: '900', letterSpacing: -0.4, textAlign: 'right' },
   per: { fontSize: 12, fontWeight: '700' },
-  priceSub: { fontSize: 11, fontWeight: '700', marginTop: 1 },
   timeline: { borderRadius: 20, padding: 16, gap: 12 },
   timelineTitle: { fontSize: 14, fontWeight: '900' },
   step: { flexDirection: 'row', alignItems: 'stretch', gap: 12 },
@@ -713,13 +766,15 @@ const styles = StyleSheet.create({
   railLine: { width: 3, flex: 1, minHeight: 18, borderRadius: 2, marginVertical: 3, opacity: 0.5 },
   stepCopy: { paddingBottom: 12 },
   orRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  orLine: { flex: 1, height: StyleSheet.hairlineWidth },
+  orLine: { flex: 1, height: 1 },
   orText: { fontSize: 13, fontWeight: '800' },
   stepDay: { fontSize: 14, fontWeight: '800' },
   stepText: { fontSize: 13, lineHeight: 18 },
   cta: { height: 58, borderRadius: 29, alignItems: 'center', justifyContent: 'center' },
   ctaText: { fontSize: 17, fontWeight: '800' },
   fine: { fontSize: 12, textAlign: 'center', lineHeight: 17 },
+  noPayment: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
+  noPaymentText: { fontSize: 14, fontWeight: '800' },
   footer: {
     position: 'absolute',
     left: 0,
@@ -728,7 +783,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 12,
     gap: 8,
-    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopWidth: 1,
   },
   refer: {
     flexDirection: 'row',

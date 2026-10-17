@@ -12,6 +12,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { PartnerStatusLine } from '@/components/chat/PartnerStatusLine';
 import { MomentsModal } from '@/components/moments/MomentsModal';
+import { partnerStreakCount, togetherStreakCount } from '@/lib/streak';
 import { StreakFlame } from '@/components/home/StreakFlame';
 import { FullScreenPage } from '@/components/layout/FullScreenPage';
 import { LocationMapPreview } from '@/components/moments/LocationMapPreview';
@@ -38,6 +39,15 @@ import type { UserProfile } from '@/types/database';
 
 /** Let this page finish sliding away before the next full-screen thing opens. */
 const HANDOFF_MS = 260;
+
+/** "5 minutes ago" for a location shared in the last day; nothing if older (reads the clock outside render). */
+function locationAgeLabel(updatedAt: string | null | undefined): string | null {
+  if (!updatedAt) return null;
+  const updated = new Date(updatedAt);
+  if (Number.isNaN(updated.getTime())) return null;
+  if (Date.now() - updated.getTime() > 24 * 60 * 60 * 1000) return null;
+  return formatDistanceToNow(updated, { addSuffix: true });
+}
 
 export function PartnerProfileModal() {
   const router = useRouter();
@@ -178,7 +188,9 @@ export function PartnerProfileModal() {
     iShareLocation && profile?.location_sharing_enabled
       ? profile.location_label?.trim()
       : null;
-  const streakCount = streak?.current_streak;
+  // Their own streak, and the days in a row you've both checked in.
+  const streakCount = partnerStreakCount(streak);
+  const togetherCount = togetherStreakCount(streak);
 
   const locationMarkers = useMemo(
     () => buildSharedLocationMarkers(user, profile ?? partner),
@@ -192,14 +204,7 @@ export function PartnerProfileModal() {
 
   const mapTitle = locationLabel ?? partnerName;
 
-  const locationFreshness = useMemo(() => {
-    if (!profile?.location_updated_at) return null;
-    const updated = new Date(profile.location_updated_at);
-    if (Number.isNaN(updated.getTime())) return null;
-    const ageMs = Date.now() - updated.getTime();
-    if (ageMs > 24 * 60 * 60 * 1000) return null;
-    return formatDistanceToNow(updated, { addSuffix: true });
-  }, [profile?.location_updated_at]);
+  const locationFreshness = locationAgeLabel(profile?.location_updated_at);
 
   const latestPartnerMoment = recentPartnerMoments[0];
   const storyPreviewUrl =
@@ -445,8 +450,13 @@ export function PartnerProfileModal() {
               <View style={[styles.card, styles.list, surface]}>
                 <InfoRow
                   icon={<StreakFlame size={20} tone={streakCount ? 'active' : 'idle'} />}
-                  label="Streak"
-                  value={`${streakCount ?? 0} day${streakCount === 1 ? '' : 's'}`}
+                  label={`${firstName}’s streak`}
+                  value={`${streakCount} day${streakCount === 1 ? '' : 's'}`}
+                />
+                <InfoRow
+                  icon={<Icon name="people" size={20} color={colors.textSecondary} />}
+                  label="Together in a row"
+                  value={`${togetherCount} day${togetherCount === 1 ? '' : 's'}`}
                 />
                 {sinceLabel ? (
                   <InfoRow icon={<Icon name="heart" size={19} color={colors.text} />} label="Together since" value={sinceLabel.short} />

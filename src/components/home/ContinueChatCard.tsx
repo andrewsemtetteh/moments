@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { LocationMapPreview } from '@/components/moments/LocationMapPreview';
@@ -44,7 +44,8 @@ export function ContinueChatCard() {
     now: new Date(now),
   });
 
-  const copy = useMemo(() => {
+  // Plain computation: cheap, and the React Compiler memoizes it.
+  const copy = (() => {
     if (!user?.id || !latest || !visible) return null;
 
     const fromPartner = latest.sender_id !== user.id;
@@ -68,7 +69,7 @@ export function ContinueChatCard() {
       ago: shortMessageAgo(latest.created_at, ref),
       attachment: continueChatAttachment(latest),
     };
-  }, [latest, partner?.name, unreadCount, user?.id, visible, now]);
+  })();
 
   if (!partner || !copy) return null;
 

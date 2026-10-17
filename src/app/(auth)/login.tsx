@@ -3,10 +3,10 @@ import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Alert, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { AuthCheckbox } from '@/components/auth/AuthCheckbox';
 import { AuthChoiceButton } from '@/components/auth/AuthChoiceButton';
 import { AuthLegalLinks } from '@/components/auth/AuthLegalLinks';
 import { AuthTextField } from '@/components/auth/AuthTextField';
+import { OtpCodeInput } from '@/components/auth/OtpCodeInput';
 import { AppleIcon, GoogleIcon } from '@/components/auth/OAuthBrandIcon';
 import { PasswordInput } from '@/components/auth/PasswordInput';
 import { useSocialSignIn } from '@/components/auth/useSocialSignIn';
@@ -15,12 +15,21 @@ import { useTheme } from '@/hooks/useTheme';
 import { formatAuthError } from '@/lib/auth-errors';
 import {
   getRememberedEmail,
-  getRememberMe,
   setRememberedEmail,
-  setRememberMe,
 } from '@/lib/remember-me-storage';
+
 import { goBackOrReplace } from '@/lib/router';
 import { sanitizeEmailInput, sanitizePasswordInput } from '@/lib/sanitize-input';
+
+/** The second step a sign-in can need (two-step verification on the account). */
+type SecondFactor = 'totp' | 'phone_code' | 'email_code' | 'backup_code';
+
+const SECOND_FACTOR_COPY: Record<SecondFactor, { title: string; subtitle: string }> = {
+  totp: { title: 'Two-step verification', subtitle: 'Enter the 6-digit code from your authenticator app.' },
+  phone_code: { title: 'Check your phone', subtitle: 'We texted you a 6-digit code.' },
+  email_code: { title: 'Check your email', subtitle: 'We emailed you a 6-digit code.' },
+  backup_code: { title: 'Use a backup code', subtitle: 'Enter one of the backup codes you saved when you set up two-step verification.' },
+};
 
 /**
  * Sign in, in the onboarding style (same frame as the email sign-up and
@@ -33,19 +42,77 @@ export default function LoginScreen() {
   const { signIn, errors, fetchStatus } = useSignIn();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [rememberMe, setRememberMeChecked] = useState(true);
   const [prefsLoaded, setPrefsLoaded] = useState(false);
   const social = useSocialSignIn({ onSuccess: () => router.replace('/') });
   const showApple = Platform.OS === 'ios' || Platform.OS === 'android';
+  // Two-step verification: the method being used, and the code typed.
+  const [factor, setFactor] = useState<SecondFactor | null>(null);
+  const [mfaCode, setMfaCode] = useState('');
+  const [verifyingMfa, setVerifyingMfa] = useState(false);
 
   const loading = fetchStatus === 'fetching';
+
+  const finish = async () => {
+    await signIn.finalize({ navigate: () => router.replace('/') });
+  };
+
+  /** The account asks for a second step: pick the best method it has (app, then text, then email). */
+  const startSecondFactor = async () => {
+    const offered = new Set((signIn.supportedSecondFactors ?? []).map((f) => f.strategy as string));
+    const pick: SecondFactor | null = offered.has('totp')
+      ? 'totp'
+      : offered.has('phone_code')
+        ? 'phone_code'
+        : offered.has('email_code')
+          ? 'email_code'
+          : offered.has('backup_code')
+            ? 'backup_code'
+            : null;
+    if (!pick) {
+      Alert.alert('Can’t finish signing in', 'This account needs a verification method this app doesn’t support yet.');
+      return;
+    }
+    if (pick === 'phone_code') {
+      const { error } = await signIn.mfa.sendPhoneCode();
+      if (error) return Alert.alert('Couldn’t send the code', formatAuthError(error));
+    }
+    if (pick === 'email_code') {
+      const { error } = await signIn.mfa.sendEmailCode();
+      if (error) return Alert.alert('Couldn’t send the code', formatAuthError(error));
+    }
+    setMfaCode('');
+    setFactor(pick);
+  };
+
+  const verifySecondFactor = async () => {
+    if (!factor || verifyingMfa) return;
+    const code = mfaCode.trim();
+    if (factor === 'backup_code' ? code.length < 6 : code.length !== 6) return;
+    setVerifyingMfa(true);
+    try {
+      const { error } =
+        factor === 'totp'
+          ? await signIn.mfa.verifyTOTP({ code })
+          : factor === 'phone_code'
+            ? await signIn.mfa.verifyPhoneCode({ code })
+            : factor === 'email_code'
+              ? await signIn.mfa.verifyEmailCode({ code })
+              : await signIn.mfa.verifyBackupCode({ code });
+      if (error) {
+        Alert.alert('That code didn’t work', formatAuthError(error));
+        return;
+      }
+      if (signIn.status === 'complete') await finish();
+    } finally {
+      setVerifyingMfa(false);
+    }
+  };
 
   useEffect(() => {
     let cancelled = false;
     void (async () => {
-      const [savedRememberMe, savedEmail] = await Promise.all([getRememberMe(), getRememberedEmail()]);
+      const savedEmail = await getRememberedEmail();
       if (cancelled) return;
-      setRememberMeChecked(savedRememberMe);
       if (savedEmail) setEmail(savedEmail);
       setPrefsLoaded(true);
     })();
@@ -59,10 +126,7 @@ export default function LoginScreen() {
     const cleanPassword = sanitizePasswordInput(password);
     if (!cleanIdentifier || !cleanPassword) return;
 
-    await Promise.all([
-      setRememberMe(rememberMe),
-      rememberMe ? setRememberedEmail(cleanIdentifier) : Promise.resolve(),
-    ]);
+    await setRememberedEmail(cleanIdentifier);
 
     const { error } = await signIn.password({ identifier: cleanIdentifier, password: cleanPassword });
     if (error) {
@@ -70,12 +134,59 @@ export default function LoginScreen() {
       return;
     }
 
-    if (signIn.status === 'complete') {
-      await signIn.finalize({ navigate: () => router.replace('/') });
-    } else if (signIn.status === 'needs_second_factor') {
-      Alert.alert('Verification required', 'Two-factor sign-in is not supported yet in this app.');
+    switch (signIn.status) {
+      case 'complete':
+        await finish();
+        return;
+      case 'needs_second_factor':
+      case 'needs_client_trust':
+        await startSecondFactor();
+        return;
+      case 'needs_new_password':
+        router.push('/(auth)/reset-password');
+        return;
+      default:
+        Alert.alert('Couldn’t finish signing in', 'Something else is needed for this account. Try again, or reset your password.');
     }
   };
+
+  if (factor) {
+    const copy = SECOND_FACTOR_COPY[factor];
+    return (
+      <OnboardingStepScreen
+        title={copy.title}
+        subtitle={copy.subtitle}
+        centered
+        primaryLabel={verifyingMfa ? 'Verifying…' : 'Verify'}
+        onPrimary={() => void verifySecondFactor()}
+        primaryDisabled={factor === 'backup_code' ? mfaCode.trim().length < 6 : mfaCode.length !== 6}
+        busy={verifyingMfa}
+        secondaryLabel={factor === 'backup_code' ? 'Back' : 'Use a backup code'}
+        onSecondary={() => {
+          setMfaCode('');
+          setFactor(factor === 'backup_code' ? null : 'backup_code');
+        }}
+        onBack={() => {
+          setFactor(null);
+          setMfaCode('');
+        }}>
+        {factor === 'backup_code' ? (
+          <AuthTextField
+            variant="bold"
+            label="Backup code"
+            autoCapitalize="none"
+            autoCorrect={false}
+            value={mfaCode}
+            onChangeText={(t) => setMfaCode(t.replace(/\s/g, ''))}
+            returnKeyType="done"
+            onSubmitEditing={() => void verifySecondFactor()}
+          />
+        ) : (
+          <OtpCodeInput value={mfaCode} onChange={setMfaCode} />
+        )}
+      </OnboardingStepScreen>
+    );
+  }
 
   return (
     <OnboardingStepScreen
@@ -142,7 +253,6 @@ export default function LoginScreen() {
       ) : null}
 
       <View style={styles.optionsRow}>
-        <AuthCheckbox checked={rememberMe} onToggle={() => setRememberMeChecked((v) => !v)} label="Remember me" />
         <Pressable
           onPress={() => router.push({ pathname: '/(auth)/forgot-password', params: email ? { email } : undefined })}
           hitSlop={8}
@@ -162,7 +272,8 @@ const styles = StyleSheet.create({
   orLine: { flex: 1, height: StyleSheet.hairlineWidth },
   orText: { fontSize: 13, fontWeight: '800' },
   fieldError: { fontSize: 13, marginTop: -6 },
-  optionsRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  // Just "Forgot password?" now, on the right (no "Remember me": you stay signed in).
+  optionsRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end' },
   forgot: { fontSize: 14, fontWeight: '800', textDecorationLine: 'underline' },
   legal: { marginTop: 4 },
 });

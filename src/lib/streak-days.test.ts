@@ -46,6 +46,7 @@ describe('buildStreakWeek', () => {
         current_streak: 3,
         last_active_date: '2026-06-25',
         both_active_today: true,
+        user_active_today: true,
       }),
       joinedAt,
       now,
@@ -61,6 +62,7 @@ describe('buildStreakWeek', () => {
         current_streak: 2,
         last_active_date: '2026-06-25',
         both_active_today: true,
+        user_active_today: true,
       }),
       joinedAt,
       now,
@@ -134,6 +136,7 @@ describe('buildStreakWeek', () => {
         current_streak: 2,
         last_active_date: '2026-06-25',
         both_active_today: true,
+        user_active_today: true,
         active_days: ['2026-06-24', '2026-06-25'],
         activity_days: ['2026-06-23', '2026-06-24', '2026-06-25'],
       }),
@@ -145,13 +148,12 @@ describe('buildStreakWeek', () => {
     expect(days.find((d) => d.weekdayLabel === 'Tue')?.tone).toBe('success');
   });
 
-  it('shows awaiting-streak UI for today before both partners check in', () => {
+  it('lights today once you check in, before your partner (your own streak)', () => {
     const late = new Date('2026-06-25T22:00:00');
     const days = buildStreakWeek(
       baseStatus({
-        current_streak: 3,
-        last_active_date: '2026-06-24',
-        at_risk: true,
+        current_streak: 4,
+        last_active_date: '2026-06-25',
         user_active_today: true,
         partner_active_today: false,
       }),
@@ -159,7 +161,28 @@ describe('buildStreakWeek', () => {
       late,
     );
     const today = days.find((d) => d.isToday);
-    expect(today?.state).toBe('today-at-risk');
+    expect(today?.state).toBe('today-done');
+    // Not a together day: your partner hasn't checked in yet.
+    expect(today?.together).toBe(false);
+  });
+
+  it('marks days you both checked in as together days', () => {
+    const days = buildStreakWeek(
+      baseStatus({
+        current_streak: 3,
+        last_active_date: '2026-06-25',
+        user_active_today: true,
+        both_active_today: true,
+        partner_streak: 2,
+        active_days: ['2026-06-23', '2026-06-24', '2026-06-25'],
+        together_days: ['2026-06-24'],
+      }),
+      joinedAt,
+      now,
+    );
+    expect(days.find((d) => d.weekdayLabel === 'Tue')?.together).toBe(false);
+    expect(days.find((d) => d.weekdayLabel === 'Wed')?.together).toBe(true);
+    expect(days.find((d) => d.isToday)?.together).toBe(true);
   });
 
   it('shows pending UI for today with no streak yet', () => {
@@ -173,6 +196,7 @@ describe('buildStreakWeek', () => {
         current_streak: 2,
         last_active_date: '2026-06-25',
         both_active_today: true,
+        user_active_today: true,
         active_days: ['2026-06-20', '2026-06-21', '2026-06-24', '2026-06-25'],
       }),
       startOfMonth(now),
@@ -194,6 +218,7 @@ describe('buildStreakMonth', () => {
         current_streak: 4,
         last_active_date: '2026-06-25',
         both_active_today: true,
+        user_active_today: true,
       }),
       startOfMonth(now),
       joinedAt,

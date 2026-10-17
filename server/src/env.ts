@@ -20,5 +20,10 @@ declare global {
     /** Store pages for people opening a link without the app. */
     APP_STORE_URL?: string;
     PLAY_STORE_URL?: string;
+    /** Calls: Cloudflare Realtime TURN key (dashboard > Realtime > TURN). Only the server holds it. */
+    TURN_KEY_ID?: string;
+    TURN_KEY_API_TOKEN?: string;
+    /** Optional: signs private media links (moments, chat). Defaults to one derived from CLERK_SECRET_KEY. */
+    MEDIA_SIGNING_SECRET?: string;
   }
 }

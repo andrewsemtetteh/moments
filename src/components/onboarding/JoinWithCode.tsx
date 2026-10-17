@@ -1,13 +1,15 @@
 import { useAuth } from '@clerk/expo';
 import LottieView from 'lottie-react-native';
 import { useEffect, useState } from 'react';
-import { Alert, StyleSheet } from 'react-native';
+import { StyleSheet, Text } from 'react-native';
+import Animated, { FadeIn } from 'react-native-reanimated';
 import { TextInput } from '@/components/ui/ThemedTextInput';
 
 import { OnboardingStepScreen } from '@/components/onboarding/OnboardingStepScreen';
 import { useTheme } from '@/hooks/useTheme';
 import { formatInviteCode, INVITE_CODE_LENGTH, normalizeInviteCode } from '@/lib/invite-code';
-import { joinRelationshipByInvite } from '@/lib/moments-api';
+import { Icon } from '@/components/ui/Icon';
+import { joinRelationshipByInvite, MomentsApiError } from '@/lib/moments-api';
 import { markRelationshipOnboardingDone } from '@/lib/onboarding-storage';
 import { clearPendingInvite, getPendingInvite } from '@/lib/pending-links';
 import { queryClient } from '@/providers/AppProviders';
@@ -37,13 +39,18 @@ export function JoinWithCode({
   const setRelationship = useRelationshipStore((s) => s.setRelationship);
   const setPartner = useRelationshipStore((s) => s.setPartner);
   const [code, setCode] = useState('');
-  // Filled in from your partner's invite link, if you opened one.
+  // Filled in from your partner's invite link, if you opened one. The saved code is then
+  // used up, so it can't keep reopening this screen once you've seen it.
   useEffect(() => {
     void getPendingInvite().then((pending) => {
-      if (pending) setCode((c) => c || normalizeInviteCode(pending).slice(0, INVITE_CODE_LENGTH));
+      if (!pending) return;
+      setCode((c) => c || normalizeInviteCode(pending).slice(0, INVITE_CODE_LENGTH));
+      void clearPendingInvite();
     });
   }, []);
   const [busy, setBusy] = useState(false);
+  // Why the last try didn't work, shown under the code (cleared as soon as they edit it).
+  const [error, setError] = useState<string | null>(null);
 
   const join = async () => {
     if (preview) {
@@ -51,6 +58,7 @@ export function JoinWithCode({
       return;
     }
     if (!user || code.length < INVITE_CODE_LENGTH) return;
+    setError(null);
     setBusy(true);
     try {
       const token = await getToken();
@@ -64,7 +72,7 @@ export function JoinWithCode({
       await clearPendingInvite();
       onJoined();
     } catch (e) {
-      Alert.alert('Couldn’t join', e instanceof Error ? e.message : 'Check the code and try again.');
+      setError(joinErrorMessage(e));
     } finally {
       setBusy(false);
     }
@@ -86,7 +94,10 @@ export function JoinWithCode({
       onBack={onBack}>
       <TextInput
         value={formatInviteCode(code)}
-        onChangeText={(t) => setCode(normalizeInviteCode(t).slice(0, INVITE_CODE_LENGTH))}
+        onChangeText={(t) => {
+          setCode(normalizeInviteCode(t).slice(0, INVITE_CODE_LENGTH));
+          if (error) setError(null);
+        }}
         placeholder="ABCD-1234"
         placeholderTextColor={colors.textTertiary}
         autoCapitalize="characters"
@@ -94,14 +105,40 @@ export function JoinWithCode({
         maxLength={INVITE_CODE_LENGTH + 1}
         returnKeyType="go"
         onSubmitEditing={() => void join()}
-        style={[styles.input, { color: colors.text, borderColor: colors.text, backgroundColor: colors.surface }]}
+        style={[
+          styles.input,
+          { color: colors.text, borderColor: error ? colors.error : colors.text, backgroundColor: colors.surface },
+        ]}
       />
+      {/* What went wrong, in plain words, right where they're looking. */}
+      {error ? (
+        <Animated.View entering={FadeIn.duration(180)} style={styles.errorRow} accessibilityLiveRegion="polite">
+          <Icon name="warning" size={16} color={colors.error} />
+          <Text style={[styles.errorText, { color: colors.error }]}>{error}</Text>
+        </Animated.View>
+      ) : null}
     </OnboardingStepScreen>
   );
 }
 
+/** A clear reason (and what to do) for each way joining can fail. */
+function joinErrorMessage(e: unknown): string {
+  if (e instanceof MomentsApiError) {
+    if (e.status === 404) {
+      return 'We couldn’t find that code. Check it with your person: it may have changed if they made a new one, or their space may already be joined.';
+    }
+    if (e.status === 429) return 'Too many tries. Wait a few minutes, then try again.';
+    // e.g. "That's your own code…" — the server's words are already clear.
+    if (e.status === 400 && e.message) return e.message;
+    return 'Something went wrong on our side. Please try again.';
+  }
+  return 'Couldn’t reach Moments. Check your connection and try again.';
+}
+
 const styles = StyleSheet.create({
   lottie: { width: 230, height: 170 },
+  errorRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'center', gap: 6, paddingHorizontal: 8 },
+  errorText: { flexShrink: 1, fontSize: 14, fontWeight: '700', lineHeight: 19, textAlign: 'center' },
   input: {
     height: 66,
     borderRadius: 18,

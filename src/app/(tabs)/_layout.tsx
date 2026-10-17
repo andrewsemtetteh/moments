@@ -2,6 +2,7 @@ import { Redirect, Tabs } from 'expo-router';
 import { Platform } from 'react-native';
 
 import { StreakMilestoneSync } from '@/components/home/StreakMilestoneSync';
+import { TogetherMilestoneSync } from '@/components/home/TogetherMilestone';
 import { StreakReminderSync } from '@/components/home/StreakReminderSync';
 import { StreakSparkSync } from '@/components/home/StreakSparkSync';
 import { AppTabBar } from '@/components/layout/AppTabBar';
@@ -10,6 +11,8 @@ import { EntryStackReset } from '@/components/layout/EntryStackReset';
 import { LiveLocationSync } from '@/components/layout/LiveLocationSync';
 import { PaywallMoments } from '@/components/layout/PaywallMoments';
 import { PlaySync } from '@/components/layout/PlaySync';
+import { PlanReminderSync } from '@/components/layout/PlanReminderSync';
+import { PendingInviteSync } from '@/components/layout/PendingInviteSync';
 import { HomeSync } from '@/components/layout/HomeSync';
 import { NotificationSync } from '@/components/layout/NotificationSync';
 import { OnboardingTour } from '@/components/layout/OnboardingTour';
@@ -51,11 +54,17 @@ export default function TabsLayout() {
       <NotificationSync />
       <ChatMessageSync />
       <PlaySync />
+      {/* Reminders for upcoming plans, on this phone. */}
+      <PlanReminderSync />
+      {/* A partner's invite link, opened while signed in. */}
+      <PendingInviteSync />
       <PaywallMoments />
       <PartnerPresenceSync />
       <PartnerTimezoneSync />
       <RelationshipReminderSync />
       <StreakMilestoneSync />
+      {/* Days in a row you both checked in: 7, 30, 100, 365. */}
+      <TogetherMilestoneSync />
       <StreakSparkSync />
       <StreakReminderSync />
       <StoreReviewSync />

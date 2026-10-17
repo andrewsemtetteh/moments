@@ -13,7 +13,7 @@ export type WidgetSnapshot = {
   /** ISO date the count starts from. */
   since: string | null;
   streak: number;
-  /** Both showed up today, so today's day is safe. */
+  /** You checked in today, so your streak is safe. */
   streakSafeToday: boolean;
   /** Their latest photo moment (a public image URL), if any. */
   momentImageUrl: string | null;

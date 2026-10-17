@@ -155,11 +155,13 @@ export function DraggableSheet({
     [translateY, backdropOpacity, finishClose],
   );
 
+  // Opening mounts straight away (while rendering); closing waits for the slide-down.
+  if (visible && !mounted) setMounted(true);
+
   useEffect(() => {
     if (visible) {
-      setMounted(true);
       translateY.set(SCREEN_HEIGHT);
-      translateY.value = withSpring(0, OPEN_SPRING);
+      translateY.set(withSpring(0, OPEN_SPRING));
       backdropOpacity.set(withTiming(1, { duration: 220, easing: Easing.out(Easing.cubic) }));
     } else if (mounted) {
       animateOut(0);
@@ -199,7 +201,7 @@ export function DraggableSheet({
         return;
       }
 
-      translateY.value = withSpring(0, SNAP_BACK_SPRING);
+      translateY.set(withSpring(0, SNAP_BACK_SPRING));
     });
 
   const sheetStyle = useAnimatedStyle(() => ({

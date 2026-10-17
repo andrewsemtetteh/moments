@@ -4,8 +4,13 @@ import { PasswordInput } from '@/components/auth/PasswordInput';
 import { SettingsEditPage } from '@/components/profile/SettingsEditPage';
 import { useTheme } from '@/hooks/useTheme';
 
+/** Same rule as signing up. */
+export const MIN_PASSWORD_LENGTH = 8;
+
 type Props = {
   visible: boolean;
+  /** Signed up with Apple or Google: there's no current password, they're setting their first. */
+  settingFirst?: boolean;
   saving?: boolean;
   currentPassword: string;
   newPassword: string;
@@ -20,6 +25,7 @@ type Props = {
 /** Change password on its own page: current, new, confirm. */
 export function ChangePasswordModal({
   visible,
+  settingFirst = false,
   saving = false,
   currentPassword,
   newPassword,
@@ -32,35 +38,41 @@ export function ChangePasswordModal({
 }: Props) {
   const { colors } = useTheme();
   const canSave =
-    currentPassword.length > 0 &&
-    newPassword.length >= 6 &&
-    confirmPassword.length >= 6 &&
+    (settingFirst || currentPassword.length > 0) &&
+    newPassword.length >= MIN_PASSWORD_LENGTH &&
     newPassword === confirmPassword &&
-    newPassword !== currentPassword;
-  const sameAsOld = newPassword.length > 0 && newPassword === currentPassword;
+    (settingFirst || newPassword !== currentPassword);
+  const sameAsOld = !settingFirst && newPassword.length > 0 && newPassword === currentPassword;
+  const tooShort = newPassword.length > 0 && newPassword.length < MIN_PASSWORD_LENGTH;
   const mismatch = confirmPassword.length > 0 && newPassword !== confirmPassword;
 
   return (
     <SettingsEditPage
       visible={visible}
       title="Password"
-      hint="Enter your current password, then choose a new one with at least 6 characters."
-      buttonLabel="Update password"
+      hint={
+        settingFirst
+          ? `You sign in with Apple or Google. Add a password (at least ${MIN_PASSWORD_LENGTH} characters) to sign in with your email too.`
+          : `Enter your current password, then choose a new one with at least ${MIN_PASSWORD_LENGTH} characters.`
+      }
+      buttonLabel={settingFirst ? 'Set password' : 'Update password'}
       canSave={canSave}
       saving={saving}
       onSave={onSave}
       onClose={onClose}>
       <View style={styles.fields}>
-        <PasswordInput
-          label="Current password"
-          autoComplete="current-password"
-          value={currentPassword}
-          onChangeText={onChangeCurrent}
-          fieldBackgroundColor={colors.surface}
-        />
+        {settingFirst ? null : (
+          <PasswordInput
+            label="Current password"
+            autoComplete="current-password"
+            value={currentPassword}
+            onChangeText={onChangeCurrent}
+            fieldBackgroundColor={colors.surface}
+          />
+        )}
         <PasswordInput
           label="New password"
-          minLength={6}
+          minLength={MIN_PASSWORD_LENGTH}
           autoComplete="new-password"
           value={newPassword}
           onChangeText={onChangeNew}
@@ -74,7 +86,9 @@ export function ChangePasswordModal({
           fieldBackgroundColor={colors.surface}
         />
       </View>
-      {sameAsOld ? (
+      {tooShort ? (
+        <Text style={[styles.error, { color: colors.error }]}>Use at least {MIN_PASSWORD_LENGTH} characters.</Text>
+      ) : sameAsOld ? (
         <Text style={[styles.error, { color: colors.error }]}>Your new password must be different.</Text>
       ) : mismatch ? (
         <Text style={[styles.error, { color: colors.error }]}>The new passwords don’t match.</Text>

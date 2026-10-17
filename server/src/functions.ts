@@ -1,3 +1,4 @@
+import { sendPendingPushes } from './push';
 import { checkAi, getPlusState, recordAi } from './billing';
 import { ApiError, shapeRow } from './core';
 import { generateId, isRelationshipMember } from './db';
@@ -579,57 +580,7 @@ export async function stockBanks(env: Env, maxFills: number): Promise<number> {
 // send-push-notification
 // ---------------------------------------------------------------------------
 
-function pushTitle(type: string): string {
-  switch (type) {
-    case 'message':
-      return 'New message';
-    case 'moment':
-      return 'New moment';
-    case 'mood':
-      return 'Mood update';
-    case 'streak':
-      return 'Streak update';
-    case 'challenge':
-      return "Today's question";
-    case 'game_invite':
-      return 'Game time';
-    case 'game_turn':
-      return 'Your move';
-    case 'partner_joined':
-      return 'You’re connected';
-    case 'referral_credit':
-      return 'You earned Plus';
-    case 'plus_unlocked':
-    case 'plus_suggest':
-      return 'Moments Plus';
-    default:
-      return 'Moments';
-  }
-}
-
-/** Which Settings > Notifications switch covers each type. Keep in sync with src/lib/notification-prefs.ts. */
-const PUSH_CATEGORY: Record<string, string> = {
-  message: 'messages',
-  message_new: 'messages',
-  moment: 'moments',
-  mood: 'moods',
-  mood_update: 'moods',
-  challenge: 'dailyQuestion',
-  streak: 'streaks',
-  game_invite: 'games',
-  game_turn: 'games',
-};
-
-function pushAllowed(prefsRaw: string | null, type: string): boolean {
-  const category = PUSH_CATEGORY[type];
-  if (!category || !prefsRaw) return true;
-  try {
-    return (JSON.parse(prefsRaw) as Record<string, unknown>)[category] !== false;
-  } catch {
-    return true;
-  }
-}
-
+/** Catch-up push send for this person's spaces (see push.ts). */
 async function sendPush(env: Env, userId: string, body: Body, limit: RateLimiter) {
   try {
     await limit(env, `push:${userId}`, 120, 3600);
@@ -637,68 +588,38 @@ async function sendPush(env: Env, userId: string, body: Body, limit: RateLimiter
     return { sent: 0, skipped: 0, rate_limited: true };
   }
   const max = typeof body.limit === 'number' ? Math.min(body.limit, 50) : 10;
+  return sendPendingPushes(env, userId, max);
+}
 
-  const { results: rows } = await env.DB.prepare(
-    `UPDATE notifications SET push_dispatched = 1
-     WHERE id IN (
-       SELECT n.id FROM notifications n
-       WHERE n.push_dispatched = 0 AND n.read = 0
-         AND n.relationship_id IN (SELECT id FROM relationships WHERE user_1_id = ?1 OR user_2_id = ?1)
-       ORDER BY n.created_at ASC LIMIT ?2)
-     RETURNING id, user_id, type, content, relationship_id`,
-  )
-    .bind(userId, max)
-    .all<{ id: string; user_id: string; type: string; content: string; relationship_id: string }>();
-  if (rows.length === 0) return { sent: 0, skipped: 0 };
+// ---------------------------------------------------------------------------
+// ice-servers: relay servers for calls and live-room voice
+// ---------------------------------------------------------------------------
 
-  const ids = [...new Set(rows.map((r) => r.user_id))];
-  const { results: users } = await env.DB.prepare(
-    `SELECT id, expo_push_token, notification_prefs FROM users WHERE id IN (${ids.map((_, i) => `?${i + 1}`).join(', ')})`,
-  )
-    .bind(...ids)
-    .all<{ id: string; expo_push_token: string | null; notification_prefs: string | null }>();
-  const tokens = new Map(users.filter((u) => u.expo_push_token).map((u) => [u.id, u.expo_push_token as string]));
-  const prefs = new Map(users.map((u) => [u.id, u.notification_prefs]));
+const STUN_ONLY = [{ urls: ['stun:stun.cloudflare.com:3478', 'stun:stun.l.google.com:19302'] }];
+/** Long enough for the longest call; the app refreshes before it runs out. */
+const TURN_TTL_SECONDS = 6 * 3600;
 
-  const messages: Record<string, unknown>[] = [];
-  const unsent: string[] = [];
-  for (const row of rows) {
-    // Turned off in Settings: stays in the in-app list, no push (and stays marked dispatched).
-    if (!pushAllowed(prefs.get(row.user_id) ?? null, row.type)) continue;
-    const token = tokens.get(row.user_id);
-    if (!token) {
-      unsent.push(row.id);
-      continue;
-    }
-    messages.push({
-      to: token,
-      title: pushTitle(row.type),
-      body: row.content,
-      sound: 'default',
-      data: { notification_id: row.id, type: row.type, relationship_id: row.relationship_id },
-    });
-  }
-
-  const release = async (list: string[]) => {
-    if (!list.length) return;
-    await env.DB.prepare(`UPDATE notifications SET push_dispatched = 0 WHERE id IN (${list.map((_, i) => `?${i + 1}`).join(', ')})`)
-      .bind(...list)
-      .run();
-  };
-
-  if (messages.length) {
-    const res = await fetch('https://exp.host/--/api/v2/push/send', {
-      method: 'POST',
-      headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
-      body: JSON.stringify(messages),
-    });
-    if (!res.ok) {
-      await release(rows.map((r) => r.id));
-      return { sent: 0, skipped: 0, error: `Expo push failed (${res.status})` };
-    }
-  }
-  await release(unsent);
-  return { sent: messages.length, skipped: unsent.length };
+/**
+ * Short-lived TURN credentials from Cloudflare Realtime, made per person on request.
+ * The long-term TURN key never leaves the server (it used to ship inside the app,
+ * where anyone could take it and relay through it at our cost).
+ */
+async function iceServers(env: Env, userId: string, bg: Bg) {
+  await bg.limit(env, `ice:${userId}`, 60, 3600);
+  if (!env.TURN_KEY_ID || !env.TURN_KEY_API_TOKEN) return { iceServers: STUN_ONLY, ttl: TURN_TTL_SECONDS };
+  const res = await fetch(`https://rtc.live.cloudflare.com/v1/turn/keys/${env.TURN_KEY_ID}/credentials/generate-ice-servers`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${env.TURN_KEY_API_TOKEN}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ttl: TURN_TTL_SECONDS, customIdentifier: userId.slice(0, 64) }),
+  }).catch(() => null);
+  if (!res?.ok) return { iceServers: STUN_ONLY, ttl: 600 };
+  const data = (await res.json().catch(() => null)) as { iceServers?: { urls: string[] | string; username?: string; credential?: string }[] } | null;
+  // Port 53 is blocked on many networks and only adds a timeout.
+  const servers = (data?.iceServers ?? []).map((s) => ({
+    ...s,
+    urls: (Array.isArray(s.urls) ? s.urls : [s.urls]).filter((u) => !/:53(\?|$)/.test(u)),
+  }));
+  return { iceServers: servers.length ? servers : STUN_ONLY, ttl: TURN_TTL_SECONDS };
 }
 
 export async function runFunction(env: Env, userId: string, name: string, body: Body, limit: RateLimiter, defer: Defer) {
@@ -714,6 +635,8 @@ export async function runFunction(env: Env, userId: string, name: string, body: 
       return generateGameContent(env, userId, body, bg);
     case 'send-push-notification':
       return sendPush(env, userId, body, limit);
+    case 'ice-servers':
+      return iceServers(env, userId, bg);
     default:
       throw new ApiError(`Unknown function ${name}`, 404);
   }

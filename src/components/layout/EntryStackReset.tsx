@@ -27,15 +27,22 @@ export function EntryStackReset() {
       nav.reset({ ...state, routes, index: Math.max(0, state.index - tabsAt) } as never);
       return true;
     };
-    if (clear()) return;
-    // The container can still be settling on the first frame.
-    const id = setInterval(() => {
-      if (clear()) clearInterval(id);
-    }, 100);
-    const stop = setTimeout(() => clearInterval(id), 3000);
+    // Not just once: every time the navigation changes. A sign-in or onboarding screen can
+    // end up under the tabs later (or after the first few seconds), and Back or an
+    // accidental swipe then dropped an existing account into onboarding.
+    let id: ReturnType<typeof setInterval> | null = null;
+    if (!clear()) {
+      // The container can still be settling on the first frame.
+      id = setInterval(() => {
+        if (clear() && id) clearInterval(id);
+      }, 100);
+    }
+    const unsubscribe = nav.addListener('state', () => {
+      clear();
+    });
     return () => {
-      clearInterval(id);
-      clearTimeout(stop);
+      if (id) clearInterval(id);
+      unsubscribe();
     };
   }, [nav]);
 

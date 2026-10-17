@@ -35,10 +35,17 @@ export default function ForgotPasswordScreen() {
 
     try {
       const { error: createError } = await signIn.create({ identifier: trimmed });
-      if (createError) throw createError;
+      // No account for that email: carry on exactly as if there were (no code ever arrives),
+      // so this screen can't be used to find out who has an account.
+      const noAccount = !!createError && /identifier_not_found|couldn.?t find your account|not found/i.test(
+        `${(createError as { code?: string }).code ?? ''} ${createError.message ?? ''}`,
+      );
+      if (createError && !noAccount) throw createError;
 
-      const { error } = await signIn.resetPasswordEmailCode.sendCode();
-      if (error) throw error;
+      if (!noAccount) {
+        const { error } = await signIn.resetPasswordEmailCode.sendCode();
+        if (error) throw error;
+      }
 
       router.push({
         pathname: '/(auth)/check-email',

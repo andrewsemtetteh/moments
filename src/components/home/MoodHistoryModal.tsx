@@ -102,10 +102,18 @@ export function MoodHistoryModal() {
         ? { title: 'No moods from you yet', body: 'Tap how you feel on Home and it’ll show up here.' }
         : { title: 'No moods yet', body: 'Tap how you’re feeling on Home. Both of your moods will show up here.' };
 
-  useEffect(() => {
+  // Closed: back to the overview, everyone, for next time (while rendering, once per close).
+  const [wasVisible, setWasVisible] = useState(visible);
+  if (wasVisible !== visible) {
+    setWasVisible(visible);
     if (!visible) {
       setTab('overview');
       setFilter('all');
+    }
+  }
+
+  useEffect(() => {
+    if (!visible) {
       trackedOpenRef.current = false;
       return;
     }

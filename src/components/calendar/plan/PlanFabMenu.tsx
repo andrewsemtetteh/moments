@@ -34,10 +34,11 @@ export function PlanRadialFab({
   const [mounted, setMounted] = useState(open);
   const backdropOpacity = useSharedValue(0);
   const ringScale = useSharedValue(0.85);
+  // Opening mounts straight away (while rendering); closing waits for the animation below.
+  if (open && !mounted) setMounted(true);
 
   useEffect(() => {
     if (open) {
-      setMounted(true);
       backdropOpacity.value = withTiming(1, { duration: 160, easing: Easing.out(Easing.cubic) });
       ringScale.value = withTiming(1, { duration: 160, easing: Easing.out(Easing.cubic) });
     } else if (mounted) {

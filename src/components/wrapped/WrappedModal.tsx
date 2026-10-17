@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { differenceInCalendarDays, format, startOfYear } from 'date-fns';
+import { differenceInCalendarDays, format, startOfYear, parseISO } from 'date-fns';
 import * as Haptics from '@/lib/haptics';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -26,6 +26,7 @@ import { ShareCardModal } from '@/components/share/ShareCardModal';
 import { WrappedShareCard, type WrappedStat } from '@/components/share/WrappedShareCard';
 import { Icon, type IconName } from '@/components/ui/Icon';
 import { MOOD_EMOJI, MOOD_LABELS } from '@/constants/design-system';
+import { togetherStreakCount } from '@/lib/streak';
 import { useDailyChallengeHistory, useMemoryEntries, useMoments, useMoodFrequency, useStreak } from '@/hooks/queries';
 import { getRelationshipAnniversaryDate } from '@/lib/anniversary';
 import { getFirstName } from '@/lib/avatar-initial';
@@ -126,7 +127,9 @@ function WrappedStory({ onClose }: { onClose: () => void }) {
     let coupleType: CoupleType = { icon: 'diamond', name: 'The Sweethearts', line: '', why: '' };
     const stats = yearMoments as MomentStat[];
     const total = stats.length;
-    const longest = Math.max(streak?.longest_streak ?? 0, streak?.current_streak ?? 0);
+    // Wrapped is about the two of you: the longest run you BOTH checked in.
+    const togetherNow = togetherStreakCount(streak);
+    const longest = Math.max(streak?.together_longest_streak ?? streak?.longest_streak ?? 0, togetherNow);
 
     // ── Intro
     list.push({
@@ -331,15 +334,30 @@ function WrappedStory({ onClose }: { onClose: () => void }) {
       body: (
         <>
           <Animated.View entering={FadeIn.duration(500)}>
-            <StickerFlame size={120} face={longest > 0} animated={longest > 0} />
+            <StickerFlame size={96} face={longest > 0} animated={longest > 0} />
           </Animated.View>
-          <Eyebrow>Longest streak</Eyebrow>
+          <Eyebrow>Longest streak together</Eyebrow>
           <Big>{longest}</Big>
           <Body>
             {longest > 0
-              ? `days in a row you both showed up.${streak?.current_streak ? ` You’re on ${streak.current_streak} right now.` : ''}`
-              : 'Show up together two days running to light your first one.'}
+              ? `days in a row you both showed up.${togetherNow ? ` You’re on ${togetherNow} right now.` : ''}`
+              : 'Check in on the same day two days running to start one together.'}
           </Body>
+          {/* And each of your own streaks (they're individual now). */}
+          <StatRows
+            rows={[
+              { icon: 'fire', label: 'Your best streak', n: Math.max(streak?.longest_streak ?? 0, streak?.current_streak ?? 0) },
+              ...(streak?.partner_longest_streak != null
+                ? [
+                    {
+                      icon: 'fire' as const,
+                      label: `${them}’s best streak`,
+                      n: Math.max(streak.partner_longest_streak, streak.partner_streak ?? 0),
+                    },
+                  ]
+                : []),
+            ]}
+          />
         </>
       ),
     });
@@ -378,7 +396,7 @@ function WrappedStory({ onClose }: { onClose: () => void }) {
     }
 
     // ── Daily questions: how many you answered together (and each of you).
-    const yearQs = (yearQuestions ?? questions).filter((q) => new Date(q.challenge_date) >= yearStart);
+    const yearQs = (yearQuestions ?? questions).filter((q) => parseISO(q.challenge_date) >= yearStart);
     const answered = yearQs.filter((q) => isPromptComplete(q));
     const mineCount = yearQs.filter((q) => myPromptResponse(q, user?.id, relationship)).length;
     const theirsCount = yearQs.filter((q) => partnerPromptResponse(q, user?.id, relationship)).length;
@@ -721,9 +739,13 @@ function WrappedStory({ onClose }: { onClose: () => void }) {
     const together = relationship ? getRelationshipAnniversaryDate(relationship) : yearStart;
     const from = together > yearStart ? together : yearStart;
     return [
-      { icon: 'heart', value: Math.max(1, differenceInCalendarDays(now, from) + 1), label: 'Days together' },
+      { icon: 'heart', value: Math.max(1, differenceInCalendarDays(now, from) + 1), label: 'Days together this year' },
       { icon: 'camera', value: (yearMoments as MomentStat[]).length, label: 'Moments' },
-      { icon: 'fire', value: Math.max(streak?.longest_streak ?? 0, streak?.current_streak ?? 0), label: 'Best streak' },
+      {
+        icon: 'fire',
+        value: Math.max(streak?.together_longest_streak ?? streak?.longest_streak ?? 0, togetherStreakCount(streak)),
+        label: 'Best streak together',
+      },
       { icon: 'calendar', value: plans.length, label: 'Plans' },
       { icon: 'albums', value: memories.filter((m) => new Date(m.date_time) >= yearStart).length, label: 'Memories' },
       { icon: 'gamepad', value: playProgress?.stats.games_played ?? 0, label: 'Games' },
@@ -778,7 +800,9 @@ function WrappedStory({ onClose }: { onClose: () => void }) {
             <Animated.View
               key={slide.key}
               entering={FadeIn.duration(260)}
-              style={[styles.content, { paddingTop: insets.top + 40, paddingBottom: insets.bottom + 96 }]}>
+              // Below the bars and the "Wrapped {year}" row (about 61pt), with room to breathe,
+              // so a tall card never crowds the title or the close button.
+              style={[styles.content, { paddingTop: insets.top + 80, paddingBottom: insets.bottom + 96 }]}>
               <FitBody>
                 <StickerCard>{slide.body}</StickerCard>
               </FitBody>

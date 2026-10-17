@@ -177,23 +177,17 @@ export function AnniversaryWheelPicker({ value, onChange, surfaceColor }: Props)
     year: parsed.getFullYear(),
   });
 
-  useEffect(() => {
+  // A new value from outside moves the wheels (while rendering, once per value).
+  const [syncedValue, setSyncedValue] = useState(value);
+  if (syncedValue !== value) {
+    setSyncedValue(value);
     const next = parseAnniversaryDate(value);
-    setParts((prev) => {
-      if (
-        prev.month === next.getMonth() &&
-        prev.day === next.getDate() &&
-        prev.year === next.getFullYear()
-      ) {
-        return prev;
-      }
-      return {
-        month: next.getMonth(),
-        day: next.getDate(),
-        year: next.getFullYear(),
-      };
-    });
-  }, [value]);
+    setParts((prev) =>
+      prev.month === next.getMonth() && prev.day === next.getDate() && prev.year === next.getFullYear()
+        ? prev
+        : { month: next.getMonth(), day: next.getDate(), year: next.getFullYear() },
+    );
+  }
 
   const { month, day, year } = parts;
 

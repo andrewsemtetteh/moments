@@ -119,6 +119,50 @@ export async function checkAi(env: Env, relationshipId: string, kind: AiKind, am
   return periodKey;
 }
 
+// ---------------------------------------------------------------------------
+// Free plan limits, checked here so a modified app can't skip them (the app checks first,
+// for a friendly paywall; these match FREE_DAILY_MOMENTS / FREE_ALBUM_LIMIT in the app).
+// ---------------------------------------------------------------------------
+
+export const FREE_DAILY_MOMENTS = 5;
+export const FREE_ALBUMS = 3;
+
+/** The calendar day (YYYY-MM-DD) of an instant in someone's own time zone. */
+function dayIn(timeZone: string | null | undefined, at: Date): string {
+  try {
+    if (timeZone) {
+      return new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(at);
+    }
+  } catch {
+    // Unknown zone: fall back to UTC below.
+  }
+  return at.toISOString().slice(0, 10);
+}
+
+/** Free: 5 moments a day per person, on their own calendar day (camera and album uploads alike). */
+export async function assertMomentAllowance(env: Env, relationshipId: string, userId: string) {
+  if ((await getPlusState(env, relationshipId)).plus) return;
+  const user = await env.DB.prepare('SELECT timezone FROM users WHERE id = ?1').bind(userId).first<{ timezone: string | null }>();
+  const now = new Date();
+  const today = dayIn(user?.timezone, now);
+  // Anything from today in any time zone is within the last 50 hours.
+  const since = new Date(now.getTime() - 50 * 3600_000).toISOString();
+  const { results } = await env.DB.prepare('SELECT created_at FROM moments WHERE user_id = ?1 AND created_at >= ?2')
+    .bind(userId, since)
+    .all<{ created_at: string }>();
+  const usedToday = results.filter((r) => dayIn(user?.timezone, new Date(r.created_at)) === today).length;
+  if (usedToday >= FREE_DAILY_MOMENTS) {
+    throw new ApiError(`Free accounts can add ${FREE_DAILY_MOMENTS} moments a day. Moments Plus is unlimited.`, 402, 'PLUS_REQUIRED');
+  }
+}
+
+/** Free: up to 3 albums. Only blocks adding more (keeping or removing ones already there is fine). */
+export async function assertAlbumAllowance(env: Env, relationshipId: string, nextData: unknown, previousCount: number) {
+  if (!Array.isArray(nextData) || nextData.length <= Math.max(previousCount, FREE_ALBUMS)) return;
+  if ((await getPlusState(env, relationshipId)).plus) return;
+  throw new ApiError(`Free accounts can keep ${FREE_ALBUMS} albums. Moments Plus is unlimited.`, 402, 'PLUS_REQUIRED');
+}
+
 export async function recordAi(env: Env, relationshipId: string, periodKey: string, kind: AiKind, amount = 1) {
   await env.DB.prepare(
     `INSERT INTO ai_usage (relationship_id, period_key, kind, count, updated_at) VALUES (?1, ?2, ?3, ?4, ?5)
@@ -307,7 +351,7 @@ async function applyEvent(env: Env, type: string, data: SuperwallEventData): Pro
 export const billingWebhooks = new Hono<{ Bindings: Env }>();
 
 /** The Superwall entitlement that is Moments Plus (same id as the app's PLUS_ENTITLEMENT). */
-export const PLUS_ENTITLEMENT = 'moments_unlimited';
+export const PLUS_ENTITLEMENT = 'unlimited';
 
 /** Signed deliveries older or newer than this are rejected (stops replays). */
 const SIGNATURE_TOLERANCE_S = 5 * 60;

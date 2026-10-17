@@ -1,5 +1,5 @@
 import * as Haptics from '@/lib/haptics';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Pressable } from 'react-native-gesture-handler';
 
@@ -59,10 +59,13 @@ export function LocketReactionCluster({
   const [showExtra, setShowExtra] = useState(false);
   const [pickedThisSession, setPickedThisSession] = useState(false);
 
-  useEffect(() => {
+  // Another moment: reactions start closed and unpicked (while rendering).
+  const [forMoment, setForMoment] = useState(moment.id);
+  if (forMoment !== moment.id) {
+    setForMoment(moment.id);
     setShowExtra(false);
     setPickedThisSession(false);
-  }, [moment.id]);
+  }
 
   const rowW = width ?? ROW_W;
   const scale = Math.min(1, rowW / ROW_W);

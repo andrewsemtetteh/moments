@@ -66,7 +66,8 @@ function RootStack() {
               reached (email, Apple, Google, login). Steps still swipe between
               themselves inside the group's own stack. */}
           <Stack.Screen name="(onboarding)" options={{ gestureEnabled: false, fullScreenGestureEnabled: false, animation: 'none' }} />
-          <Stack.Screen name="(tabs)" options={{ animation: 'none' }} />
+          {/* The app's root once you're in: never swiped (or backed) off to whatever's below. */}
+          <Stack.Screen name="(tabs)" options={{ animation: 'none', gestureEnabled: false, fullScreenGestureEnabled: false }} />
           {/* Chat, Notifications and Settings: the platform's own push
             (`default` = the real UIKit transition on iOS, not a JS/custom
             animator), closed by swiping right from anywhere on the screen —

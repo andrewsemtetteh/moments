@@ -1,6 +1,6 @@
 import type { RealtimeChannel } from '@/lib/cloudflare';
 
-import { createCallId, ICE_SERVERS, type CallMode, type CallSignal } from '@/lib/call-types';
+import { createCallId, getIceServers, type CallMode, type CallSignal } from '@/lib/call-types';
 import { getWebRTCModule } from '@/lib/webrtc-native';
 import { backend } from '@/lib/backend';
 
@@ -19,6 +19,10 @@ export type CallManagerCallbacks = {
   onError?: (message: string) => void;
 };
 
+/** How often a ringing call re-sends its invite, and how long it rings before giving up. */
+const RING_REPEAT_MS = 3000;
+const RING_TIMEOUT_MS = 45_000;
+
 export class CallManager {
   private channel: RealtimeChannel | null = null;
   private pc: unknown = null;
@@ -31,6 +35,9 @@ export class CallManager {
   private userId = '';
   private userName = '';
   private isInitiator = false;
+  /** While ringing: the invite repeats, so a partner who opens the app from the push still gets it. */
+  private ringTimer: ReturnType<typeof setInterval> | null = null;
+  private ringTimeout: ReturnType<typeof setTimeout> | null = null;
   private callbacks: CallManagerCallbacks = {};
   private streamCallbacks: Pick<CallManagerCallbacks, 'onLocalStream' | 'onRemoteStream'> = {};
 
@@ -117,7 +124,8 @@ export class CallManager {
       this.pc = null;
     }
 
-    const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS }) as unknown as {
+    const iceServers = await getIceServers();
+    const pc = new RTCPeerConnection({ iceServers }) as unknown as {
       addTrack: (track: unknown, stream: NativeStream) => void;
       close: () => void;
       ontrack: ((event: { streams: NativeStream[] }) => void) | null;
@@ -165,23 +173,40 @@ export class CallManager {
     this.localStream = await this.getUserMedia(mode);
     this.emitLocalStream();
 
-    const pc = await this.createPeerConnection();
-    await this.sendSignal({
-      type: 'invite',
+    await this.createPeerConnection();
+    const invite = {
+      type: 'invite' as const,
       callId: this.callId,
       fromUserId: this.userId,
       fromName: this.userName,
       mode,
-    });
+    };
+    await this.sendSignal(invite);
+    // Keep ringing: their app may only open (from the call push) a few seconds from now.
+    this.ringTimer = setInterval(() => void this.sendSignal(invite), RING_REPEAT_MS);
+    this.ringTimeout = setTimeout(() => {
+      this.callbacks.onError?.('No answer');
+      void this.endCall();
+    }, RING_TIMEOUT_MS);
+  }
 
+  private stopRinging() {
+    if (this.ringTimer) clearInterval(this.ringTimer);
+    if (this.ringTimeout) clearTimeout(this.ringTimeout);
+    this.ringTimer = null;
+    this.ringTimeout = null;
+  }
+
+  /** They picked up: now make the offer (made at accept, so it's never sent to a closed app). */
+  private async sendOffer() {
+    const pc = this.getPeer() as unknown as {
+      createOffer: () => Promise<RTCSessionDescriptionInit>;
+      setLocalDescription: (desc: RTCSessionDescriptionInit) => Promise<void>;
+    } | null;
+    if (!pc || !this.callId) return;
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
-    await this.sendSignal({
-      type: 'offer',
-      callId: this.callId,
-      fromUserId: this.userId,
-      sdp: offer,
-    });
+    await this.sendSignal({ type: 'offer', callId: this.callId, fromUserId: this.userId, sdp: offer });
   }
 
   async acceptCall(callId: string, mode: CallMode) {
@@ -227,8 +252,13 @@ export class CallManager {
 
     switch (signal.type) {
       case 'accept':
+        if (this.isInitiator) {
+          this.stopRinging();
+          await this.sendOffer();
+        }
         break;
       case 'reject':
+        this.stopRinging();
         this.callbacks.onPhase?.('ended');
         await this.cleanup();
         break;
@@ -286,6 +316,7 @@ export class CallManager {
   }
 
   async cleanup() {
+    this.stopRinging();
     this.localStream?.getTracks().forEach((track) => track.stop());
     this.remoteStream?.getTracks().forEach((track) => track.stop());
     this.getPeer()?.close();

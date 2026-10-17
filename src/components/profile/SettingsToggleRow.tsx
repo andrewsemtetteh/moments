@@ -1,6 +1,7 @@
 import { StyleSheet, Text, View } from 'react-native';
 
 import { Icon, type IconName } from '@/components/ui/Icon';
+import { separatorColor } from '@/components/ui/primitives';
 import { useTheme } from '@/hooks/useTheme';
 import { AppSwitch } from '@/components/ui/AppSwitch';
 
@@ -52,7 +53,7 @@ export function SettingsToggleRow({
 /** Hairline between toggle rows, starting under the text like iOS Settings. */
 export function SettingsToggleDivider() {
   const { colors } = useTheme();
-  return <View style={[styles.divider, { backgroundColor: colors.border }]} />;
+  return <View style={[styles.divider, { backgroundColor: separatorColor(colors) }]} />;
 }
 
 const styles = StyleSheet.create({
@@ -70,5 +71,5 @@ const styles = StyleSheet.create({
   copy: { flex: 1, minWidth: 0 },
   title: { fontSize: 16, fontWeight: '600', lineHeight: 21 },
   sub: { fontSize: 13, marginTop: 2, lineHeight: 17 },
-  divider: { height: StyleSheet.hairlineWidth, marginLeft: 60 },
+  divider: { height: 1, marginLeft: 60 },
 });

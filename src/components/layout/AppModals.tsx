@@ -8,6 +8,7 @@ import { PartnerProfileModal } from '@/components/profile/PartnerProfileModal';
 import { TrophyViewHost } from '@/components/games/TrophyViewHost';
 import { PaywallModal } from '@/components/subscription/PaywallModal';
 import { StreakMilestoneModal } from '@/components/home/StreakMilestoneModal';
+import { TogetherMilestoneModal } from '@/components/home/TogetherMilestone';
 import { StreakSparkModal } from '@/components/home/StreakSparkModal';
 import { WrappedModal } from '@/components/wrapped/WrappedModal';
 import { useUIStore } from '@/stores';
@@ -65,6 +66,7 @@ export function AppModals() {
       {/* A trophy opened from its chat card or notification. */}
       <TrophyViewHost />
       <StreakMilestoneModal />
+      <TogetherMilestoneModal />
       <StreakSparkModal />
       <GameRoomBridge />
     </>

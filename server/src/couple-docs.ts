@@ -1,12 +1,13 @@
 import { Hono } from 'hono';
 
 import type { AuthVariables } from './auth';
-import { emitRow } from './core';
+import { assertAlbumAllowance } from './billing';
+import { ApiError, emitRow } from './core';
 import { isRelationshipMember, nowIso } from './db';
 import { rateLimit } from './rate-limit';
 
 /** The shared documents a couple can keep (see migration 0010). */
-const KINDS = new Set(['albums', 'places']);
+const KINDS = new Set(['albums', 'places', 'lists']);
 const MAX_BYTES = 256 * 1024;
 
 export const coupleDocs = new Hono<{ Bindings: Env; Variables: AuthVariables }>();
@@ -40,6 +41,26 @@ coupleDocs.put('/relationships/:id/docs/:kind', rateLimit('couple-doc', 120, 60)
   if (body.data === undefined || typeof body.version !== 'number') return c.json({ error: 'Missing data or version' }, 400);
   const text = JSON.stringify(body.data);
   if (text.length > MAX_BYTES) return c.json({ error: 'Too large' }, 413);
+
+  // Free plan: no more than 3 albums (only adding is blocked, never what's already there).
+  if (kind === 'albums') {
+    const current = await c.env.DB.prepare('SELECT data FROM couple_docs WHERE relationship_id = ?1 AND kind = ?2')
+      .bind(relationshipId, kind)
+      .first<{ data: string }>();
+    let previousCount = 0;
+    try {
+      const parsed = current ? (JSON.parse(current.data) as unknown) : [];
+      previousCount = Array.isArray(parsed) ? parsed.length : 0;
+    } catch {
+      previousCount = 0;
+    }
+    try {
+      await assertAlbumAllowance(c.env, relationshipId, body.data, previousCount);
+    } catch (e) {
+      if (e instanceof ApiError) return c.json({ error: e.message, code: e.code }, 402);
+      throw e;
+    }
+  }
 
   const next = body.version + 1;
   const now = nowIso();

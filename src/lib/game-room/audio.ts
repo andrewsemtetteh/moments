@@ -1,4 +1,4 @@
-import { ICE_SERVERS } from '@/lib/call-types';
+import { currentIceServers, getIceServers } from '@/lib/call-types';
 import { getWebRTCModule } from '@/lib/webrtc-native';
 
 import type { AudioSignal } from './types';
@@ -44,6 +44,8 @@ export class RoomAudio {
   }
 
   async start() {
+    // Relay servers ready before the first connection (createPeer can't wait for them).
+    await getIceServers();
     const webrtc = getWebRTCModule();
     if (!webrtc) {
       this.onStatus('unavailable');
@@ -66,7 +68,7 @@ export class RoomAudio {
     const webrtc = getWebRTCModule()!;
     this.pc?.close();
     this.pendingIce = [];
-    const pc = new webrtc.RTCPeerConnection({ iceServers: ICE_SERVERS }) as unknown as Peer;
+    const pc = new webrtc.RTCPeerConnection({ iceServers: currentIceServers() }) as unknown as Peer;
     this.stream?.getTracks().forEach((track) => pc.addTrack(track, this.stream!));
     pc.ontrack = () => this.onStatus('live');
     pc.onicecandidate = (event) => {

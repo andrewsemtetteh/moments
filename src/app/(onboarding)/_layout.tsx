@@ -42,7 +42,6 @@ export default function OnboardingLayout() {
       <Stack.Screen name="theme-picker" />
       <Stack.Screen name="widget-prompt" />
       <Stack.Screen name="notification-prompt" />
-      <Stack.Screen name="welcome" />
     </Stack>
   );
 }

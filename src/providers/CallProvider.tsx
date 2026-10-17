@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { Platform } from 'react-native';
 
 import { CallOverlay } from '@/components/call/CallOverlay';
@@ -13,13 +13,19 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
   const setPhase = useCallStore((s) => s.setPhase);
   const setError = useCallStore((s) => s.setError);
   const reset = useCallStore((s) => s.reset);
+  // Read through a ref: re-attaching the call channel on every phase change dropped the
+  // signals sent in that moment, so calls failed while connecting.
+  const phaseRef = useRef(phase);
+  useEffect(() => {
+    phaseRef.current = phase;
+  }, [phase]);
 
   useEffect(() => {
     if (Platform.OS === 'web' || !relationship?.id || !user?.id) return;
 
     callManager.setCallbacks({
       onInvite: (signal) => {
-        if (phase !== 'idle') return;
+        if (phaseRef.current !== 'idle') return;
         setIncoming({
           callId: signal.callId,
           mode: signal.mode,
@@ -38,7 +44,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
     return () => {
       void callManager.detachChannel();
     };
-  }, [phase, relationship?.id, reset, setError, setIncoming, setPhase, user?.id, user?.name]);
+  }, [relationship?.id, reset, setError, setIncoming, setPhase, user?.id, user?.name]);
 
   return (
     <>

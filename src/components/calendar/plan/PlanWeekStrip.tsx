@@ -152,10 +152,15 @@ export function PlanWeekStrip({
   );
   const dots = useEventDots(events, colors);
 
-  // Keep the strip on the week that contains the selected day (Today pill, create, month jumps).
+  // Keep the strip on the week that contains the selected day (Today pill, create, month
+  // jumps): the anchor follows while rendering; the effect only re-centres the scroll.
+  const selectedWeek = startOfWeek(selectedDate, { weekStartsOn: WEEK_STARTS_ON });
+  const [anchoredTo, setAnchoredTo] = useState(selectedWeek.getTime());
+  if (anchoredTo !== selectedWeek.getTime()) {
+    setAnchoredTo(selectedWeek.getTime());
+    setWeekAnchor((prev) => (isSameDay(prev, selectedWeek) ? prev : selectedWeek));
+  }
   useEffect(() => {
-    const next = startOfWeek(selectedDate, { weekStartsOn: WEEK_STARTS_ON });
-    setWeekAnchor((prev) => (isSameDay(prev, next) ? prev : next));
     if (pageW <= 0) return;
     requestAnimationFrame(() => {
       scrollRef.current?.scrollTo({ x: pageW, animated: false });

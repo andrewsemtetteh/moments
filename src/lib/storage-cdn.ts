@@ -73,6 +73,8 @@ export async function resignStorageUrl(
   options?: { size?: StorageImageSize; ttlSec?: number },
 ): Promise<string | null> {
   if (!url) return null;
+  // Already signed by the server (every link it sends is): use it as it is, no extra request.
+  if (/[?&]s=[^&]+/.test(url) && /[?&]e=\d+/.test(url)) return url;
   const path = extractStoragePath(url, bucket);
   if (!path) return url;
 

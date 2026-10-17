@@ -247,16 +247,22 @@ export function MomentHistoryModal() {
     return () => clearTimeout(t);
   }, [visible, savedScrollY, albumId]);
 
+  // Closed: leave selection and sheets behind for next time (while rendering, once per close).
+  const [wasVisible, setWasVisible] = useState(visible);
+  if (wasVisible !== visible) {
+    setWasVisible(visible);
+    if (!visible) {
+      setSelecting(false);
+      setAddTarget(null);
+      setSelectedIds(new Set());
+      setSelectAllEngaged(false);
+      setDownloading(false);
+      setDeleting(false);
+      setSheet(null);
+    }
+  }
   useEffect(() => {
-    if (visible) return;
-    setSelecting(false);
-    setAddTarget(null);
-    setSelectedIds(new Set());
-    setSelectAllEngaged(false);
-    setDownloading(false);
-    setDeleting(false);
-    setSheet(null);
-    longPressLockRef.current = false;
+    if (!visible) longPressLockRef.current = false;
   }, [visible]);
 
   const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {

@@ -80,10 +80,20 @@ export default function AboutYouScreen() {
       await goNext(router, 'about-you', { preview });
       return;
     }
-    const active = useAuthStore.getState().user;
-    if (!active) return;
     setBusy(true);
     try {
+      // The profile normally exists by now; if making it in the background failed (offline),
+      // make it here instead of Continue silently doing nothing.
+      let active = useAuthStore.getState().user;
+      if (!active && clerkUser) {
+        active = await ensureUserProfile({
+          id: clerkUser.id,
+          email: clerkUser.primaryEmailAddress?.emailAddress ?? null,
+          name: clerkUser.fullName,
+        });
+        setUser(active);
+      }
+      if (!active) throw new Error('Check your connection and try again.');
       const token = await getToken();
       if (!token) throw new Error('Not signed in');
       let next = active;

@@ -8,7 +8,7 @@ import { getCoupleDoc, putCoupleDoc } from '@/lib/moments-api';
 import { reportError } from '@/lib/monitoring';
 import { useAuthStore, useRelationshipStore } from '@/stores';
 
-type Kind = 'albums' | 'places';
+type Kind = 'albums' | 'places' | 'lists';
 type Local<T> = { data: T; version: number; dirty?: boolean };
 
 const cacheKey = (kind: Kind, relationshipId: string) => `couple-doc:${kind}:${relationshipId}`;

@@ -47,9 +47,13 @@ export function ChatVoiceRecorder({ elapsedSec, metering, holding, onCancel, onS
   const { colors } = useTheme();
   const [levels, setLevels] = useState<number[]>(() => Array.from({ length: BAR_COUNT }, () => 0.12));
 
-  useEffect(() => {
+  // Each new mic reading scrolls the waveform one bar (while rendering, once per reading).
+  const readingKey = `${metering ?? ''}|${elapsedSec}`;
+  const [lastReading, setLastReading] = useState(readingKey);
+  if (readingKey !== lastReading) {
+    setLastReading(readingKey);
     setLevels((prev) => [...prev.slice(1), level(metering)]);
-  }, [metering, elapsedSec]);
+  }
 
   const pulse = useSharedValue(1);
   useEffect(() => {

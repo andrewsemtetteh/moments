@@ -6,6 +6,7 @@ import {
 } from 'expo-audio';
 import * as Contacts from 'expo-contacts';
 import * as DocumentPicker from 'expo-document-picker';
+import { getInfoAsync } from 'expo-file-system/legacy';
 import * as Haptics from '@/lib/haptics';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
@@ -56,7 +57,7 @@ import { getCachedChatDraft, loadStoredChatDraft, saveChatDraft } from '@/lib/ch
 import { buildChatListItems, type ChatListItem } from '@/lib/chat-list';
 import { messagePreviewLabel } from '@/lib/chat-media';
 import { flushChatOfflineQueue } from '@/lib/chat-offline-flush';
-import type { ChatOfflinePayload } from '@/lib/chat-offline-queue';
+import type { ChatOfflineItem, ChatOfflinePayload } from '@/lib/chat-offline-queue';
 import { getCurrentPlace } from '@/lib/location';
 import { closeStackScreen } from '@/lib/router';
 import { backend } from '@/lib/backend';
@@ -71,6 +72,19 @@ const VOICE_PRESET = { ...RecordingPresets.HIGH_QUALITY, isMeteringEnabled: true
 const MIC_HOLD_MS = 350;
 /** A hold shorter than this is treated as a slip and discarded. */
 const MIN_HOLD_RECORD_MS = 1000;
+/** The server's upload limit (server/src/compat.ts). */
+const MAX_UPLOAD_MB = 50;
+
+/** Whether a picked file is over the upload limit (unknown sizes go ahead and try). */
+async function isOverUploadLimit(uri: string): Promise<boolean> {
+  try {
+    const info = await getInfoAsync(uri);
+    return info.exists && typeof info.size === 'number' && info.size > MAX_UPLOAD_MB * 1024 * 1024;
+  } catch {
+    return false;
+  }
+}
+
 /** Like WhatsApp: a few pins keep the bar useful. */
 const MAX_PINNED = 3;
 
@@ -91,6 +105,7 @@ export default function ChatScreen() {
   const offlineQueue = useOfflineStore((s) => s.queue);
   const addToQueue = useOfflineStore((s) => s.addToQueue);
   const removeFromQueue = useOfflineStore((s) => s.removeFromQueue);
+  const noteFailedAttempt = useOfflineStore((s) => s.noteFailedAttempt);
   const hydrateOfflineQueue = useOfflineStore((s) => s.hydrateQueue);
 
   // Text — starts from any unsent draft left the last time Chat was open.
@@ -114,7 +129,7 @@ export default function ChatScreen() {
   const micPressedAt = useRef(0);
   const recordingStart = useRef<Promise<boolean> | null>(null);
   const [isSendingMedia, setIsSendingMedia] = useState(false);
-  const [flushingOffline, setFlushingOffline] = useState(false);
+  const flushingRef = useRef(false);
   const [pendingScrollMessageId, setPendingScrollMessageId] = useState<string | null>(null);
   // The message just jumped to, flashed once it's on screen.
   const [highlightId, setHighlightId] = useState<string | null>(null);
@@ -311,9 +326,15 @@ export default function ChatScreen() {
     saveChatDraft(relationship.id, { text, replyTo });
   }, [relationship?.id, text, replyTo, editing]);
 
+  // Something to send arrived from elsewhere (a moment reply…): add it after what you were
+  // already typing, never wipe it. Taken in while rendering; the effect then clears it.
+  const [takenDraft, setTakenDraft] = useState<string | null>(null);
+  if (chatDraft && chatDraft !== takenDraft) {
+    setTakenDraft(chatDraft);
+    setText((current) => (current.trim() ? `${current.trimEnd()} ${chatDraft}` : chatDraft));
+  }
   useEffect(() => {
     if (!chatDraft && !chatMomentReply) return;
-    if (chatDraft) setText(chatDraft);
     clearChatDraft();
     const timer = setTimeout(() => inputRef.current?.focus(), 300);
     return () => clearTimeout(timer);
@@ -351,15 +372,16 @@ export default function ChatScreen() {
   // backs off before retrying — otherwise a message the server keeps rejecting
   // would be re-sent in a tight loop the instant the previous attempt ended.
   const flushPausedRef = useRef(false);
+  const givenUpRef = useRef<ChatOfflineItem[]>([]);
   const [flushRetryTick, setFlushRetryTick] = useState(0);
   useEffect(() => {
-    if (isOffline || offlineQueue.length === 0 || !relationship || !user || flushingOffline) return;
+    if (isOffline || offlineQueue.length === 0 || !relationship || !user || flushingRef.current) return;
     if (flushPausedRef.current) return;
 
     const pending = offlineQueue.filter((item) => item.type === 'message');
     if (pending.length === 0) return;
 
-    setFlushingOffline(true);
+    flushingRef.current = true;
     void flushChatOfflineQueue({
       relationshipId: relationship.id,
       userId: user.id,
@@ -367,8 +389,25 @@ export default function ChatScreen() {
       partnerUserId: partner?.id,
       senderName: user.name,
       onSent: removeFromQueue,
+      onFailed: noteFailedAttempt,
+      onGiveUp: (item) => {
+        removeFromQueue(item.id);
+        givenUpRef.current.push(item);
+      },
     })
       .then(async ({ failed }) => {
+        // Messages that will never send: say so once, and put a lost text back in the box.
+        const givenUp = givenUpRef.current.splice(0);
+        if (givenUp.length) {
+          const lostText = givenUp.find((g) => !g.payload.mediaLocalUri && g.payload.content?.trim())?.payload.content;
+          if (lostText) setText((current) => current || lostText);
+          Alert.alert(
+            givenUp.length === 1 ? 'A message couldn’t be sent' : `${givenUp.length} messages couldn’t be sent`,
+            givenUp.some((g) => g.payload.mediaLocalUri)
+              ? 'A photo, video or voice note was too large or is no longer on this phone.'
+              : 'It was put back in the message box so you can try again.',
+          );
+        }
         await refetch();
         if (failed > 0) {
           flushPausedRef.current = true;
@@ -378,15 +417,19 @@ export default function ChatScreen() {
           }, 15_000);
         }
       })
-      .finally(() => setFlushingOffline(false));
+      .finally(() => {
+        flushingRef.current = false;
+        // Look again: more may have been queued while this flush ran.
+        setFlushRetryTick((n) => n + 1);
+      });
   }, [
     isOffline,
     offlineQueue,
     relationship,
     user,
     partner?.id,
-    flushingOffline,
     removeFromQueue,
+    noteFailedAttempt,
     refetch,
     flushRetryTick,
   ]);
@@ -419,16 +462,26 @@ export default function ChatScreen() {
 
   const allMessages = useMemo(() => {
     // Our own message can come back over realtime before the send call returns; once the
-    // real one is in, drop its temporary "sending" copy so it never shows twice.
-    const landed = (temp: Message) =>
-      messages.some(
+    // real one is in, drop its temporary "sending" copy so it never shows twice. Each real
+    // message stands in for one copy only, so two identical quick sends ("ok", "ok") both show.
+    const claimed = new Set<string>();
+    const landed = (temp: Message) => {
+      const match = messages.find(
         (m) =>
+          !claimed.has(m.id) &&
           m.sender_id === temp.sender_id &&
           (m.content ?? '') === (temp.content ?? '') &&
           (m.media_url ?? null) === (temp.media_url ?? null) &&
           new Date(m.created_at).getTime() >= new Date(temp.created_at).getTime() - 10_000,
       );
-    const pending = [...queuedMessages, ...optimisticMessages.filter((m) => !landed(m))].sort(
+      if (!match) return false;
+      claimed.add(match.id);
+      return true;
+    };
+    const oldestFirst = [...optimisticMessages].sort(
+      (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
+    );
+    const pending = [...queuedMessages, ...oldestFirst.filter((m) => !landed(m))].sort(
       (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
     );
     return [...messages, ...pending];
@@ -630,8 +683,16 @@ export default function ChatScreen() {
    */
   const sendLocalMedia = async (uri: string, mediaType: 'image' | 'video' | 'voice', content = '') => {
     if (!user || !relationship) return;
+    // Over the server's limit: say so now, instead of failing quietly in the background.
+    if (await isOverUploadLimit(uri)) {
+      Alert.alert('Too large to send', `Photos and videos can be up to ${MAX_UPLOAD_MB} MB. Try a shorter video.`);
+      return;
+    }
     const id = `temp-${Date.now()}`;
-    const queuePayload: ChatOfflinePayload = { content, mediaLocalUri: uri, mediaType };
+    // Replying to a message with a photo, video or voice note keeps the reply (queued too).
+    const replyToId = replyTo?.id.startsWith('temp-') ? undefined : replyTo?.id;
+    setReplyTo(null);
+    const queuePayload: ChatOfflinePayload = { content, mediaLocalUri: uri, mediaType, replyToId };
     nearBottomRef.current = true;
 
     if (isOffline) {
@@ -639,14 +700,17 @@ export default function ChatScreen() {
       return;
     }
 
-    setOptimisticMessages((prev) => [...prev, pendingMessage(id, { content, media_url: uri, media_type: mediaType })]);
+    setOptimisticMessages((prev) => [
+      ...prev,
+      pendingMessage(id, { content, media_url: uri, media_type: mediaType, reply_to_id: replyToId ?? null }),
+    ]);
     setIsSendingMedia(true);
     try {
       const ext = mediaType === 'voice' ? 'm4a' : mediaType === 'video' ? 'mp4' : (uri.split('.').pop() ?? 'jpg');
       const contentType = mediaType === 'voice' ? 'audio/mp4' : mediaType === 'video' ? 'video/mp4' : 'image/jpeg';
       const path = `${relationship.id}/${user.id}-${mediaType}-${Date.now()}.${ext}`;
       const mediaUrl = await api.uploadChatMedia(path, uri, contentType);
-      await sendMessage.mutateAsync({ content, mediaUrl, mediaType });
+      await sendMessage.mutateAsync({ content, mediaUrl, mediaType, replyToId });
       setOptimisticMessages((prev) => prev.filter((m) => m.id !== id));
     } catch {
       moveToQueue(id, queuePayload);
@@ -804,10 +868,8 @@ export default function ChatScreen() {
   }, [audioRecorder]);
 
   useEffect(() => {
-    if (!isRecording) {
-      setRecordingElapsed(0);
-      return;
-    }
+    // Not recording: the timer shows 0 (see elapsedSec below), no reset needed here.
+    if (!isRecording) return;
 
     const started = Date.now();
     const timer = setInterval(() => {
@@ -901,6 +963,17 @@ export default function ChatScreen() {
 
   const startCall = useStartCall();
 
+  // Jumping to a message that isn't anywhere (all pages loaded): stop looking.
+  const pendingMissing =
+    !!pendingScrollMessageId &&
+    !hasNextPage &&
+    !isFetchingNextPage &&
+    !listItems.some(
+      (item) =>
+        (item.type === 'message' || item.type === 'unread') && item.id === pendingScrollMessageId,
+    );
+  if (pendingMissing) setPendingScrollMessageId(null);
+
   useEffect(() => {
     if (!pendingScrollMessageId) return;
     const index = listItems.findIndex(
@@ -914,14 +987,13 @@ export default function ChatScreen() {
         void fetchNextPage().finally(() => {
           loadingOlderRef.current = false;
         });
-      } else if (!hasNextPage && !isFetchingNextPage) {
-        setPendingScrollMessageId(null);
       }
       return;
     }
     const target = listItems[index];
-    setPendingScrollMessageId(null);
     requestAnimationFrame(() => {
+      // Found and on its way: done looking (cleared as the scroll starts).
+      setPendingScrollMessageId(null);
       listRef.current?.scrollToIndex({ index, animated: true, viewPosition: 0.5 });
     });
     if (target.type === 'message') {
@@ -1106,7 +1178,8 @@ export default function ChatScreen() {
           </Pressable>
         )}
 
-        {flushingOffline && (
+        {/* Online with messages still queued: they're being sent. */}
+        {!isOffline && queuedMessages.length > 0 && (
           <View style={[styles.offlineBar, { backgroundColor: colors.accentSoft }]}>
             <Text style={[styles.offlineText, { color: colors.accent }]}>Sending queued messages…</Text>
           </View>
@@ -1240,7 +1313,7 @@ export default function ChatScreen() {
               {isRecording ? (
                 <View style={styles.flex}>
                   <ChatVoiceRecorder
-                    elapsedSec={recordingElapsed}
+                    elapsedSec={isRecording ? recordingElapsed : 0}
                     metering={recorderState.metering}
                     holding={holdingMic}
                     onCancel={() => void cancelRecording()}

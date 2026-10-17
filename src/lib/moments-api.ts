@@ -3,7 +3,7 @@ import { prepareImageForUpload, readUriAsArrayBuffer } from '@/lib/prepare-image
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
 
-class MomentsApiError extends Error {
+export class MomentsApiError extends Error {
   status: number;
   constructor(status: number, message: string) {
     super(message);
@@ -94,6 +94,11 @@ export async function claimReferral(token: string, code: string): Promise<{ ok: 
 /** Permanently deletes the account: shared spaces close, all data, media and the sign-in go. */
 export async function deleteMyAccount(token: string): Promise<void> {
   await apiFetch<{ ok: boolean }>('/me', token, { method: 'DELETE' });
+}
+
+/** Copies the verified primary email from the sign-in onto the profile (the server reads it from Clerk). */
+export async function syncMyEmail(token: string): Promise<UserProfile> {
+  return apiFetch<UserProfile>('/me/email-sync', token, { method: 'POST' });
 }
 
 export async function updateMyProfile(token: string, updates: Partial<UserProfile>): Promise<UserProfile> {

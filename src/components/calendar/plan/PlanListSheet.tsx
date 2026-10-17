@@ -1,6 +1,6 @@
 import { paperEdge } from '@/components/ui/primitives';
 import * as Haptics from '@/lib/haptics';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { TextInput } from '@/components/ui/ThemedTextInput';
 
@@ -33,13 +33,16 @@ export function PlanListSheet({
   const [itemTitleDraft, setItemTitleDraft] = useState('');
   const progress = useMemo(() => (list ? listProgress(list) : null), [list]);
 
-  useEffect(() => {
+  // Closed: forget half-typed text and edits (while rendering, once per close).
+  const [wasVisible, setWasVisible] = useState(visible);
+  if (wasVisible !== visible) {
+    setWasVisible(visible);
     if (!visible) {
       setDraft('');
       setEditingSectionId(null);
       setEditingItem(null);
     }
-  }, [visible]);
+  }
 
   if (!list) return null;
 

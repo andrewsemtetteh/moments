@@ -9,7 +9,7 @@ import { useState, type ReactNode } from 'react';
 import { ActivityIndicator, Alert, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { ChangePasswordModal } from '@/components/profile/ChangePasswordModal';
+import { ChangePasswordModal, MIN_PASSWORD_LENGTH } from '@/components/profile/ChangePasswordModal';
 import { EditAnniversaryModal } from '@/components/profile/EditAnniversaryModal';
 import { EditFieldModal } from '@/components/profile/EditFieldModal';
 // import { EditGenderModal } from '@/components/profile/EditGenderModal';
@@ -21,7 +21,7 @@ import { VerifyEmailCodeModal } from '@/components/profile/VerifyEmailCodeModal'
 import { ScreenHeader } from '@/components/layout/ScreenHeader';
 import { rateFromSettings } from '@/lib/store-review';
 import { Icon, type IconName } from '@/components/ui/Icon';
-import { Avatar, colorWithAlpha } from '@/components/ui/primitives';
+import { Avatar, colorWithAlpha, separatorColor } from '@/components/ui/primitives';
 import { SOCIAL_LINKS, SUPPORT_EMAIL } from '@/constants/social';
 import { THEME_META, Spacing, Themes, type AppTheme, type ThemeColors } from '@/constants/design-system';
 import { usePlanActions } from '@/hooks/usePlanActions';
@@ -31,7 +31,8 @@ import { useTheme } from '@/hooks/useTheme';
 import { getRelationshipAnniversaryIso, isValidAnniversaryIso } from '@/lib/anniversary';
 import { formatAuthError } from '@/lib/auth-errors';
 import { signOutUser } from '@/lib/auth-session';
-import { deleteMyAccount } from '@/lib/moments-api';
+import { deleteMyAccount, syncMyEmail } from '@/lib/moments-api';
+import { openSubscriptionManagement } from '@/lib/purchases';
 import { getFirstName } from '@/lib/avatar-initial';
 import { markRelationshipOnboardingDone } from '@/lib/onboarding-storage';
 // import { profileGenderLabel } from '@/lib/profile-gender';
@@ -158,6 +159,24 @@ export default function SettingsScreen() {
   // Really deletes (App Store 5.1.1(v)): the server removes the shared space,
   // all data and media and the sign-in, then we sign out locally.
   const handleDeleteAccount = () => {
+    // Paying for Plus: deleting the account can't cancel an App Store / Google Play
+    // subscription, and it would keep charging. Say so first, with a way to cancel.
+    if (isPlus && isOwner) {
+      Alert.alert(
+        'Cancel your subscription first',
+        'You pay for Moments Plus. Deleting your account doesn’t cancel it, so you’d keep being charged. Cancel it in your subscriptions first.',
+        [
+          { text: 'Not now', style: 'cancel' },
+          { text: 'Manage subscription', onPress: () => void openSubscriptionManagement().catch(() => undefined) },
+          { text: 'Delete anyway', style: 'destructive', onPress: confirmDeleteAccount },
+        ],
+      );
+      return;
+    }
+    confirmDeleteAccount();
+  };
+
+  const confirmDeleteAccount = () => {
     const space = relationship
       ? ' Your shared space closes for both of you, with its moments, chats and memories.'
       : '';
@@ -215,8 +234,12 @@ export default function SettingsScreen() {
           try {
             await api.leaveRelationship(user.id, relationship.id);
             await markRelationshipOnboardingDone(user.id);
-            await signOutUser();
-            router.replace('/(auth)/login');
+            // Still signed in: the old space's data goes, and the launch screen sends you to
+            // making a new space or joining one (it used to sign you out as well).
+            const { queryClient } = await import('@/providers/AppProviders');
+            queryClient.clear();
+            useRelationshipStore.getState().reset();
+            router.replace('/');
           } catch (e) {
             Alert.alert('Could not end the space', e instanceof Error ? e.message : 'Please try again.');
           }
@@ -282,7 +305,16 @@ export default function SettingsScreen() {
     try {
       const verified = await pendingEmail.attemptVerification({ code: emailCode });
       await clerkUser.update({ primaryEmailAddressId: verified.id });
-      const updated = await api.updateProfile(user.id, { email: verified.emailAddress });
+      // The old address goes, so it can't still be used to sign in or reset the password.
+      await Promise.all(
+        clerkUser.emailAddresses
+          .filter((e) => e.id !== verified.id)
+          .map((e) => e.destroy().catch(() => undefined)),
+      );
+      // The server takes the new address from the sign-in itself, never from the app.
+      const token = await getToken();
+      if (!token) throw new Error('Please sign in again, then try.');
+      const updated = await syncMyEmail(token);
       setUser(updated);
       closeEmailCodeModal();
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -334,19 +366,21 @@ export default function SettingsScreen() {
   };
 
   const savePassword = async () => {
+    if (!clerkUser) return;
+    // Apple / Google sign-ups have no password yet: they set a first one, no current one needed.
+    const settingFirst = !clerkUser.passwordEnabled;
     if (
-      !currentPassword ||
-      newPassword.length < 6 ||
+      (!settingFirst && !currentPassword) ||
+      newPassword.length < MIN_PASSWORD_LENGTH ||
       newPassword !== confirmPassword ||
-      newPassword === currentPassword
+      (!settingFirst && newPassword === currentPassword)
     ) {
       return;
     }
-    if (!clerkUser) return;
 
     setSavingPassword(true);
     try {
-      await clerkUser.updatePassword({ currentPassword, newPassword });
+      await clerkUser.updatePassword(settingFirst ? { newPassword } : { currentPassword, newPassword });
       closePasswordModal();
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       Alert.alert('Password updated', 'Your new password is ready to use next time you sign in.');
@@ -460,7 +494,12 @@ export default function SettingsScreen() {
             <Row icon="user" label="Name" value={user?.name?.trim() || 'Add your name'} onPress={() => openEdit('name', user?.name ?? '')} />
             {/* <Row icon="people" label="Gender" value={profileGenderLabel(user?.gender)} onPress={openGenderModal} /> */}
             <Row icon="mail" label="Email" value={user?.email ?? ''} onPress={() => openEdit('email', user?.email ?? '')} />
-            <Row icon="lock" label="Password" value="••••••••" onPress={openPasswordModal} />
+            <Row
+              icon="lock"
+              label="Password"
+              value={clerkUser && !clerkUser.passwordEnabled ? 'Not set' : '••••••••'}
+              onPress={openPasswordModal}
+            />
             <Row icon="settings" label="Account options" onPress={openAccountOptions} last />
           </Group>
         </Section>
@@ -515,7 +554,7 @@ export default function SettingsScreen() {
         <Section title="Privacy">
           <Group>
             <OnlineStatusSettings />
-            <View style={[styles.divider, { backgroundColor: colors.border }]} />
+            <View style={[styles.divider, { backgroundColor: separatorColor(colors) }]} />
             <LocationSharingSettings />
           </Group>
         </Section>
@@ -548,6 +587,7 @@ export default function SettingsScreen() {
             <Row icon="help" label="Contact support" onPress={() => contactSupport('Help with Moments')} />
             <Row icon="flag" label="Report a problem" onPress={() => contactSupport('Problem report')} />
             <Row icon="star" label="Rate Moments" onPress={() => void rateFromSettings()} />
+            <Row icon="mail" label="Send feedback" onPress={() => contactSupport('Feedback')} />
             <Row icon="lock" label="Privacy policy" onPress={() => router.push('/legal/privacy')} />
             <Row icon="document" label="Terms of service" onPress={() => router.push('/legal/terms')} last />
           </Group>
@@ -630,6 +670,7 @@ export default function SettingsScreen() {
 
       <ChangePasswordModal
         visible={showPasswordModal}
+        settingFirst={!!clerkUser && !clerkUser.passwordEnabled}
         saving={savingPassword}
         currentPassword={currentPassword}
         newPassword={newPassword}
@@ -742,7 +783,7 @@ function Row({
       <View
         style={[
           styles.rowBody,
-          !last && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
+          !last && { borderBottomWidth: 1, borderBottomColor: separatorColor(colors) },
         ]}>
         <Text style={[styles.rowLabel, { color: tint }]} numberOfLines={1}>
           {label}
@@ -842,7 +883,7 @@ const styles = StyleSheet.create({
   },
   rowLabel: { flex: 1, fontSize: 16, fontWeight: '600' },
   rowValue: { maxWidth: '55%', fontSize: 14 },
-  divider: { height: StyleSheet.hairlineWidth, marginLeft: 60 },
+  divider: { height: 1, marginLeft: 60 },
 
   // Three a row, two rows.
   themeCard: { flexDirection: 'row', flexWrap: 'wrap', columnGap: 10, rowGap: 16, padding: 14 },

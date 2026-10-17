@@ -9,11 +9,11 @@ export function StreakSparkModal() {
   const partner = useRelationshipStore((s) => s.partner);
 
   if (!spark || spark.count <= 0) return null;
-  const who = getFirstName(partner?.name) ?? 'your partner';
+  const who = getFirstName(partner?.name) ?? 'your person';
   const message =
     spark.count <= 1
-      ? `A new streak begins! Show up with ${who} each day to keep it going.`
-      : `You and ${who} kept the flame alive.\nSee you tomorrow.`;
+      ? `A new streak begins! Check in each day to keep it going.`
+      : `You kept your flame alive for ${who}.\nSee you tomorrow.`;
 
   return (
     <StreakCelebration

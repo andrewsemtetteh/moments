@@ -1,6 +1,6 @@
 import { useSignUp } from '@clerk/expo';
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { AuthCheckbox } from '@/components/auth/AuthCheckbox';
@@ -28,6 +28,9 @@ export default function SignupEmailScreen() {
   const [emailTouched, setEmailTouched] = useState(false);
 
   const loading = fetchStatus === 'fetching';
+  // Set the instant it's tapped: `loading` only turns on once the request is under way,
+  // so a quick double tap used to create the account twice.
+  const submitting = useRef(false);
   const emailError = emailProblem(email);
   const suggestion = emailSuggestion(email);
   const passOk = password.length >= 8;
@@ -38,9 +41,18 @@ export default function SignupEmailScreen() {
       router.push({ pathname: '/(auth)/check-email', params: { email: email || 'you@example.com', type: 'signup' } });
       return;
     }
-    if (loading) return;
+    if (loading || submitting.current) return;
     setTried(true);
     if (emailError || !passOk || !agreedToTerms) return;
+    submitting.current = true;
+    try {
+      await createAccount();
+    } finally {
+      submitting.current = false;
+    }
+  };
+
+  const createAccount = async () => {
     const cleanEmail = normalizeAuthEmail(sanitizeEmailInput(email));
     const cleanPassword = sanitizePasswordInput(password);
 

@@ -35,24 +35,9 @@ import { formatSubscriptionExpiry } from '@/lib/subscription';
 import * as api from '@/services/api';
 import { useAuthStore, useRelationshipStore, useUIStore } from '@/stores';
 import { usePlayProgressStore } from '@/stores/play-progress-store';
-import type { Relationship, UserProfile } from '@/types/database';
 import { ensurePermission } from '@/lib/permissions';
 import { InviteCard } from '@/components/home/HomeCards';
 
-/**
- * DEV "Preview UI" mode has no partner or space, so the page would only ever
- * show its waiting state. There it renders as a paired couple with these
- * samples instead, so the real page can be checked on a phone.
- */
-const PREVIEW_PARTNER = { id: 'preview-partner', name: 'Alex', avatar_url: null } as unknown as UserProfile;
-const PREVIEW_RELATIONSHIP = {
-  id: 'preview',
-  relationship_name: 'Our little world',
-  status: 'active',
-  created_at: '2025-03-04T12:00:00.000Z',
-  anniversary_date: '2025-03-04',
-  invite_code: null,
-} as unknown as Relationship;
 
 const PLUS_GRADIENT: [string, string, string] = ['#FF6B7A', '#F03A55', '#C41E45'];
 /** Whether a #rrggbb colour is dark enough to need light status-bar icons. */
@@ -96,9 +81,9 @@ export default function ProfileScreen() {
   const { colors } = useTheme();
   const storedRelationship = useRelationshipStore((s) => s.relationship);
   const storedPartner = useRelationshipStore((s) => s.partner);
-  const previewMode = __DEV__ && !storedRelationship;
-  const relationship = previewMode ? PREVIEW_RELATIONSHIP : storedRelationship;
-  const partner = previewMode ? PREVIEW_PARTNER : storedPartner;
+  // Always the real space: a made-up partner used to show in development builds with no space.
+  const relationship = storedRelationship;
+  const partner = storedPartner;
   const user = useAuthStore((s) => s.user);
   const setUser = useAuthStore((s) => s.setUser);
   const setShowWrapped = useUIStore((s) => s.setShowWrapped);
@@ -112,7 +97,7 @@ export default function ProfileScreen() {
   const { data: momentCount } = useQuery({
     queryKey: ['momentCount', relationship?.id],
     queryFn: () => api.countMoments(relationship!.id),
-    enabled: !!relationship?.id && !previewMode,
+    enabled: !!relationship?.id,
   });
   const playProgress = usePlayProgressStore((s) => s.progress);
   const level = useMemo(() => levelInfo((playProgress ?? emptyProgress(todayKey())).xp), [playProgress]);
@@ -126,7 +111,7 @@ export default function ProfileScreen() {
 
    
   const changePhoto = async () => {
-    if (!user || previewMode) return;
+    if (!user) return;
     if (!(await ensurePermission('photos'))) return;
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
@@ -282,7 +267,7 @@ export default function ProfileScreen() {
             </View>
           ) : null}
 
-          <ProfileAnniversarySection relationship={previewMode ? PREVIEW_RELATIONSHIP : undefined} />
+          <ProfileAnniversarySection />
 
           {partner ? (
             <Section title="Your year">

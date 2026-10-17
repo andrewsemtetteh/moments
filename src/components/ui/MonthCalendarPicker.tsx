@@ -12,7 +12,7 @@ import {
 } from 'date-fns';
 import { paperEdge } from '@/components/ui/primitives';
 import * as Haptics from '@/lib/haptics';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Icon } from '@/components/ui/Icon';
@@ -47,9 +47,12 @@ export function MonthCalendarPicker({
   const { colors } = useTheme();
   const [currentMonth, setCurrentMonth] = useState(() => startOfMonth(value));
 
-  useEffect(() => {
+  // A new value shows its month (while rendering, once per value).
+  const [shownFor, setShownFor] = useState(value.getTime());
+  if (shownFor !== value.getTime()) {
+    setShownFor(value.getTime());
     setCurrentMonth(startOfMonth(value));
-  }, [value]);
+  }
 
   const markerByDay = new Map(markers.map((m) => [m.dateKey, m]));
   const monthStart = startOfMonth(currentMonth);

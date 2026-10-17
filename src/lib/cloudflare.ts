@@ -219,8 +219,27 @@ function storageBucket(bucket: string) {
       const res = await callWorker(`/storage-remove/${bucket}`, { paths });
       return { data: null, error: res.error };
     },
+    /**
+     * Moment and chat files are only served with a signature that expires (see the server's
+     * media-sign.ts), so a link the app makes itself (right after an upload) is signed by the
+     * server. Avatars are public and need no signature.
+     */
     async createSignedUrl(path: string, _ttl?: number, _opts?: unknown) {
-      return { data: { signedUrl: `${API_URL}/media/${bucket}/${encodePath(path)}` }, error: null };
+      const plain = `${API_URL}/media/${bucket}/${encodePath(path)}`;
+      if (bucket !== 'moments' && bucket !== 'chat') return { data: { signedUrl: plain }, error: null };
+      try {
+        const token = await authToken();
+        const res = await fetch(`${API_URL}/media/sign`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+          body: JSON.stringify({ key: `${bucket}/${path}` }),
+        });
+        const json = (await res.json().catch(() => null)) as { signedUrl?: string; error?: string } | null;
+        if (!res.ok || !json?.signedUrl) return { data: null, error: { message: json?.error ?? 'Could not sign the link' } };
+        return { data: { signedUrl: json.signedUrl }, error: null };
+      } catch (e) {
+        return { data: null, error: { message: e instanceof Error ? e.message : 'Could not sign the link' } };
+      }
     },
     getPublicUrl(path: string) {
       return { data: { publicUrl: `${API_URL}/media/${bucket}/${encodePath(path)}` } };

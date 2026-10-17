@@ -9,6 +9,7 @@ import { useAuthStore, useRelationshipStore } from '@/stores';
 import type { Message } from '@/types/database';
 
 const BANNER_AUTO_DISMISS_MS = 3000;
+const VIEWABILITY_CONFIG = { itemVisiblePercentThreshold: 10, minimumViewTime: 80 };
 
 /**
  * Unread chat banner + header badge:
@@ -24,8 +25,8 @@ const BANNER_AUTO_DISMISS_MS = 3000;
  */
 export function useChatUnreadBanner(messages: Message[] | undefined) {
   const queryClient = useQueryClient();
-  const relationship = useRelationshipStore((s) => s.relationship);
-  const user = useAuthStore((s) => s.user);
+  const relationshipId = useRelationshipStore((s) => s.relationship?.id);
+  const userId = useAuthStore((s) => s.user?.id);
 
   const [unreadBannerIds, setUnreadBannerIds] = useState<Set<string> | null>(null);
   const [unreadBannerCount, setUnreadBannerCount] = useState(0);
@@ -41,40 +42,44 @@ export function useChatUnreadBanner(messages: Message[] | undefined) {
     return () => sub.remove();
   }, []);
 
-  // Reset when switching conversations.
-  useEffect(() => {
+  // Reset when switching conversations (adjusted while rendering, not in an effect).
+  const [bannerFor, setBannerFor] = useState(relationshipId);
+  if (bannerFor !== relationshipId) {
+    setBannerFor(relationshipId);
     setUnreadBannerIds(null);
     setUnreadBannerCount(0);
+  }
+  useEffect(() => {
     dismissedRef.current = false;
     bannerSeenRef.current = false;
     markedReadRef.current = false;
-  }, [relationship?.id]);
+  }, [relationshipId]);
 
   const clearBadge = useCallback(() => {
-    if (!relationship?.id || !user?.id) return;
-    const key = ['unreadMessages', relationship.id, user.id] as const;
+    if (!relationshipId || !userId) return;
+    const key = ['unreadMessages', relationshipId, userId] as const;
     void queryClient.cancelQueries({ queryKey: key });
     queryClient.setQueryData(key, 0);
-  }, [queryClient, relationship?.id, user?.id]);
+  }, [queryClient, relationshipId, userId]);
 
   const markReadAndClearBadge = useCallback(() => {
-    if (!relationship?.id || !user?.id || markedReadRef.current) return;
+    if (!relationshipId || !userId || markedReadRef.current) return;
     markedReadRef.current = true;
     clearBadge();
     void api
-      .markMessagesRead(relationship.id, user.id)
+      .markMessagesRead(relationshipId, userId)
       .then(() => {
-        applyMessagesReadInCache(queryClient, relationship.id, user.id);
+        applyMessagesReadInCache(queryClient, relationshipId, userId);
         clearBadge();
       })
       .catch(() => {
         // Allow a retry on the next open if the server mark failed.
         markedReadRef.current = false;
         void queryClient.invalidateQueries({
-          queryKey: ['unreadMessages', relationship.id, user.id],
+          queryKey: ['unreadMessages', relationshipId, userId],
         });
       });
-  }, [clearBadge, queryClient, relationship?.id, user?.id]);
+  }, [clearBadge, queryClient, relationshipId, userId]);
 
   const dismissUnreadBanner = useCallback(() => {
     if (dismissedRef.current) return;
@@ -84,51 +89,55 @@ export function useChatUnreadBanner(messages: Message[] | undefined) {
     markReadAndClearBadge();
   }, [markReadAndClearBadge]);
 
+  // The latest versions, for the list's visibility callback (kept in sync after each render).
   const dismissRef = useRef(dismissUnreadBanner);
-  dismissRef.current = dismissUnreadBanner;
-
   const markReadRef = useRef(markReadAndClearBadge);
-  markReadRef.current = markReadAndClearBadge;
-
-  // Snapshot unread messages once when the thread loads.
   useEffect(() => {
-    if (!messages || !user || unreadBannerIds !== null) return;
+    dismissRef.current = dismissUnreadBanner;
+    markReadRef.current = markReadAndClearBadge;
+  }, [dismissUnreadBanner, markReadAndClearBadge]);
 
-    const unread = new Set(
-      messages.filter((m) => m.sender_id !== user.id && !m.read_at).map((m) => m.id),
-    );
+  // Snapshot unread messages once when the thread loads (taken while rendering)…
+  if (messages && userId && unreadBannerIds === null) {
+    const unread = new Set(messages.filter((m) => m.sender_id !== userId && !m.read_at).map((m) => m.id));
     setUnreadBannerIds(unread);
+    setUnreadBannerCount(unread.size);
+  }
 
-    if (unread.size === 0 || !relationship?.id) {
-      setUnreadBannerCount(0);
+  // …then its side effects: clear a stale badge, or fetch the full unread count.
+  useEffect(() => {
+    if (!unreadBannerIds || !userId) return;
+    if (unreadBannerIds.size === 0 || !relationshipId) {
       // Thread has nothing unread — force-clear a stale header badge.
       clearBadge();
       return;
     }
-
     dismissedRef.current = false;
     bannerSeenRef.current = false;
     markedReadRef.current = false;
-
+    const shown = unreadBannerIds.size;
+    let cancelled = false;
     // Prefer the full server count (not just currently loaded pages).
-    void api.fetchUnreadMessageCount(relationship.id, user.id).then((count) => {
-      if (dismissedRef.current) return;
-      setUnreadBannerCount(Math.max(count, unread.size));
+    void api.fetchUnreadMessageCount(relationshipId, userId).then((count) => {
+      if (cancelled || dismissedRef.current) return;
+      setUnreadBannerCount(Math.max(count, shown));
     });
-    setUnreadBannerCount(unread.size);
-  }, [messages, user, relationship?.id, unreadBannerIds, clearBadge]);
+    return () => {
+      cancelled = true;
+    };
+    // Once per snapshot: unreadBannerIds is only replaced when it's taken or dismissed.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [unreadBannerIds]);
 
   // New messages from your partner after the thread opened (not the ones the unread divider
   // is waiting on): read as soon as they're on screen.
   useEffect(() => {
-    if (!messages || !user || !relationship?.id || unreadBannerIds === null) return;
+    if (!messages || !userId || !relationshipId || unreadBannerIds === null) return;
     if (!focused || !appActive) return;
     const fresh = messages.some(
-      (m) => m.sender_id !== user.id && !m.read_at && !m.deleted_for_all && !unreadBannerIds.has(m.id),
+      (m) => m.sender_id !== userId && !m.read_at && !m.deleted_for_all && !unreadBannerIds.has(m.id),
     );
     if (!fresh) return;
-    const relationshipId = relationship.id;
-    const userId = user.id;
     const timer = setTimeout(() => {
       clearBadge();
       void api
@@ -142,7 +151,7 @@ export function useChatUnreadBanner(messages: Message[] | undefined) {
         });
     }, 350);
     return () => clearTimeout(timer);
-  }, [messages, user, relationship?.id, unreadBannerIds, focused, appActive, clearBadge, queryClient]);
+  }, [messages, userId, relationshipId, unreadBannerIds, focused, appActive, clearBadge, queryClient]);
 
   // Auto-dismiss the "N UNREAD" label after a few seconds.
   useEffect(() => {
@@ -157,8 +166,9 @@ export function useChatUnreadBanner(messages: Message[] | undefined) {
     }
   }, [unreadBannerIds]);
 
-  const onViewableItemsChanged = useRef(
-    ({ viewableItems }: { viewableItems: ViewToken[] }) => {
+  // Made once (FlatList needs it to never change); it reads the latest state through refs.
+  const [onViewableItemsChanged] = useState(
+    () => ({ viewableItems }: { viewableItems: ViewToken[] }) => {
       if (dismissedRef.current) return;
       const dividerVisible = viewableItems.some(
         (token) =>
@@ -180,12 +190,8 @@ export function useChatUnreadBanner(messages: Message[] | undefined) {
         dismissRef.current();
       }
     },
-  ).current;
-
-  const viewabilityConfig = useRef({
-    itemVisiblePercentThreshold: 10,
-    minimumViewTime: 80,
-  }).current;
+  );
+  const viewabilityConfig = VIEWABILITY_CONFIG;
 
   return {
     unreadBannerIds,

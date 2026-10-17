@@ -30,7 +30,7 @@ const CORE: Record<string, Row> = {
   chat: { icon: 'messages', title: 'Your own private chat', sub: 'Messages, voice notes and photos, just for the two of you.' },
   plans: { icon: 'calendar', title: 'Plans you make together', sub: 'Date nights, trips and to-dos on one shared plan, with reminders for both.' },
   talk: { icon: 'cards', title: 'Conversations for two', sub: 'Conversation decks and games for the nights you want more than small talk.' },
-  streak: { icon: 'fire', title: 'A streak to keep', sub: 'Show up together every day and watch it grow.' },
+  streak: { icon: 'fire', title: 'A streak to keep', sub: 'Check in every day with a moment, your mood or today’s question, and watch it grow.' },
 };
 
 /** Step 5: their answers played back as a plan, plus without/with Moments. */

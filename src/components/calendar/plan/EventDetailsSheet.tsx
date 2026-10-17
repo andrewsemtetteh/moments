@@ -92,24 +92,31 @@ export function EventDetailsSheet({
   const [editingTitle, setEditingTitle] = useState(false);
   const dirty = useRef(false);
 
+  // Filled from the plan each time one opens: per plan, not per object, so a save coming
+  // back mustn't wipe what's being typed. Done while rendering, keyed on the plan.
+  const openKey = visible && event ? event.id : null;
+  const [lastOpenKey, setLastOpenKey] = useState<string | null>(null);
+  if (openKey !== lastOpenKey) {
+    setLastOpenKey(openKey);
+    if (openKey !== null && event) {
+      const meta = parsePlanMeta(event.description);
+      const at = new Date(event.date_time);
+      setTitle(event.title);
+      setLocation(meta.location ?? '');
+      setNotes(meta.notes ?? '');
+      setReminderMins(meta.reminderMins ?? null);
+      setChecklist(meta.checklist ?? []);
+      setCompleted(!!meta.completed);
+      setEventDate(at);
+      setEventTime(at);
+      setChecklistDraft('');
+      setEditingTitle(false);
+    }
+  }
+  // Nothing typed yet for the plan just opened.
   useEffect(() => {
-    if (!visible || !event) return;
-    const meta = parsePlanMeta(event.description);
-    const at = new Date(event.date_time);
-    setTitle(event.title);
-    setLocation(meta.location ?? '');
-    setNotes(meta.notes ?? '');
-    setReminderMins(meta.reminderMins ?? null);
-    setChecklist(meta.checklist ?? []);
-    setCompleted(!!meta.completed);
-    setEventDate(at);
-    setEventTime(at);
-    setChecklistDraft('');
-    setEditingTitle(false);
     dirty.current = false;
-    // Per plan, not per object: a save coming back mustn't wipe what's being typed.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visible, event?.id]);
+  }, [openKey]);
 
   const countdown = useMemo(() => {
     if (!event) return null;

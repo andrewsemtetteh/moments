@@ -38,6 +38,11 @@ function tasksKey(relationshipId: string) {
   return `plan-tasks:${relationshipId}`;
 }
 
+/** Where this phone kept plan lists before they synced (moved up the first time). */
+export function planListsLegacyKey(relationshipId: string) {
+  return listsKey(relationshipId);
+}
+
 function listsKey(relationshipId: string) {
   return `plan-lists-v3:${relationshipId}`;
 }
@@ -60,7 +65,7 @@ export async function savePlanTasks(relationshipId: string, tasks: PlanTask[]) {
   await AsyncStorage.setItem(tasksKey(relationshipId), JSON.stringify(tasks));
 }
 
-function normalizeList(raw: PlanList): PlanList {
+export function normalizeList(raw: PlanList): PlanList {
   if (raw.sections?.length) {
     return {
       ...raw,

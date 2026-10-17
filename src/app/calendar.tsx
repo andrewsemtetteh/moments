@@ -57,13 +57,14 @@ import {
 import { useTheme } from '@/hooks/useTheme';
 import {
   createListFromPlan,
-  fetchPlanLists,
-  savePlanLists,
+  normalizeList,
+  planListsLegacyKey,
   syncChecklistIntoList,
   type PlanList,
 } from '@/lib/plan-local';
 import { getFirstName } from '@/lib/avatar-initial';
 import { filterMediaMoments } from '@/lib/moment-display';
+import { useCoupleDoc } from '@/lib/couple-doc';
 import { groupMomentsIntoPlaces, useMomentPlaces } from '@/lib/moment-places';
 import {
   displayTitle,
@@ -125,6 +126,7 @@ const dismissedKey = (relationshipId: string) => `memory-suggestions-dismissed:$
  */
 const SHEET_SWAP_MS = 380;
 const afterSheetCloses = (fn: () => void) => setTimeout(fn, SHEET_SWAP_MS);
+const NO_LISTS: PlanList[] = [];
 
 export default function CalendarScreen() {
   const { create, tab: tabParam } = useLocalSearchParams<{ create?: string; tab?: string }>();
@@ -151,7 +153,16 @@ export default function CalendarScreen() {
   const [saving, setSaving] = useState(false);
 
   const [detailEvent, setDetailEvent] = useState<CalendarEvent | null>(null);
-  const [lists, setLists] = useState<PlanList[]>([]);
+  // Shared lists sync between both phones (the couple's "lists" document), so you each see
+  // and tick the same list. They used to be kept only on the phone that made them.
+  const { data: rawLists, write: writeLists } = useCoupleDoc<PlanList[]>('lists', NO_LISTS, planListsLegacyKey);
+  const lists = useMemo(
+    () =>
+      (Array.isArray(rawLists) ? rawLists : NO_LISTS)
+        .map(normalizeList)
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
+    [rawLists],
+  );
   const [activeListId, setActiveListId] = useState<string | null>(null);
 
   useFocusEffect(
@@ -164,18 +175,17 @@ export default function CalendarScreen() {
     }, []),
   );
 
-  useEffect(() => {
+  // `?create=1` (e.g. "Plan something" elsewhere) opens New plan, once per link.
+  const [seenCreate, setSeenCreate] = useState<string | undefined>(undefined);
+  if (create !== seenCreate) {
+    setSeenCreate(create);
     if (create === '1' || create === 'true') {
       setCreateKind(undefined);
       setSkipTypePicker(false);
       setCreateOpen(true);
     }
-  }, [create]);
+  }
 
-  useEffect(() => {
-    if (!relationship) return;
-    fetchPlanLists(relationship.id).then(setLists);
-  }, [relationship]);
 
   const {
     data: rawPlanEvents = [],
@@ -310,10 +320,9 @@ export default function CalendarScreen() {
     ]);
   }, [queryClient, refetch]);
 
-  const persistLists = async (next: PlanList[]) => {
-    setLists(next);
-    if (relationship) await savePlanLists(relationship.id, next);
-  };
+  /** Applied to the latest copy, so your partner's edit made a moment ago isn't overwritten. */
+  const updateLists = (change: (current: PlanList[]) => PlanList[]) =>
+    writeLists((current) => change((Array.isArray(current) ? current : NO_LISTS).map(normalizeList)));
 
   const selectDay = (day: Date) => {
     Haptics.selectionAsync();
@@ -353,7 +362,7 @@ export default function CalendarScreen() {
         description,
       });
 
-      let nextLists = [...lists];
+      let newList: PlanList | null = null;
 
       if (payload.createSharedList) {
         const list = createListFromPlan({
@@ -365,17 +374,19 @@ export default function CalendarScreen() {
         const meta = parsePlanMeta(payload.description);
         description = serializePlanMeta({ ...meta, linkedListId: list.id, v: 1 });
         created = await api.updateCalendarEvent(created.id, { description });
-        nextLists = [list, ...nextLists.filter((l) => l.id !== list.id)];
+        newList = list;
       }
 
-      if (payload.attachedListIds.length) {
-        nextLists = nextLists.map((l) =>
-          payload.attachedListIds.includes(l.id) ? { ...l, eventId: created.id, archived: false } : l,
-        );
-      }
-
-      if (payload.createSharedList || payload.attachedListIds.length) {
-        await persistLists(nextLists);
+      if (newList || payload.attachedListIds.length) {
+        const planId = created.id;
+        const added = newList;
+        updateLists((current) => {
+          let next = added ? [added, ...current.filter((l) => l.id !== added.id)] : current;
+          if (payload.attachedListIds.length) {
+            next = next.map((l) => (payload.attachedListIds.includes(l.id) ? { ...l, eventId: planId, archived: false } : l));
+          }
+          return next;
+        });
       }
 
       writeEventToCaches(created);
@@ -412,9 +423,8 @@ export default function CalendarScreen() {
         (l) => l.id === meta.linkedListId || l.eventId === patch.id,
       );
       if (linked && meta.checklist) {
-        await persistLists(
-          lists.map((l) => (l.id === linked.id ? syncChecklistIntoList(l, meta.checklist!) : l)),
-        );
+        const checklist = meta.checklist;
+        updateLists((current) => current.map((l) => (l.id === linked.id ? syncChecklistIntoList(l, checklist) : l)));
       }
 
       void invalidate();
@@ -437,11 +447,7 @@ export default function CalendarScreen() {
         .map((l) => l.id);
       await api.deleteCalendarEvent(detailEvent.id);
       if (linkedIds.length) {
-        await persistLists(
-          lists.map((l) =>
-            linkedIds.includes(l.id) ? { ...l, eventId: null, archived: true } : l,
-          ),
-        );
+        updateLists((current) => current.map((l) => (linkedIds.includes(l.id) ? { ...l, eventId: null, archived: true } : l)));
       }
       setDetailEvent(null);
       await invalidate();
@@ -913,7 +919,7 @@ export default function CalendarScreen() {
             eventId: detailEvent.id,
             checklist: meta.checklist,
           });
-          void persistLists([list, ...lists.filter((l) => l.id !== list.id)]);
+          updateLists((current) => [list, ...current.filter((l) => l.id !== list.id)]);
           void api
             .updateCalendarEvent(detailEvent.id, {
               description: serializePlanMeta({ ...meta, linkedListId: list.id, v: 1 }),
@@ -940,7 +946,7 @@ export default function CalendarScreen() {
         }
         onClose={() => setActiveListId(null)}
         onChange={(next) => {
-          void persistLists(lists.map((l) => (l.id === next.id ? next : l)));
+          updateLists((current) => current.map((l) => (l.id === next.id ? next : l)));
         }}
       />
     </View>

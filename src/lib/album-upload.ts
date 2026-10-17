@@ -74,7 +74,13 @@ export async function uploadToAlbum(opts: {
       const path = `${relationship.id}/${user.id}/${Date.now()}-${index}.${video ? 'mp4' : 'jpg'}`;
       const mediaUrl = await api.uploadMomentMedia(path, item.uri, video ? 'video/mp4' : 'image/jpeg');
       // No partner option: skips the per-moment "sent you a moment" notification.
-      const moment = await api.createMoment(relationship.id, user.id, { type: item.type, media_url: mediaUrl });
+      const moment = await api
+        .createMoment(relationship.id, user.id, { type: item.type, media_url: mediaUrl })
+        .catch((e: unknown) => {
+          // Uploaded but not created (e.g. over today's free moments): remove the file.
+          void api.discardMomentUpload(mediaUrl);
+          throw e;
+        });
       addMoments(albumId, [moment.id]);
       firstId ??= moment.id;
       firstUrl ??= moment.media_url ?? mediaUrl;

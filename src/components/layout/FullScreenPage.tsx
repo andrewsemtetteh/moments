@@ -71,10 +71,11 @@ export function FullScreenPage({
   const { colors } = useTheme();
   const [mounted, setMounted] = useState(visible);
   const translateX = useSharedValue(SCREEN_W);
+  // Opening mounts straight away (while rendering); closing waits for the slide-out below.
+  if (visible && !mounted) setMounted(true);
 
   useEffect(() => {
     if (visible) {
-      setMounted(true);
       translateX.value = SCREEN_W;
       translateX.value = withSpring(0, OPEN_SPRING);
     } else if (mounted) {

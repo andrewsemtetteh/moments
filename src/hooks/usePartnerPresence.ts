@@ -52,9 +52,10 @@ export function usePartnerPresence(
     });
   }, [partnerId, setPartner]);
 
+  // Not connected (no space / partner yet): shown as offline below, no state to reset.
+  const connected = !!relationshipId && !!userId && !!partnerId;
   useEffect(() => {
     if (!relationshipId || !userId || !partnerId) {
-      setPresence({ isOnline: false, lastSeenAt: null });
       wasOnlineRef.current = false;
       return;
     }
@@ -86,9 +87,9 @@ export function usePartnerPresence(
       return { isOnline: false, lastSeenAt: null, statusHidden: true };
     }
     return {
-      isOnline: presence.isOnline,
-      lastSeenAt: presence.lastSeenAt ?? partnerLastSeen,
+      isOnline: connected && presence.isOnline,
+      lastSeenAt: (connected ? presence.lastSeenAt : null) ?? partnerLastSeen,
       statusHidden: false,
     };
-  }, [shareMine, partnerShares, presence.isOnline, presence.lastSeenAt, partnerLastSeen]);
+  }, [shareMine, partnerShares, connected, presence.isOnline, presence.lastSeenAt, partnerLastSeen]);
 }

@@ -94,6 +94,10 @@ interface UIState {
   showPartnerProfile: boolean;
   partnerLocationMap: PartnerLocationMapState | null;
   streakMilestoneCount: number | null;
+  /** A together milestone (days in a row you both checked in) being celebrated. */
+  togetherMilestoneCount: number | null;
+  openTogetherMilestone: (count: number) => void;
+  closeTogetherMilestone: () => void;
   streakSpark: { count: number; fromCount: number } | null;
   /** A trophy opened from chat or a notification (its id, or title on older cards). */
   trophyView: string | null;
@@ -174,6 +178,9 @@ export const useUIStore = create<UIState>((set, get) => ({
   showPartnerProfile: false,
   partnerLocationMap: null,
   streakMilestoneCount: null,
+  togetherMilestoneCount: null,
+  openTogetherMilestone: (togetherMilestoneCount) => set({ togetherMilestoneCount }),
+  closeTogetherMilestone: () => set({ togetherMilestoneCount: null }),
   streakSpark: null,
   trophyView: null,
   openTrophy: (trophyView) => set({ trophyView }),
@@ -348,6 +355,8 @@ interface OfflineState {
   hydrateQueue: (relationshipId: string) => Promise<void>;
   addToQueue: (item: Omit<ChatOfflineItem, 'createdAt'>, relationshipId?: string) => void;
   removeFromQueue: (id: string) => void;
+  /** One more failed try for a queued message. */
+  noteFailedAttempt: (id: string) => void;
   clearQueue: () => void;
   resetQueue: () => void;
 }
@@ -382,6 +391,13 @@ export const useOfflineStore = create<OfflineState>((set, get) => ({
   removeFromQueue: (id) => {
     set((s) => {
       const queue = s.queue.filter((q) => q.id !== id);
+      void persistQueue(s.relationshipId, queue);
+      return { queue };
+    });
+  },
+  noteFailedAttempt: (id) => {
+    set((s) => {
+      const queue = s.queue.map((q) => (q.id === id ? { ...q, attempts: (q.attempts ?? 0) + 1 } : q));
       void persistQueue(s.relationshipId, queue);
       return { queue };
     });

@@ -1,6 +1,6 @@
-import { format, setHours, setMilliseconds, setMinutes, setSeconds, startOfDay } from 'date-fns';
+import { format, setHours, setMilliseconds, setMinutes, setSeconds, startOfDay, startOfToday } from 'date-fns';
 import * as Haptics from '@/lib/haptics';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { TextInput } from '@/components/ui/ThemedTextInput';
 
@@ -92,20 +92,25 @@ export function AddEventSheet({
 
   const kind = PLAN_KINDS.find((k) => k.key === kindKey) ?? PLAN_KINDS[0];
 
-  useEffect(() => {
-    if (!visible) return;
-    const base = selectedDate ?? new Date();
-    setEventDate(base);
-    setEventTime(defaultEventTime(base));
-    setTitle(initialTitle);
-    const matched =
-      PLAN_KINDS.find((k) => k.titleHint && initialTitle === k.titleHint) ??
-      PLAN_KINDS.find((k) => k.type === initialType && k.key !== 'birthday') ??
-      PLAN_KINDS[0];
-    setKindKey(matched.key);
-    setDateOpen(false);
-    setTimeOpen(false);
-  }, [visible, selectedDate, initialType, initialTitle]);
+  // Fresh form each time it opens (reset while rendering, keyed on what it opened with).
+  const openKey = visible ? `${selectedDate?.getTime() ?? 'now'}|${initialType}|${initialTitle}` : null;
+  const [lastOpenKey, setLastOpenKey] = useState<string | null>(null);
+  if (openKey !== lastOpenKey) {
+    setLastOpenKey(openKey);
+    if (openKey !== null) {
+      const base = selectedDate ?? startOfToday();
+      setEventDate(base);
+      setEventTime(defaultEventTime(base));
+      setTitle(initialTitle);
+      const matched =
+        PLAN_KINDS.find((k) => k.titleHint && initialTitle === k.titleHint) ??
+        PLAN_KINDS.find((k) => k.type === initialType && k.key !== 'birthday') ??
+        PLAN_KINDS[0];
+      setKindKey(matched.key);
+      setDateOpen(false);
+      setTimeOpen(false);
+    }
+  }
 
   const resolvedDateTime = useMemo(() => {
     const day = startOfDay(eventDate);

@@ -1,7 +1,7 @@
 import { format, isToday, startOfDay } from 'date-fns';
 import { paperEdge } from '@/components/ui/primitives';
 import * as Haptics from '@/lib/haptics';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { PlanWheelColumn, useTimeWheelItems } from '@/components/calendar/plan/PlanWheelColumn';
@@ -14,6 +14,13 @@ import { useTheme } from '@/hooks/useTheme';
  * Plans can't start in the past: a time that's already gone moves to the next
  * quarter hour from now (a day in the future is left as it is).
  */
+/** Whether h:m today is already over (read from the clock outside render). */
+function timeHasPassedToday(h24: number, minute: number): boolean {
+  const at = new Date();
+  at.setHours(h24, minute, 0, 0);
+  return at.getTime() <= Date.now();
+}
+
 export function notInPast(when: Date): Date {
   const now = new Date();
   if (when.getTime() > now.getTime()) return when;
@@ -74,10 +81,13 @@ export function PlanDateModal({
 }) {
   const { colors } = useTheme();
   const [draft, setDraft] = useState(value);
-
-  useEffect(() => {
+  // Each time it opens, start from the current value (while rendering).
+  const openKey = visible ? value.getTime() : null;
+  const [lastOpenKey, setLastOpenKey] = useState<number | null>(null);
+  if (openKey !== lastOpenKey) {
+    setLastOpenKey(openKey);
     if (visible) setDraft(value);
-  }, [visible, value]);
+  }
 
   return (
     <DraggableSheet visible={visible} onClose={onClose} style={styles.sheet}>
@@ -121,17 +131,20 @@ export function PlanTimeModal({
   const [m, setM] = useState(minute);
   const [p, setP] = useState<'AM' | 'PM'>(period);
 
-  useEffect(() => {
-    if (!visible) return;
-    setH(hour12);
-    setM(minute);
-    setP(period);
-  }, [visible, hour12, minute, period]);
+  // Each time it opens, start from the current time value (while rendering).
+  const openKey = visible ? `${hour12}:${minute}${period}` : null;
+  const [lastOpenKey, setLastOpenKey] = useState<string | null>(null);
+  if (openKey !== lastOpenKey) {
+    setLastOpenKey(openKey);
+    if (visible) {
+      setH(hour12);
+      setM(minute);
+      setP(period);
+    }
+  }
 
-  const previewDate = new Date();
   const h24 = p === 'PM' ? (h === 12 ? 12 : h + 12) : h === 12 ? 0 : h;
-  previewDate.setHours(h24, m, 0, 0);
-  const passed = !!day && isToday(day) && previewDate.getTime() <= Date.now();
+  const passed = !!day && isToday(day) && timeHasPassedToday(h24, m);
 
   return (
     <DraggableSheet visible={visible} onClose={onClose} style={styles.sheet}>
@@ -146,7 +159,7 @@ export function PlanTimeModal({
       />
 
       <Text style={[styles.preview, { color: passed ? colors.textTertiary : colors.text }]}>
-        {format(previewDate, 'h:mm a')}
+        {`${h}:${String(m).padStart(2, '0')} ${p}`}
       </Text>
       {passed ? (
         <Text style={[styles.passed, { color: colors.error }]}>That time has already passed today</Text>

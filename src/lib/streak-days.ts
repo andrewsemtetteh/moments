@@ -37,6 +37,8 @@ export interface StreakDayCell {
   isToday: boolean;
   state: StreakDayState;
   tone?: StreakDayTone;
+  /** You both checked in that day (a "together" day): drawn with a double ring. */
+  together?: boolean;
 }
 
 export type StreakMonthDay = StreakDayCell;
@@ -81,10 +83,17 @@ export function buildActiveDaySet(status: StreakStatus, now = new Date()): Set<s
   }
 
   const todayKey = dayKey(now);
-  if (status.both_active_today) {
+  if (status.user_active_today) {
     days.add(todayKey);
   }
 
+  return days;
+}
+
+/** Days you both checked in (older servers: the couple's active days were exactly these). */
+export function buildTogetherDaySet(status: StreakStatus, now = new Date()): Set<string> {
+  const days = new Set<string>(status.together_days ?? (status.partner_streak === undefined ? status.active_days ?? [] : []));
+  if (status.both_active_today) days.add(dayKey(now));
   return days;
 }
 
@@ -108,7 +117,8 @@ function resolveDayState(
   if (isAfter(date, today)) return { state: 'future' };
 
   if (isToday) {
-    if (status.both_active_today) {
+    // Your streak: today's done once you've checked in.
+    if (status.user_active_today) {
       return { state: 'today-done', tone: 'success' };
     }
     if (status.current_streak > 0 && isStreakVisuallyAtRisk(status, now)) {
@@ -131,6 +141,7 @@ function toDayCell(
   status: StreakStatus,
   joinedDay: Date | null,
   now: Date,
+  togetherDays: Set<string> = new Set(),
 ): StreakDayCell {
   const { state, tone } = resolveDayState(date, today, activeDays, status, joinedDay, now);
   return {
@@ -140,6 +151,7 @@ function toDayCell(
     isToday: isSameDay(date, today),
     state,
     tone,
+    together: (state === 'completed' || state === 'today-done') && togetherDays.has(dayKey(date)),
   };
 }
 
@@ -153,12 +165,13 @@ export function buildStreakWeek(
   const weekStart = startOfWeek(today, WEEK_OPTS);
   const weekEnd = endOfWeek(today, WEEK_OPTS);
   const activeDays = buildActiveDaySet(status, now);
+  const togetherDays = buildTogetherDaySet(status, now);
   const joinedDay = parseJoinedDay(joinedAt);
 
   const cells: StreakDayCell[] = [];
   let cursor = weekStart;
   while (!isAfter(cursor, weekEnd)) {
-    cells.push(toDayCell(cursor, today, activeDays, status, joinedDay, now));
+    cells.push(toDayCell(cursor, today, activeDays, status, joinedDay, now, togetherDays));
     cursor = addDays(cursor, 1);
   }
 
@@ -200,7 +213,7 @@ export function buildMilestoneWeek(
         state: 'future',
       });
     } else if (!isBefore(cursor, streakStart)) {
-      if (isToday && status && !status.both_active_today) {
+      if (isToday && status && !status.user_active_today) {
         cells.push({
           date: cursor,
           weekdayLabel: format(cursor, 'EEE'),
@@ -266,10 +279,11 @@ export function buildStreakMonth(
   const monthStart = startOfMonth(month);
   const monthEnd = endOfMonth(month);
   const activeDays = buildActiveDaySet(status, now);
+  const togetherDays = buildTogetherDaySet(status, now);
   const joinedDay = parseJoinedDay(joinedAt);
 
   const days = eachDayOfInterval({ start: monthStart, end: monthEnd }).map((date) =>
-    toDayCell(date, today, activeDays, status, joinedDay, now),
+    toDayCell(date, today, activeDays, status, joinedDay, now, togetherDays),
   );
 
   return {

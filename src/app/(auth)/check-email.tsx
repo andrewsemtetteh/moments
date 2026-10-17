@@ -67,8 +67,15 @@ export default function CheckEmailScreen() {
       if (flow === 'recovery') {
         const { error } = await signIn.resetPasswordEmailCode.verifyCode({ code });
         if (error) throw error;
+        // Every outcome goes somewhere (it used to sit here unless a new password was needed).
         if (signIn.status === 'needs_new_password') {
           router.replace('/(auth)/reset-password');
+        } else if (signIn.status === 'complete') {
+          await signIn.finalize({ navigate: () => router.replace('/') });
+        } else {
+          Alert.alert('Almost there', 'Sign in with your email and password to carry on.', [
+            { text: 'OK', onPress: () => router.replace('/(auth)/login') },
+          ]);
         }
         return;
       }

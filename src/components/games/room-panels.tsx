@@ -364,7 +364,13 @@ export function GuessPanel({ state, tone }: PanelProps) {
   const [text, setText] = useState('');
   const item = state.items[state.round] as PromptItem | undefined;
 
-  useEffect(() => setText(''), [state.round, state.step]);
+  // A new round or step starts with an empty box (while rendering).
+  const stepKey = `${state.round}|${state.step}`;
+  const [lastStep, setLastStep] = useState(stepKey);
+  if (stepKey !== lastStep) {
+    setLastStep(stepKey);
+    setText('');
+  }
   if (!item) return null;
 
   const guesserId = state.players.find((p) => p.id !== state.turnId)?.id ?? '';
@@ -457,10 +463,13 @@ export function TwoTruthsPanel({ state, tone }: PanelProps) {
   const [lines, setLines] = useState(['', '', '']);
   const [lie, setLie] = useState<number | null>(null);
 
-  useEffect(() => {
+  // A new round starts blank (while rendering).
+  const [lastRound, setLastRound] = useState(state.round);
+  if (state.round !== lastRound) {
+    setLastRound(state.round);
     setLines(['', '', '']);
     setLie(null);
-  }, [state.round]);
+  }
 
   const statements = state.secret?.statements ?? [];
   const guessedRaw = Object.values(state.answers)[0];

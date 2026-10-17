@@ -1,6 +1,6 @@
 import { differenceInCalendarDays, parseISO } from 'date-fns';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { paperEdge } from '@/components/ui/primitives';
@@ -19,7 +19,14 @@ export default function TogetherSinceScreen() {
   const { colors } = useTheme();
   const userId = useAuthStore((s) => s.user?.id);
   const [date, setDate] = useState(formatAnniversaryForDb(new Date()));
-  useSavedAnswer(userId, preview, 'anniversaryDate', setDate);
+  // The wheels start on today: Continue waits until a date is actually picked (or loaded),
+  // so tapping straight through doesn't save today as your anniversary.
+  const [picked, setPicked] = useState(false);
+  const choose = useCallback((value: string) => {
+    setDate(value);
+    setPicked(true);
+  }, []);
+  useSavedAnswer(userId, preview, 'anniversaryDate', choose);
   const days = Math.max(0, differenceInCalendarDays(new Date(), parseISO(date)));
 
   const next = async (value: string | null) => {
@@ -34,14 +41,19 @@ export default function TogetherSinceScreen() {
       subtitle="For your anniversary countdown and the milestones we’ll celebrate with you."
       primaryLabel="Continue"
       onPrimary={() => void next(date)}
+      primaryDisabled={!picked}
       secondaryLabel="Skip for now"
       onSecondary={() => void next(null)}
       scroll={false}>
-      <AnniversaryWheelPicker value={date} onChange={setDate} surfaceColor={colors.surface} />
+      <AnniversaryWheelPicker value={date} onChange={choose} surfaceColor={colors.surface} />
       <View style={[styles.note, { backgroundColor: colors.surfaceElevated }, paperEdge(colors)]}>
         <CalendarCharacter size={64} />
         <Text style={[styles.noteText, { color: colors.text }]}>
-          {days > 0 ? `That’s ${days.toLocaleString()} days together. Nice.` : 'Day one. How exciting.'}
+          {!picked
+            ? 'Scroll to the day you got together.'
+            : days > 0
+              ? `That’s ${days.toLocaleString()} days together. Nice.`
+              : 'Day one. How exciting.'}
         </Text>
       </View>
     </OnboardingStepScreen>

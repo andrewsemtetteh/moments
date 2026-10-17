@@ -56,15 +56,21 @@ export function ChatCameraModal({ visible, onClose, onCapture }: Props) {
   const dragY = useSharedValue(0);
   const dragStyle = useAnimatedStyle(() => ({ transform: [{ translateY: dragY.value }] }));
 
+  // Closed: clear the photo and state for next time (while rendering, once per close)…
+  const [wasVisible, setWasVisible] = useState(visible);
+  if (wasVisible !== visible) {
+    setWasVisible(visible);
+    if (!visible) {
+      setPreviewUri(null);
+      setPreviewIsVideo(false);
+      setRecording(false);
+      setSending(false);
+      setCameraReady(false);
+    }
+  }
+  // …and a swipe-close leaves the page off-screen; start the next open in place.
   useEffect(() => {
-    if (visible) return;
-    // A swipe-close leaves the page off-screen; start the next open in place.
-    dragY.set(0);
-    setPreviewUri(null);
-    setPreviewIsVideo(false);
-    setRecording(false);
-    setSending(false);
-    setCameraReady(false);
+    if (!visible) dragY.set(0);
   }, [visible, dragY]);
 
   const close = () => {
@@ -216,7 +222,7 @@ export function ChatCameraModal({ visible, onClose, onCapture }: Props) {
         );
         return;
       }
-      dragY.value = withSpring(0, { damping: 30, stiffness: 260, velocity: e.velocityY });
+      dragY.set(withSpring(0, { damping: 30, stiffness: 260, velocity: e.velocityY }));
     });
   return (
     // No system slide: opens and closes instantly, like the moments camera

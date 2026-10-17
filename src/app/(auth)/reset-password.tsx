@@ -64,7 +64,9 @@ export default function ResetPasswordScreen() {
       centered
       primaryLabel={loading ? 'Saving…' : 'Update password'}
       onPrimary={() => void handleSave()}
-      busy={loading}>
+      busy={loading}
+      // Changed your mind: back to signing in (the reset just isn't finished).
+      onBack={() => router.replace('/(auth)/login')}>
       <PasswordInput
         variant="bold"
         label="New password"

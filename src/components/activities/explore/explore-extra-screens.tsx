@@ -1,6 +1,6 @@
 import * as Haptics from '@/lib/haptics';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Alert, Pressable, Text, View } from 'react-native';
 import { TextInput } from '@/components/ui/ThemedTextInput';
 
@@ -26,14 +26,17 @@ export function ComplimentJarScreen() {
   const [notes, setNotes] = useState<ComplimentNote[]>([]);
   const [drawn, setDrawn] = useState<ComplimentNote | null>(null);
 
-  const load = useCallback(async () => {
-    if (!relationship?.id) return;
-    setNotes(await fetchCompliments(relationship.id));
-  }, [relationship?.id]);
-
+  const relationshipId = relationship?.id;
   useEffect(() => {
-    void load();
-  }, [load]);
+    if (!relationshipId) return;
+    let cancelled = false;
+    void fetchCompliments(relationshipId).then((loaded) => {
+      if (!cancelled) setNotes(loaded);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [relationshipId]);
 
   const save = async () => {
     if (!text.trim() || !relationship?.id) return;

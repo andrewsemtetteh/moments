@@ -137,6 +137,10 @@ export async function openFromNotification(target: NotificationNavTarget, router
       }
       return;
 
+    // Opening the app is enough: a call that's still ringing shows its own screen.
+    case 'call':
+      return;
+
     // A trophy your partner unlocked opens that trophy; a quest (no id) opens Play.
     case 'achievement':
       if (target.relatedId && BADGES.some((b) => b.id === target.relatedId)) {

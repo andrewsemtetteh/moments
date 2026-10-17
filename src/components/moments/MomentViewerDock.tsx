@@ -1,5 +1,5 @@
 import { isToday } from 'date-fns';
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { Dimensions, Keyboard, Pressable, StyleSheet, Text, View } from 'react-native';
 import { TextInput } from '@/components/ui/ThemedTextInput';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
@@ -70,14 +70,15 @@ export function MomentViewerDock({
   const userReaction = getUserReactionEmoji(moment, userId);
   const [pickerOpen, setPickerOpen] = useState(() => !userReaction);
 
-  useEffect(() => {
-    // New moment (or viewer) — default open only when there's nothing reacted yet.
-    setPickerOpen(!getUserReactionEmoji(moment, userId));
-    // keyed on moment.id on purpose: the full `moment` object changes reference whenever anyone
-    // reacts, which would otherwise reopen the picker on every reaction instead of only on
-    // moment navigation.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [moment.id, userId]);
+  // New moment (or viewer): default open only when there's nothing reacted yet. Keyed on the
+  // moment's id on purpose (while rendering): the moment object changes whenever anyone
+  // reacts, which would otherwise reopen the picker on every reaction.
+  const pickerKey = `${moment.id}|${userId}`;
+  const [lastPickerKey, setLastPickerKey] = useState(pickerKey);
+  if (pickerKey !== lastPickerKey) {
+    setLastPickerKey(pickerKey);
+    setPickerOpen(!userReaction);
+  }
 
   // Not OR'd with `!userReaction` anymore — removing a reaction (tapping the same
   // emoji again) used to force this back open right after closing it, since that
@@ -93,8 +94,8 @@ export function MomentViewerDock({
   const [replyFocused, setReplyFocused] = useState(false);
   const dragY = useSharedValue(0);
 
+  // Keyboard.dismiss() blurs the focused reply box too (no ref needed from the gesture).
   const dismissReplyKeyboard = () => {
-    inputRef.current?.blur();
     Keyboard.dismiss();
   };
 
@@ -105,12 +106,12 @@ export function MomentViewerDock({
     .activeOffsetY([-6, 6])
     .failOffsetX([-14, 14])
     .onUpdate((event) => {
-      dragY.value = event.translationY > 0 ? event.translationY : 0;
+      dragY.set(event.translationY > 0 ? event.translationY : 0);
     })
     .onEnd((event) => {
       const shouldDismiss = event.translationY > 50 || event.velocityY > 600;
       if (shouldDismiss) runOnJS(dismissReplyKeyboard)();
-      dragY.value = withSpring(0, { damping: 26, stiffness: 300 });
+      dragY.set(withSpring(0, { damping: 26, stiffness: 300 }));
     });
 
   // Floating (the full-screen viewer): only this bar moves, riding the keyboard frame by frame, like a

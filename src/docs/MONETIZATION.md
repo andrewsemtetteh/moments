@@ -52,16 +52,15 @@ Limitations:
 
 ## 3.2 Plus Tier (Paid)
 
-Unlocks:
+Unlocks (what the app actually gates; keep the paywall's list in sync):
 
-* unlimited moments
-* unlimited chat media
-* full activity generator
-* full journal access
-* mood tracking history
-* full calendar system
-* expanded memory timeline
-* streak tracking system
+* unlimited moments (Free: 5 a day)
+* your whole moments history (Free: the last 12)
+* unlimited albums (Free: 3)
+* unlimited games and conversations (new AI-made ones, made for the couple)
+* live game nights with voice
+* restoring a broken streak (within 24 hours)
+* one plan for both partners
 
 ---
 
@@ -87,11 +86,12 @@ Adds:
 
 | Plan | Price | Trial | Shown |
 |---|---|---|---|
-| Yearly | $69.99/year ($5.83/month, $35 each, save 73%) | 7 days free | First, selected by default |
+| Yearly | $59.99/year ($5.00/month, $30 each, save 77%) | 7 days free | First, selected by default |
 | Monthly | $9.99/month | none (starts today) | Second |
-| Weekly | $4.99/week | 7 days free | Third |
+| Weekly | $4.99/week | $0.99 first week (paid intro offer) | Third |
 
-* One free trial per person (Apple / Google rule); after that, plans start straight away.
+* One introductory offer per person across the group (Apple / Google rule): the yearly free trial
+  or the weekly $0.99 first week. After that, plans start at full price.
 * The trial includes everything in Plus, AI included. AI has a monthly fair-use cap for every
   Plus couple, trial or paid (200 games / 400 questions a month), enforced on the server
   (`server/src/billing.ts`).
@@ -135,7 +135,7 @@ paywall experiments. No RevenueCat.
 
 * App: `src/lib/purchases.ts`. Identifies each person with Superwall by a UUID derived from their
   Clerk id (StoreKit only accepts a UUID as appAccountToken) and sets a `clerkUserId` attribute.
-  Prices, purchase and restore go through Superwall. Entitlement: `moments_unlimited`.
+  Prices, purchase and restore go through Superwall. Entitlement: `unlimited`.
 * Paywall: ours (`PaywallScreen`) by default. `EXPO_PUBLIC_PAYWALL=superwall` shows the dashboard
   paywall for the placement instead (`onboarding`, `settings`, `limit`, `moment`, `reminder`,
   `winback`), and falls back to ours when Superwall shows nothing.
@@ -150,7 +150,7 @@ paywall experiments. No RevenueCat.
    subscription group; optional `yearly_winback`. Android ids in `PRODUCT_IDS` use
    `subscriptionId:basePlanId`.
 2. Superwall: iOS + Android apps (bundle `com.vasemti.moments`), App Store Connect / Play service
-   credentials, the products, and an entitlement `moments_unlimited` on all of them.
+   credentials, the products, and an entitlement `unlimited` on all of them.
 3. App env: `EXPO_PUBLIC_SUPERWALL_IOS_API_KEY`, `EXPO_PUBLIC_SUPERWALL_ANDROID_API_KEY`
    (EAS environment variables for builds).
 4. Webhook: Superwall > Integrations > Webhooks, URL `https://<api>/webhooks/superwall`, then

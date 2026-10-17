@@ -22,6 +22,7 @@ const RELATIONSHIP_TABLES = [
   'analytics_events',
   'game_sessions',
   'streak_active_days',
+  'user_streak_days',
   'notification_dedup',
   'quiz_live_sessions',
   'couple_progress',
@@ -40,6 +41,10 @@ const USER_TABLES: { table: string; column: string }[] = [
   { table: 'journal_entries', column: 'user_id' },
   { table: 'pack_answers', column: 'user_id' },
   { table: 'billing_events', column: 'app_user_id' },
+  { table: 'user_streak_days', column: 'user_id' },
+  // Who invited whom: both sides go (the other person's credit has already been given).
+  { table: 'referrals', column: 'referred_user_id' },
+  { table: 'referrals', column: 'referrer_id' },
 ];
 
 /** Shared-space media lives under `${bucket}/${relationshipId}/…`; profile media under the user's id. */

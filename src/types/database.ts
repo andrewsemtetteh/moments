@@ -208,24 +208,44 @@ export interface Streak {
 }
 
 /** Live streak snapshot from get_streak_status RPC (includes at-risk + partner activity). */
+/**
+ * Streaks are individual (like Paired): each of you keeps your own with a daily check-in
+ * (a moment, a mood, or answering today's question). `current_streak`, `longest_streak`,
+ * `at_risk`, the restore fields and `active_days` are YOURS — what every screen shows.
+ * Your partner's streak and the together streak (days you both showed up) come alongside.
+ */
 export interface StreakStatus {
   relationship_id: string;
+  /** Your streak. */
   current_streak: number;
   longest_streak: number;
+  /** The last day you checked in (YYYY-MM-DD). */
   last_active_date: string | null;
+  /** Your streak ends tonight: you checked in yesterday, not yet today. */
   at_risk: boolean;
+  /** You both checked in today. */
   both_active_today: boolean;
   user_active_today: boolean;
   partner_active_today: boolean;
-  /** True only while streak is 0 and a prior streak was saved — before any new activity. */
+  /** True only while your streak is 0 and the one you lost can still be brought back. */
   can_restore_streak: boolean;
   restorable_streak: number | null;
-  /** ISO timestamp when the streak was lost; restore is valid for 24 hours after this. */
+  /** ISO timestamp when your streak was lost; restore is valid for 24 hours after this. */
   restorable_lost_at: string | null;
-  /** Calendar dates (YYYY-MM-DD) when both partners were active. */
+  /** Days (YYYY-MM-DD) you checked in. */
   active_days?: string[];
-  /** Calendar dates (YYYY-MM-DD) with any qualifying couple activity. */
+  /** Older servers: days with any couple activity. */
   activity_days?: string[];
+  /** Your partner's streak. */
+  partner_streak?: number;
+  partner_longest_streak?: number;
+  /** Your partner's streak ends tonight. */
+  partner_at_risk?: boolean;
+  /** Days in a row you BOTH checked in. */
+  together_streak?: number;
+  together_longest_streak?: number;
+  /** Days (YYYY-MM-DD) you both checked in. */
+  together_days?: string[];
 }
 
 export interface DailyChallenge {

@@ -8,7 +8,7 @@ import type { SubscriptionPlanId } from '@/constants/subscription';
 /**
  * Moments Plus billing through Superwall (StoreKit 2 / Google Play Billing, no RevenueCat).
  *
- * - One entitlement, `moments_unlimited`, attached in the Superwall dashboard to the weekly / yearly /
+ * - One entitlement, `unlimited`, attached in the Superwall dashboard to the weekly / yearly /
  *   monthly products (PRODUCT_IDS below).
  * - Superwall identifies each person by a UUID derived from their Clerk id (StoreKit only accepts a
  *   UUID as appAccountToken), plus a `clerkUserId` attribute. The Superwall webhook maps either back
@@ -19,7 +19,7 @@ import type { SubscriptionPlanId } from '@/constants/subscription';
  *   runs without billing (the paywall lets people carry on with Free).
  */
 
-export const PLUS_ENTITLEMENT = 'moments_unlimited';
+export const PLUS_ENTITLEMENT = 'unlimited';
 
 const API_KEY =
   Platform.OS === 'ios'
@@ -53,14 +53,22 @@ export const PAYWALL_SOURCE: 'native' | 'superwall' =
   process.env.EXPO_PUBLIC_PAYWALL === 'superwall' ? 'superwall' : 'native';
 
 /**
- * Store product ids for each plan. iOS: the App Store Connect product id. Android: Superwall's
- * `subscriptionId:basePlanId` form, e.g. `weekly:weekly-autorenew` (match the Play Console base plans).
+ * Store product ids for each plan, as set up in Superwall. iOS: the App Store Connect product id.
+ * Android: `subscriptionId:basePlanId:offer`, where `sw-auto` lets Superwall pick the best offer
+ * the person is eligible for (the free trial, until they've used it).
  */
-const PRODUCT_IDS: Record<SubscriptionPlanId, string> = {
-  weekly: 'weekly',
-  yearly: 'yearly',
-  monthly: 'monthly',
-};
+const PRODUCT_IDS: Record<SubscriptionPlanId, string> =
+  Platform.OS === 'android'
+    ? { weekly: 'weekly:weekly:sw-auto', yearly: 'yearly:yearly:sw-auto', monthly: 'monthly:monthly:sw-auto' }
+    : { weekly: 'weekly', yearly: 'yearly', monthly: 'monthly' };
+
+/** Plans whose introductory offer is free (mirrors `intro` in src/constants/subscription.ts). */
+const FREE_TRIAL_PLANS: SubscriptionPlanId[] = ['yearly'];
+
+/** Same store subscription (Android ids may come back with or without the base plan / offer parts). */
+function sameProduct(a: string, b: string): boolean {
+  return a === b || a.split(':')[0] === b.split(':')[0];
+}
 
 /**
  * The one time win back offer: a second yearly product whose introductory offer is the discounted
@@ -82,7 +90,9 @@ type PurchasesState = {
   perMonth: Partial<Record<SubscriptionPlanId, string>>;
   /** Each plan's price split between the two of you ("$35.00" on yearly). */
   perPerson: Partial<Record<SubscriptionPlanId, string>>;
-  /** Whether this account can still get the free trial (one per subscription group). */
+  /** Paid introductory prices ("$0.99" for weekly's first week), in the local currency. */
+  introPrices: Partial<Record<SubscriptionPlanId, string>>;
+  /** Whether this account can still get an introductory offer (one per subscription group). */
   trialEligible: boolean;
   /** The discounted first year, if the win back product exists in the store. */
   winbackPrice: string | null;
@@ -100,6 +110,7 @@ export const usePurchasesStore = create<PurchasesState>(() => ({
   perWeek: {},
   perMonth: {},
   perPerson: {},
+  introPrices: {},
   trialEligible: true,
   winbackPrice: null,
   zeroPrice: null,
@@ -122,7 +133,10 @@ function applySuperwallState({ subscriptionStatus, customerInfo }: SuperwallStat
     entitlement: active
       ? {
           active: true,
-          trial: current?.offerType === 'trial',
+          // Only a free intro is a trial: weekly's paid first week is a normal, paid period.
+          trial:
+            current?.offerType === 'trial' &&
+            FREE_TRIAL_PLANS.some((plan) => sameProduct(current.productId, PRODUCT_IDS[plan])),
           expiresAt: current?.expirationDate ?? null,
           willRenew: current?.willRenew ?? true,
         }
@@ -213,26 +227,29 @@ export async function loadPrices() {
   try {
     const plans = Object.keys(PRODUCT_IDS) as SubscriptionPlanId[];
     const products = await sdk().products([...plans.map((p) => PRODUCT_IDS[p]), WINBACK_PRODUCT_ID]);
-    const byId = new Map(products.map((p) => [p.productIdentifier, p]));
+    const find = (id: string) => products.find((p) => sameProduct(p.productIdentifier, id));
     const prices: PurchasesState['prices'] = {};
     const perWeek: PurchasesState['perWeek'] = {};
     const perMonth: PurchasesState['perMonth'] = {};
     const perPerson: PurchasesState['perPerson'] = {};
+    const introPrices: PurchasesState['introPrices'] = {};
     for (const plan of plans) {
-      const product = byId.get(PRODUCT_IDS[plan]);
+      const product = find(PRODUCT_IDS[plan]);
       if (!product) continue;
       prices[plan] = product.localizedPrice;
       if (product.weeklyPrice) perWeek[plan] = product.weeklyPrice;
       if (product.monthlyPrice) perMonth[plan] = product.monthlyPrice;
       const half = halfPrice(product.price, product.currencyCode, product.locale);
       if (half) perPerson[plan] = half;
+      // A paid intro offer (Superwall reports intro offers as the "trial" period).
+      if (product.trialPeriodPrice > 0) introPrices[plan] = product.localizedTrialPeriodPrice;
     }
     // The win back product's introductory price is the discounted first year.
-    const winback = byId.get(WINBACK_PRODUCT_ID);
+    const winback = find(WINBACK_PRODUCT_ID);
     const winbackPrice = winback && winback.trialPeriodPrice > 0 ? winback.localizedTrialPeriodPrice : null;
-    const any = byId.get(PRODUCT_IDS.yearly) ?? products[0];
+    const any = find(PRODUCT_IDS.yearly) ?? products[0];
     const zeroPrice = any ? formatMoney(0, any.currencyCode, any.locale) : null;
-    usePurchasesStore.setState({ prices, perWeek, perMonth, perPerson, winbackPrice, zeroPrice });
+    usePurchasesStore.setState({ prices, perWeek, perMonth, perPerson, introPrices, winbackPrice, zeroPrice });
   } catch (e) {
     console.warn('[purchases] prices failed', e);
   }

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { AnniversaryWheelPicker } from '@/components/onboarding/AnniversaryWheelPicker';
@@ -19,9 +19,13 @@ export function EditAnniversaryModal({ visible, value, saving = false, onClose, 
   const { colors } = useTheme();
   const [draft, setDraft] = useState(value);
 
-  useEffect(() => {
+  // Each time it opens, start from the saved date (while rendering).
+  const openKey = visible ? value : null;
+  const [lastOpenKey, setLastOpenKey] = useState<typeof value | null>(null);
+  if (openKey !== lastOpenKey) {
+    setLastOpenKey(openKey);
     if (visible) setDraft(value);
-  }, [visible, value]);
+  }
 
   return (
     <DraggableSheet visible={visible} onClose={onClose}>

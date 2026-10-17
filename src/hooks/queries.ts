@@ -14,7 +14,7 @@ import {
   getCachedDailyChallenge,
   setCachedDailyChallenge,
 } from '@/lib/daily-challenge-cache';
-import { localCalendarDate } from '@/lib/db-time';
+import { spaceCalendarDate } from '@/lib/db-time';
 import { backend } from '@/lib/backend';
 import * as api from '@/services/api';
 import { useAuthStore, useRelationshipStore } from '@/stores';
@@ -66,7 +66,7 @@ export function moodsQueryKey(relationshipId?: string) {
 }
 
 export function dailyChallengeQueryKey(relationshipId?: string, challengeDate?: string) {
-  return ['daily-challenge', relationshipId, challengeDate ?? localCalendarDate()] as const;
+  return ['daily-challenge', relationshipId, challengeDate ?? spaceCalendarDate()] as const;
 }
 
 export async function resolveDailyChallenge(relationshipId: string) {
@@ -516,12 +516,12 @@ export function useStreak() {
 export function useDailyChallenge() {
   const relationship = useRelationshipStore((s) => s.relationship);
   const queryClient = useQueryClient();
-  const [today, setToday] = useState(localCalendarDate);
+  const [today, setToday] = useState(() => spaceCalendarDate());
 
-  // Roll to a new query when the device local date changes (midnight).
+  // Roll to a new query when the couple's day changes (midnight where the space was made).
   useEffect(() => {
     const id = setInterval(() => {
-      const next = localCalendarDate();
+      const next = spaceCalendarDate();
       setToday((prev) => (prev === next ? prev : next));
     }, 30_000);
     return () => clearInterval(id);
@@ -832,8 +832,11 @@ export function useRealtimeSubscription(
     | 'daily_challenges',
 ) {
   const queryClient = useQueryClient();
+  // The latest client for the subscription's callbacks (kept in sync after render).
   const queryClientRef = useRef(queryClient);
-  queryClientRef.current = queryClient;
+  useEffect(() => {
+    queryClientRef.current = queryClient;
+  }, [queryClient]);
   const relationship = useRelationshipStore((s) => s.relationship);
 
   useEffect(() => {
@@ -897,7 +900,11 @@ export function useRealtimeSubscription(
           if (table === 'pack_answers') {
             qc.invalidateQueries({ queryKey: ['packAnswers', relationship.id] });
           }
-          if (table === 'moments') qc.invalidateQueries({ queryKey: ['moments', relationship.id] });
+          if (table === 'moments') {
+            qc.invalidateQueries({ queryKey: ['moments', relationship.id] });
+            // The "Moments" count on You.
+            qc.invalidateQueries({ queryKey: ['momentCount', relationship.id] });
+          }
           if (table === 'mood_logs') {
             qc.invalidateQueries({ queryKey: ['moods', relationship.id] });
             qc.invalidateQueries({ queryKey: ['moodHistory', relationship.id] });
@@ -1031,6 +1038,7 @@ export function useCreateMoment() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['moments', relationship?.id] });
+      queryClient.invalidateQueries({ queryKey: ['momentCount', relationship?.id] });
       queryClient.invalidateQueries({ queryKey: ['streak', relationship?.id] });
     },
   });
@@ -1045,6 +1053,7 @@ export function useDeleteMoments() {
     mutationFn: (momentIds: string[]) => api.deleteMoments(momentIds, user!.id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['moments', relationship?.id] });
+      queryClient.invalidateQueries({ queryKey: ['momentCount', relationship?.id] });
     },
   });
 }
@@ -1132,6 +1141,9 @@ export function useMomentReaction() {
   return useMutation({
     mutationFn: (p: { momentId: string; emoji: string }) =>
       api.toggleMomentReaction(p.momentId, user!.id, p.emoji),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['moments', relationship?.id] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['moments', relationship?.id] });
+      queryClient.invalidateQueries({ queryKey: ['momentCount', relationship?.id] });
+    },
   });
 }

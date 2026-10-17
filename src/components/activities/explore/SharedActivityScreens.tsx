@@ -9,7 +9,7 @@ import { WEEK_CHALLENGE } from '@/constants/activity-content';
 import { useSharedActivities } from '@/hooks/useSharedActivity';
 import { useTheme } from '@/hooks/useTheme';
 import { getFirstName } from '@/lib/avatar-initial';
-import { localCalendarDate } from '@/lib/db-time';
+import { localCalendarDate, spaceCalendarDate } from '@/lib/db-time';
 import * as Haptics from '@/lib/haptics';
 import { openChat } from '@/lib/router';
 import * as api from '@/services/api';
@@ -246,7 +246,8 @@ export function WeekChallengeScreen() {
 
   const row = rows[0];
   const week = weekOf(row);
-  const today = localCalendarDate();
+  // The couple's shared day (see spaceCalendarDate), so you're both on the same day's swap.
+  const today = spaceCalendarDate();
   const openDays = week ? Math.min(7, Math.max(1, differenceInCalendarDays(parseISO(today), parseISO(week.startedOn)) + 1)) : 0;
   const everyone = [me?.id, partner?.id].filter(Boolean) as string[];
   const finished =

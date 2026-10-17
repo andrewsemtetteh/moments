@@ -33,19 +33,25 @@ type QuestCelebration = Extract<Celebration, { kind: 'quest' }>;
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 const CONFETTI_COLORS = ['#FF6B8A', '#FFD54A', '#5B8DEF', '#3DBE7A', '#B48CFF', '#FF9F5A'];
 
+/** A fixed 0–1 "random" per piece and property: scattered like Math.random, but pure. */
+function scatter(index: number, salt: number): number {
+  const x = Math.sin((index + 1) * 12.9898 + salt * 78.233) * 43758.5453;
+  return x - Math.floor(x);
+}
+
 function Piece({ index, count }: { index: number; count: number }) {
   const t = useSharedValue(0);
   const spec = useMemo(() => {
-    const angle = (index / count) * Math.PI * 2 + Math.random() * 0.6;
-    const speed = 160 + Math.random() * 260;
+    const angle = (index / count) * Math.PI * 2 + scatter(index, 1) * 0.6;
+    const speed = 160 + scatter(index, 2) * 260;
     return {
       color: CONFETTI_COLORS[index % CONFETTI_COLORS.length],
       dx: Math.cos(angle) * speed,
       dy: Math.sin(angle) * speed - 140,
-      spin: (Math.random() - 0.5) * 900,
-      size: 7 + Math.random() * 7,
-      delay: Math.random() * 120,
-      round: Math.random() > 0.5,
+      spin: (scatter(index, 3) - 0.5) * 900,
+      size: 7 + scatter(index, 4) * 7,
+      delay: scatter(index, 5) * 120,
+      round: scatter(index, 6) > 0.5,
     };
   }, [index, count]);
 

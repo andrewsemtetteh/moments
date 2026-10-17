@@ -16,6 +16,8 @@ export interface ChatOfflineItem {
   type: 'message';
   payload: ChatOfflinePayload;
   createdAt: string;
+  /** Failed sends so far; the queue gives up after a few (see chat-offline-flush). */
+  attempts?: number;
 }
 
 const KEY_PREFIX = 'chat-offline-queue:';

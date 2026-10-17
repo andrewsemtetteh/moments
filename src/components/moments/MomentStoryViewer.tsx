@@ -134,7 +134,7 @@ export function MomentStoryViewer() {
     progressRef.current = 0;
     setReply('');
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-  }, [clearTimer, dismissViewer, activeIndex, moments.length]);
+  }, [clearTimer, dismissViewer, activeIndex, moments.length, setReply]);
 
   const goPrev = useCallback(() => {
     clearTimer();
@@ -144,16 +144,20 @@ export function MomentStoryViewer() {
     progressRef.current = 0;
     setReply('');
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-  }, [clearTimer, activeIndex]);
+  }, [clearTimer, activeIndex, setReply]);
 
-  useEffect(() => {
-    if (!viewer || !sessionKey) return;
+  // A new viewing session starts at its chosen moment, fresh (while rendering, once per session).
+  const [lastSession, setLastSession] = useState<typeof sessionKey | null>(null);
+  if (viewer && sessionKey && sessionKey !== lastSession) {
+    setLastSession(sessionKey);
     setIndex(viewer.startIndex);
     setProgress(0);
-    progressRef.current = 0;
     setReply('');
     setPaused(false);
     setLocalReactions({});
+  }
+  useEffect(() => {
+    if (viewer && sessionKey) progressRef.current = 0;
   }, [sessionKey, viewer]);
 
   useEffect(() => {

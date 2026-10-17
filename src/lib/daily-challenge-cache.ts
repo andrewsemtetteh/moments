@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import { localCalendarDate } from '@/lib/db-time';
+import { spaceCalendarDate } from '@/lib/db-time';
 import type { DailyChallenge } from '@/types/database';
 
 const KEY_PREFIX = 'daily_challenge_cache';
@@ -11,7 +11,7 @@ function storageKey(relationshipId: string, challengeDate: string) {
 
 export async function getCachedDailyChallenge(
   relationshipId: string,
-  challengeDate = localCalendarDate(),
+  challengeDate = spaceCalendarDate(),
 ): Promise<DailyChallenge | null> {
   try {
     const raw = await AsyncStorage.getItem(storageKey(relationshipId, challengeDate));
@@ -34,7 +34,7 @@ export async function setCachedDailyChallenge(challenge: DailyChallenge): Promis
 
 export async function clearCachedDailyChallenge(
   relationshipId: string,
-  challengeDate = localCalendarDate(),
+  challengeDate = spaceCalendarDate(),
 ): Promise<void> {
   await AsyncStorage.removeItem(storageKey(relationshipId, challengeDate));
 }

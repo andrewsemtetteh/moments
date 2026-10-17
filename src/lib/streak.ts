@@ -80,6 +80,12 @@ export function parseStreakStatus(raw: unknown): StreakStatus | null {
       typeof row.restorable_lost_at === 'string' ? row.restorable_lost_at : null,
     active_days: 'active_days' in row ? parseActiveDays(row.active_days) : undefined,
     activity_days: 'activity_days' in row ? parseActiveDays(row.activity_days) : undefined,
+    partner_streak: typeof row.partner_streak === 'number' ? row.partner_streak : undefined,
+    partner_longest_streak: typeof row.partner_longest_streak === 'number' ? row.partner_longest_streak : undefined,
+    partner_at_risk: row.partner_at_risk === true,
+    together_streak: typeof row.together_streak === 'number' ? row.together_streak : undefined,
+    together_longest_streak: typeof row.together_longest_streak === 'number' ? row.together_longest_streak : undefined,
+    together_days: 'together_days' in row ? parseActiveDays(row.together_days) : undefined,
   };
 }
 
@@ -93,25 +99,26 @@ export function streakSubtitle(status: StreakStatus, now = new Date()): string {
     return `Restore your ${status.restorable_streak}-day streak before starting over`;
   }
   if (status.current_streak <= 0) {
-    return 'Send a moment, message, or mood to start';
+    return 'Send a moment, share your mood or answer today’s question to start';
   }
-  if (isStreakVisuallyAtRisk(status, now)) {
-    return status.user_active_today
-      ? 'Waiting on your partner before midnight'
-      : 'Check in before midnight';
-  }
-  if (status.at_risk) {
-    return status.user_active_today
-      ? 'Waiting on your partner today'
-      : 'Check in today to keep it going';
-  }
-  if (status.both_active_today) {
-    return 'You both showed up today';
-  }
+  if (isStreakVisuallyAtRisk(status, now)) return 'Check in before midnight';
+  if (status.at_risk) return 'Check in today to keep it going';
+  if (status.both_active_today) return 'You both showed up today';
+  if (status.user_active_today) return 'You showed up today';
   if (status.longest_streak > status.current_streak) {
-    return `Best together: ${status.longest_streak} days`;
+    return `Your best: ${status.longest_streak} days`;
   }
-  return 'Keep it going together';
+  return 'Keep it going';
+}
+
+/** Your partner's streak (0 when they haven't one going, or on an older server). */
+export function partnerStreakCount(status: StreakStatus | null | undefined): number {
+  return Math.max(0, status?.partner_streak ?? 0);
+}
+
+/** Days in a row you both showed up (older servers: the couple streak itself). */
+export function togetherStreakCount(status: StreakStatus | null | undefined): number {
+  return Math.max(0, status?.together_streak ?? status?.current_streak ?? 0);
 }
 
 export function streakCountLabel(count: number): string {
@@ -136,12 +143,8 @@ export function streakCheerMessage(status: StreakStatus, now = new Date()): stri
   if (isStreakRestoreAvailable(status)) {
     return 'Your streak is on pause. Restore it with Plus or start a new one together.';
   }
-  if (status.current_streak <= 0) return 'Check in together to begin';
-  if (isStreakVisuallyAtRisk(status, now)) {
-    return status.user_active_today
-      ? 'Waiting on your partner before midnight'
-      : 'Check in before midnight';
-  }
+  if (status.current_streak <= 0) return 'Check in today to begin';
+  if (isStreakVisuallyAtRisk(status, now)) return 'Check in before midnight';
   if (status.both_active_today) return "You're on fire! 🔥";
   if (status.current_streak >= 7) return "You're on fire! 🔥";
   return 'Keep showing up for each other';
@@ -174,7 +177,7 @@ export function streakEndLine(status: StreakStatus, variant: StreakEndVariant): 
     return `${label} · Restore the day, then streak`;
   }
   if (variant === 'at-risk') {
-    return status.user_active_today ? 'Check in with your partner today' : 'Check in today';
+    return 'Check in today';
   }
   return 'Streak ended · Start again';
 }

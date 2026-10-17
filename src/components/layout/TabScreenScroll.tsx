@@ -1,3 +1,4 @@
+import { useIsFocused } from 'expo-router';
 import { ReactNode, useEffect, useImperativeHandle, useRef, useState, type Ref } from 'react';
 import {
   Keyboard,
@@ -5,6 +6,7 @@ import {
   ScrollView,
   StyleSheet,
   TextInput,
+  View,
   type ScrollViewProps,
   type StyleProp,
   type ViewStyle,
@@ -28,8 +30,8 @@ const FIELD_GAP = 24;
  * left a much bigger empty area than intended).
  *
  * Typing in a field on the page (today's question, for one) keeps it above the
- * keyboard: iOS insets and scrolls natively; Android gets the keyboard's height
- * as extra room and a scroll to the focused field.
+ * keyboard: the page gets the keyboard's height as extra room and a scroll to the
+ * focused field (on both platforms, only for this page's own fields).
  */
 export function TabScreenScroll({ children, contentContainerStyle, style, ref, ...scrollProps }: Props) {
   const tabBarInset = useTabBarInset();
@@ -37,24 +39,46 @@ export function TabScreenScroll({ children, contentContainerStyle, style, ref, .
   useImperativeHandle(ref, () => scrollRef.current as ScrollView);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const offsetY = useRef(0);
+  // Tab pages stay mounted under Chat, Moments, sheets… and used to make room for those
+  // screens' keyboards too. When that keyboard closed elsewhere the room could stay
+  // (iOS's automatic insets sometimes never reset; Android could miss the hide), leaving
+  // Home with a huge blank area to scroll into. Now only this page's own typing, while
+  // it's on screen, makes room, and any leftover is cleared when the page shows again.
+  const focused = useIsFocused();
+  const focusedRef = useRef(focused);
+  const [lastFocused, setLastFocused] = useState(focused);
+  if (lastFocused !== focused) {
+    setLastFocused(focused);
+    setKeyboardHeight(0);
+  }
+  useEffect(() => {
+    focusedRef.current = focused;
+  }, [focused]);
 
   useEffect(() => {
-    if (Platform.OS !== 'android') return;
-    const show = Keyboard.addListener('keyboardDidShow', (e) => {
-      const height = e.endCoordinates.height;
-      setKeyboardHeight(height);
-      // Bring the focused field into view, just above the keyboard.
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const show = Keyboard.addListener(showEvent, (e) => {
+      if (!focusedRef.current) return;
       const field = TextInput.State.currentlyFocusedInput();
-      if (!field) return;
+      // The scroll view is a native view: it can measure where it sits on screen.
+      const scroll = scrollRef.current as unknown as View | null;
+      if (!field || !scroll) return;
       requestAnimationFrame(() => {
-        field.measureInWindow((_x, y, _w, h) => {
-          const visibleBottom = e.endCoordinates.screenY - FIELD_GAP;
-          const overlap = y + h - visibleBottom;
-          if (overlap > 0) scrollRef.current?.scrollTo({ y: offsetY.current + overlap, animated: true });
+        scroll.measureInWindow((_sx, sy, _sw, sh) => {
+          field.measureInWindow((_x, y, _w, h) => {
+            // Only a field on this page (inside this scroll view on screen).
+            if (y + h < sy || y > sy + sh) return;
+            setKeyboardHeight(e.endCoordinates.height);
+            // Bring it into view, just above the keyboard.
+            const visibleBottom = e.endCoordinates.screenY - FIELD_GAP;
+            const overlap = y + h - visibleBottom;
+            if (overlap > 0) scrollRef.current?.scrollTo({ y: offsetY.current + overlap, animated: true });
+          });
         });
       });
     });
-    const hide = Keyboard.addListener('keyboardDidHide', () => setKeyboardHeight(0));
+    const hide = Keyboard.addListener(hideEvent, () => setKeyboardHeight(0));
     return () => {
       show.remove();
       hide.remove();
@@ -76,7 +100,6 @@ export function TabScreenScroll({ children, contentContainerStyle, style, ref, .
         // While typing, the keyboard (not the tab bar) is what sits at the bottom.
         { paddingBottom: keyboardHeight > 0 ? keyboardHeight + FIELD_GAP : tabBarInset },
       ]}
-      automaticallyAdjustKeyboardInsets
       keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
       nestedScrollEnabled
       keyboardShouldPersistTaps="handled"

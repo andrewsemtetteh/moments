@@ -140,22 +140,26 @@ export function MomentCreatorModal() {
 
   const partnerName = getFirstName(partner?.name) ?? 'your partner';
 
-  useEffect(() => {
-    if (!visible) return;
-    setDraft({ type: 'photo' });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visible]);
+  // Opening starts a fresh photo; closing puts the camera back to the front, flash off
+  // (while rendering, once per open/close).
+  const [wasVisible, setWasVisible] = useState(visible);
+  if (wasVisible !== visible) {
+    setWasVisible(visible);
+    if (visible) {
+      setDraft({ type: 'photo' });
+    } else {
+      setFacing('front');
+      setFlash('off');
+      setCameraReady(false);
+    }
+  }
 
-  useEffect(() => {
-    if (visible) return;
-    setFacing('front');
-    setFlash('off');
+  // Switching cameras: wait for the new one to be ready (while rendering).
+  const [readyFor, setReadyFor] = useState(facing);
+  if (readyFor !== facing) {
+    setReadyFor(facing);
     setCameraReady(false);
-  }, [visible]);
-
-  useEffect(() => {
-    setCameraReady(false);
-  }, [facing]);
+  }
 
   const resetPreview = () => {
     setPreviewUri(null);
@@ -282,12 +286,18 @@ export function MomentCreatorModal() {
       const mediaUrl = await api.uploadMomentMedia(path, mediaUri, contentType);
 
       const pin = addLocation && pinnedPlace ? pinnedPlace : null;
-      await createMoment.mutateAsync({
-        type,
-        media_url: mediaUrl,
-        latitude: pin?.latitude ?? null,
-        longitude: pin?.longitude ?? null,
-      });
+      try {
+        await createMoment.mutateAsync({
+          type,
+          media_url: mediaUrl,
+          latitude: pin?.latitude ?? null,
+          longitude: pin?.longitude ?? null,
+        });
+      } catch (e) {
+        // The file went up but the moment didn't: don't leave the file behind.
+        void api.discardMomentUpload(mediaUrl);
+        throw e;
+      }
       if (pin) void rememberPlaceSuggestion(relationship.id, pin.latitude, pin.longitude, pin.label);
       await api.trackEvent(relationship.id, user.id, 'moment_created', { type });
       void usePlayProgressStore.getState().award(
@@ -300,6 +310,11 @@ export function MomentCreatorModal() {
       resetPreview();
       setSentNotice(true);
     } catch (error) {
+      // Over the free plan's moments today (the server checks too): offer Plus, not an error.
+      if ((error as { code?: string } | null)?.code === 'PLUS_REQUIRED') {
+        requirePlus('Unlimited daily moments');
+        return;
+      }
       Alert.alert(
         'Could not send moment',
         toUserFacingNetworkError(error, 'Please check your connection and try again.').message,

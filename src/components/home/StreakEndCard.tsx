@@ -60,9 +60,12 @@ export function StreakEndCard({ status }: StreakEndCardProps) {
   const [endsInMs, setEndsInMs] = useState(() => msUntilLocalMidnight());
   const [nowTick, setNowTick] = useState(() => Date.now());
 
-  useEffect(() => {
+  // A different streak end shows again, even if the last one was dismissed (while rendering).
+  const [lastDismissKey, setLastDismissKey] = useState(dismissKey);
+  if (dismissKey !== lastDismissKey) {
+    setLastDismissKey(dismissKey);
     setDismissedKey(null);
-  }, [dismissKey]);
+  }
 
   const variant = getStreakEndVariant(effectiveStatus);
   const isAtRisk = variant === 'at-risk';

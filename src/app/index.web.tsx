@@ -1,6 +1,5 @@
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
-import { Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Platform, ScrollView, StyleSheet, View } from 'react-native';
 
 import { AnimatedIcon } from '@/components/animated-icon.web';
 import { FeatureCard } from '@/components/feature-card';
@@ -14,7 +13,6 @@ import { useWebViewportWidth } from '@/hooks/use-web-viewport-width';
 
 export default function HomeScreen() {
   const theme = useTheme();
-  const router = useRouter();
   const width = useWebViewportWidth();
   const isNarrow = width < 760;
 
@@ -73,14 +71,6 @@ export default function HomeScreen() {
                 body="A shared calendar, date ideas, and reminders that both of you see."
               />
             </View>
-
-            <Pressable
-              onPress={() => router.push('/explore')}
-              style={({ pressed }) => [styles.moreLink, pressed && styles.pressed]}>
-              <ThemedText type="linkPrimary" themeColor="accent" style={styles.moreLinkText}>
-                See everything Moments does
-              </ThemedText>
-            </Pressable>
 
             {Platform.OS === 'web' && (
               <ThemedText type="small" themeColor="textTertiary" style={styles.tagline}>

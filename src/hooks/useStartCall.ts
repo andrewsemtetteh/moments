@@ -2,7 +2,9 @@ import { Alert } from 'react-native';
 
 import { callManager } from '@/lib/call-manager';
 import type { CallMode } from '@/lib/call-types';
+import { getFirstName } from '@/lib/avatar-initial';
 import { isWebRTCAvailable } from '@/lib/webrtc-native';
+import { sendPartnerNotification } from '@/services/api';
 import { useAuthStore, useCallStore, useRelationshipStore } from '@/stores';
 
 export function useStartCall() {
@@ -34,6 +36,16 @@ export function useStartCall() {
       setPhase('outgoing');
       setError(null);
       await callManager.startCall(mode);
+      // Their app may be closed: a call push brings them in while it's still ringing.
+      const relationshipId = useRelationshipStore.getState().relationship?.id;
+      if (relationshipId) {
+        void sendPartnerNotification(
+          relationshipId,
+          partner.id,
+          'call',
+          `${getFirstName(user.name) ?? 'Your partner'} is ${mode === 'video' ? 'video ' : ''}calling you. Tap to answer.`,
+        ).catch(() => undefined);
+      }
     } catch (e) {
       reset();
       Alert.alert('Call failed', e instanceof Error ? e.message : 'Please try again');

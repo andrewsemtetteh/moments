@@ -45,10 +45,6 @@ export const shouldShowStreakAtRiskCard = isStreakVisuallyAtRisk;
 export function needsStreakReminders(
   status: Pick<StreakStatus, 'at_risk' | 'current_streak' | 'user_active_today' | 'both_active_today'>,
 ): boolean {
-  return (
-    status.at_risk &&
-    status.current_streak > 0 &&
-    !status.user_active_today &&
-    !status.both_active_today
-  );
+  // Your streak, your check-in: reminded only until you've checked in today.
+  return status.at_risk && status.current_streak > 0 && !status.user_active_today;
 }

@@ -28,6 +28,13 @@ export async function registerForPushNotifications(): Promise<string | null> {
         name: 'Moments',
         importance: Notifications.AndroidImportance.DEFAULT,
       });
+      // Calls: loud and on screen (heads-up), like a phone ringing.
+      await Notifications.setNotificationChannelAsync('calls', {
+        name: 'Calls',
+        importance: Notifications.AndroidImportance.MAX,
+        sound: 'default',
+        vibrationPattern: [0, 400, 250, 400],
+      });
     }
 
     const existing = await Notifications.getPermissionsAsync();
@@ -49,6 +56,13 @@ export async function requestPushNotificationPermission(): Promise<boolean> {
       await Notifications.setNotificationChannelAsync('default', {
         name: 'Moments',
         importance: Notifications.AndroidImportance.DEFAULT,
+      });
+      // Calls: loud and on screen (heads-up), like a phone ringing.
+      await Notifications.setNotificationChannelAsync('calls', {
+        name: 'Calls',
+        importance: Notifications.AndroidImportance.MAX,
+        sound: 'default',
+        vibrationPattern: [0, 400, 250, 400],
       });
     }
 
