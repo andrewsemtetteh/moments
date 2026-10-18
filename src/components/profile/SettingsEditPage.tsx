@@ -14,7 +14,7 @@ import * as Haptics from '@/lib/haptics';
 import { FullScreenPage, PageFooter } from '@/components/layout/FullScreenPage';
 import { DraggableSheet } from '@/components/ui/DraggableSheet';
 import { Icon } from '@/components/ui/Icon';
-import { PrimaryButton } from '@/components/ui/primitives';
+import { PrimaryButton, insetCardStyle, pressedRowColor, separatorColor } from '@/components/ui/primitives';
 import { useTheme } from '@/hooks/useTheme';
 
 /**
@@ -77,12 +77,8 @@ export function SettingsField({ label, ...input }: TextInputProps & { label: str
         {...input}
         style={[
           styles.input,
-          {
-            color: colors.text,
-            backgroundColor: colors.surface,
-            borderColor: colors.border,
-            borderWidth: colors.boldBorder ? 2 : StyleSheet.hairlineWidth,
-          },
+          { color: colors.text },
+          insetCardStyle(colors, 'page'),
         ]}
       />
     </View>
@@ -119,14 +115,7 @@ export function SettingsChoiceSheet<T extends string>({
       <Text style={[styles.sheetTitle, { color: colors.text }]}>{title}</Text>
       {hint ? <Text style={[styles.sheetHint, { color: colors.textSecondary }]}>{hint}</Text> : null}
       <View
-        style={[
-          styles.list,
-          {
-            backgroundColor: colors.surface,
-            borderColor: colors.border,
-            borderWidth: colors.boldBorder ? 2 : 0,
-          },
-        ]}>
+        style={[styles.list, insetCardStyle(colors, 'sheet')]}>
         {options.map((option, i) => {
           const selected = option.value === value;
           const busy = option.value === savingValue;
@@ -144,10 +133,10 @@ export function SettingsChoiceSheet<T extends string>({
               style={({ pressed }) => [
                 styles.option,
                 i < options.length - 1 && {
-                  borderBottomWidth: StyleSheet.hairlineWidth,
-                  borderBottomColor: colors.border,
+                  borderBottomWidth: 1,
+                  borderBottomColor: separatorColor(colors),
                 },
-                pressed && { backgroundColor: colors.surfaceElevated },
+                pressed && { backgroundColor: pressedRowColor(colors) },
               ]}>
               <Text style={[styles.optionLabel, { color: colors.text }, selected && styles.optionLabelOn]}>
                 {option.label}

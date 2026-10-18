@@ -161,10 +161,10 @@ export function MoodHistoryModal() {
               <Pressable
                 key={key}
                 onPress={() => selectTab(key)}
-                style={[styles.segmentItem, active && { backgroundColor: colors.text }]}
+                style={[styles.segmentItem, active && { backgroundColor: colors.accent }]}
                 accessibilityRole="tab"
                 accessibilityState={{ selected: active }}>
-                <Text style={[styles.segmentText, { color: active ? colors.background : colors.textSecondary }]}>
+                <Text style={[styles.segmentText, { color: active ? colors.onAccent : colors.textSecondary }]}>
                   {key === 'overview' ? 'Overview' : 'Timeline'}
                 </Text>
               </Pressable>
@@ -184,7 +184,7 @@ export function MoodHistoryModal() {
                 onPress={() => selectFilter(item.key)}
                 style={[
                   styles.filterChip,
-                  { backgroundColor: active ? colors.text : colors.surface },
+                  { backgroundColor: active ? colors.accent : colors.surface },
                   disabled && styles.filterChipDisabled,
                 ]}
                 accessibilityRole="button"
@@ -192,7 +192,7 @@ export function MoodHistoryModal() {
                 <Text
                   style={[
                     styles.filterText,
-                    { color: active ? colors.background : colors.text },
+                    { color: active ? colors.onAccent : colors.text },
                     disabled && { color: colors.textTertiary },
                   ]}>
                   {item.label}

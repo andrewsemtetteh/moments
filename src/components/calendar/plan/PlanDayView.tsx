@@ -2,7 +2,7 @@ import { format } from 'date-fns';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Icon } from '@/components/ui/Icon';
-import { Avatar, paperEdge } from '@/components/ui/primitives';
+import { Avatar, separatorColor, cardSurface } from '@/components/ui/primitives';
 import { useTheme } from '@/hooks/useTheme';
 import { getFirstName } from '@/lib/avatar-initial';
 import { displayTitle, isHiddenFrom, planOwner } from '@/lib/plan-day';
@@ -91,7 +91,7 @@ export function PlanDayView({
           }
         />
       ) : (
-      <View style={[styles.list, { backgroundColor: colors.surface }, paperEdge(colors)]}>
+      <View style={[styles.list, cardSurface(colors)]}>
         {(
           sorted.map((event, i) => {
             const hidden = isHiddenFrom(event, me?.id);
@@ -109,7 +109,7 @@ export function PlanDayView({
                 accessibilityLabel={`${format(at, 'h:mm a')}, ${displayTitle(event, me?.id)}, ${who.label}`}
                 style={({ pressed }) => [
                   styles.row,
-                  i > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },
+                  i > 0 && { borderTopWidth: 1, borderTopColor: separatorColor(colors) },
                   pressed && styles.pressed,
                 ]}>
                 <View style={styles.time}>

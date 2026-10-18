@@ -341,6 +341,19 @@ export function paperEdge(colors: ThemeColors, width = 2): ViewStyle | null {
   return colors.boldBorder ? { borderWidth: width, borderColor: colors.border } : null;
 }
 
+/**
+ * A card's edge, as on the Settings cards: Paper / Colour's 2pt line, the soft themes' crisp 1pt
+ * edge in the theme's border colour.
+ */
+export function cardEdge(colors: ThemeColors): { borderWidth: number; borderColor: string } {
+  return { borderWidth: colors.boldBorder ? 2 : colors.sticker ? 1 : 0, borderColor: colors.border };
+}
+
+/** A whole card as on the Settings page: the theme's surface and that edge. */
+export function cardSurface(colors: ThemeColors): { backgroundColor: string; borderWidth: number; borderColor: string } {
+  return { backgroundColor: colors.surface, ...cardEdge(colors) };
+}
+
 export function colorWithAlpha(hex: string, alpha: number) {
   const h = hex.replace('#', '');
   if (h.length !== 6) return hex;
@@ -356,6 +369,37 @@ export function colorWithAlpha(hex: string, alpha: number) {
  */
 export function separatorColor(colors: { text: string; isDark: boolean }) {
   return colorWithAlpha(colors.text, colors.isDark ? 0.18 : 0.12);
+}
+
+/** A card or field outline you can actually see: the bold border on outlined themes, else soft ink. */
+export function outlineColor(colors: { text: string; isDark: boolean; border: string; boldBorder?: boolean }) {
+  return colors.boldBorder ? colors.border : colorWithAlpha(colors.text, colors.isDark ? 0.22 : 0.16);
+}
+
+/**
+ * A card inside a drawer (or a field on a page), theme aware. In a drawer it takes the
+ * page's own background, so it stands apart from the drawer's surface; on a page it takes
+ * the surface. Always with a visible outline (bold on outlined themes).
+ */
+export function insetCardStyle(
+  colors: { text: string; isDark: boolean; border: string; boldBorder?: boolean; background: string; surface: string },
+  on: 'sheet' | 'page' = 'sheet',
+) {
+  return {
+    backgroundColor: on === 'sheet' ? colors.background : colors.surface,
+    borderColor: outlineColor(colors),
+    borderWidth: colors.boldBorder ? 2 : 1,
+  };
+}
+
+/** The empty part of a progress bar: the theme's ink, a little stronger than a separator. */
+export function trackColor(colors: { text: string; isDark: boolean }) {
+  return colorWithAlpha(colors.text, colors.isDark ? 0.2 : 0.13);
+}
+
+/** A row being pressed inside such a card: a light wash of the theme's ink. */
+export function pressedRowColor(colors: { text: string; isDark: boolean }) {
+  return colorWithAlpha(colors.text, colors.isDark ? 0.1 : 0.06);
 }
 
 export type { ThemeColors };

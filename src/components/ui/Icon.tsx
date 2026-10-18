@@ -43,6 +43,7 @@ export type IconName =
   | 'sparkles'
   | 'sync'
   | 'paperPlane'
+  | 'trophy'
   | 'link'
   | 'bulb'
   | 'question'
@@ -141,6 +142,8 @@ const ICON_MAP: Record<IconName, { outline: IoniconName; filled: IoniconName }> 
   lock: { outline: 'lock-closed-outline', filled: 'lock-closed' },
   time: { outline: 'time-outline', filled: 'time' },
   sparkles: { outline: 'sparkles-outline', filled: 'sparkles' },
+  /** Trophies (the Play trophy shelf and your progress). */
+  trophy: { outline: 'trophy-outline', filled: 'trophy' },
   /** A paper plane flying up and to the right (about 2 o'clock): sending a nudge. */
   paperPlane: { outline: 'paper-plane-outline', filled: 'paper-plane' },
   /** Answers that matched, being in sync. */

@@ -3,7 +3,7 @@ import { useEffect, useRef } from 'react';
 import { useStreak } from '@/hooks/queries';
 import { hasSeenStreakMilestone } from '@/lib/streak-milestone-storage';
 import { isStreakMilestone } from '@/lib/streak-milestones';
-import { useRelationshipStore, useUIStore } from '@/stores';
+import { isFullScreenLayerOpen, useRelationshipStore, useUIStore } from '@/stores';
 
 const OPEN_DELAY_MS = 900;
 
@@ -12,13 +12,13 @@ export function StreakMilestoneSync() {
   const relationshipId = useRelationshipStore((s) => s.relationship?.id);
   const { data: streak } = useStreak();
   const openStreakMilestone = useUIStore((s) => s.openStreakMilestone);
-  const streakMilestoneCount = useUIStore((s) => s.streakMilestoneCount);
-  const showPaywall = useUIStore((s) => s.showPaywall);
+  // Waits for anything full-screen to close (e.g. the camera you just sent a moment from).
+  const busy = useUIStore(isFullScreenLayerOpen);
   const lastCheckedRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (!relationshipId || !streak || streak.current_streak <= 0) return;
-    if (showPaywall || streakMilestoneCount != null) return;
+    if (busy) return;
 
     const count = streak.current_streak;
     if (!isStreakMilestone(count)) return;
@@ -43,8 +43,7 @@ export function StreakMilestoneSync() {
     relationshipId,
     streak,
     openStreakMilestone,
-    streakMilestoneCount,
-    showPaywall,
+    busy,
   ]);
 
   return null;

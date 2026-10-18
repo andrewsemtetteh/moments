@@ -5,6 +5,7 @@ import { Dimensions, Pressable, ScrollView, StyleSheet, Text, View } from 'react
 import { LocationMapPreview, type MapMarker } from '@/components/moments/LocationMapPreview';
 import { MomentSquircle } from '@/components/moments/MomentSquircle';
 import { Icon } from '@/components/ui/Icon';
+import { cardSurface } from '@/components/ui/primitives';
 import { useTheme } from '@/hooks/useTheme';
 import type { MomentPlace } from '@/lib/moment-places';
 import { momentChrome } from '@/lib/moment-theme';
@@ -29,7 +30,7 @@ export function OurMapCard({ places, onOpen }: { places: MomentPlace[]; onOpen: 
       accessibilityLabel="Open our map"
       style={({ pressed }) => [
         styles.card,
-        { backgroundColor: chrome.surfaceSoft, borderColor: chrome.border },
+        cardSurface(colors),
         pressed && styles.pressed,
       ]}>
       <View style={[styles.cardIcon, { backgroundColor: chrome.accentSoft }]}>

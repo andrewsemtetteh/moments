@@ -7,7 +7,7 @@ import { FREE_DAILY_MOMENTS, FREE_TIMELINE_MOMENTS } from '@/constants/design-sy
  * paywall once Superwall loads them; these are the fallbacks and the basis for the per week maths.
  */
 export const WEEKLY_PRICE_USD = 4.99;
-export const YEARLY_PRICE_USD = 59.99;
+export const YEARLY_PRICE_USD = 69.99;
 export const MONTHLY_PRICE_USD = 9.99;
 
 /** Free trial on yearly only. Set the same introductory offer on the store product. */
@@ -49,7 +49,7 @@ export const PER_WEEK_USD: Record<SubscriptionPlanId, number> = {
 /** What a month costs on yearly, for "$5.83/month" under the yearly price. */
 export const YEARLY_PER_MONTH_USD = roundUsd(YEARLY_PRICE_USD / 12);
 
-/** Yearly vs paying weekly all year (59.99 vs 259.48 → 77%). */
+/** Yearly vs paying weekly all year (69.99 vs 259.48 → 73%). */
 export const YEARLY_SAVING_PERCENT = Math.round((1 - YEARLY_PRICE_USD / (WEEKLY_PRICE_USD * WEEKS_PER_YEAR)) * 100);
 
 /** How a plan starts for someone who hasn't had an introductory offer yet (one per person). */

@@ -16,6 +16,16 @@ export type ChatAttachment =
       title: string;
       sub: string;
     }
+  /** A message about a plan, sent from the plan's page: the plan as a card, the words under it. */
+  | {
+      type: 'plan';
+      planId: string;
+      title: string;
+      /** When the plan is (ISO). */
+      at: string;
+      location?: string;
+      reply?: string;
+    }
   /** A reply or reaction to your partner's answer in a Play pack (Paired-style). */
   | {
       type: 'play_answer';
@@ -55,6 +65,8 @@ export function getAttachmentPreviewText(attachment: ChatAttachment): string {
       return `🎮 You both finished “${attachment.title}”`;
     case 'achievement':
       return attachment.kind === 'quest' ? `${attachment.emoji} Quest complete: ${attachment.title}` : `🏆 Trophy unlocked: ${attachment.title}`;
+    case 'plan':
+      return attachment.reply ? `📅 ${attachment.reply}` : `📅 ${attachment.title}`;
     case 'play_answer':
       return attachment.reaction
         ? `${attachment.reaction} on “${attachment.question}”`

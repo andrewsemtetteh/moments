@@ -125,8 +125,9 @@ export function MoodSnapshot({ moods, onSelectMood, onViewHistory }: MoodSnapsho
         styles.container,
         {
           backgroundColor: colors.tints.blush,
+          // Same edge as the Settings cards: Paper's 2pt line, a crisp 1pt on soft themes, none otherwise.
           borderColor: colors.border,
-          borderWidth: colors.boldBorder ? 2 : StyleSheet.hairlineWidth,
+          borderWidth: colors.boldBorder ? 2 : colors.sticker ? 1 : 0,
         },
       ]}>
       <View style={styles.headerRow}>
@@ -189,8 +190,13 @@ export function MoodSnapshot({ moods, onSelectMood, onViewHistory }: MoodSnapsho
                 accessibilityLabel="More moods"
                 style={({ pressed }) => [
                   styles.moreBtn,
-                  { backgroundColor: colors.isDark ? 'rgba(255,255,255,0.07)' : colors.surfaceElevated, borderColor: colors.border },
-                  lightCard(colors) && { backgroundColor: FROSTED, borderColor: 'transparent' },
+                  {
+                    backgroundColor: colors.isDark ? 'rgba(255,255,255,0.07)' : colors.surfaceElevated,
+                    // Same edge as the card and the emoji chips.
+                    borderColor: colors.border,
+                    borderWidth: cardEdge(colors),
+                  },
+                  lightCard(colors) && { backgroundColor: FROSTED },
                   colors.boldBorder && { backgroundColor: colors.background, borderWidth: 2 },
                   pressed && styles.pressed,
                 ]}>
@@ -221,6 +227,11 @@ export function MoodSnapshot({ moods, onSelectMood, onViewHistory }: MoodSnapsho
   );
 }
 
+/** The Settings cards' edge: Paper's 2pt line, a crisp 1pt on soft themes, none otherwise. */
+function cardEdge(colors: ThemeColors): number {
+  return colors.boldBorder ? 2 : colors.sticker ? 1 : 0;
+}
+
 function MoodChip({
   mood,
   active,
@@ -239,14 +250,20 @@ function MoodChip({
         styles.moodBtn,
         {
           // Dark themes: a faint see-through fill, so it takes on the card's colour instead of a grey patch.
-          backgroundColor: active ? MOOD_COLORS[mood] + '33' : colors.isDark ? 'rgba(255,255,255,0.07)' : colors.surfaceElevated,
-          borderColor: active ? MOOD_COLORS[mood] : 'transparent',
+          backgroundColor: active
+            ? MOOD_COLORS[mood] + '33'
+            : colors.isDark
+              ? 'rgba(255,255,255,0.07)'
+              : colors.surfaceElevated,
+          // At rest: the same edge as the card (and Settings). Picked: its mood colour.
+          borderColor: active ? MOOD_COLORS[mood] : cardEdge(colors) ? colors.border : 'transparent',
+          borderWidth: active ? Math.max(1.5, cardEdge(colors)) : cardEdge(colors),
         },
         // Light themes (the pink card): frosted white chips; the picked one solid white with an ink outline.
         lightCard(colors) && {
           backgroundColor: active ? '#FFFFFF' : FROSTED,
-          borderColor: active ? colors.text : 'transparent',
-          borderWidth: 2,
+          borderColor: active ? colors.text : cardEdge(colors) ? colors.border : 'transparent',
+          borderWidth: active ? 2 : cardEdge(colors),
         },
         // Outlined themes (Ink, Pop): white sticker chips with black outlines; the picked mood fills with its colour.
         colors.boldBorder && {
@@ -299,7 +316,11 @@ function MoodBubble({
           styles.moodCircle,
           { backgroundColor: mood ? tint + '2A' : colors.surfaceElevated, borderColor: mood ? tint : colors.border },
           // Light themes: solid white so the emoji pops, with a strong ring in the mood's colour.
-          lightCard(colors) && { backgroundColor: mood ? '#FFFFFF' : FROSTED, borderWidth: mood ? 3 : 2, borderColor: mood ? tint : 'transparent' },
+          lightCard(colors) && {
+            backgroundColor: mood ? '#FFFFFF' : FROSTED,
+            borderWidth: mood ? 3 : 2,
+            borderColor: mood ? tint : 'transparent',
+          },
         ]}>
         <Animated.Text style={[styles.emoji, emojiStyle, hideEmoji && styles.hidden]}>
           {mood ? MOOD_EMOJI[mood] : '·'}
@@ -345,9 +366,9 @@ const FROSTED = 'rgba(255,255,255,0.62)';
 
 const styles = StyleSheet.create({
   container: {
-    borderRadius: Radius.lg,
+    // Matches the Settings cards' corners.
+    borderRadius: 22,
     padding: 16,
-    borderWidth: StyleSheet.hairlineWidth,
   },
   headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 },
   label: { fontSize: 14, fontWeight: '800' },
@@ -392,7 +413,6 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 4,
     borderRadius: Radius.md,
-    borderWidth: 1.5,
   },
   moodEmoji: { fontSize: 20 },
   moodText: { fontSize: 10, marginTop: 2, fontWeight: '600', textAlign: 'center' },
@@ -405,7 +425,6 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 4,
     borderRadius: Radius.md,
-    borderWidth: 1.5,
   },
   moreText: { fontSize: 10, marginTop: 2, fontWeight: '600', textAlign: 'center' },
   pressed: { opacity: 0.7 },

@@ -9,8 +9,7 @@ import {
   InviteCard,
   NextUpCard,
   OnThisDayCard,
-  useOnThisDay,
-} from "@/components/home/HomeCards";
+  useOnThisDay, PartnerBirthdayCard } from "@/components/home/HomeCards";
 import { MoodSnapshot } from "@/components/home/MoodSnapshot";
 import { StreakRestoreBanner } from "@/components/home/StreakRestoreBanner";
 import { ActivitiesIntroSection } from "@/components/activities/ActivitiesIntroSection";
@@ -344,6 +343,9 @@ export default function HomeScreen() {
                 onOpenHistory={() => router.push("/question-history")}
               />
             ) : null}
+
+            {/* Their birthday, from two weeks out. */}
+            {partner ? <PartnerBirthdayCard partner={partner} /> : null}
 
             {nextUp ? <NextUpCard event={nextUp} viewerId={user?.id} /> : null}
 

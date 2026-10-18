@@ -29,7 +29,7 @@ import {
   markTogetherMilestoneSeen,
   togetherMilestoneHeadline,
 } from '@/lib/together-milestones';
-import { useAuthStore, useRelationshipStore, useUIStore } from '@/stores';
+import { isFullScreenLayerOpen, useAuthStore, useRelationshipStore, useUIStore } from '@/stores';
 
 const OPEN_DELAY_MS = 1200;
 
@@ -42,9 +42,7 @@ export function TogetherMilestoneSync() {
   const relationshipId = useRelationshipStore((s) => s.relationship?.id);
   const { data: streak } = useStreak();
   const open = useUIStore((s) => s.openTogetherMilestone);
-  const busy = useUIStore(
-    (s) => s.showPaywall || s.streakMilestoneCount != null || s.streakSpark != null || s.togetherMilestoneCount != null,
-  );
+  const busy = useUIStore(isFullScreenLayerOpen);
   const checked = useRef<number | null>(null);
   const count = togetherStreakCount(streak);
   // Only once the server reports the together streak on its own (older servers don't).

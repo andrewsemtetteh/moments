@@ -515,8 +515,8 @@ async function afterInsert(env: Env, table: string, row: Record<string, unknown>
   const relId = row.relationship_id;
   if (typeof relId !== 'string') return;
 
-  // Daily check-ins that keep your streak: a moment, a mood, or your answer to today's
-  // question (below). Chat messages and journal entries don't count.
+  // Daily check-ins that keep your streak: a moment, a mood, your answer to today's
+  // question (below), or playing (record_play_checkin). Chat messages and journal entries don't count.
   if (table === 'moments') {
     await updateStreak(env, relId, userId);
   } else if (table === 'mood_logs') {
@@ -787,6 +787,13 @@ const RPC: Record<string, RpcHandler> = {
   async get_streak_status(env, userId, a) {
     await requireMember(env, userId, a.p_relationship_id);
     return getStreakStatus(env, a.p_relationship_id, userId);
+  },
+
+  /** Played together today (a game, a live game, a pack, a quiz, an activity): keeps your streak. */
+  async record_play_checkin(env, userId, a) {
+    await requireMember(env, userId, a.p_relationship_id);
+    await updateStreak(env, a.p_relationship_id, userId);
+    return null;
   },
 
   async restore_streak(env, userId, a) {

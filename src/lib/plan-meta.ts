@@ -1,4 +1,5 @@
 import type { IconName } from '@/components/ui/Icon';
+import type { ThemeColors, Tint } from '@/constants/design-system';
 
 /** Extra plan fields stored in calendar_events.description as JSON. */
 
@@ -81,6 +82,39 @@ export const MEMORY_TINT: Record<MemoryType, string> = {
   family: '#10B981',
   justus: '#8B5CF6',
 };
+
+/** Which of the theme's card colours each kind of memory wears. */
+const MEMORY_CARD_TINT: Record<MemoryType, Tint> = {
+  milestone: 'blush',
+  date: 'peach',
+  trip: 'sky',
+  celebration: 'butter',
+  family: 'mint',
+  justus: 'lilac',
+};
+
+/** Deep versions of the memory colours for icons and labels on the light themes' pastel cards. */
+const MEMORY_INK_LIGHT: Record<MemoryType, string> = {
+  milestone: '#B4234A',
+  date: '#B4451F',
+  trip: '#1D5BD8',
+  celebration: '#8A5A00',
+  family: '#0F7A50',
+  justus: '#6B3FD1',
+};
+
+/**
+ * A memory's colours in the current theme: `fill` is the theme's own card colour for its kind (so
+ * the card reads on every theme, dark or light), `ink` its icon/label colour on that card.
+ */
+export function memoryTone(type: MemoryType | undefined, colors: ThemeColors) {
+  const kind = type ?? 'justus';
+  const tint = MEMORY_CARD_TINT[kind];
+  return {
+    fill: colors.tints[tint],
+    ink: colors.tintAccents?.[tint] ?? (colors.isDark ? MEMORY_TINT[kind] : MEMORY_INK_LIGHT[kind]),
+  };
+}
 
 export function memoryTypeMeta(type: MemoryType | undefined) {
   return MEMORY_TYPES.find((t) => t.key === type) ?? MEMORY_TYPES[MEMORY_TYPES.length - 1];

@@ -7,6 +7,7 @@ import Animated, { FadeIn, LinearTransition } from 'react-native-reanimated';
 import { Icon } from '@/components/ui/Icon';
 import type { PlanTask } from '@/lib/plan-local';
 import { useTheme } from '@/hooks/useTheme';
+import { separatorColor } from '@/components/ui/primitives';
 
 export function PlanTasksCard({
   tasks,
@@ -84,7 +85,7 @@ export function PlanTasksCard({
       </View>
 
       {adding ? (
-        <View style={[styles.addRow, { borderColor: colors.border }]}>
+        <View style={[styles.addRow, { borderColor: separatorColor(colors) }]}>
           <TextInput
             value={draft}
             onChangeText={setDraft}
@@ -129,7 +130,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopWidth: 1,
     paddingTop: 12,
   },
   input: { flex: 1, fontSize: 16, fontWeight: '600', paddingVertical: 4 },

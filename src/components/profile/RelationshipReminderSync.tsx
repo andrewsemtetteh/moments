@@ -16,11 +16,12 @@ export function RelationshipReminderSync() {
   const anniversaryIso =
     relationship?.created_at && relationship.status !== 'ended' ? getRelationshipAnniversaryIso(relationship) : null;
   const partnerName = getFirstName(partner?.name) ?? null;
+  const partnerBirthday = partner?.birthday ?? null;
 
   useEffect(() => {
     if (!anniversaryIso || !partnerName) return;
-    void syncRelationshipReminders({ anniversaryIso, partnerName });
-  }, [anniversaryIso, partnerName]);
+    void syncRelationshipReminders({ anniversaryIso, partnerName, partnerBirthday });
+  }, [anniversaryIso, partnerName, partnerBirthday]);
 
   return null;
 }

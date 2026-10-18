@@ -1,4 +1,4 @@
-import { paperEdge } from '@/components/ui/primitives';
+import { paperEdge, trackColor } from '@/components/ui/primitives';
 import * as Haptics from '@/lib/haptics';
 import { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
@@ -71,7 +71,7 @@ export function PlayPulseCard() {
               : `All quests done today 🎉 · ${activeStreak(progress)} day streak`}
         </Text>
         {!joinable ? (
-          <View style={[styles.track, { backgroundColor: colors.boldBorder ? colors.background : colors.border }, paperEdge(colors, 1.5)]}>
+          <View style={[styles.track, { backgroundColor: trackColor(colors) }, paperEdge(colors, 1.5)]}>
             <View
               style={[
                 styles.fill,
@@ -119,7 +119,7 @@ export function CoupleLevelCard() {
           </Text>
         </View>
       </View>
-      <View style={[styles.track, { backgroundColor: colors.boldBorder ? colors.background : colors.border }, paperEdge(colors, 1.5)]}>
+      <View style={[styles.track, { backgroundColor: trackColor(colors) }, paperEdge(colors, 1.5)]}>
         <View style={[styles.fill, { width: `${Math.round(info.progress * 100)}%`, backgroundColor: colors.accent }]} />
       </View>
       <View style={styles.tiles}>

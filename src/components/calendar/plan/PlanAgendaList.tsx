@@ -2,7 +2,7 @@ import { format, isBefore, isSameDay, isToday, startOfDay } from 'date-fns';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 
-import { paperEdge } from '@/components/ui/primitives';
+import { paperEdge, cardEdge, cardSurface } from '@/components/ui/primitives';
 import { Icon, type IconName } from '@/components/ui/Icon';
 import { EVENT_TYPE_META, getEventTypeColors } from '@/constants/calendar-events';
 import { Radius } from '@/constants/design-system';
@@ -38,9 +38,9 @@ function groupEvents(events: CalendarEvent[]): AgendaGroup[] {
 export function PlanEmptyState({ icon, title, body }: { icon: IconName; title: string; body: string }) {
   const { colors } = useTheme();
   return (
-    <View style={styles.empty}>
-      <View style={[styles.emptyIcon, { backgroundColor: colors.accentSoft }]}>
-        <Icon name={icon} size={26} color={colors.accent} />
+    <View style={[styles.empty, cardSurface(colors)]}>
+      <View style={[styles.emptyIcon, { backgroundColor: colors.background }, cardEdge(colors)]}>
+        <Icon name={icon} size={26} color={colors.text} />
       </View>
       <Text style={[styles.emptyTitle, { color: colors.text }]}>{title}</Text>
       <Text style={[styles.emptyBody, { color: colors.textSecondary }]}>{body}</Text>
@@ -141,12 +141,8 @@ function PlanCard({
       <View
         style={[
           styles.card,
-          {
-            backgroundColor: colors.surface,
-            borderColor: colors.border,
-            borderWidth: colors.boldBorder ? 2 : StyleSheet.hairlineWidth,
-            opacity: done ? 0.6 : 1,
-          },
+          cardSurface(colors),
+          { opacity: done ? 0.6 : 1 },
         ]}>
         <View style={[styles.bar, { backgroundColor: done ? colors.textTertiary : tc.main }]} />
         <View style={styles.body}>
@@ -237,7 +233,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   badgeEmoji: { fontSize: 19 },
-  empty: { alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 40, paddingHorizontal: 24 },
+  empty: { alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 36, paddingHorizontal: 24, borderRadius: 22, minHeight: 200 },
   emptyIcon: { width: 60, height: 60, borderRadius: 30, alignItems: 'center', justifyContent: 'center', marginBottom: 6 },
   emptyTitle: { fontSize: 18, fontWeight: '800', letterSpacing: -0.2, textAlign: 'center' },
   emptyBody: { fontSize: 14, textAlign: 'center', lineHeight: 20, maxWidth: 280 },

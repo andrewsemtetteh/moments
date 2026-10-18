@@ -291,11 +291,11 @@ function FilterPill({
       style={[
         styles.filterPill,
         {
-          backgroundColor: selected ? colors.text : colors.surface,
-          borderColor: selected ? colors.text : colors.border,
+          backgroundColor: selected ? colors.accent : colors.surface,
+          borderColor: selected ? colors.accent : colors.border,
         },
       ]}>
-      <Text style={[styles.filterPillText, { color: selected ? colors.background : colors.text }]}>
+      <Text style={[styles.filterPillText, { color: selected ? colors.onAccent : colors.text }]}>
         {label}
       </Text>
       {showDot ? <View style={[styles.filterDot, { backgroundColor: colors.error }]} /> : null}

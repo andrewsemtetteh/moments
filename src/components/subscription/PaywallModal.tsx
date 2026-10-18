@@ -83,7 +83,7 @@ export function PaywallModal({ inline = false }: { inline?: boolean } = {}) {
   if (inline) return <View style={StyleSheet.absoluteFill}>{content}</View>;
 
   return (
-    // Transparent so swiping it down reveals the app behind, like Moments.
+    // Slides up over the app; closes only from its close button (not draggable).
     <Modal visible transparent animationType="slide" presentationStyle="overFullScreen" onRequestClose={handleClose}>
       {content}
     </Modal>

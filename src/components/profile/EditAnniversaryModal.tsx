@@ -3,7 +3,7 @@ import { StyleSheet, Text, View } from 'react-native';
 
 import { AnniversaryWheelPicker } from '@/components/onboarding/AnniversaryWheelPicker';
 import { DraggableSheet } from '@/components/ui/DraggableSheet';
-import { PrimaryButton } from '@/components/ui/primitives';
+import { PrimaryButton, insetCardStyle } from '@/components/ui/primitives';
 import { useTheme } from '@/hooks/useTheme';
 
 type Props = {
@@ -12,10 +12,23 @@ type Props = {
   saving?: boolean;
   onClose: () => void;
   onSave: (isoDate: string) => void;
+  /** Defaults to the anniversary; the birthday drawer passes its own. */
+  title?: string;
+  hint?: string;
+  minYear?: number;
 };
 
 /** Same layout as the other Settings sheets (relationship type etc.): title, hint, the control, then Save. */
-export function EditAnniversaryModal({ visible, value, saving = false, onClose, onSave }: Props) {
+export function EditAnniversaryModal({
+  visible,
+  value,
+  saving = false,
+  onClose,
+  onSave,
+  title = 'Anniversary',
+  hint = 'Used for your countdown and how long you’ve been together.',
+  minYear,
+}: Props) {
   const { colors } = useTheme();
   const [draft, setDraft] = useState(value);
 
@@ -29,17 +42,15 @@ export function EditAnniversaryModal({ visible, value, saving = false, onClose, 
 
   return (
     <DraggableSheet visible={visible} onClose={onClose}>
-      <Text style={[styles.title, { color: colors.text }]}>Anniversary</Text>
-      <Text style={[styles.hint, { color: colors.textSecondary }]}>
-        Used for your countdown and how long you’ve been together.
-      </Text>
+      <Text style={[styles.title, { color: colors.text }]}>{title}</Text>
+      <Text style={[styles.hint, { color: colors.textSecondary }]}>{hint}</Text>
 
       <View
         style={[
           styles.picker,
-          { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: colors.boldBorder ? 2 : 0 },
+          insetCardStyle(colors, 'sheet'),
         ]}>
-        <AnniversaryWheelPicker value={draft} onChange={setDraft} surfaceColor={colors.surface} />
+        <AnniversaryWheelPicker value={draft} onChange={setDraft} surfaceColor={colors.background} minYear={minYear} />
       </View>
 
       <PrimaryButton

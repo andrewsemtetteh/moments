@@ -14,6 +14,7 @@ import { REFERRAL_DAYS } from '@/constants/subscription';
 import { useTheme } from '@/hooks/useTheme';
 import { getMyReferral } from '@/lib/moments-api';
 import { useAuthStore } from '@/stores';
+import { separatorColor } from '@/components/ui/primitives';
 
 const STEPS = [
   'Share your link with a couple you know',
@@ -101,7 +102,7 @@ export function ReferPage({ onBack }: { onBack?: () => void } = {}) {
           {STEPS.map((t, i) => (
             <View
               key={t}
-              style={[styles.row, i < STEPS.length - 1 && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border }]}>
+              style={[styles.row, i < STEPS.length - 1 && { borderBottomWidth: 1, borderBottomColor: separatorColor(colors) }]}>
               <View style={[styles.num, { backgroundColor: colors.text }]}>
                 <Text style={[styles.numText, { color: colors.background }]}>{i + 1}</Text>
               </View>

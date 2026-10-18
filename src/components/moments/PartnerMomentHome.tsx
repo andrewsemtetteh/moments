@@ -19,7 +19,7 @@ import { runOnJS } from 'react-native-reanimated';
 
 import { MomentVideoPlayer } from '@/components/moments/MomentVideoPlayer';
 import { Icon } from '@/components/ui/Icon';
-import { Avatar, paperEdge } from '@/components/ui/primitives';
+import { Avatar, cardEdge, cardSurface } from '@/components/ui/primitives';
 import { useMomentReaction, useSendMessage } from '@/hooks/queries';
 import { useTheme } from '@/hooks/useTheme';
 import { getFirstName } from '@/lib/avatar-initial';
@@ -146,7 +146,7 @@ export function PartnerMomentHome({ partnerMoments }: PartnerMomentHomeProps) {
 
   return (
     <View>
-      <View style={[styles.card, { backgroundColor: colors.surface }, cardBorder]}>
+      <View style={[styles.card, cardSurface(colors)]}>
         <View style={styles.head}>
           <Avatar name={authorName} imageUrl={authorAvatar} size={34} />
           <View style={styles.headText}>
@@ -186,7 +186,7 @@ export function PartnerMomentHome({ partnerMoments }: PartnerMomentHomeProps) {
 
         <GestureDetector gesture={swipe}>
           <Pressable onPress={openFullscreen} accessibilityRole="imagebutton" accessibilityLabel="Open moment">
-            <View style={[styles.media, { backgroundColor: colors.surfaceElevated }, paperEdge(colors)]}>
+            <View style={[styles.media, { backgroundColor: colors.surfaceElevated }, cardEdge(colors)]}>
               {moment.media_url ? (
                 isVideo ? (
                   <MomentVideoPlayer uri={moment.media_url} width={MEDIA_W} height={MEDIA_H} autoPlay={false} controls={false} />
@@ -262,7 +262,7 @@ export function PartnerMomentHome({ partnerMoments }: PartnerMomentHomeProps) {
             onChangeText={setReply}
             placeholder={isMine ? 'Note to self…' : `Whisper to ${partnerFirst}…`}
             placeholderTextColor={colors.textTertiary}
-            style={[styles.replyInput, { backgroundColor: colors.background, color: colors.text, borderColor: colors.border }]}
+            style={[styles.replyInput, { backgroundColor: colors.background, color: colors.text }, cardEdge(colors)]}
             returnKeyType="send"
             onSubmitEditing={() => void sendReply()}
             editable={!sendingReply}

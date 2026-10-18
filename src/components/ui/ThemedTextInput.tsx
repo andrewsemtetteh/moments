@@ -1,6 +1,7 @@
 import type { Ref } from 'react';
 import { TextInput as RNTextInput, type TextInputProps } from 'react-native';
 
+import { notifyInputFocused } from '@/components/ui/KeyboardAwareScrollView';
 import { useTheme } from '@/hooks/useTheme';
 
 /** The instance type, so \`useRef<TextInput>\` keeps working where this replaces react-native's. */
@@ -21,6 +22,11 @@ export function TextInput({ ref, ...props }: TextInputProps & { ref?: Ref<RNText
       cursorColor={colors.accent}
       placeholderTextColor={colors.textTertiary}
       {...props}
+      onFocus={(e) => {
+        // Lets a form scroll this field above the keyboard (KeyboardAwareScrollView).
+        notifyInputFocused();
+        props.onFocus?.(e);
+      }}
       ref={ref}
     />
   );

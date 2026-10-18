@@ -2,30 +2,29 @@ import { format, setHours, setMilliseconds, setMinutes, setSeconds, startOfDay }
 import * as Haptics from '@/lib/haptics';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
 import { TextInput } from '@/components/ui/ThemedTextInput';
 
-import { ownerColor } from '@/components/calendar/plan/PlanDayView';
 import { notInPast, PlanDateModal, PlanTimeModal } from '@/components/calendar/plan/PlanPickerModals';
-import { FullScreenPage } from '@/components/layout/FullScreenPage';
+import { Divider, FieldRow, InlineInput, createFormStyles as form } from '@/components/calendar/plan/CreatePlanFlow';
+import { FullScreenPage, PageFooter } from '@/components/layout/FullScreenPage';
+import { SettingsChoiceSheet } from '@/components/profile/SettingsEditPage';
 import { HeaderIconButton } from '@/components/ui/HeaderIconButton';
-import { DraggableSheet } from '@/components/ui/DraggableSheet';
 import { Icon } from '@/components/ui/Icon';
-import { Avatar, colorWithAlpha, PrimaryButton, paperEdge } from '@/components/ui/primitives';
-import { LinearGradient } from 'expo-linear-gradient';
+import { KeyboardAwareScrollView } from '@/components/ui/KeyboardAwareScrollView';
+import { Avatar, cardSurface, colorWithAlpha, trackColor } from '@/components/ui/primitives';
 import { getFirstName } from '@/lib/avatar-initial';
 import { planOwner } from '@/lib/plan-day';
 import { useTheme } from '@/hooks/useTheme';
 import {
   parsePlanMeta,
   planCountdownParts,
-  planIcon,
   reminderLabel,
   serializePlanMeta,
   REMINDER_OPTIONS,
@@ -34,6 +33,11 @@ import {
 } from '@/lib/plan-meta';
 import { useAuthStore, useRelationshipStore } from '@/stores';
 import type { CalendarEvent } from '@/types/database';
+
+/** An id for a new checklist item (the time it was added). */
+function newChecklistId() {
+  return `${Date.now()}`;
+}
 
 function applyTimeParts(base: Date, h12: number, m: number, period: 'AM' | 'PM'): Date {
   const h24 = period === 'PM' ? (h12 === 12 ? 12 : h12 + 12) : h12 === 12 ? 0 : h12;
@@ -48,6 +52,7 @@ export function EventDetailsSheet({
   onSave,
   onDelete,
   onMessage,
+  onSendMessage,
   onOpenLinkedList,
   onCreateLinkedList,
   saving,
@@ -64,7 +69,10 @@ export function EventDetailsSheet({
     description: string;
   }) => void;
   onDelete: () => void;
+  /** Open Chat. */
   onMessage: () => void;
+  /** Send a message about this plan to chat (the plan goes with it as a card). */
+  onSendMessage?: (text: string) => Promise<void>;
   onOpenLinkedList?: () => void;
   onCreateLinkedList?: () => void;
   saving?: boolean;
@@ -89,7 +97,10 @@ export function EventDetailsSheet({
   const [dateOpen, setDateOpen] = useState(false);
   const [timeOpen, setTimeOpen] = useState(false);
   const [reminderOpen, setReminderOpen] = useState(false);
-  const [editingTitle, setEditingTitle] = useState(false);
+  const [replyOpen, setReplyOpen] = useState(false);
+  const [replyText, setReplyText] = useState('');
+  const [sendingReply, setSendingReply] = useState(false);
+  const [sentNote, setSentNote] = useState(false);
   const dirty = useRef(false);
 
   // Filled from the plan each time one opens: per plan, not per object, so a save coming
@@ -110,7 +121,9 @@ export function EventDetailsSheet({
       setEventDate(at);
       setEventTime(at);
       setChecklistDraft('');
-      setEditingTitle(false);
+      setReplyOpen(false);
+      setReplyText('');
+      setSentNote(false);
     }
   }
   // Nothing typed yet for the plan just opened.
@@ -135,14 +148,48 @@ export function EventDetailsSheet({
 
   if (!event) return null;
 
-  const icon = planIcon(event);
   const done = completed;
   const owner = planOwner(event);
-  const tint = ownerColor(owner, user?.id, colors);
   const people = owner === 'together' ? [user, partner] : owner === user?.id ? [user] : [partner];
   const forLabel =
     owner === 'together' ? 'Together' : owner === user?.id ? 'Just you' : `Just ${getFirstName(partner?.name) ?? 'your partner'}`;
   const passed = !!countdown && countdown.totalMs === 0;
+  // The Together cards' look (as the Trophy shelf): a raised fill and a clear outline.
+  const card = cardSurface(colors);
+  const shelfCard = card;
+
+  const removeCheck = (id: string) => {
+    Haptics.selectionAsync();
+    const next = checklist.filter((c) => c.id !== id);
+    setChecklist(next);
+    persist(next);
+  };
+
+  const addChecklistItem = () => {
+    const t = checklistDraft.trim();
+    if (!t) return;
+    const next = [...checklist, { id: newChecklistId(), title: t, done: false }];
+    setChecklist(next);
+    setChecklistDraft('');
+    persist(next);
+  };
+
+  const sendReply = async () => {
+    if (!onSendMessage || sendingReply) return;
+    setSendingReply(true);
+    try {
+      await onSendMessage(replyText.trim());
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setReplyOpen(false);
+      setReplyText('');
+      setSentNote(true);
+    } catch (e) {
+      Alert.alert('Could not send', e instanceof Error ? e.message : 'Check your connection and try again.');
+    } finally {
+      setSendingReply(false);
+    }
+  };
+  const progress = checkProgress.total ? checkProgress.done / checkProgress.total : 0;
 
   const h24 = eventTime.getHours();
   const hour12 = h24 % 12 || 12;
@@ -225,7 +272,6 @@ export function EventDetailsSheet({
         visible={visible && !!eventProp}
         title="Plan"
         onBack={closeSheet}
-        avoidKeyboard={false}
         dismissKeyboardOnTap={false}
         right={
           <View style={styles.topActions}>
@@ -233,246 +279,274 @@ export function EventDetailsSheet({
             <HeaderIconButton icon="check" onPress={() => persist()} accessibilityLabel="Save plan" />
           </View>
         }>
-            <ScrollView
+            {/* The page shrinks above the keyboard here (its footer rides on it), so no extra space. */}
+            <KeyboardAwareScrollView
               showsVerticalScrollIndicator={false}
-              keyboardShouldPersistTaps="handled"
-              automaticallyAdjustKeyboardInsets
+              addKeyboardSpace={false}
               contentContainerStyle={styles.scroll}>
-              {/* Hero: the plan in its colour, who it's for, and when (tap a chip to change it). */}
-              <LinearGradient
-                colors={[colorWithAlpha(tint, colors.isDark ? 0.34 : 0.2), colorWithAlpha(tint, colors.isDark ? 0.1 : 0.04)]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={[styles.hero, { borderColor: colorWithAlpha(tint, 0.3) }]}>
-                <View style={styles.heroTop}>
-                  <View style={[styles.heroIcon, { backgroundColor: colors.surface }]}>
-                    <Icon name={icon} size={26} color={tint} />
-                  </View>
-                  <View style={styles.heroPeople}>
-                    <View style={styles.heroFaces}>
-                      {people.map((person, i) => (
-                        <View key={i} style={[styles.heroFace, i > 0 && styles.heroFaceOverlap, { borderColor: colors.surface }]}>
-                          <Avatar name={person?.name} imageUrl={person?.avatar_url} size={28} />
-                        </View>
-                      ))}
-                    </View>
-                    <Text style={[styles.heroFor, { color: colors.textSecondary }]}>{forLabel}</Text>
-                  </View>
-                </View>
-
-                {editingTitle ? (
-                  <TextInput
-                    value={title}
-                    onChangeText={(t) => {
-                      setTitle(t);
-                      dirty.current = true;
-                    }}
-                    onBlur={() => setEditingTitle(false)}
-                    autoFocus
-                    style={[styles.heroTitleInput, { color: colors.text }]}
-                  />
-                ) : (
-                  <Pressable onPress={() => setEditingTitle(true)} accessibilityRole="button" accessibilityHint="Rename this plan">
-                    <Text
-                      style={[styles.heroTitle, { color: colors.text, textDecorationLine: done ? 'line-through' : 'none' }]}>
-                      {title}
-                    </Text>
-                  </Pressable>
-                )}
-
-                <View style={styles.chips}>
-                  <Pressable
-                    onPress={() => setDateOpen(true)}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Date, ${format(eventDate, 'EEEE d MMMM')}`}
-                    style={({ pressed }) => [styles.chip, { backgroundColor: colors.surface }, paperEdge(colors), pressed && styles.chipPressed]}>
-                    <Icon name="calendar" size={15} color={tint} />
-                    <Text style={[styles.chipText, { color: colors.text }]}>{format(eventDate, 'EEE, MMM d')}</Text>
-                  </Pressable>
-                  <Pressable
-                    onPress={() => setTimeOpen(true)}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Time, ${format(eventTime, 'h:mm a')}`}
-                    style={({ pressed }) => [styles.chip, { backgroundColor: colors.surface }, paperEdge(colors), pressed && styles.chipPressed]}>
-                    <Icon name="time" size={15} color={tint} />
-                    <Text style={[styles.chipText, { color: colors.text }]}>{format(eventTime, 'h:mm a')}</Text>
-                  </Pressable>
-                  {location ? (
-                    <View style={[styles.chip, styles.chipShrink, { backgroundColor: colors.surface }, paperEdge(colors)]}>
-                      <Icon name="location" size={15} color={tint} />
-                      <Text style={[styles.chipText, styles.chipTextShrink, { color: colors.text }]} numberOfLines={1}>
-                        {location}
-                      </Text>
-                    </View>
-                  ) : null}
-                </View>
-              </LinearGradient>
-
-              {done ? (
-                <View style={[styles.doneBanner, { backgroundColor: colors.accentSoft }]}>
-                  <Icon name="checkDone" size={16} color={colors.accent} />
-                  <Text style={{ color: colors.accent, fontWeight: '700', flex: 1 }}>Completed</Text>
-                  <Pressable onPress={markUndone}>
-                    <Text style={{ color: colors.accent, fontWeight: '600', fontSize: 13 }}>Undo</Text>
-                  </Pressable>
-                </View>
-              ) : passed ? (
-                // Green like a past day with plans on the calendar.
-                <View style={[styles.doneBanner, { backgroundColor: colorWithAlpha(colors.success, 0.14) }]}>
-                  <Icon name="checkDone" size={16} color={colors.success} />
-                  <Text style={{ color: colors.success, fontWeight: '700', flex: 1 }}>This happened</Text>
-                </View>
-              ) : countdown ? (
-                <View style={styles.countdownRow}>
-                  {[
-                    { n: countdown.days, unit: countdown.days === 1 ? 'day' : 'days' },
-                    { n: countdown.hours, unit: countdown.hours === 1 ? 'hour' : 'hours' },
-                    { n: countdown.mins, unit: countdown.mins === 1 ? 'min' : 'mins' },
-                  ].map((part) => (
-                    <View key={part.unit} style={[styles.countTile, { backgroundColor: colors.surface }, paperEdge(colors)]}>
-                      <Text style={[styles.countNum, { color: tint }]}>{String(part.n).padStart(2, '0')}</Text>
-                      <Text style={[styles.countUnit, { color: colors.textSecondary }]}>{part.unit}</Text>
+              {/* Laid out like New plan: who it's for and how soon, the title, one grouped list of
+                  rows, then the checklist and the shared list. */}
+              <View style={[styles.forRow, card]}>
+                <View style={styles.heroFaces}>
+                  {people.map((person, i) => (
+                    <View key={i} style={[styles.heroFace, i > 0 && styles.heroFaceOverlap, { borderColor: colors.surface }]}>
+                      <Avatar name={person?.name} imageUrl={person?.avatar_url} size={26} />
                     </View>
                   ))}
                 </View>
-              ) : null}
-
-              <View style={[styles.card, { backgroundColor: colors.surface }, paperEdge(colors)]}>
-                <View style={styles.cardHeader}>
-                  <Text style={[styles.cardTitle, { color: colors.text }]}>Checklist</Text>
-                  <Text style={[styles.cardMeta, { color: colors.textTertiary }]}>
-                    {checkProgress.done} / {checkProgress.total}
-                  </Text>
+                <View style={styles.forCopy}>
+                  <Text style={[styles.forLabel, { color: colors.text }]}>{forLabel}</Text>
                 </View>
+                {done ? (
+                  <View accessible accessibilityLabel="Done" style={[styles.statusDot, { backgroundColor: colors.accent }]}>
+                    <Icon name="checkDone" size={18} color={colors.onAccent} />
+                  </View>
+                ) : passed ? (
+                  <View accessible accessibilityLabel="This happened" style={[styles.statusDot, { backgroundColor: colorWithAlpha(colors.success, 0.16) }]}>
+                    <Icon name="checkDone" size={18} color={colors.success} />
+                  </View>
+                ) : countdown ? (
+                  <View style={[styles.statusPill, { backgroundColor: colors.accentSoft }]}>
+                    <Icon name="time" size={14} color={colors.accent} />
+                    <Text style={[styles.statusText, { color: colors.accent }]}>
+                      {countdown.days
+                        ? `${countdown.days}d ${countdown.hours}h`
+                        : countdown.hours
+                          ? `${countdown.hours}h ${countdown.mins}m`
+                          : `${countdown.mins}m`}
+                    </Text>
+                  </View>
+                ) : null}
+              </View>
+
+              <TextInput
+                value={title}
+                onChangeText={(t) => {
+                  setTitle(t);
+                  dirty.current = true;
+                }}
+                onBlur={() => {
+                  if (dirty.current) persist();
+                }}
+                placeholder="Plan name"
+                placeholderTextColor={colors.textTertiary}
+                style={[
+                  form.titleInput,
+                  card,
+                  { color: colors.text, textDecorationLine: done ? 'line-through' : 'none' },
+                ]}
+              />
+
+              <View style={[form.group, card]}>
+                <FieldRow
+                  label="Date"
+                  value={format(eventDate, 'EEEE, MMM d, yyyy')}
+                  onPress={() => {
+                    Haptics.selectionAsync();
+                    setDateOpen(true);
+                  }}
+                  colors={colors}
+                />
+                <Divider colors={colors} />
+                <FieldRow
+                  label="Time"
+                  value={format(eventTime, 'h:mm a')}
+                  onPress={() => {
+                    Haptics.selectionAsync();
+                    setTimeOpen(true);
+                  }}
+                  colors={colors}
+                />
+                <Divider colors={colors} />
+                <InlineInput
+                  label="Location"
+                  value={location}
+                  onChangeText={(t) => {
+                    setLocation(t);
+                    dirty.current = true;
+                  }}
+                  placeholder="Optional"
+                  colors={colors}
+                />
+                <Divider colors={colors} />
+                <FieldRow
+                  label="Reminder"
+                  value={reminderLabel(reminderMins)}
+                  onPress={() => {
+                    Haptics.selectionAsync();
+                    setReminderOpen(true);
+                  }}
+                  colors={colors}
+                />
+                <Divider colors={colors} />
+                <InlineInput
+                  label="Notes"
+                  value={notes}
+                  onChangeText={(t) => {
+                    setNotes(t);
+                    dirty.current = true;
+                  }}
+                  placeholder="Optional"
+                  colors={colors}
+                />
+              </View>
+
+              <View style={styles.sectionHead}>
+                <Text style={[form.sectionLabel, styles.sectionLabelFlush, { color: colors.accent }]}>Checklist</Text>
+                {checkProgress.total ? (
+                  <Text style={[styles.cardMeta, { color: colors.textSecondary }]}>
+                    {checkProgress.done} of {checkProgress.total}
+                  </Text>
+                ) : null}
+              </View>
+              <View style={[form.group, card]}>
+                {checkProgress.total ? (
+                  <View style={[styles.progressTrack, styles.progressInset, { backgroundColor: trackColor(colors) }]}>
+                    <View style={[styles.progressFill, { backgroundColor: colors.accent, width: `${Math.round(progress * 100)}%` }]} />
+                  </View>
+                ) : null}
                 {checklist.map((item) => (
-                  <Pressable key={item.id} onPress={() => toggleCheck(item.id)} style={styles.checkRow}>
-                    <View
+                  <View key={item.id} style={form.checkRow}>
+                    <Pressable
+                      onPress={() => toggleCheck(item.id)}
+                      hitSlop={6}
+                      accessibilityRole="checkbox"
+                      accessibilityState={{ checked: item.done }}
                       style={[
-                        styles.checkBox,
+                        form.checkBox,
                         {
                           borderColor: item.done ? colors.accent : colors.borderStrong,
                           backgroundColor: item.done ? colors.accent : 'transparent',
                         },
                       ]}>
                       {item.done ? <Icon name="check" size={12} color={colors.onAccent} /> : null}
-                    </View>
+                    </Pressable>
                     <Text
-                      style={{
-                        flex: 1,
-                        color: item.done ? colors.textTertiary : colors.text,
-                        textDecorationLine: item.done ? 'line-through' : 'none',
-                        fontSize: 15,
-                        fontWeight: '600',
-                      }}>
+                      style={[
+                        form.checkTitle,
+                        {
+                          color: item.done ? colors.textTertiary : colors.text,
+                          textDecorationLine: item.done ? 'line-through' : 'none',
+                        },
+                      ]}>
                       {item.title}
                     </Text>
-                  </Pressable>
+                    <Pressable onPress={() => removeCheck(item.id)} hitSlop={8} accessibilityLabel={`Remove ${item.title}`}>
+                      <Icon name="close" size={16} color={colors.textTertiary} />
+                    </Pressable>
+                  </View>
                 ))}
-                <View style={styles.addCheckRow}>
+                <View style={form.addCheckRow}>
                   <TextInput
                     value={checklistDraft}
                     onChangeText={setChecklistDraft}
                     placeholder="Add item"
                     placeholderTextColor={colors.textTertiary}
-                    onSubmitEditing={() => {
-                      const t = checklistDraft.trim();
-                      if (!t) return;
-                      const next = [...checklist, { id: `${Date.now()}`, title: t, done: false }];
-                      setChecklist(next);
-                      setChecklistDraft('');
-                      persist(next);
-                    }}
-                    style={[styles.checkInput, { color: colors.text }]}
+                    returnKeyType="done"
+                    onSubmitEditing={addChecklistItem}
+                    style={[form.checkInput, { color: colors.text }]}
                   />
+                  <Pressable onPress={addChecklistItem} hitSlop={8} accessibilityRole="button">
+                    <Text style={{ color: colors.accent, fontWeight: '700' }}>+ Add</Text>
+                  </Pressable>
+                </View>
+              </View>
+
+              <Text style={[form.sectionLabel, { color: colors.accent }]}>Shared list</Text>
+              <View style={[form.group, card]}>
+                <Pressable
+                  onPress={linkedListTitle && onOpenLinkedList ? onOpenLinkedList : onCreateLinkedList}
+                  disabled={!(linkedListTitle && onOpenLinkedList) && !onCreateLinkedList}
+                  accessibilityRole="button"
+                  style={({ pressed }) => [form.checkRow, pressed && styles.chipPressed]}>
+                  <Icon name={linkedListTitle ? 'list' : 'plus'} size={17} color={linkedListTitle ? colors.text : colors.accent} />
+                  <Text
+                    style={[form.checkTitle, { color: linkedListTitle ? colors.text : colors.accent }]}
+                    numberOfLines={1}>
+                    {linkedListTitle ?? (onCreateLinkedList ? 'Create a list for this plan' : 'No list linked yet')}
+                  </Text>
+                  {linkedListTitle ? <Icon name="chevronRight" size={16} color={colors.textTertiary} /> : null}
+                </Pressable>
+              </View>
+            </KeyboardAwareScrollView>
+
+            <PageFooter>
+              {sentNote ? (
+                <View style={[styles.sentNote, { backgroundColor: colorWithAlpha(colors.success, 0.14) }]}>
+                  <Icon name="checkDone" size={15} color={colors.success} />
+                  <Text style={[styles.sentNoteText, { color: colors.text }]}>Sent to chat</Text>
+                  <Pressable onPress={onMessage} hitSlop={8} accessibilityRole="button">
+                    <Text style={[styles.sentNoteAction, { color: colors.text }]}>Open chat</Text>
+                  </Pressable>
+                </View>
+              ) : null}
+              {replyOpen ? (
+                // Say something about this plan: it goes to chat with the plan as a card.
+                <View style={styles.replyRow}>
                   <Pressable
                     onPress={() => {
-                      const t = checklistDraft.trim();
-                      if (!t) return;
-                      const next = [...checklist, { id: `${Date.now()}`, title: t, done: false }];
-                      setChecklist(next);
-                      setChecklistDraft('');
-                      persist(next);
-                    }}>
-                    <Text style={{ color: colors.accent, fontWeight: '700' }}>+ Add Item</Text>
+                      setReplyOpen(false);
+                      setReplyText('');
+                    }}
+                    hitSlop={8}
+                    accessibilityRole="button"
+                    accessibilityLabel="Cancel message"
+                    style={[styles.replyCancel, shelfCard]}>
+                    <Icon name="close" size={16} color={colors.text} />
                   </Pressable>
-                </View>
-              </View>
-
-              <View style={[styles.card, { backgroundColor: colors.surface }, paperEdge(colors)]}>
-                <Text style={[styles.cardTitle, { color: colors.text, marginBottom: 8 }]}>Notes</Text>
-                <TextInput
-                  value={notes}
-                  onChangeText={(t) => {
-                    setNotes(t);
-                    dirty.current = true;
-                  }}
-                  onBlur={() => {
-                    if (dirty.current) persist();
-                  }}
-                  placeholder="Add a note…"
-                  placeholderTextColor={colors.textTertiary}
-                  multiline
-                  style={[styles.notesInput, { color: colors.text }]}
-                />
-              </View>
-
-              <View style={[styles.card, { backgroundColor: colors.surface }, paperEdge(colors)]}>
-                <Text style={[styles.cardTitle, { color: colors.text, marginBottom: 8 }]}>Shared list</Text>
-                {linkedListTitle && onOpenLinkedList ? (
-                  <Pressable onPress={onOpenLinkedList} style={styles.metaRow}>
-                    <Text style={[styles.metaValue, { color: colors.text, textAlign: 'left' }]} numberOfLines={1}>
-                      {linkedListTitle}
-                    </Text>
-                    <Icon name="chevronRight" size={16} color={colors.textTertiary} />
-                  </Pressable>
-                ) : onCreateLinkedList ? (
-                  <Pressable onPress={onCreateLinkedList}>
-                    <Text style={{ color: colors.accent, fontWeight: '700' }}>+ Create list for this plan</Text>
-                  </Pressable>
-                ) : (
-                  <Text style={{ color: colors.textTertiary, fontWeight: '500' }}>No list linked yet</Text>
-                )}
-              </View>
-
-              <View style={[styles.card, { backgroundColor: colors.surface }, paperEdge(colors)]}>
-                <View style={styles.metaRow}>
-                  <Text style={[styles.metaLabel, { color: colors.textTertiary }]}>Location</Text>
                   <TextInput
-                    value={location}
-                    onChangeText={(t) => {
-                      setLocation(t);
-                      dirty.current = true;
-                    }}
-                    onBlur={() => {
-                      if (dirty.current) persist();
-                    }}
-                    placeholder="Add location"
+                    value={replyText}
+                    onChangeText={setReplyText}
+                    placeholder={`Message about “${title || event.title}”…`}
                     placeholderTextColor={colors.textTertiary}
-                    style={[styles.metaInput, { color: colors.text }]}
+                    autoFocus
+                    multiline
+                    maxLength={1000}
+                    style={[styles.replyInput, shelfCard, { color: colors.text }]}
                   />
+                  <Pressable
+                    onPress={() => void sendReply()}
+                    disabled={sendingReply}
+                    accessibilityRole="button"
+                    accessibilityLabel="Send to chat"
+                    style={({ pressed }) => [styles.replySend, { backgroundColor: colors.text }, pressed && styles.chipPressed]}>
+                    {sendingReply ? (
+                      <ActivityIndicator color={colors.background} />
+                    ) : (
+                      <Icon name="send" size={18} color={colors.background} />
+                    )}
+                  </Pressable>
                 </View>
-                <View style={[styles.divider, { backgroundColor: colors.border }]} />
-                <Pressable onPress={() => setReminderOpen(true)} style={styles.metaRow}>
-                  <Text style={[styles.metaLabel, { color: colors.textTertiary }]}>Reminder</Text>
-                  <Text style={[styles.metaValue, { color: colors.text }]}>{reminderLabel(reminderMins)}</Text>
-                </Pressable>
-              </View>
-
-              <View style={styles.actions}>
-                <Pressable
-                  onPress={onMessage}
-                  style={[styles.messageBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                  <Icon name="chat" size={18} color={colors.accent} />
-                  <Text style={[styles.messageLabel, { color: colors.accent }]}>Message</Text>
-                </Pressable>
-                <PrimaryButton
-                  label={done ? 'Completed' : 'Mark as done'}
-                  onPress={markDone}
-                  disabled={done || saving}
-                  style={styles.doneBtn}
-                />
-              </View>
-            </ScrollView>
+              ) : (
+                <View style={styles.actions}>
+                  <Pressable
+                    onPress={() => {
+                      Haptics.selectionAsync();
+                      if (onSendMessage) setReplyOpen(true);
+                      else onMessage();
+                    }}
+                    accessibilityRole="button"
+                    style={({ pressed }) => [styles.messageBtn, shelfCard, pressed && styles.chipPressed]}>
+                    <Icon name="chat" size={18} color={colors.text} />
+                    <Text style={[styles.messageLabel, { color: colors.text }]}>Message</Text>
+                  </Pressable>
+                  {/* Done / not done: one round tick (filled once it's done; tap again to undo). */}
+                  <Pressable
+                    onPress={done ? markUndone : markDone}
+                    disabled={saving}
+                    accessibilityRole="button"
+                    accessibilityLabel={done ? 'Done. Mark as not done' : 'Mark as done'}
+                    accessibilityState={{ checked: done }}
+                    style={({ pressed }) => [
+                      styles.doneRound,
+                      done ? { backgroundColor: colors.accent } : shelfCard,
+                      pressed && styles.chipPressed,
+                    ]}>
+                    <Icon name="checkDone" size={26} color={done ? colors.onAccent : colors.text} />
+                  </Pressable>
+                </View>
+              )}
+            </PageFooter>
 
         {/* Pickers live inside this page's own Modal: on iPhone a second Modal
             opened beside an open one never shows, while one opened from inside it does. */}
@@ -502,24 +576,20 @@ export function EventDetailsSheet({
           }}
         />
 
-        <DraggableSheet visible={reminderOpen} onClose={() => setReminderOpen(false)} dragAnywhere>
-          <Text style={[styles.reminderTitle, { color: colors.text }]}>Reminder</Text>
-          {REMINDER_OPTIONS.map((opt) => (
-            <Pressable
-              key={String(opt.mins)}
-              onPress={() => {
-                setReminderMins(opt.mins);
-                setReminderOpen(false);
-                persist(checklist, { reminderMins: opt.mins });
-              }}
-              accessibilityRole="button"
-              accessibilityState={{ selected: reminderMins === opt.mins }}
-              style={({ pressed }) => [styles.reminderRow, pressed && { opacity: 0.6 }]}>
-              <Text style={{ color: colors.text, fontSize: 16, fontWeight: '600' }}>{opt.label}</Text>
-              {reminderMins === opt.mins ? <Icon name="check" size={18} color={colors.accent} /> : null}
-            </Pressable>
-          ))}
-        </DraggableSheet>
+        <SettingsChoiceSheet
+          visible={reminderOpen}
+          title="Reminder"
+          hint="We'll remind you both before it starts."
+          options={REMINDER_OPTIONS.map((opt) => ({ value: String(opt.mins), label: opt.label }))}
+          value={String(reminderMins)}
+          onSelect={(v) => {
+            const mins = v === 'null' ? null : Number(v);
+            setReminderMins(mins);
+            setReminderOpen(false);
+            persist(checklist, { reminderMins: mins });
+          }}
+          onClose={() => setReminderOpen(false)}
+        />
       </FullScreenPage>
 
     </>
@@ -528,44 +598,64 @@ export function EventDetailsSheet({
 
 const styles = StyleSheet.create({
   topActions: { flexDirection: 'row', gap: 8 },
-  scroll: { paddingHorizontal: 20, paddingTop: 4, paddingBottom: 40, gap: 14 },
-  hero: { borderRadius: 24, borderWidth: StyleSheet.hairlineWidth, padding: 16, gap: 12 },
-  heroTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  heroIcon: { width: 52, height: 52, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
-  heroPeople: { alignItems: 'flex-end', gap: 4 },
+  scroll: { paddingHorizontal: 20, paddingTop: 4, paddingBottom: 24, gap: 14 },
+  hero: { borderRadius: 26, padding: 18, gap: 14, overflow: 'hidden' },
+  heroWash: { position: 'absolute', top: 0, left: 0, right: 0, height: 110 },
+  forRow: { flexDirection: 'row', alignItems: 'center', gap: 12, borderRadius: 18, paddingHorizontal: 14, paddingVertical: 12 },
+  forCopy: { flex: 1, minWidth: 0, gap: 2 },
+  forLabel: { fontSize: 15, fontWeight: '800' },
+  sectionHead: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', marginTop: 4 },
+  sectionLabelFlush: { marginTop: 0 },
+  progressInset: { marginHorizontal: 14, marginTop: 12, marginBottom: 0 },
+  heroTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
+  heroIcon: { width: 48, height: 48, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+  forPill: { flexDirection: 'row', alignItems: 'center', gap: 6, height: 34, paddingLeft: 5, paddingRight: 12, borderRadius: 17 },
   heroFaces: { flexDirection: 'row' },
-  heroFace: { borderWidth: 2, borderRadius: 16 },
-  heroFaceOverlap: { marginLeft: -10 },
-  heroFor: { fontSize: 12, fontWeight: '700' },
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  chip: { flexDirection: 'row', alignItems: 'center', gap: 6, height: 34, paddingHorizontal: 12, borderRadius: 17 },
-  chipPressed: { opacity: 0.7 },
-  chipShrink: { flexShrink: 1, maxWidth: '100%' },
-  chipText: { fontSize: 14, fontWeight: '700' },
-  chipTextShrink: { flexShrink: 1 },
-  countdownRow: { flexDirection: 'row', gap: 8 },
-  countTile: { flex: 1, borderRadius: 16, paddingVertical: 12, alignItems: 'center' },
-  countNum: { fontSize: 26, fontWeight: '900', letterSpacing: -0.6, fontVariant: ['tabular-nums'] },
-  countUnit: { fontSize: 12, fontWeight: '700', marginTop: 1 },
-  heroTitle: { fontSize: 28, fontWeight: '800', letterSpacing: -0.5 },
-  heroTitleInput: { fontSize: 28, fontWeight: '800', letterSpacing: -0.5, padding: 0 },
-  doneBanner: {
+  heroFace: { borderWidth: 2, borderRadius: 13 },
+  heroFaceOverlap: { marginLeft: -9 },
+  heroFor: { fontSize: 13, fontWeight: '800' },
+  titleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  heroTitle: { flexShrink: 1, fontSize: 28, fontWeight: '900', letterSpacing: -0.6, lineHeight: 33 },
+  heroTitleInput: { fontSize: 28, fontWeight: '900', letterSpacing: -0.6, padding: 0 },
+  statusPill: {
+    alignSelf: 'flex-start',
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    borderRadius: 12,
+    gap: 6,
+    height: 32,
     paddingHorizontal: 12,
-    paddingVertical: 10,
+    borderRadius: 16,
   },
-  card: { borderRadius: 14, padding: 16, gap: 4 },
-  cardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 6,
-  },
-  cardTitle: { fontSize: 16, fontWeight: '700' },
-  cardMeta: { fontSize: 13, fontWeight: '600' },
+  statusText: { fontSize: 14, fontWeight: '800' },
+  statusDot: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
+  doneRound: { width: 52, height: 52, borderRadius: 26, alignItems: 'center', justifyContent: 'center' },
+  statusAction: { fontSize: 13, fontWeight: '800', textDecorationLine: 'underline', marginLeft: 4 },
+  ticket: { flexDirection: 'row', alignItems: 'center', borderRadius: 20, padding: 8 },
+  ticketHalf: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10, padding: 4 },
+  ticketDivider: { width: StyleSheet.hairlineWidth, alignSelf: 'stretch', marginVertical: 6 },
+  dateBlock: { width: 46, height: 50, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  dateBlockMonth: { fontSize: 11, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 0.6 },
+  dateBlockDay: { fontSize: 20, fontWeight: '900', lineHeight: 23, fontVariant: ['tabular-nums'] },
+  ticketCopy: { flex: 1, minWidth: 0, gap: 1 },
+  ticketLabel: { fontSize: 12, fontWeight: '700' },
+  ticketValue: { fontSize: 15, fontWeight: '800' },
+  chipPressed: { opacity: 0.7 },
+  detailRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10 },
+  rowIcon: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
+  rowCopy: { flex: 1, minWidth: 0, gap: 1 },
+  rowLabel: { fontSize: 12, fontWeight: '700' },
+  rowValue: { fontSize: 15, fontWeight: '700' },
+  rowInput: { fontSize: 15, fontWeight: '700', padding: 0 },
+  checkText: { flex: 1, fontSize: 15, fontWeight: '600' },
+  addText: { fontSize: 14, fontWeight: '800' },
+  card: { borderRadius: 22, padding: 16, gap: 6 },
+  cardHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 4 },
+  cardIcon: { width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
+  cardTitle: { flex: 1, fontSize: 16, fontWeight: '800' },
+  cardMeta: { fontSize: 13, fontWeight: '700', fontVariant: ['tabular-nums'] },
+  cardHint: { fontSize: 13, fontWeight: '600' },
+  progressTrack: { height: 6, borderRadius: 3, overflow: 'hidden', marginBottom: 4 },
+  progressFill: { height: 6, borderRadius: 3 },
   checkRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 8 },
   checkBox: {
     width: 22,
@@ -575,7 +665,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  addCheckRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingTop: 8 },
+  addCheckRow: { flexDirection: 'row', alignItems: 'center', gap: 10, height: 44, paddingHorizontal: 14, borderRadius: 14, marginTop: 6 },
   checkInput: { flex: 1, fontSize: 15, fontWeight: '600', padding: 0 },
   notesInput: {
     minHeight: 56,
@@ -584,17 +674,33 @@ const styles = StyleSheet.create({
     textAlignVertical: 'top',
     padding: 0,
   },
-  metaRow: {
+  divider: { height: 1 },
+  actions: { flexDirection: 'row', gap: 10 },
+  replyRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 8 },
+  replyCancel: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
+  replyInput: {
+    flex: 1,
+    minHeight: 44,
+    maxHeight: 120,
+    borderRadius: 22,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 12,
+    fontSize: 15,
+    fontWeight: '500',
+  },
+  replySend: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
+  sentNote: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 10,
+    gap: 8,
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    marginBottom: 10,
   },
-  metaLabel: { fontSize: 13, fontWeight: '600', width: 80 },
-  metaValue: { flex: 1, fontSize: 15, fontWeight: '600', textAlign: 'right' },
-  metaInput: { flex: 1, fontSize: 15, fontWeight: '600', textAlign: 'right', padding: 0 },
-  divider: { height: StyleSheet.hairlineWidth },
-  actions: { flexDirection: 'row', gap: 10, marginTop: 4 },
+  sentNoteText: { flex: 1, fontSize: 14, fontWeight: '700' },
+  sentNoteAction: { fontSize: 14, fontWeight: '800', textDecorationLine: 'underline' },
   messageBtn: {
     flex: 1,
     flexDirection: 'row',
@@ -602,7 +708,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 8,
     borderRadius: 999,
-    borderWidth: StyleSheet.hairlineWidth,
     paddingVertical: 14,
   },
   messageLabel: { fontSize: 15, fontWeight: '700' },

@@ -99,7 +99,7 @@ export function streakSubtitle(status: StreakStatus, now = new Date()): string {
     return `Restore your ${status.restorable_streak}-day streak before starting over`;
   }
   if (status.current_streak <= 0) {
-    return 'Send a moment, share your mood or answer today’s question to start';
+    return 'Send a moment, share your mood, answer today’s question or play to start';
   }
   if (isStreakVisuallyAtRisk(status, now)) return 'Check in before midnight';
   if (status.at_risk) return 'Check in today to keep it going';

@@ -1,17 +1,19 @@
 import { LinearGradient } from 'expo-linear-gradient';
-import { useMemo } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useMemo, useState } from 'react';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { LevelRing } from '@/components/games/PlayHub';
-import { StreakFlame } from '@/components/home/StreakFlame';
+import { StickerFlame } from '@/components/home/StickerFlame';
+import { useStreak } from '@/hooks/queries';
 import { PlayHeader } from '@/components/play/PlayHeader';
+import { ShareCardModal } from '@/components/share/ShareCardModal';
+import { TitleShareCard } from '@/components/share/TitleShareCard';
 import { Icon, type IconName } from '@/components/ui/Icon';
-import { Avatar, colorWithAlpha } from '@/components/ui/primitives';
+import { Avatar, colorWithAlpha, outlineColor, separatorColor, trackColor } from '@/components/ui/primitives';
 import { Spacing } from '@/constants/design-system';
 import { useTheme } from '@/hooks/useTheme';
 import {
-  activeStreak,
   BADGES,
   emptyProgress,
   levelInfo,
@@ -55,12 +57,17 @@ export default function ProgressScreen() {
   const stored = usePlayProgressStore((s) => s.progress);
   const progress = stored ?? emptyProgress(todayKey());
   const info = useMemo(() => levelInfo(progress.xp), [progress.xp]);
-  const streak = activeStreak(progress);
+  // Your streak (the one on Home, You and the streak page), not the separate play count.
+  const { data: streakStatus } = useStreak();
+  const streak = streakStatus?.current_streak ?? 0;
+  const streakBest = Math.max(streakStatus?.longest_streak ?? 0, streak);
   const chase = useMemo(() => nextBadges(progress, 4), [progress]);
+  // A title from The road being shared.
+  const [sharing, setSharing] = useState<{ title: string; line: string } | null>(null);
   const currentTier = Math.floor((info.level - 1) / LEVELS_PER_TIER);
   const card = {
     backgroundColor: colors.isDark ? colors.surface : colors.surfaceElevated,
-    borderColor: colors.border,
+    borderColor: outlineColor(colors),
   };
 
   return (
@@ -104,19 +111,26 @@ export default function ProgressScreen() {
           {/* The three headline numbers. */}
           <View style={styles.trio}>
             <View style={[styles.trioCell, card]}>
-              <Icon name="star" size={18} color={colors.accent} filled />
+              <View style={styles.trioIcon}>
+                <Icon name="star" size={22} color={colors.accent} filled />
+              </View>
               <Text style={[styles.trioValue, { color: colors.text }]}>{progress.xp.toLocaleString()}</Text>
               <Text style={[styles.trioLabel, { color: colors.textSecondary }]}>Total XP</Text>
             </View>
             <View style={[styles.trioCell, card]}>
-              <StreakFlame size={18} tone={streak > 0 ? 'active' : 'idle'} />
+              {/* Your streak: the same number as Home and the streak page. */}
+              <View style={[styles.trioIcon, streak > 0 ? undefined : styles.idleFlame]}>
+                <StickerFlame size={20} />
+              </View>
               <Text style={[styles.trioValue, { color: colors.text }]}>{streak}</Text>
               <Text style={[styles.trioLabel, { color: colors.textSecondary }]}>
-                Days played in a row · best {progress.bestStreak}
+                Day streak · best {streakBest}
               </Text>
             </View>
             <View style={[styles.trioCell, card]}>
-              <Text style={styles.trioEmoji}>🏅</Text>
+              <View style={styles.trioIcon}>
+                <Icon name="trophy" size={22} color={colors.accent} filled />
+              </View>
               <Text style={[styles.trioValue, { color: colors.text }]}>
                 {progress.badges.length}/{BADGES.length}
               </Text>
@@ -132,9 +146,9 @@ export default function ProgressScreen() {
                 {chase.map(({ badge, value }, i) => (
                   <View
                     key={badge.id}
-                    style={[styles.row, i > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border }]}>
+                    style={[styles.row, i > 0 && { borderTopWidth: 1, borderTopColor: separatorColor(colors) }]}>
                     <View style={[styles.rowTile, { backgroundColor: colors.accentSoft }]}>
-                      <Text style={styles.rowEmoji}>{badge.emoji}</Text>
+                      <Icon name={badge.icon} size={22} color={colors.accent} filled />
                     </View>
                     <View style={styles.flex}>
                       <View style={styles.rowHead}>
@@ -148,7 +162,7 @@ export default function ProgressScreen() {
                       <Text style={[styles.rowHint, { color: colors.textSecondary }]} numberOfLines={1}>
                         {badge.hint}
                       </Text>
-                      <View style={[styles.track, { backgroundColor: colors.border }]}>
+                      <View style={[styles.track, { backgroundColor: trackColor(colors) }]}>
                         <View
                           style={[
                             styles.fill,
@@ -192,20 +206,28 @@ export default function ProgressScreen() {
                 const startLevel = i * LEVELS_PER_TIER + 1;
                 const reached = i < currentTier;
                 const here = i === currentTier;
+                const earned = reached || here;
+                const levels = `Levels ${startLevel}–${startLevel + LEVELS_PER_TIER - 1}`;
                 return (
-                  <View
+                  // A title you've reached (or are on) opens as an achievement to share.
+                  <Pressable
                     key={title}
-                    style={[
+                    disabled={!earned}
+                    onPress={() => setSharing({ title, line: here ? `Couple level ${info.level}` : levels })}
+                    accessibilityRole={earned ? 'button' : undefined}
+                    accessibilityLabel={earned ? `${title}, share` : `${title}, locked`}
+                    style={({ pressed }) => [
                       styles.tier,
-                      i > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },
+                      i > 0 && { borderTopWidth: 1, borderTopColor: separatorColor(colors) },
                       here && { backgroundColor: colors.accentSoft },
+                      pressed && styles.pressed,
                     ]}>
                     <View
                       style={[
                         styles.tierDot,
                         reached || here
                           ? { backgroundColor: colors.accent }
-                          : { borderWidth: 2, borderColor: colors.border },
+                          : { borderWidth: 2, borderColor: outlineColor(colors) },
                       ]}>
                       {reached ? <Icon name="check" size={13} color={colors.onAccent} /> : null}
                       {here ? <Icon name="star" size={12} color={colors.onAccent} filled /> : null}
@@ -222,23 +244,36 @@ export default function ProgressScreen() {
                         {here
                           ? `You're here · level ${info.level}`
                           : reached
-                            ? `Levels ${startLevel}–${startLevel + LEVELS_PER_TIER - 1}`
+                            ? levels
                             : `From level ${startLevel} · ${xpForLevel(startLevel).toLocaleString()} XP`}
                       </Text>
                     </View>
-                    {!reached && !here ? <Icon name="lock" size={16} color={colors.textTertiary} /> : null}
-                  </View>
+                    {earned ? (
+                      <Icon name="share" size={17} color={colors.textSecondary} />
+                    ) : (
+                      <Icon name="lock" size={16} color={colors.textTertiary} />
+                    )}
+                  </Pressable>
                 );
               })}
             </View>
           </View>
         </View>
       </ScrollView>
+
+      {/* A title from The road, shared like an achievement. */}
+      <ShareCardModal visible={!!sharing} onClose={() => setSharing(null)} title="Share your couple title">
+        {sharing ? <TitleShareCard title={sharing.title} line={sharing.line} /> : null}
+      </ShareCardModal>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  pressed: { opacity: 0.7 },
+  // One box for each headline icon (star, flame, trophy), so all three read the same size.
+  trioIcon: { width: 26, height: 26, alignItems: 'center', justifyContent: 'center' },
+  idleFlame: { opacity: 0.4 },
   root: { flex: 1 },
   flex: { flex: 1, minWidth: 0 },
   body: { paddingHorizontal: Spacing.lg, gap: 22, paddingTop: 6 },
@@ -252,7 +287,6 @@ const styles = StyleSheet.create({
   heroXp: { fontSize: 13, fontWeight: '700', textAlign: 'center' },
   trio: { flexDirection: 'row', gap: 10 },
   trioCell: { flex: 1, borderRadius: 20, borderWidth: 1.5, padding: 12, gap: 4, alignItems: 'center' },
-  trioEmoji: { fontSize: 17 },
   trioValue: { fontSize: 22, fontWeight: '900', letterSpacing: -0.5 },
   trioLabel: { fontSize: 11, fontWeight: '700', textAlign: 'center' },
   section: { gap: 10 },
@@ -260,7 +294,6 @@ const styles = StyleSheet.create({
   list: { borderRadius: 22, borderWidth: 1.5, overflow: 'hidden' },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14 },
   rowTile: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
-  rowEmoji: { fontSize: 22 },
   rowHead: { flexDirection: 'row', alignItems: 'baseline', gap: 8 },
   rowTitle: { flex: 1, fontSize: 15, fontWeight: '900' },
   rowCount: { fontSize: 12, fontWeight: '800' },

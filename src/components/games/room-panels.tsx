@@ -11,7 +11,7 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import type { PlayTone } from '@/components/activities/explore/explore-catalog';
-import { Avatar } from '@/components/ui/primitives';
+import { Avatar, trackColor } from '@/components/ui/primitives';
 import { useTheme } from '@/hooks/useTheme';
 import { QUIZ_ANSWER_MS, type ChoiceItem, type PromptItem, type QuizItem, type RoomState } from '@/lib/game-room/types';
 import { BOOL_TILE_COLORS, QUIZ_TILE_COLORS } from '@/lib/quiz-live';
@@ -604,7 +604,7 @@ export function QuizPanel({ state, tone }: PanelProps) {
   return (
     <View style={styles.panel}>
       {state.step === 'answer' && state.deadline ? (
-        <View style={[styles.timerTrack, { backgroundColor: colors.border }]}>
+        <View style={[styles.timerTrack, { backgroundColor: trackColor(colors) }]}>
           <View style={[styles.timerFill, { width: `${Math.round(pct * 100)}%`, backgroundColor: hot ? '#FF5A5F' : tone.accent }]} />
           <Text style={[styles.timerText, { color: colors.text }]}>{seconds}s</Text>
         </View>

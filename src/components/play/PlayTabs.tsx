@@ -29,11 +29,11 @@ export function PlayTabs({ value, onChange }: { value: PlayTab; onChange: (tab: 
               void Haptics.selectionAsync();
               onChange(tab.id);
             }}
-            style={[styles.tab, selected && { backgroundColor: colors.text }]}>
+            style={[styles.tab, selected && { backgroundColor: colors.accent }]}>
             <Text
               style={[
                 styles.label,
-                { color: selected ? colors.background : colors.textSecondary, fontWeight: selected ? '800' : '700' },
+                { color: selected ? colors.onAccent : colors.textSecondary, fontWeight: selected ? '800' : '700' },
               ]}>
               {tab.label}
             </Text>

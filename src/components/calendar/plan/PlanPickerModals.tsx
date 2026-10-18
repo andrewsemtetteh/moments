@@ -1,12 +1,12 @@
 import { format, isToday, startOfDay } from 'date-fns';
-import { paperEdge } from '@/components/ui/primitives';
+import { insetCardStyle } from '@/components/ui/primitives';
 import * as Haptics from '@/lib/haptics';
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 
 import { PlanWheelColumn, useTimeWheelItems } from '@/components/calendar/plan/PlanWheelColumn';
 import { DraggableSheet } from '@/components/ui/DraggableSheet';
-import { Icon } from '@/components/ui/Icon';
+import { SheetHeader, SheetIconButton } from '@/components/ui/SheetHeader';
 import { MonthCalendarPicker } from '@/components/ui/MonthCalendarPicker';
 import { useTheme } from '@/hooks/useTheme';
 
@@ -30,6 +30,7 @@ export function notInPast(when: Date): Date {
   return next;
 }
 
+/** The Settings drawer top: the title on the left, ✕ and a filled ✓ on the right. */
 function ModalHeader({
   title,
   onClose,
@@ -41,26 +42,13 @@ function ModalHeader({
   onDone: () => void;
   doneDisabled?: boolean;
 }) {
-  const { colors } = useTheme();
   return (
     <View style={styles.header}>
-      <Pressable
-        onPress={onClose}
-        hitSlop={8}
-        accessibilityLabel="Close"
-        style={[styles.iconBtn, { backgroundColor: colors.surfaceElevated }, paperEdge(colors)]}>
-        <Icon name="close" size={18} color={colors.textSecondary} />
-      </Pressable>
-      <Text style={[styles.headerTitle, { color: colors.text }]}>{title}</Text>
-      <Pressable
-        onPress={onDone}
-        disabled={doneDisabled}
-        hitSlop={8}
-        accessibilityLabel="Done"
-        accessibilityState={{ disabled: !!doneDisabled }}
-        style={[styles.iconBtn, { backgroundColor: colors.accentSoft, opacity: doneDisabled ? 0.4 : 1 }]}>
-        <Icon name="check" size={18} color={colors.accent} />
-      </Pressable>
+      <SheetHeader
+        title={title}
+        onClose={onClose}
+        right={<SheetIconButton icon="check" primary onPress={onDone} disabled={doneDisabled} accessibilityLabel="Done" />}
+      />
     </View>
   );
 }
@@ -100,7 +88,7 @@ export function PlanDateModal({
         }}
       />
       <Text style={[styles.preview, { color: colors.text }]}>{format(draft, 'EEEE, MMM d')}</Text>
-      <View style={styles.pickerPad}>
+      <View style={[styles.pickerCard, insetCardStyle(colors, 'sheet')]}>
         <MonthCalendarPicker value={draft} onChange={setDraft} minDate={allowPast ? null : startOfDay(new Date())} />
       </View>
     </DraggableSheet>
@@ -165,7 +153,7 @@ export function PlanTimeModal({
         <Text style={[styles.passed, { color: colors.error }]}>That time has already passed today</Text>
       ) : null}
 
-      <View style={styles.wheels}>
+      <View style={[styles.wheels, styles.pickerCard, insetCardStyle(colors, 'sheet')]}>
         <PlanWheelColumn items={hours} value={h} onChange={(v) => setH(Number(v))} width={88} />
         <Text style={[styles.colon, { color: colors.textTertiary }]}>:</Text>
         <PlanWheelColumn items={minutes} value={m} onChange={(v) => setM(Number(v))} width={88} />
@@ -182,21 +170,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 0,
     paddingBottom: 28,
   },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-  },
-  iconBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerTitle: { fontSize: 16, fontWeight: '700' },
+  header: { paddingHorizontal: 16, paddingTop: 4 },
   passed: { textAlign: 'center', fontSize: 13, fontWeight: '700', marginTop: -6, marginBottom: 6 },
   preview: {
     textAlign: 'center',
@@ -206,7 +180,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     fontVariant: ['tabular-nums'],
   },
-  pickerPad: { paddingHorizontal: 16, paddingBottom: 8 },
+  pickerCard: { marginHorizontal: 16, marginBottom: 8, borderRadius: 18, overflow: 'hidden', padding: 8 },
   wheels: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -122,6 +122,11 @@ export async function openFromNotification(target: NotificationNavTarget, router
       router.navigate('/(tabs)/profile');
       return;
 
+    // Your partner's birthday: Home, where its card is.
+    case 'birthday':
+      goHome(router);
+      return;
+
     case 'wrapped':
       router.navigate('/(tabs)/profile');
       afterNavigate(() => {

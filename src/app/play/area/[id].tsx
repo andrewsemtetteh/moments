@@ -7,6 +7,8 @@ import { PLAY_TONES, type ExploreModalKey } from '@/components/activities/explor
 import { ExploreActivityModal } from '@/components/activities/explore/ExploreActivityModal';
 import { PlayCard } from '@/components/play/PlayCard';
 import { DraggableSheet } from '@/components/ui/DraggableSheet';
+import { SheetHeader, sheetListStyle } from '@/components/ui/SheetHeader';
+import { pressedRowColor, separatorColor } from '@/components/ui/primitives';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { PlayHeader } from '@/components/play/PlayHeader';
 import { Icon } from '@/components/ui/Icon';
@@ -139,12 +141,12 @@ export default function AreaScreen() {
               style={[
                 styles.filterBtn,
                 {
-                  backgroundColor: activeFilters ? colors.text : colors.surfaceElevated,
-                  borderColor: activeFilters ? colors.text : colors.border,
+                  backgroundColor: activeFilters ? colors.accent : colors.surfaceElevated,
+                  borderColor: activeFilters ? colors.accent : colors.border,
                 },
               ]}>
-              <Icon name="filter" size={18} color={activeFilters ? colors.background : colors.text} />
-              {activeFilters ? <Text style={[styles.filterCount, { color: colors.background }]}>{activeFilters}</Text> : null}
+              <Icon name="filter" size={18} color={activeFilters ? colors.onAccent : colors.text} />
+              {activeFilters ? <Text style={[styles.filterCount, { color: colors.onAccent }]}>{activeFilters}</Text> : null}
             </Pressable>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips} style={styles.chipScroll}>
               <Chip label="All" selected={format === 'all'} onPress={() => setFormat('all')} />
@@ -223,27 +225,25 @@ export default function AreaScreen() {
 
       <DraggableSheet visible={filtersOpen} onClose={() => setFiltersOpen(false)}>
         <View style={styles.sheet}>
-          <Text style={[styles.sheetTitle, { color: colors.text }]}>Filters</Text>
+          <SheetHeader title="Filters" hint="Pick how deep, and what to show." onClose={() => setFiltersOpen(false)} />
 
           <Text style={[styles.sheetLabel, { color: colors.textSecondary }]}>Depth</Text>
-          <View style={styles.sheetChips}>
-            {[{ id: 'all' as const, label: 'Any' }, ...DEPTHS].map((d) => (
-              <Chip key={d.id} label={d.label} selected={depth === d.id} onPress={() => setDepth(d.id)} />
-            ))}
-          </View>
+          <ChoiceList
+            options={[{ id: 'all' as const, label: 'Any' }, ...DEPTHS]}
+            value={depth}
+            onSelect={(id) => setDepth(id)}
+          />
 
           <Text style={[styles.sheetLabel, { color: colors.textSecondary }]}>Show</Text>
-          <View style={styles.sheetChips}>
-            {(
-              [
-                { id: 'all', label: 'Everything' },
-                { id: 'unanswered', label: 'Unanswered' },
-                { id: 'answered', label: 'Answered' },
-              ] as const
-            ).map((o) => (
-              <Chip key={o.id} label={o.label} selected={status === o.id} onPress={() => setStatus(o.id)} />
-            ))}
-          </View>
+          <ChoiceList
+            options={[
+              { id: 'all' as const, label: 'Everything' },
+              { id: 'unanswered' as const, label: 'Unanswered' },
+              { id: 'answered' as const, label: 'Answered' },
+            ]}
+            value={status}
+            onSelect={(id) => setStatus(id)}
+          />
 
           <View style={styles.sheetActions}>
             <Pressable onPress={resetFilters} accessibilityRole="button" style={styles.sheetReset}>
@@ -262,6 +262,41 @@ export default function AreaScreen() {
   );
 }
 
+/** One choice from a short list, as on the Settings drawers: an inset list, a ✓ on the one picked. */
+function ChoiceList<T extends string>({
+  options,
+  value,
+  onSelect,
+}: {
+  options: readonly { id: T; label: string }[];
+  value: T;
+  onSelect: (id: T) => void;
+}) {
+  const { colors } = useTheme();
+  return (
+    <View style={sheetListStyle(colors)}>
+      {options.map((o, i) => {
+        const on = o.id === value;
+        return (
+          <Pressable
+            key={o.id}
+            onPress={() => onSelect(o.id)}
+            accessibilityRole="radio"
+            accessibilityState={{ selected: on }}
+            style={({ pressed }) => [
+              styles.choiceRow,
+              i < options.length - 1 && { borderBottomWidth: 1, borderBottomColor: separatorColor(colors) },
+              pressed && { backgroundColor: pressedRowColor(colors) },
+            ]}>
+            <Text style={[styles.choiceLabel, { color: colors.text }, on && styles.choiceLabelOn]}>{o.label}</Text>
+            {on ? <Icon name="check" size={20} color={colors.accent} /> : null}
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
 function Chip({ label, selected, onPress }: { label: string; selected: boolean; onPress: () => void }) {
   const { colors } = useTheme();
   return (
@@ -272,17 +307,20 @@ function Chip({ label, selected, onPress }: { label: string; selected: boolean; 
       style={[
         styles.chip,
         {
-          backgroundColor: selected ? colors.text : colors.surfaceElevated,
-          borderColor: selected ? colors.text : colors.border,
+          backgroundColor: selected ? colors.accent : colors.surfaceElevated,
+          borderColor: selected ? colors.accent : colors.border,
         },
       ]}>
-      <Text style={[styles.chipText, { color: selected ? colors.background : colors.text }]}>{label}</Text>
+      <Text style={[styles.chipText, { color: selected ? colors.onAccent : colors.text }]}>{label}</Text>
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
+  choiceRow: { minHeight: 52, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  choiceLabel: { fontSize: 16, fontWeight: '600' },
+  choiceLabelOn: { fontWeight: '800' },
   hero: { borderBottomLeftRadius: 32, borderBottomRightRadius: 32, paddingTop: 10, paddingBottom: 30, minHeight: 150, justifyContent: 'flex-end' },
   heroBody: { paddingHorizontal: 24, gap: 18 },
   heroBlurb: { color: '#FFFFFF', fontSize: 20, fontWeight: '700', lineHeight: 27, letterSpacing: -0.3 },

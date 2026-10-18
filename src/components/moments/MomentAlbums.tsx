@@ -16,13 +16,14 @@ import { Image } from 'expo-image';
 
 import { DraggableSheet } from '@/components/ui/DraggableSheet';
 import { HeaderIconButton } from '@/components/ui/HeaderIconButton';
-import { colorWithAlpha } from '@/components/ui/primitives';
+import { colorWithAlpha, separatorColor, insetCardStyle, pressedRowColor, cardSurface } from '@/components/ui/primitives';
 import { Icon, type IconName } from '@/components/ui/Icon';
 import { useTheme } from '@/hooks/useTheme';
 import { ALBUM_UPLOAD_MAX, pickAlbumMedia, type PickedMedia } from '@/lib/album-upload';
 import { ALBUM_ICONS, markIcon } from '@/lib/mark-icons';
 import { albumCoverId, type MomentAlbum } from '@/lib/moment-albums';
 import { momentChrome } from '@/lib/moment-theme';
+import { sheetListStyle } from '@/components/ui/SheetHeader';
 import type { Moment } from '@/types/database';
 
 /** Album folder on the shelf. */
@@ -60,7 +61,7 @@ export function AlbumsShelf({
           accessibilityRole="button"
           style={({ pressed }) => [
             styles.invite,
-            { backgroundColor: chrome.surfaceSoft, borderColor: chrome.border },
+            cardSurface(colors),
             pressed && styles.pressed,
           ]}>
           <View style={[styles.inviteIcon, { backgroundColor: chrome.accentSoft }]}>
@@ -348,7 +349,8 @@ export function AlbumEditSheet({
         onSubmitEditing={submit}
         style={[
           styles.nameInput,
-          { color: chrome.text, borderColor: chrome.border, backgroundColor: chrome.surfaceSoft },
+          cardSurface(colors),
+          { color: chrome.text },
         ]}
       />
 
@@ -396,7 +398,7 @@ export function AlbumEditSheet({
                 style={({ pressed }) => [
                   styles.mediaTile,
                   styles.mediaAdd,
-                  { borderColor: chrome.border, backgroundColor: chrome.surfaceSoft },
+                  cardSurface(colors),
                   pressed && styles.pressed,
                 ]}>
                 <Icon name="image" size={26} color={chrome.accent} />
@@ -404,7 +406,7 @@ export function AlbumEditSheet({
               </Pressable>
             ) : null}
             {media.map((item) => (
-              <View key={item.uri} style={[styles.mediaTile, { backgroundColor: chrome.surfaceSoft }]}>
+              <View key={item.uri} style={[styles.mediaTile, cardSurface(colors)]}>
                 {item.type === 'photo' ? (
                   <Image source={{ uri: item.uri }} style={StyleSheet.absoluteFill} contentFit="cover" />
                 ) : (
@@ -498,7 +500,8 @@ export function ActionSheet({
         </View>
       ) : null}
       {groups.map((group, gi) => (
-        <View key={gi} style={[styles.actionGroup, { backgroundColor: chrome.surfaceSoft }]}>
+        // Each group as a Settings list: an inset card on the sheet, rows split by the theme's separator.
+        <View key={gi} style={[styles.actionGroup, insetCardStyle(colors, 'sheet')]}>
           {group.map((a, i) => {
             const tint = a.destructive ? chrome.error : chrome.text;
             return (
@@ -511,8 +514,8 @@ export function ActionSheet({
                 accessibilityRole="button"
                 style={({ pressed }) => [
                   styles.actionRow,
-                  i > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: chrome.border },
-                  pressed && { backgroundColor: chrome.border },
+                  i > 0 && { borderTopWidth: 1, borderTopColor: separatorColor(colors) },
+                  pressed && { backgroundColor: pressedRowColor(colors) },
                 ]}>
                 <Text style={[styles.actionLabel, { color: tint }]}>{a.label}</Text>
                 <Icon name={a.icon} size={21} color={tint} />
@@ -546,18 +549,28 @@ export function AlbumPickerSheet({
       <Text style={[styles.sheetTitle, { color: chrome.text }]}>
         Add {count} moment{count === 1 ? '' : 's'} to…
       </Text>
-      <ScrollView style={styles.pickerList} keyboardShouldPersistTaps="handled">
-        <Pressable onPress={onNew} style={({ pressed }) => [styles.pickerRow, pressed && styles.pressed]}>
+      <ScrollView style={[styles.pickerList, ...sheetListStyle(colors)]} keyboardShouldPersistTaps="handled">
+        <Pressable
+          onPress={onNew}
+          style={({ pressed }) => [
+            styles.pickerRow,
+            albums.length > 0 && { borderBottomWidth: 1, borderBottomColor: separatorColor(colors) },
+            pressed && { backgroundColor: pressedRowColor(colors) },
+          ]}>
           <View style={[styles.pickerThumb, { backgroundColor: chrome.accentSoft }]}>
             <Icon name="plus" size={22} color={chrome.accent} />
           </View>
           <Text style={[styles.pickerName, { color: chrome.accent }]}>New album</Text>
         </Pressable>
-        {albums.map((album) => (
+        {albums.map((album, i) => (
           <Pressable
             key={album.id}
             onPress={() => onPick(album)}
-            style={({ pressed }) => [styles.pickerRow, pressed && styles.pressed]}>
+            style={({ pressed }) => [
+              styles.pickerRow,
+              i < albums.length - 1 && { borderBottomWidth: 1, borderBottomColor: separatorColor(colors) },
+              pressed && { backgroundColor: pressedRowColor(colors) },
+            ]}>
             <View style={[styles.pickerThumb, { backgroundColor: chrome.accentSoft }]}>
               <Icon name={markIcon(album.emoji, 'albums')} size={24} color={chrome.accent} filled />
             </View>
@@ -666,8 +679,8 @@ const styles = StyleSheet.create({
   actionHead: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   actionThumb: { width: 52, height: 52, borderRadius: 14, overflow: 'hidden' },
   actionHeadText: { flex: 1, minWidth: 0, gap: 2 },
-  actionTitle: { fontSize: 18, fontWeight: '800', letterSpacing: -0.2 },
-  actionSubtitle: { fontSize: 13, fontWeight: '600' },
+  actionTitle: { fontSize: 20, fontWeight: '800', letterSpacing: -0.3 },
+  actionSubtitle: { fontSize: 14, lineHeight: 20 },
   actionMessage: { fontSize: 14, lineHeight: 20, marginTop: -4 },
   primaryWrap: { gap: 6, marginTop: 4 },
   upgradeBtn: { height: 54, borderRadius: 27, flexDirection: 'row', gap: 8, alignItems: 'center', justifyContent: 'center' },
@@ -734,8 +747,8 @@ const styles = StyleSheet.create({
   },
   mediaHint: { fontSize: 12, fontWeight: '600' },
   pickerList: { maxHeight: 360 },
-  pickerRow: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 8 },
-  pickerThumb: { width: 52, height: 52, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+  pickerRow: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 10, paddingHorizontal: 14 },
+  pickerThumb: { width: 46, height: 46, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   pickerText: { flex: 1, minWidth: 0 },
   pickerName: { fontSize: 16, fontWeight: '700' },
 });

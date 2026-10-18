@@ -1,6 +1,7 @@
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Icon, type IconName } from '@/components/ui/Icon';
+import { cardEdge } from '@/components/ui/primitives';
 import { useTheme } from '@/hooks/useTheme';
 import { momentChrome } from '@/lib/moment-theme';
 
@@ -34,7 +35,8 @@ export function HistoryActionDock({
       <View
         style={[
           styles.dock,
-          { backgroundColor: chrome.elevated, borderColor: chrome.border },
+          { backgroundColor: chrome.elevated },
+          cardEdge(colors),
         ]}>
         <DockAction
           icon="trash"

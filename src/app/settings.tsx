@@ -12,7 +12,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ChangePasswordModal, MIN_PASSWORD_LENGTH } from '@/components/profile/ChangePasswordModal';
 import { EditAnniversaryModal } from '@/components/profile/EditAnniversaryModal';
 import { EditFieldModal } from '@/components/profile/EditFieldModal';
-// import { EditGenderModal } from '@/components/profile/EditGenderModal';
+import { EditGenderModal } from '@/components/profile/EditGenderModal';
 import { EditRelationshipTypeModal } from '@/components/profile/EditRelationshipTypeModal';
 import { LocationSharingSettings } from '@/components/profile/LocationSharingSettings';
 import { OnlineStatusSettings } from '@/components/profile/OnlineStatusSettings';
@@ -35,15 +35,15 @@ import { deleteMyAccount, syncMyEmail } from '@/lib/moments-api';
 import { openSubscriptionManagement } from '@/lib/purchases';
 import { getFirstName } from '@/lib/avatar-initial';
 import { markRelationshipOnboardingDone } from '@/lib/onboarding-storage';
-// import { profileGenderLabel } from '@/lib/profile-gender';
+import { profileGender, profileGenderLabel } from '@/lib/profile-gender';
+import { birthdayShortLabel } from '@/lib/birthday';
 import { relationshipTypeLabel } from '@/lib/relationship-type';
 import { closeStackScreen } from '@/lib/router';
 import { toUserFacingNetworkError } from '@/lib/network-error';
 import { formatSubscriptionExpiry } from '@/lib/subscription';
 import * as api from '@/services/api';
 import { useAuthStore, useRelationshipStore, useUIStore } from '@/stores';
-// import type { ProfileGender, RelationshipType } from '@/types/database';
-import type { RelationshipType } from '@/types/database';
+import type { ProfileGender, RelationshipType } from '@/types/database';
 import { ensurePermission } from '@/lib/permissions';
 import { useHapticsPref } from '@/lib/haptics';
 
@@ -79,10 +79,13 @@ export default function SettingsScreen() {
   const [savingEdit, setSavingEdit] = useState(false);
   const [avatarSaving, setAvatarSaving] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
-  // Gender isn't used anywhere in the app, so it's not asked for (kept for later).
-  // const [showGenderModal, setShowGenderModal] = useState(false);
-  // const [genderDraft, setGenderDraft] = useState<ProfileGender | null>(user?.gender ?? null);
-  // const [savingGender, setSavingGender] = useState(false);
+  // Gender (optional): Male, Female, Genderqueer or non-binary, Other.
+  const [showGenderModal, setShowGenderModal] = useState(false);
+  const [genderDraft, setGenderDraft] = useState<ProfileGender | null>(profileGender(user));
+  const [savingGender, setSavingGender] = useState(false);
+  // Birthday (optional): your partner gets a countdown and reminders.
+  const [birthdayOpen, setBirthdayOpen] = useState(false);
+  const [savingBirthday, setSavingBirthday] = useState(false);
   const [showRelationshipTypeModal, setShowRelationshipTypeModal] = useState(false);
   const [relationshipTypeDraft, setRelationshipTypeDraft] = useState<RelationshipType | null>(
     relationship?.relationship_type ?? null,
@@ -391,32 +394,46 @@ export default function SettingsScreen() {
     }
   };
 
-  // const openGenderModal = () => {
-    // setGenderDraft(user?.gender ?? null);
-    // setShowGenderModal(true);
-  // };
+  const openGenderModal = () => {
+    setGenderDraft(profileGender(user));
+    setShowGenderModal(true);
+  };
 
-  // const closeGenderModal = () => {
-    // setShowGenderModal(false);
-    // setGenderDraft(user?.gender ?? null);
-  // };
+  const closeGenderModal = () => {
+    setShowGenderModal(false);
+    setGenderDraft(profileGender(user));
+  };
 
-  // const saveGender = async (gender: ProfileGender) => {
-    // if (!user) return;
+  const saveGender = async (gender: ProfileGender) => {
+    if (!user) return;
+    setGenderDraft(gender);
+    setSavingGender(true);
+    try {
+      const updated = await api.updateProfile(user.id, { gender_identity: gender });
+      setUser(updated);
+      closeGenderModal();
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (e) {
+      Alert.alert('Could not save', e instanceof Error ? e.message : 'Please try again.');
+    } finally {
+      setSavingGender(false);
+    }
+  };
 
-    // setGenderDraft(gender);
-    // setSavingGender(true);
-    // try {
-      // const updated = await api.updateProfile(user.id, { gender });
-      // setUser(updated);
-      // closeGenderModal();
-      // Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    // } catch (e) {
-      // Alert.alert('Could not save', e instanceof Error ? e.message : 'Please try again.');
-    // } finally {
-      // setSavingGender(false);
-    // }
-  // };
+  const saveBirthday = async (isoDate: string) => {
+    if (!user) return;
+    setSavingBirthday(true);
+    try {
+      const updated = await api.updateProfile(user.id, { birthday: isoDate });
+      setUser(updated);
+      setBirthdayOpen(false);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (e) {
+      Alert.alert('Could not save', e instanceof Error ? e.message : 'Please try again.');
+    } finally {
+      setSavingBirthday(false);
+    }
+  };
 
   const openRelationshipTypeModal = () => {
     setRelationshipTypeDraft(relationship?.relationship_type ?? null);
@@ -492,7 +509,13 @@ export default function SettingsScreen() {
         <Section title="Account">
           <Group>
             <Row icon="user" label="Name" value={user?.name?.trim() || 'Add your name'} onPress={() => openEdit('name', user?.name ?? '')} />
-            {/* <Row icon="people" label="Gender" value={profileGenderLabel(user?.gender)} onPress={openGenderModal} /> */}
+            <Row icon="people" label="Gender" value={profileGenderLabel(profileGender(user))} onPress={openGenderModal} />
+            <Row
+              icon="gift"
+              label="Birthday"
+              value={user?.birthday ? birthdayShortLabel(user.birthday) : 'Add your birthday'}
+              onPress={() => setBirthdayOpen(true)}
+            />
             <Row icon="mail" label="Email" value={user?.email ?? ''} onPress={() => openEdit('email', user?.email ?? '')} />
             <Row
               icon="lock"
@@ -616,6 +639,23 @@ export default function SettingsScreen() {
                 onPress={() => router.push({ pathname: '/(onboarding)/about-you', params: { preview: '1' } })}
               />
               <Row
+                icon="lock"
+                label="Preview sign-in screens"
+                onPress={() => {
+                  useUIStore.setState({ authPreview: true });
+                  router.push('/(auth)/welcome');
+                }}
+              />
+              <Row
+                icon="compass"
+                label="Preview app tour"
+                onPress={() => {
+                  // The tour points at Home, so go there first.
+                  router.navigate('/(tabs)/home');
+                  setTimeout(() => useUIStore.getState().requestTour(), 600);
+                }}
+              />
+              <Row
                 icon="fire"
                 label="Preview streak celebration"
                 onPress={() => useUIStore.getState().openStreakSpark(42, 41)}
@@ -682,13 +722,24 @@ export default function SettingsScreen() {
         onSave={savePassword}
       />
 
-      {/* <EditGenderModal
+      <EditGenderModal
         visible={showGenderModal}
-        value={user?.gender}
+        value={profileGender(user)}
         savingValue={savingGender ? genderDraft : null}
         onSelect={(g) => void saveGender(g)}
         onClose={closeGenderModal}
-      /> */}
+      />
+
+      <EditAnniversaryModal
+        visible={birthdayOpen}
+        value={user?.birthday ?? '1998-01-01'}
+        saving={savingBirthday}
+        onClose={() => setBirthdayOpen(false)}
+        onSave={(iso) => void saveBirthday(iso)}
+        title="Birthday"
+        hint="Only your person sees it. They get a countdown and a reminder so they never forget."
+        minYear={1920}
+      />
 
       <EditRelationshipTypeModal
         visible={showRelationshipTypeModal}

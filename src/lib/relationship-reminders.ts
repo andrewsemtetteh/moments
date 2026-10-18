@@ -1,6 +1,7 @@
 import { addDays, addMonths, setHours, setMinutes, startOfDay } from 'date-fns';
 
 import { getAnniversaryCountdown } from '@/lib/anniversary';
+import { nextBirthday, turningAge } from '@/lib/birthday';
 import { loadExpoNotifications } from '@/lib/expo-notifications-safe';
 
 /**
@@ -31,10 +32,13 @@ function plural(n: number, word: string) {
 export function buildRelationshipReminders({
   anniversaryIso,
   partnerName,
+  partnerBirthday,
   now = new Date(),
 }: {
   anniversaryIso: string;
   partnerName: string;
+  /** YYYY-MM-DD: a week's notice and the day itself. */
+  partnerBirthday?: string | null;
   now?: Date;
 }): Reminder[] {
   const { anniversaryDate, togetherSince } = getAnniversaryCountdown(anniversaryIso);
@@ -86,6 +90,26 @@ export function buildRelationshipReminders({
       }),
     );
 
+  // Your partner's birthday: a week's notice, then the day.
+  const birthday = nextBirthday(partnerBirthday, now);
+  if (birthday) {
+    const turning = turningAge(partnerBirthday, now);
+    list.push({
+      id: 'birthday-week',
+      date: at9(addDays(birthday, -7)),
+      title: `${partnerName}’s birthday is in a week 🎁`,
+      body: 'Time to plan something (or at least a card).',
+      type: 'birthday',
+    });
+    list.push({
+      id: 'birthday',
+      date: at9(birthday),
+      title: `It’s ${partnerName}’s birthday 🎂`,
+      body: turning ? `They’re ${turning} today. Make it a good one.` : 'Make it a good one.',
+      type: 'birthday',
+    });
+  }
+
   // Wrapped season.
   const wrappedDay = at9(new Date(now.getFullYear(), 11, 1));
   list.push({
@@ -100,7 +124,11 @@ export function buildRelationshipReminders({
 }
 
 /** Replace all scheduled relationship reminders. Quietly does nothing without permission. */
-export async function syncRelationshipReminders(args: { anniversaryIso: string; partnerName: string }) {
+export async function syncRelationshipReminders(args: {
+  anniversaryIso: string;
+  partnerName: string;
+  partnerBirthday?: string | null;
+}) {
   const Notifications = loadExpoNotifications();
   if (!Notifications) return;
   try {

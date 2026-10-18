@@ -2,6 +2,8 @@ import type { ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { DraggableSheet, useKeptWhileClosing } from '@/components/ui/DraggableSheet';
+import { SheetHeader } from '@/components/ui/SheetHeader';
+import { insetCardStyle } from '@/components/ui/primitives';
 import {
   CameraCharacter,
   MicCharacter,
@@ -65,19 +67,23 @@ export function PermissionSheetHost({ host = 'root', inline = false }: { host?: 
   return (
     <DraggableSheet visible={!!live} onClose={dismiss} inline={inline} dragAnywhere>
       <View style={styles.content}>
-        <View style={styles.art}>{copy.art}</View>
-        <Text style={[styles.title, { color: colors.text }]}>{copy.title}</Text>
-        <Text style={[styles.body, { color: colors.textSecondary }]}>
-          {shown.blocked ? `You turned this off before. ${copy.body(who)} Switch it on in Settings.` : copy.body(who)}
-        </Text>
+        <SheetHeader
+          title={copy.title}
+          hint={shown.blocked ? `You turned this off before. ${copy.body(who)} Switch it on in Settings.` : copy.body(who)}
+          onClose={dismiss}
+        />
+        <View style={[styles.art, insetCardStyle(colors, 'sheet')]}>{copy.art}</View>
         <Pressable
           onPress={() => answerPermissionPrompt(true)}
           accessibilityRole="button"
           style={({ pressed }) => [styles.allow, { backgroundColor: colors.accent, opacity: pressed ? 0.85 : 1 }]}>
           <Text style={[styles.allowText, { color: colors.onAccent }]}>{shown.blocked ? 'Open Settings' : copy.allow}</Text>
         </Pressable>
-        <Pressable onPress={() => answerPermissionPrompt(false)} hitSlop={8} accessibilityRole="button" style={styles.later}>
-          <Text style={[styles.laterText, { color: colors.textSecondary }]}>Not now</Text>
+        <Pressable
+          onPress={() => answerPermissionPrompt(false)}
+          accessibilityRole="button"
+          style={({ pressed }) => [styles.later, insetCardStyle(colors, 'sheet'), pressed && { opacity: 0.7 }]}>
+          <Text style={[styles.laterText, { color: colors.text }]}>Not now</Text>
         </Pressable>
       </View>
     </DraggableSheet>
@@ -85,12 +91,12 @@ export function PermissionSheetHost({ host = 'root', inline = false }: { host?: 
 }
 
 const styles = StyleSheet.create({
-  content: { alignItems: 'center', gap: 12 },
-  art: { marginVertical: 4 },
+  content: { alignItems: 'stretch', gap: 12 },
+  art: { alignItems: 'center', justifyContent: 'center', borderRadius: 18, paddingVertical: 18 },
   title: { fontSize: 24, fontWeight: '900', letterSpacing: -0.5, textAlign: 'center' },
   body: { fontSize: 15, lineHeight: 21, textAlign: 'center' },
   allow: { alignSelf: 'stretch', height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', marginTop: 6 },
   allowText: { fontSize: 17, fontWeight: '800' },
-  later: { height: 40, justifyContent: 'center' },
+  later: { height: 52, borderRadius: 26, alignItems: 'center', justifyContent: 'center' },
   laterText: { fontSize: 15, fontWeight: '700' },
 });

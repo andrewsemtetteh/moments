@@ -644,6 +644,13 @@ export async function fetchCalendarEvents(relationshipId: string, month?: Date) 
 }
 
 /** Inclusive range fetch — used by Plan so week/month dots + agenda share one source. */
+/** One plan / memory by id (e.g. opened from a plan card in Chat). Null when it's gone. */
+export async function fetchCalendarEvent(eventId: string): Promise<CalendarEvent | null> {
+  const { data, error } = await backend.from('calendar_events').select('*').eq('id', eventId).maybeSingle();
+  if (error) throw error;
+  return (data as CalendarEvent | null) ?? null;
+}
+
 export async function fetchCalendarEventsInRange(
   relationshipId: string,
   from: Date,
@@ -941,7 +948,11 @@ export async function updateMood(relationshipId: string, mood: string, userId: s
   return data as MoodLog;
 }
 
-export async function fetchStreakStatus(relationshipId: string): Promise<StreakStatus | null> {
+export async function fetchStreakStatus(
+  relationshipId: string,
+  /** Which partner you are on the streak row (for the fallback below). */
+  side?: 'user_1' | 'user_2',
+): Promise<StreakStatus | null> {
   const { data, error } = await backend.rpc('get_streak_status', {
     p_relationship_id: relationshipId,
   });
@@ -950,9 +961,11 @@ export async function fetchStreakStatus(relationshipId: string): Promise<StreakS
     const status = parseStreakStatus(data);
     if (!status) return null;
 
-    // Only fall back to client table scans when the RPC omitted day lists.
+    // Individual streaks (the server sends your partner's too): your days are exactly
+    // active_days. Older servers left day lists out, so they're filled in by scanning.
+    const individual = status.partner_streak !== undefined;
     const needsActive = status.active_days === undefined;
-    const needsActivity = status.activity_days === undefined;
+    const needsActivity = !individual && status.activity_days === undefined;
     const [activeDays, activityDays] = await Promise.all([
       needsActive ? fetchStreakActiveDays(relationshipId) : Promise.resolve([] as string[]),
       needsActivity ? fetchRelationshipActivityDays(relationshipId) : Promise.resolve([] as string[]),
@@ -968,12 +981,28 @@ export async function fetchStreakStatus(relationshipId: string): Promise<StreakS
     });
   }
 
-  const { data: row, error: rowError } = await backend
+  // The status call failed: read the row itself. With individual streaks that row holds
+  // both of yours and the together streak; use YOURS (its plain current_streak is the
+  // together one, which showed everyone 0 whenever this fallback ran).
+  if (error) console.warn('[streak] get_streak_status failed; reading the row', error);
+  const { data: raw, error: rowError } = await backend
     .from('streaks')
-    .select('current_streak, longest_streak, last_active_date, restorable_streak, restorable_lost_at')
+    .select('*')
     .eq('relationship_id', relationshipId)
     .maybeSingle();
-  if (rowError || !row) return null;
+  if (rowError || !raw) {
+    // Couldn't read anything: keep what's on screen rather than showing 0.
+    throw new Error('Streak unavailable');
+  }
+  const r = raw as Record<string, unknown>;
+  const mine = side && typeof r[`${side}_streak`] === 'number';
+  const row = {
+    current_streak: mine ? (r[`${side}_streak`] as number) : Number(r.current_streak ?? 0),
+    longest_streak: mine ? (r[`${side}_longest`] as number) : Number(r.longest_streak ?? 0),
+    last_active_date: (mine ? r[`${side}_last_active_date`] : r.last_active_date) as string | null,
+    restorable_streak: (mine ? r[`${side}_restorable`] : r.restorable_streak) as number | null,
+    restorable_lost_at: (mine ? r[`${side}_lost_at`] : r.restorable_lost_at) as string | null,
+  };
   const status = legacyStreakToStatus(relationshipId, row);
   const canRestore =
     status.current_streak === 0 &&

@@ -1,6 +1,8 @@
 import { Pressable, StyleSheet, Text } from 'react-native';
 
 import { DraggableSheet, SheetScrollView } from '@/components/ui/DraggableSheet';
+import { SheetHeader } from '@/components/ui/SheetHeader';
+import { insetCardStyle } from '@/components/ui/primitives';
 import { MOOD_COLORS, MOOD_EMOJI, MOOD_LABELS } from '@/constants/design-system';
 import { useTheme } from '@/hooks/useTheme';
 
@@ -16,9 +18,8 @@ export function MoodPickerModal({ visible, moods, selected, onSelect, onClose }:
   const { colors } = useTheme();
 
   return (
-    <DraggableSheet visible={visible} onClose={onClose} style={styles.sheet} dragAnywhere>
-      <Text style={[styles.title, { color: colors.text }]}>More moods</Text>
-      <Text style={[styles.subtitle, { color: colors.textSecondary }]}>Pick the mood that fits best right now</Text>
+    <DraggableSheet visible={visible} onClose={onClose} dragAnywhere>
+      <SheetHeader title="More moods" hint="Pick the mood that fits best right now." onClose={onClose} />
 
       <SheetScrollView contentContainerStyle={styles.grid}>
         {moods.map((m) => {
@@ -33,8 +34,8 @@ export function MoodPickerModal({ visible, moods, selected, onSelect, onClose }:
               style={[
                 styles.moodItem,
                 {
-                  backgroundColor: active ? MOOD_COLORS[m] + '33' : colors.surface,
-                  borderColor: active ? MOOD_COLORS[m] : colors.border,
+                  ...insetCardStyle(colors, 'sheet'),
+                  ...(active ? { backgroundColor: MOOD_COLORS[m] + '33', borderColor: MOOD_COLORS[m], borderWidth: 2 } : null),
                 },
               ]}>
               <Text style={styles.emoji}>{MOOD_EMOJI[m]}</Text>
@@ -44,9 +45,6 @@ export function MoodPickerModal({ visible, moods, selected, onSelect, onClose }:
         })}
       </SheetScrollView>
 
-      <Pressable onPress={onClose} style={styles.cancel} hitSlop={8}>
-        <Text style={{ color: colors.textSecondary, fontWeight: '600' }}>Cancel</Text>
-      </Pressable>
     </DraggableSheet>
   );
 }

@@ -10,7 +10,7 @@ import { StickerHeart } from '@/components/home/StickerHeart';
 import { DashedRing } from '@/components/ui/DashedRing';
 import { StreakRestoreBanner } from '@/components/home/StreakRestoreBanner';
 import { Icon, type IconName } from '@/components/ui/Icon';
-import { Avatar, colorWithAlpha, paperEdge, separatorColor } from '@/components/ui/primitives';
+import { Avatar, colorWithAlpha, paperEdge, separatorColor, trackColor } from '@/components/ui/primitives';
 import { ringColor } from '@/constants/design-system';
 import { useStreak } from '@/hooks/queries';
 import { useTheme } from '@/hooks/useTheme';
@@ -106,7 +106,7 @@ export default function StreakScreen() {
   const explain = () =>
     Alert.alert(
       'How streaks work',
-      'Each of you has your own streak. It grows every day you check in: send a moment, share your mood or answer today’s question. Miss a day and it starts over (with Plus you can restore it within 24 hours).\n\nDays you both check in count towards your together streak.',
+      'Each of you has your own streak. It grows every day you check in: send a moment, share your mood, answer today’s question or play a game together. Miss a day and it starts over (with Plus you can restore it within 24 hours).\n\nDays you both check in count towards your together streak.',
     );
 
   return (
@@ -254,7 +254,7 @@ export default function StreakScreen() {
                   </Text>
                 </View>
               </View>
-              <View style={[styles.track, { backgroundColor: colors.sticker ? (colors.isDark ? 'rgba(255,255,255,0.14)' : 'rgba(26,26,26,0.10)') : colors.surfaceElevated }, paperEdge(colors, 1.5)]}>
+              <View style={[styles.track, { backgroundColor: trackColor(colors) }, paperEdge(colors, 1.5)]}>
                 <View
                   style={[
                     styles.fill,

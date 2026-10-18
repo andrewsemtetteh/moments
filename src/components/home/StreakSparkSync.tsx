@@ -3,7 +3,7 @@ import { useEffect } from 'react';
 import { useStreak } from '@/hooks/queries';
 import { getLastCelebratedStreak, setLastCelebratedStreak } from '@/lib/streak-celebration-storage';
 import { isStreakMilestone } from '@/lib/streak-milestones';
-import { useRelationshipStore, useUIStore } from '@/stores';
+import { isFullScreenLayerOpen, useRelationshipStore, useUIStore } from '@/stores';
 
 const OPEN_DELAY_MS = 650;
 
@@ -19,7 +19,8 @@ export function StreakSparkSync() {
   const relationshipId = useRelationshipStore((s) => s.relationship?.id);
   const { data: streak } = useStreak();
   const openStreakSpark = useUIStore((s) => s.openStreakSpark);
-  const busy = useUIStore((s) => s.showPaywall || s.streakSpark != null || s.streakMilestoneCount != null);
+  // Waits for anything full-screen to close (e.g. the camera you just sent a moment from).
+  const busy = useUIStore(isFullScreenLayerOpen);
   const count = streak?.current_streak;
 
   useEffect(() => {

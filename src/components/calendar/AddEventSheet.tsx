@@ -7,7 +7,7 @@ import { TextInput } from '@/components/ui/ThemedTextInput';
 import { notInPast, PlanDateModal, PlanTimeModal } from '@/components/calendar/plan/PlanPickerModals';
 import { DraggableSheet } from '@/components/ui/DraggableSheet';
 import { Icon, type IconName } from '@/components/ui/Icon';
-import { PrimaryButton, paperEdge } from '@/components/ui/primitives';
+import { PrimaryButton, paperEdge, separatorColor } from '@/components/ui/primitives';
 import { getEventTypeColors } from '@/constants/calendar-events';
 import { Radius, type ThemeColors } from '@/constants/design-system';
 import { useTheme } from '@/hooks/useTheme';
@@ -208,7 +208,7 @@ export function AddEventSheet({
                   }}
                   colors={colors}
                 />
-                <View style={[styles.divider, { backgroundColor: colors.border }]} />
+                <View style={[styles.divider, { backgroundColor: separatorColor(colors) }]} />
                 <FieldRow
                   icon="time"
                   label="Time"
@@ -304,5 +304,5 @@ const styles = StyleSheet.create({
   },
   fieldLabel: { fontSize: 12, fontWeight: '700', width: 42 },
   fieldValue: { flex: 1, fontSize: 15, fontWeight: '700', textAlign: 'right' },
-  divider: { height: StyleSheet.hairlineWidth, marginHorizontal: 14 },
+  divider: { height: 1, marginHorizontal: 14 },
 });

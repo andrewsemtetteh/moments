@@ -86,7 +86,7 @@ Adds:
 
 | Plan | Price | Trial | Shown |
 |---|---|---|---|
-| Yearly | $59.99/year ($5.00/month, $30 each, save 77%) | 7 days free | First, selected by default |
+| Yearly | $69.99/year ($5.83/month, $35 each, save 73%) | 7 days free | First, selected by default |
 | Monthly | $9.99/month | none (starts today) | Second |
 | Weekly | $4.99/week | $0.99 first week (paid intro offer) | Third |
 

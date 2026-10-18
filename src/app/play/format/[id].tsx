@@ -111,11 +111,11 @@ export default function FormatScreen() {
                     style={[
                       styles.chip,
                       {
-                        backgroundColor: selected ? colors.text : colors.surfaceElevated,
-                        borderColor: selected ? colors.text : colors.border,
+                        backgroundColor: selected ? colors.accent : colors.surfaceElevated,
+                        borderColor: selected ? colors.accent : colors.border,
                       },
                     ]}>
-                    <Text style={[styles.chipText, { color: selected ? colors.background : colors.text }]}>{k.label}</Text>
+                    <Text style={[styles.chipText, { color: selected ? colors.onAccent : colors.text }]}>{k.label}</Text>
                   </Pressable>
                 );
               })}

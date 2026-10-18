@@ -50,7 +50,9 @@ app.get('/media/*', async (c) => {
   if (isPrivateMediaKey(key) && !(await verifyMediaSignature(c.env, key, c.req.query('e'), c.req.query('s')))) {
     return c.text('This link has expired', 403);
   }
-  const object = await c.env.STORAGE.get(key);
+  // Range requests: iPhone's audio/video players fetch byte ranges and wait forever without them.
+  const ranged = !!c.req.header('Range');
+  const object = await c.env.STORAGE.get(key, ranged ? { range: c.req.raw.headers } : undefined);
   if (!object) return c.notFound();
 
   const stored = object.httpMetadata?.contentType ?? 'application/octet-stream';
@@ -63,8 +65,20 @@ app.get('/media/*', async (c) => {
     'Content-Security-Policy': "default-src 'none'; sandbox",
     'Referrer-Policy': 'no-referrer',
     ETag: object.httpEtag,
+    'Accept-Ranges': 'bytes',
   };
   if (!inline) headers['Content-Disposition'] = 'attachment';
+
+  const size = object.size;
+  const r = object.range as { offset?: number; length?: number; suffix?: number } | undefined;
+  if (ranged && r) {
+    const start = r.suffix != null ? Math.max(0, size - r.suffix) : (r.offset ?? 0);
+    const length = r.suffix != null ? size - start : (r.length ?? size - start);
+    headers['Content-Range'] = `bytes ${start}-${start + length - 1}/${size}`;
+    headers['Content-Length'] = String(length);
+    return new Response(object.body, { status: 206, headers });
+  }
+  headers['Content-Length'] = String(size);
   return new Response(object.body, { headers });
 });
 
@@ -130,7 +144,9 @@ app.get('/me', async (c) => {
 /** Creates the app-owned profile row for a Clerk user the first time they're seen. Idempotent. */
 app.post('/users', async (c) => {
   const userId = c.get('userId');
-  const body = await c.req.json<{ email?: string; name?: string }>().catch((): { email?: string; name?: string } => ({}));
+  const body = await c.req
+    .json<{ email?: string; name?: string }>()
+    .catch((): { email?: string; name?: string } => ({}));
 
   const existing = await c.env.DB.prepare('SELECT * FROM users WHERE id = ?1').bind(userId).first();
   if (existing) {
@@ -148,7 +164,9 @@ app.post('/users', async (c) => {
     null;
   // Sign-ins without an email (some phone / Apple relay setups): a private placeholder.
   let email = (verified ?? `${userId}@users.moments-app`).toLowerCase();
-  const clash = await c.env.DB.prepare('SELECT id FROM users WHERE email = ?1 AND id <> ?2').bind(email, userId).first();
+  const clash = await c.env.DB.prepare('SELECT id FROM users WHERE email = ?1 AND id <> ?2')
+    .bind(email, userId)
+    .first();
   if (clash) email = `${userId}@users.moments-app`;
 
   // Location sharing starts off: turning it on is what asks for location permission.
@@ -165,6 +183,8 @@ const USER_UPDATE_FIELDS = [
   'name',
   'avatar_url',
   'gender',
+  'gender_identity',
+  'birthday',
   // Subscription fields are written only by the Superwall webhook (see billing.ts).
   'location_sharing_enabled',
   'location_latitude',
@@ -184,15 +204,31 @@ app.post('/me/email-sync', rateLimit('email-sync', 10, 3600), async (c) => {
   const verified = clerkUser?.emailAddresses.find((e) => e.id === clerkUser.primaryEmailAddressId);
   if (!verified || verified.verification?.status !== 'verified') return c.json({ error: 'No verified email' }, 400);
   const email = verified.emailAddress.toLowerCase();
-  const clash = await c.env.DB.prepare('SELECT id FROM users WHERE email = ?1 AND id <> ?2').bind(email, userId).first();
+  const clash = await c.env.DB.prepare('SELECT id FROM users WHERE email = ?1 AND id <> ?2')
+    .bind(email, userId)
+    .first();
   if (clash) return c.json({ error: 'That email is already used by another account' }, 409);
   await c.env.DB.prepare('UPDATE users SET email = ?1 WHERE id = ?2').bind(email, userId).run();
   return c.json(await c.env.DB.prepare('SELECT * FROM users WHERE id = ?1').bind(userId).first());
 });
 
+/** The genders you can pick (or none). */
+const GENDER_IDENTITIES = new Set(['male', 'female', 'non_binary', 'other']);
+
 app.patch('/me', async (c) => {
   const userId = c.get('userId');
   const body = await c.req.json<Record<string, unknown>>();
+
+  if ('gender_identity' in body && body.gender_identity !== null && !GENDER_IDENTITIES.has(String(body.gender_identity))) {
+    return c.json({ error: 'Pick one of the listed options' }, 400);
+  }
+  if ('birthday' in body && body.birthday !== null) {
+    const b = String(body.birthday);
+    const d = new Date(`${b}T12:00:00Z`);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(b) || Number.isNaN(d.getTime()) || d.getTime() > Date.now() || d.getUTCFullYear() < 1900) {
+      return c.json({ error: 'That birthday doesn’t look right' }, 400);
+    }
+  }
 
   const update = buildUpdate(body, USER_UPDATE_FIELDS);
   if (!update) return c.json({ error: 'No recognized fields to update' }, 400);
@@ -324,7 +360,14 @@ app.post('/relationships', async (c) => {
     `INSERT INTO relationships (id, user_1_id, status, invite_code, relationship_name, anniversary_date, relationship_type)
      VALUES (?1, ?2, 'pending', ?3, ?4, ?5, ?6)`,
   )
-    .bind(id, userId, inviteCode, body.relationship_name ?? 'Our Moments', body.anniversary_date ?? null, body.relationship_type ?? null)
+    .bind(
+      id,
+      userId,
+      inviteCode,
+      body.relationship_name ?? 'Our Moments',
+      body.anniversary_date ?? null,
+      body.relationship_type ?? null,
+    )
     .run();
   await carryPersonalPlus(c.env, userId, id);
 
@@ -400,9 +443,7 @@ app.patch('/relationships/:id', async (c) => {
   const update = buildUpdate(body, ['relationship_name', 'anniversary_date', 'relationship_type', 'distance_mode']);
   if (!update) return c.json({ error: 'No recognized fields to update' }, 400);
 
-  await c.env.DB.prepare(
-    `UPDATE relationships SET ${update.setClause} WHERE id = ?${update.values.length + 1}`,
-  )
+  await c.env.DB.prepare(`UPDATE relationships SET ${update.setClause} WHERE id = ?${update.values.length + 1}`)
     .bind(...update.values, relationshipId)
     .run();
 

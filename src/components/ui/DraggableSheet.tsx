@@ -236,6 +236,15 @@ export function DraggableSheet({
             sheetStyle,
             style,
           ]}>
+          {/* The drawer's colour carries on below its edge, so pulling it up (it gives a
+              little) never shows a gap underneath. */}
+          <View
+            pointerEvents="none"
+            style={[
+              styles.underlap,
+              { backgroundColor: (StyleSheet.flatten(style)?.backgroundColor as string | undefined) ?? colors.surfaceElevated },
+            ]}
+          />
           {dragAnywhere ? (
             <SheetScroll.Provider value={scrollCtx}>
               <GestureDetector gesture={pan}>
@@ -287,6 +296,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
   },
   dragArea: { flexShrink: 1 },
+  underlap: { position: 'absolute', left: 0, right: 0, top: '100%', height: 600 },
   handleTouchTarget: {
     alignSelf: 'center',
     paddingVertical: 10,

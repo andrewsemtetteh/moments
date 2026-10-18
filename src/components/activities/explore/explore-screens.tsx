@@ -5,7 +5,7 @@ import { Alert, Pressable, ScrollView, Text, View } from 'react-native';
 import { TextInput } from '@/components/ui/ThemedTextInput';
 
 import { Icon } from '@/components/ui/Icon';
-import { colorWithAlpha, PrimaryButton, paperEdge } from '@/components/ui/primitives';
+import { colorWithAlpha, PrimaryButton, paperEdge, trackColor } from '@/components/ui/primitives';
 import {
     CARD_CATEGORIES,
     CARD_PROMPTS,
@@ -54,11 +54,11 @@ export function CardsDeckScreen() {
               style={[
                 s.tab,
                 {
-                  backgroundColor: active ? colors.text : colors.surfaceElevated,
-                  borderColor: active ? colors.text : colors.border,
+                  backgroundColor: active ? colors.accent : colors.surfaceElevated,
+                  borderColor: active ? colors.accent : colors.border,
                 },
               ]}>
-              <Text style={[s.tabText, { color: active ? colors.background : colors.textSecondary }]}>
+              <Text style={[s.tabText, { color: active ? colors.onAccent : colors.textSecondary }]}>
                 {c.charAt(0).toUpperCase() + c.slice(1)}
               </Text>
             </Pressable>
@@ -187,7 +187,7 @@ export function QuizScreen() {
   return (
     <View style={s.stack}>
       <View style={s.progressWrap}>
-        <View style={[s.progressTrack, { backgroundColor: colors.surfaceElevated }, paperEdge(colors, 1.5)]}>
+        <View style={[s.progressTrack, { backgroundColor: trackColor(colors) }, paperEdge(colors, 1.5)]}>
           <View style={[s.progressFill, { backgroundColor: colors.accent, width: `${(answered / total) * 100}%` }]} />
         </View>
         <Text style={[s.progressLabel, { color: colors.textSecondary }]}>
@@ -278,11 +278,11 @@ export function BucketListScreen() {
               style={[
                 s.tab,
                 {
-                  backgroundColor: active ? colors.text : colors.surfaceElevated,
-                  borderColor: active ? colors.text : colors.border,
+                  backgroundColor: active ? colors.accent : colors.surfaceElevated,
+                  borderColor: active ? colors.accent : colors.border,
                 },
               ]}>
-              <Text style={[s.tabText, { color: active ? colors.background : colors.textSecondary }]}>
+              <Text style={[s.tabText, { color: active ? colors.onAccent : colors.textSecondary }]}>
                 {t === 'all' ? 'All' : t === 'pending' ? 'To do' : 'Done'}
               </Text>
             </Pressable>
@@ -386,7 +386,7 @@ export function GoalsScreen() {
               <Text style={[s.goalTitle, { color: colors.text }]}>{g.title}</Text>
               <Text style={[s.goalPct, { color: colors.accent }]}>{g.progress}%</Text>
             </View>
-            <View style={[s.goalTrack, { backgroundColor: colors.surface }, paperEdge(colors, 1.5)]}>
+            <View style={[s.goalTrack, { backgroundColor: trackColor(colors) }, paperEdge(colors, 1.5)]}>
               <View style={[s.goalFill, { backgroundColor: colors.accent, width: `${Math.min(100, g.progress)}%` }]} />
             </View>
             <View style={s.goalBtns}>
@@ -538,7 +538,7 @@ export function CouplesTriviaScreen() {
   return (
     <View style={s.stack}>
       <View style={s.progressWrap}>
-        <View style={[s.progressTrack, { backgroundColor: colors.surfaceElevated }, paperEdge(colors, 1.5)]}>
+        <View style={[s.progressTrack, { backgroundColor: trackColor(colors) }, paperEdge(colors, 1.5)]}>
           <View
             style={[
               s.progressFill,

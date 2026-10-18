@@ -12,12 +12,59 @@ import { useTheme } from '@/hooks/useTheme';
 import { getFirstName } from '@/lib/avatar-initial';
 import { displayTitle } from '@/lib/plan-day';
 import { parsePlanMeta, planIcon } from '@/lib/plan-meta';
-import { openCalendar } from '@/lib/router';
+import { openCalendar, openChat } from '@/lib/router';
+import { birthdayDayLabel, daysUntilBirthday, nextBirthday, turningAge } from '@/lib/birthday';
 import * as api from '@/services/api';
 import { useRelationshipStore, useUIStore } from '@/stores';
-import type { CalendarEvent, Moment } from '@/types/database';
+import type { CalendarEvent, Moment, UserProfile } from '@/types/database';
 import { useCardBorder } from '@/hooks/useCardBorder';
 import { formatInviteCode } from '@/lib/invite-code';
+import { separatorColor } from '@/components/ui/primitives';
+
+/**
+ * Your partner's birthday, from two weeks out: a countdown that opens Plan on the
+ * day (to plan something), and on the day itself opens Chat to say happy birthday.
+ */
+export function PartnerBirthdayCard({ partner }: { partner: UserProfile }) {
+  const { colors } = useTheme();
+  const cardBorder = useCardBorder();
+  const days = daysUntilBirthday(partner.birthday);
+  const next = nextBirthday(partner.birthday);
+  if (days == null || !next || days > 14) return null;
+  const name = getFirstName(partner.name) ?? 'Your person';
+  const turning = turningAge(partner.birthday);
+  const today = days === 0;
+  return (
+    <Pressable
+      onPress={() => {
+        void Haptics.selectionAsync();
+        if (today) openChat(`Happy birthday ${name}! 🎂`);
+        else openCalendar({ dateISO: next.toISOString() });
+      }}
+      accessibilityRole="button"
+      style={({ pressed }) => [styles.card, styles.row, { backgroundColor: colors.tints.blush }, cardBorder, pressed && styles.pressed]}>
+      <View style={[styles.rowIcon, { backgroundColor: colors.accentSoft }]}>
+        <Icon name="gift" size={22} color={colors.tintAccents?.blush ?? colors.accent} />
+      </View>
+      <View style={styles.rowText}>
+        <Text style={[styles.kicker, { color: colors.textSecondary }]}>{today ? 'Today' : 'Coming up'}</Text>
+        <Text style={[styles.rowTitle, { color: colors.text }]} numberOfLines={1}>
+          {today ? `It’s ${name}’s birthday 🎂` : `${name}’s birthday`}
+        </Text>
+        <Text style={[styles.rowSub, { color: colors.textSecondary }]} numberOfLines={1}>
+          {today
+            ? turning
+              ? `They’re ${turning} today. Send some love.`
+              : 'Send some love.'
+            : days === 1
+              ? `Tomorrow${turning ? ` · turning ${turning}` : ''}`
+              : `In ${days} days · ${birthdayDayLabel(next)}`}
+        </Text>
+      </View>
+      <Icon name="chevronRight" size={18} color={colors.textTertiary} />
+    </Pressable>
+  );
+}
 
 /** Partner hasn't shared a moment today: nudge to send yours. */
 export function NoMomentCard({ partnerName }: { partnerName?: string | null }) {
@@ -128,9 +175,9 @@ export function InviteCard({ from }: { from?: 'profile' } = {}) {
         <Text style={[styles.primaryBtnText, { color: colors.onAccent }]}>Share invite</Text>
       </Pressable>
       <View style={styles.orRow}>
-        <View style={[styles.orLine, { backgroundColor: colors.border }]} />
+        <View style={[styles.orLine, { backgroundColor: separatorColor(colors) }]} />
         <Text style={[styles.orText, { color: colors.textTertiary }]}>or</Text>
-        <View style={[styles.orLine, { backgroundColor: colors.border }]} />
+        <View style={[styles.orLine, { backgroundColor: separatorColor(colors) }]} />
       </View>
       <Pressable
         onPress={() => router.push(from ? `/(onboarding)/join-relationship?from=${from}` : '/(onboarding)/join-relationship')}
@@ -280,6 +327,6 @@ const styles = StyleSheet.create({
   memoryThumbEmpty: { alignItems: 'center', justifyContent: 'center' },
   memoryTitle: { fontSize: 16, fontWeight: '800' },
   orRow: { flexDirection: 'row', alignItems: 'center', gap: 10, alignSelf: 'stretch' },
-  orLine: { flex: 1, height: StyleSheet.hairlineWidth },
+  orLine: { flex: 1, height: 1 },
   orText: { fontSize: 13, fontWeight: '600' },
 });

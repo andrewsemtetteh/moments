@@ -18,6 +18,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Icon } from '@/components/ui/Icon';
 import { useTheme } from '@/hooks/useTheme';
 import { prevStep as stepBefore, stepProgress, stepRoute, type OnboardingStep } from '@/lib/onboarding-v2';
+import { trackColor } from '@/components/ui/primitives';
 
 function useKeyboardOpen() {
   const [open, setOpen] = useState(false);
@@ -130,7 +131,7 @@ export function OnboardingStepScreen({
                 </Pressable>
               ) : null}
               {progress != null ? (
-                <View style={[styles.track, !back && styles.trackNoBack, { backgroundColor: colors.boldBorder ? '#E6E6E6' : colors.surfaceElevated }]}>
+                <View style={[styles.track, !back && styles.trackNoBack, { backgroundColor: trackColor(colors) }]}>
                   <View style={[styles.fill, { width: `${Math.round(progress * 100)}%`, backgroundColor: colors.accent }]} />
                 </View>
               ) : null}

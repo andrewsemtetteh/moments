@@ -10,6 +10,7 @@ import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'rea
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { StickerFlame } from '@/components/home/StickerFlame';
+import { BirthdayPrompt } from '@/components/profile/BirthdayPrompt';
 import { ScreenContainer } from '@/components/layout/ScreenContainer';
 import { TabScreenScroll } from '@/components/layout/TabScreenScroll';
 import { TabSwipe } from '@/components/layout/TabSwipe';
@@ -19,7 +20,7 @@ import { DaysTogetherCard } from '@/components/share/DaysTogetherCard';
 import { ShareCardModal } from '@/components/share/ShareCardModal';
 import { FullScreenImageModal } from '@/components/ui/FullScreenImageModal';
 import { Icon, type IconName } from '@/components/ui/Icon';
-import { Avatar, colorWithAlpha } from '@/components/ui/primitives';
+import { Avatar, colorWithAlpha, trackColor } from '@/components/ui/primitives';
 import { Spacing, type ThemeColors } from '@/constants/design-system';
 import { useStreak } from '@/hooks/queries';
 import { useOpenPartnerProfile } from '@/hooks/useOpenPartnerProfile';
@@ -248,6 +249,9 @@ export default function ProfileScreen() {
             </Text>
           </Pressable>
 
+          {/* Once, until you add it or close it: your birthday, for your partner's countdown. */}
+          <BirthdayPrompt />
+
           {waitingForPartner ? (
             <Section title="Invite your person">
               <InviteCard from="profile" />
@@ -310,7 +314,7 @@ export default function ProfileScreen() {
                   <Text style={[styles.cardTitle, { color: colors.text }]} numberOfLines={1}>
                     Couple level {level.level} · {level.title}
                   </Text>
-                  <View style={[styles.trackThin, { backgroundColor: colors.boldBorder ? colors.backgroundElevated : colors.surfaceElevated }]}>
+                  <View style={[styles.trackThin, { backgroundColor: trackColor(colors) }]}>
                     <View style={[styles.fill, { width: `${Math.round(level.progress * 100)}%`, backgroundColor: colors.accent }]} />
                   </View>
                   <Text style={[styles.small, { color: colors.textSecondary }]}>

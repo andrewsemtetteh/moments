@@ -97,7 +97,11 @@ export async function warmDailyChallengeCache(
 }
 
 export async function resolveStreakStatus(relationshipId: string) {
-  const status = await api.fetchStreakStatus(relationshipId);
+  // Which partner you are on the streak row (only needed if the status call fails).
+  const me = useAuthStore.getState().user?.id;
+  const rel = useRelationshipStore.getState().relationship;
+  const side = me && rel ? (rel.user_2_id === me ? 'user_2' : 'user_1') : undefined;
+  const status = await api.fetchStreakStatus(relationshipId, side);
   const resolved = status ?? emptyStreakStatus(relationshipId);
   await setCachedStreakStatus(relationshipId, resolved);
   return resolved;

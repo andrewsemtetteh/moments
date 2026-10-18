@@ -4,6 +4,8 @@ import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { PLAY_TONES } from '@/components/activities/explore/explore-catalog';
 import { DraggableSheet, useKeptWhileClosing } from '@/components/ui/DraggableSheet';
+import { SheetHeader } from '@/components/ui/SheetHeader';
+import { insetCardStyle } from '@/components/ui/primitives';
 import { useTheme } from '@/hooks/useTheme';
 import { gameRoom } from '@/lib/game-room/manager';
 import { getGameDefinition } from '@/lib/game-room/types';
@@ -39,9 +41,12 @@ function InviteSheet() {
           <View style={[styles.liveBadge, { backgroundColor: colors.success }]}>
             <Text style={styles.liveBadgeText}>LIVE</Text>
           </View>
-          <Text style={[styles.sheetTitle, { color: colors.text }]}>{invite.fromName} wants to play live</Text>
-          <Text style={[styles.sheetSub, { color: colors.textSecondary }]}>They’re in the session now, with voice on.</Text>
-          <View style={[styles.gameCard, { backgroundColor: colors.background, borderColor: colors.border }]}>
+          <SheetHeader
+            title={`${invite.fromName} wants to play live`}
+            hint="They’re in the session now, with voice on."
+            onClose={() => gameRoom.dismissInvite()}
+          />
+          <View style={[styles.gameCard, insetCardStyle(colors, 'sheet')]}>
             <View style={[styles.gameTile, { backgroundColor: tone.accent }]}>
               <Text style={styles.gameEmoji}>{def.emoji}</Text>
             </View>
@@ -59,11 +64,17 @@ function InviteSheet() {
             <Text style={[styles.joinText, { color: colors.onAccent }]}>Join</Text>
           </Pressable>
           <View style={styles.secondaryRow}>
-            <Pressable onPress={() => join(true)} accessibilityRole="button" style={styles.secondaryBtn}>
-              <Text style={[styles.secondaryText, { color: colors.textSecondary }]}>Join muted</Text>
+            <Pressable
+              onPress={() => join(true)}
+              accessibilityRole="button"
+              style={({ pressed }) => [styles.secondaryBtn, styles.secondaryCard, insetCardStyle(colors, 'sheet'), pressed && { opacity: 0.7 }]}>
+              <Text style={[styles.secondaryText, { color: colors.text }]}>Join muted</Text>
             </Pressable>
-            <Pressable onPress={() => gameRoom.dismissInvite()} accessibilityRole="button" style={styles.secondaryBtn}>
-              <Text style={[styles.secondaryText, { color: colors.textSecondary }]}>Not now</Text>
+            <Pressable
+              onPress={() => gameRoom.dismissInvite()}
+              accessibilityRole="button"
+              style={({ pressed }) => [styles.secondaryBtn, styles.secondaryCard, insetCardStyle(colors, 'sheet'), pressed && { opacity: 0.7 }]}>
+              <Text style={[styles.secondaryText, { color: colors.text }]}>Not now</Text>
             </Pressable>
           </View>
         </View>
@@ -130,8 +141,8 @@ export function GameRoomBridge() {
 }
 
 const styles = StyleSheet.create({
-  sheet: { alignItems: 'center', gap: 8, paddingBottom: 8 },
-  liveBadge: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4, marginBottom: 4 },
+  sheet: { alignItems: 'stretch', gap: 10, paddingBottom: 8 },
+  liveBadge: { alignSelf: 'flex-start', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 },
   liveBadgeText: { color: '#14100D', fontSize: 11, fontWeight: '900', letterSpacing: 0.6 },
   sheetTitle: { fontSize: 22, fontWeight: '800', textAlign: 'center', letterSpacing: -0.4 },
   sheetSub: { fontSize: 14, fontWeight: '600', textAlign: 'center', marginBottom: 8 },
@@ -151,7 +162,8 @@ const styles = StyleSheet.create({
   gameSub: { fontSize: 12, fontWeight: '600' },
   joinBtn: { alignSelf: 'stretch', height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center' },
   joinText: { fontSize: 17, fontWeight: '800' },
-  secondaryRow: { alignSelf: 'stretch', flexDirection: 'row' },
+  secondaryRow: { alignSelf: 'stretch', flexDirection: 'row', gap: 10 },
   secondaryBtn: { flex: 1, height: 48, alignItems: 'center', justifyContent: 'center' },
+  secondaryCard: { flex: 1, borderRadius: 999, minHeight: 48 },
   secondaryText: { fontSize: 15, fontWeight: '700' },
 });

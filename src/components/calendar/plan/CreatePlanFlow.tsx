@@ -1,12 +1,11 @@
 import { format, setHours, setMilliseconds, setMinutes, setSeconds, startOfDay } from 'date-fns';
-import { paperEdge } from '@/components/ui/primitives';
+import { separatorColor, cardSurface } from '@/components/ui/primitives';
 import * as Haptics from '@/lib/haptics';
 import { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -15,10 +14,11 @@ import { TextInput } from '@/components/ui/ThemedTextInput';
 import { ScrollView as GHScrollView } from 'react-native-gesture-handler';
 
 import { notInPast, PlanDateModal, PlanTimeModal } from '@/components/calendar/plan/PlanPickerModals';
+import { SettingsChoiceSheet } from '@/components/profile/SettingsEditPage';
 import { FullScreenPage } from '@/components/layout/FullScreenPage';
 import { HeaderIconButton } from '@/components/ui/HeaderIconButton';
-import { DraggableSheet } from '@/components/ui/DraggableSheet';
 import { Icon } from '@/components/ui/Icon';
+import { KeyboardAwareScrollView } from '@/components/ui/KeyboardAwareScrollView';
 import { useTheme } from '@/hooks/useTheme';
 import {
   FAB_ACTIONS,
@@ -255,11 +255,9 @@ export function CreatePlanFlow({
             />
           )
         }>
-              <ScrollView
+              <KeyboardAwareScrollView
                 showsVerticalScrollIndicator={false}
-                keyboardShouldPersistTaps="handled"
                 keyboardDismissMode="none"
-                automaticallyAdjustKeyboardInsets
                 contentContainerStyle={[styles.formScroll, styles.formFill]}>
                 {/* No autoFocus: the keyboard waits until you tap the title. */}
                 <TextInput
@@ -269,7 +267,8 @@ export function CreatePlanFlow({
                   placeholderTextColor={colors.textTertiary}
                   style={[
                     styles.titleInput,
-                    { color: colors.text, backgroundColor: colors.surface, borderColor: colors.border },
+                    cardSurface(colors),
+                    { color: colors.text },
                   ]}
                 />
 
@@ -291,9 +290,9 @@ export function CreatePlanFlow({
                         }}
                         accessibilityRole="button"
                         accessibilityState={{ selected: on }}
-                        style={[styles.chip, { backgroundColor: on ? colors.text : colors.surface }]}>
-                        <Icon name={option.icon} size={18} color={on ? colors.background : colors.text} />
-                        <Text style={[styles.chipText, { color: on ? colors.background : colors.text }]}>
+                        style={[styles.chip, { backgroundColor: on ? colors.accent : colors.surface }]}>
+                        <Icon name={option.icon} size={18} color={on ? colors.onAccent : colors.text} />
+                        <Text style={[styles.chipText, { color: on ? colors.onAccent : colors.text }]}>
                           {option.label}
                         </Text>
                       </Pressable>
@@ -301,7 +300,7 @@ export function CreatePlanFlow({
                   })}
                 </GHScrollView>
 
-                <View style={[styles.whoRow, { backgroundColor: colors.surface }, paperEdge(colors)]}>
+                <View style={[styles.whoRow, cardSurface(colors)]}>
                   {(['together', 'me'] as const).map((who) => {
                     const on = forWhom === who;
                     return (
@@ -313,13 +312,13 @@ export function CreatePlanFlow({
                         }}
                         accessibilityRole="button"
                         accessibilityState={{ selected: on }}
-                        style={[styles.whoBtn, on && { backgroundColor: colors.text }]}>
+                        style={[styles.whoBtn, on && { backgroundColor: colors.accent }]}>
                         <Icon
                           name={who === 'together' ? 'people' : 'user'}
                           size={17}
-                          color={on ? colors.background : colors.textSecondary}
+                          color={on ? colors.onAccent : colors.textSecondary}
                         />
-                        <Text style={[styles.whoText, { color: on ? colors.background : colors.textSecondary }]}>
+                        <Text style={[styles.whoText, { color: on ? colors.onAccent : colors.textSecondary }]}>
                           {who === 'together' ? 'Together' : 'Just me'}
                         </Text>
                       </Pressable>
@@ -334,7 +333,7 @@ export function CreatePlanFlow({
                     }}
                     accessibilityRole="switch"
                     accessibilityState={{ checked: isPrivate }}
-                    style={[styles.privateRow, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                    style={[styles.privateRow, cardSurface(colors)]}>
                     <Icon name="lock" size={16} color={isPrivate ? colors.accent : colors.textSecondary} />
                     <Text style={[styles.privateText, { color: colors.text }]}>
                       Private{' '}
@@ -353,7 +352,7 @@ export function CreatePlanFlow({
                   </Pressable>
                 ) : null}
 
-                <View style={[styles.group, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                <View style={[styles.group, cardSurface(colors)]}>
                   <FieldRow
                     label="Date"
                     value={format(eventDate, 'EEEE, MMM d, yyyy')}
@@ -402,7 +401,7 @@ export function CreatePlanFlow({
                 </View>
 
                 <Text style={[styles.sectionLabel, { color: colors.accent }]}>Checklist</Text>
-                <View style={[styles.group, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                <View style={[styles.group, cardSurface(colors)]}>
                   {checklist.map((item) => (
                     <View key={item.id} style={styles.checkRow}>
                       <Pressable
@@ -461,7 +460,7 @@ export function CreatePlanFlow({
                 </View>
 
                 <Text style={[styles.sectionLabel, { color: colors.accent }]}>Shared list</Text>
-                <View style={[styles.group, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                <View style={[styles.group, cardSurface(colors)]}>
                   <Pressable
                     onPress={() => {
                       Haptics.selectionAsync();
@@ -484,7 +483,7 @@ export function CreatePlanFlow({
                   </Pressable>
                   {existingLists.length > 0 ? (
                     <>
-                      <View style={[styles.divider, { backgroundColor: colors.border }]} />
+                      <View style={[styles.divider, { backgroundColor: separatorColor(colors) }]} />
                       <Text
                         style={{
                           color: colors.textTertiary,
@@ -526,7 +525,7 @@ export function CreatePlanFlow({
                   ) : null}
                 </View>
 
-              </ScrollView>
+              </KeyboardAwareScrollView>
 
 
         {/* Pickers live inside this page's own Modal: on iPhone a second Modal
@@ -555,23 +554,18 @@ export function CreatePlanFlow({
           }}
         />
 
-        <DraggableSheet visible={reminderOpen} onClose={() => setReminderOpen(false)} dragAnywhere>
-          <Text style={[styles.reminderTitle, { color: colors.text }]}>Reminder</Text>
-          {REMINDER_OPTIONS.map((opt) => (
-            <Pressable
-              key={String(opt.mins)}
-              onPress={() => {
-                setReminderMins(opt.mins);
-                setReminderOpen(false);
-              }}
-              accessibilityRole="button"
-              accessibilityState={{ selected: reminderMins === opt.mins }}
-              style={({ pressed }) => [styles.reminderRow, pressed && { opacity: 0.6 }]}>
-              <Text style={{ color: colors.text, fontSize: 16, fontWeight: '600' }}>{opt.label}</Text>
-              {reminderMins === opt.mins ? <Icon name="check" size={18} color={colors.accent} /> : null}
-            </Pressable>
-          ))}
-        </DraggableSheet>
+        <SettingsChoiceSheet
+          visible={reminderOpen}
+          title="Reminder"
+          hint="We'll remind you both before it starts."
+          options={REMINDER_OPTIONS.map((opt) => ({ value: String(opt.mins), label: opt.label }))}
+          value={String(reminderMins)}
+          onSelect={(v) => {
+            setReminderMins(v === 'null' ? null : Number(v));
+            setReminderOpen(false);
+          }}
+          onClose={() => setReminderOpen(false)}
+        />
       </FullScreenPage>
 
     </>
@@ -627,8 +621,8 @@ export function InlineInput({
   );
 }
 
-export function Divider({ colors }: { colors: { border: string } }) {
-  return <View style={[styles.divider, { backgroundColor: colors.border }]} />;
+export function Divider({ colors }: { colors: { text: string; isDark: boolean } }) {
+  return <View style={[styles.divider, { backgroundColor: separatorColor(colors) }]} />;
 }
 
 const styles = StyleSheet.create({
@@ -741,7 +735,7 @@ const styles = StyleSheet.create({
   fieldLabel: { fontSize: 13, fontWeight: '600', width: 78 },
   fieldValue: { flex: 1, fontSize: 15, fontWeight: '600', textAlign: 'right' },
   inlineInput: { flex: 1, fontSize: 15, fontWeight: '600', textAlign: 'right', padding: 0 },
-  divider: { height: StyleSheet.hairlineWidth, marginHorizontal: 14 },
+  divider: { height: 1, marginHorizontal: 14 },
   sectionLabel: { fontSize: 14, fontWeight: '700', marginTop: 4 },
   checkRow: {
     flexDirection: 'row',

@@ -94,6 +94,21 @@ async function writeRemote(relationshipId: string, progress: CoupleProgress): Pr
   return isMissingTableError(error) ? 'missing' : 'failed';
 }
 
+/** Played today: tell the server, which keeps your streak (once a day per phone is enough). */
+const checkedInToday = new Map<string, string>();
+async function checkInForPlay(relationshipId: string) {
+  const today = todayKey();
+  if (checkedInToday.get(relationshipId) === today) return;
+  try {
+    const { error } = await backend.rpc('record_play_checkin', { p_relationship_id: relationshipId });
+    if (error) return;
+    // The server broadcasts the streak change, so every screen updates by itself.
+    checkedInToday.set(relationshipId, today);
+  } catch {
+    // Offline: the next play tries again.
+  }
+}
+
 let chain: Promise<unknown> = Promise.resolve();
 let subscription: { relationshipId: string; remove: () => void } | null = null;
 let idCounter = 0;
@@ -215,6 +230,8 @@ export const usePlayProgressStore = create<PlayProgressState>((set, get) => ({
 
       const result = applyAward(base, input);
       const celebrations = celebrationsFor(result, label);
+      // Playing counts as today's check-in for your streak (only real play, not catch-ups).
+      if (input.xp > 0 || Object.keys(input.stats ?? {}).length > 0) void checkInForPlay(relationshipId);
       set((s) => ({ progress: result.progress, celebrations: [...s.celebrations, ...celebrations] }));
       void writeLocal(relationshipId, result.progress);
 

@@ -1,6 +1,6 @@
 import { setAudioModeAsync, useAudioPlayer, useAudioPlayerStatus, type AudioPlayer } from 'expo-audio';
 import * as Haptics from '@/lib/haptics';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native';
 
 import { Icon } from '@/components/ui/Icon';
@@ -12,6 +12,8 @@ interface Props {
 }
 
 const BARS = 28;
+/** A note that hasn't loaded after this long shows "tap to retry" instead of spinning forever. */
+const LOAD_TIMEOUT_MS = 15_000;
 const SPEEDS = [1, 1.5, 2] as const;
 
 /** Only one voice note plays at a time: starting one pauses the last. */
@@ -46,6 +48,8 @@ export function VoiceNotePlayer({ uri, isSelf }: Props) {
   const player = useAudioPlayer(uri);
   const status = useAudioPlayerStatus(player);
   const [error, setError] = useState(false);
+  // Tapped play before the note had loaded: play as soon as it's ready.
+  const [waiting, setWaiting] = useState(false);
   const [speedIndex, setSpeedIndex] = useState(0);
   const [waveWidth, setWaveWidth] = useState(0);
   const wave = useMemo(() => waveFor(uri), [uri]);
@@ -57,12 +61,9 @@ export function VoiceNotePlayer({ uri, isSelf }: Props) {
   const progress = duration ? Math.min(1, status.currentTime / duration) : 0;
   const started = status.playing || status.currentTime > 0.05;
 
-  const toggle = async () => {
+  /** Plays this note (pausing any other), from the start if it had finished. */
+  const startPlayback = async () => {
     try {
-      if (status.playing) {
-        player.pause();
-        return;
-      }
       await setAudioModeAsync({ playsInSilentMode: true, allowsRecording: false });
       if (nowPlaying && nowPlaying !== player) {
         try {
@@ -75,10 +76,48 @@ export function VoiceNotePlayer({ uri, isSelf }: Props) {
       if (duration && status.currentTime >= duration - 0.05) await player.seekTo(0);
       player.setPlaybackRate(SPEEDS[speedIndex]);
       player.play();
-      setError(false);
     } catch {
       setError(true);
     }
+  };
+
+  // Tapped before it loaded: play the moment it's ready.
+  useEffect(() => {
+    if (!waiting || !status.isLoaded || status.playing) return;
+    const timer = setTimeout(() => void startPlayback(), 0);
+    return () => clearTimeout(timer);
+    // startPlayback reads the latest status itself.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [waiting, status.isLoaded]);
+
+  // …and if it never loads (e.g. an expired link), stop spinning and offer a retry.
+  useEffect(() => {
+    if (!waiting || status.isLoaded) return;
+    const timer = setTimeout(() => {
+      setWaiting(false);
+      setError(true);
+    }, LOAD_TIMEOUT_MS);
+    return () => clearTimeout(timer);
+  }, [waiting, status.isLoaded]);
+
+  const toggle = () => {
+    if (status.playing) {
+      player.pause();
+      setWaiting(false);
+      return;
+    }
+    if (error) {
+      // Reload it (its link may have expired) and play when it's back.
+      setError(false);
+      player.replace({ uri });
+      setWaiting(true);
+      return;
+    }
+    if (!status.isLoaded) {
+      setWaiting(true);
+      return;
+    }
+    void startPlayback();
   };
 
   const seek = async (x: number) => {
@@ -98,17 +137,18 @@ export function VoiceNotePlayer({ uri, isSelf }: Props) {
     }
   };
 
-  const loading = !status.isLoaded && !error;
+  // Spinner only while you're waiting on it to load; at rest it shows the play button.
+  const loading = waiting && !status.isLoaded && !error;
 
   return (
     <View style={styles.row}>
       <Pressable
-        onPress={() => void toggle()}
+        onPress={toggle}
         hitSlop={6}
         accessibilityRole="button"
         accessibilityLabel={status.playing ? 'Pause voice message' : 'Play voice message'}
         style={({ pressed }) => [styles.playBtn, { backgroundColor: played }, pressed && styles.pressed]}>
-        {loading && status.isBuffering ? (
+        {loading ? (
           <ActivityIndicator size="small" color={isSelf ? colors.chatBubbleSelf : colors.onAccent} />
         ) : (
           <Icon
@@ -141,14 +181,17 @@ export function VoiceNotePlayer({ uri, isSelf }: Props) {
         </Pressable>
         <View style={styles.meta}>
           <Text style={[styles.time, { color: ink }]}>
-            {error ? 'Can’t play this one' : formatDuration(started ? status.currentTime : duration)}
+            {error ? 'Couldn’t load · tap to retry' : formatDuration(started ? status.currentTime : duration)}
           </Text>
           <Pressable
             onPress={cycleSpeed}
             hitSlop={8}
             accessibilityRole="button"
             accessibilityLabel={`Playback speed ${SPEEDS[speedIndex]}x`}
-            style={[styles.speed, { backgroundColor: isSelf ? `${colors.chatBubbleSelfText}22` : colors.surfaceElevated }]}>
+            style={[
+              styles.speed,
+              { backgroundColor: isSelf ? `${colors.chatBubbleSelfText}22` : colors.surfaceElevated },
+            ]}>
             <Text style={[styles.speedText, { color: ink }]}>{SPEEDS[speedIndex]}×</Text>
           </Pressable>
         </View>

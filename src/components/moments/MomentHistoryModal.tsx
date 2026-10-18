@@ -39,7 +39,7 @@ import { OurMapCard, OurMapView, placeTitle } from '@/components/moments/MomentP
 import { MomentTile } from '@/components/moments/MomentTile';
 import { HeaderIconButton } from '@/components/ui/HeaderIconButton';
 import { Icon, type IconName } from '@/components/ui/Icon';
-import { colorWithAlpha } from '@/components/ui/primitives';
+import { colorWithAlpha, cardSurface } from '@/components/ui/primitives';
 import { ThemedStatusBar } from '@/components/ui/ThemedStatusBar';
 import { introBand } from '@/components/home/WelcomeCard';
 import { useDeleteMoments, useMoments } from '@/hooks/queries';
@@ -772,7 +772,7 @@ export function MomentHistoryModal() {
       return (
         <View style={styles.sectionHeader}>
           <Text style={[styles.sectionLabel, { color: chrome.text }]}>{item.label}</Text>
-          <View style={[styles.sectionPill, { backgroundColor: chrome.surfaceSoft }]}>
+          <View style={[styles.sectionPill, cardSurface(colors)]}>
             <Text style={[styles.sectionCount, { color: chrome.textSecondary }]}>{item.count}</Text>
           </View>
         </View>
@@ -815,7 +815,7 @@ export function MomentHistoryModal() {
         hitSlop={12}
         style={[
           styles.selectAllBtn,
-          { borderColor: chrome.border, backgroundColor: chrome.surfaceSoft },
+          cardSurface(colors),
           selectAllEngaged && { backgroundColor: chrome.accent, borderColor: chrome.accent },
         ]}
         accessibilityLabel={selectAllEngaged ? 'Deselect all' : 'Select all'}>
@@ -927,7 +927,7 @@ export function MomentHistoryModal() {
   };
   const uploadJob = openAlbum ? uploadJobs[openAlbum.id] : undefined;
   const uploadBanner = uploadJob ? (
-    <View style={[styles.uploadBanner, { backgroundColor: chrome.surfaceSoft, borderColor: chrome.border }]}>
+    <View style={[styles.uploadBanner, cardSurface(colors)]}>
       <ActivityIndicator size="small" color={chrome.accent} />
       <View style={styles.uploadText}>
         <Text style={[styles.uploadTitle, { color: chrome.text }]}>
@@ -971,7 +971,7 @@ export function MomentHistoryModal() {
             </View>
           ) : emptyAll ? (
             <View style={styles.centered}>
-              <View style={[styles.emptyIcon, { backgroundColor: chrome.surfaceSoft }]}>
+              <View style={[styles.emptyIcon, cardSurface(colors)]}>
                 <Icon name="camera" size={36} color={chrome.accent} />
               </View>
               <Text style={[styles.emptyTitle, { color: chrome.text }]}>No moments yet</Text>
@@ -1032,7 +1032,7 @@ export function MomentHistoryModal() {
                   {lockedCount > 0 && (
                     <Pressable
                       onPress={() => openPlus('Full moment history')}
-                      style={[styles.unlockBanner, { backgroundColor: chrome.surfaceSoft }]}>
+                      style={[styles.unlockBanner, cardSurface(colors)]}>
                       <Icon name="lock" size={18} color={chrome.text} />
                       <Text style={[styles.unlockText, { color: chrome.text }]}>
                         Unlock {lockedCount} more moment{lockedCount === 1 ? '' : 's'} with Plus

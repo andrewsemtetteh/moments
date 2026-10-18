@@ -16,6 +16,7 @@ import { toUserFacingNetworkError } from '@/lib/network-error';
 import * as api from '@/services/api';
 import { useRelationshipStore } from '@/stores';
 import type { Relationship } from '@/types/database';
+import { trackColor } from '@/components/ui/primitives';
 
 /**
  * You page · Anniversary: the next anniversary, days to go, how far through
@@ -101,7 +102,7 @@ export function ProfileAnniversarySection({ relationship: override }: { relation
           ) : null}
         </View>
 
-        <View style={[styles.track, { backgroundColor: colors.boldBorder ? colors.backgroundElevated : colors.surfaceElevated }]}>
+        <View style={[styles.track, { backgroundColor: trackColor(colors) }]}>
           <View style={[styles.fill, { width: `${yearProgress * 100}%`, backgroundColor: colors.accent }]} />
         </View>
 

@@ -1,16 +1,14 @@
 import * as Haptics from '@/lib/haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Dimensions, Pressable, StyleSheet, Text, View } from 'react-native';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   interpolate,
   runOnJS,
   useAnimatedScrollHandler,
   useAnimatedStyle,
   useSharedValue,
-  withSpring,
   withTiming,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -43,8 +41,6 @@ import { claimNotificationKey, sendPartnerNotification } from '@/services/api';
 import { useAuthStore, useRelationshipStore } from '@/stores';
 
 const SCREEN_H = Dimensions.get('window').height;
-const DISMISS_DISTANCE = 120;
-const DISMISS_VELOCITY = 800;
 const INK = '#1A1A1A';
 
 /** True for light colours like #FFFFFF (so text on the banner is light). */
@@ -58,17 +54,40 @@ function isLightColor(hex: string) {
 /** The first three show; the rest sit behind "See all". */
 const PERKS_SHOWN = 3;
 /**
- * Everything Moments Plus unlocks, in the order people care about. Only what the
- * app really gates: promising something free users already have backfires.
+ * Everything Moments Plus unlocks, most important first (only the first PERKS_SHOWN show before
+ * "See all"). The top three are what makes a couple pay: the AI games and conversations nobody
+ * else has, the limit they run into most (moments), and the loss they'd feel (a broken streak).
+ * Then the rest of the depth. "One plan, both of you" is last: the headline already says it.
+ * Only what the app really gates: promising something free users already have backfires.
  */
 const PERKS: { icon: IconName; title: string; free: string; tint: string }[] = [
+  {
+    icon: 'cards',
+    title: 'Unlimited games and conversations',
+    free: 'New ones made just for you two, every time',
+    tint: '#E3DDFF',
+  },
   { icon: 'camera', title: 'Unlimited moments', free: `Free: ${FREE_DAILY_MOMENTS} a day`, tint: '#FFD9CC' },
-  { icon: 'time', title: 'Your whole history', free: `Free: your last ${FREE_TIMELINE_MOMENTS} moments`, tint: '#D7F2E3' },
-  { icon: 'albums', title: 'Unlimited albums', free: `Free: ${FREE_ALBUM_LIMIT} albums`, tint: '#FFE7A0' },
-  { icon: 'cards', title: 'Unlimited games and conversations', free: 'New ones made just for you two, every time', tint: '#E3DDFF' },
-  { icon: 'volumeHigh', title: 'Live game nights with voice', free: 'Play together in real time, wherever you are', tint: '#DCEBFF' },
   { icon: 'fire', title: 'Save a broken streak', free: 'Bring it back within 24 hours', tint: '#FFD6DC' },
-  { icon: 'people', title: 'One plan, both of you', free: 'Your person gets everything too, at no extra cost', tint: '#D7F2E3' },
+  {
+    icon: 'volumeHigh',
+    title: 'Live game nights with voice',
+    free: 'Play together in real time, wherever you are',
+    tint: '#DCEBFF',
+  },
+  {
+    icon: 'time',
+    title: 'Your whole history',
+    free: `Free: your last ${FREE_TIMELINE_MOMENTS} moments`,
+    tint: '#D7F2E3',
+  },
+  { icon: 'albums', title: 'Unlimited albums', free: `Free: ${FREE_ALBUM_LIMIT} albums`, tint: '#FFE7A0' },
+  {
+    icon: 'people',
+    title: 'One plan, both of you',
+    free: 'Your person gets everything too, at no extra cost',
+    tint: '#D7F2E3',
+  },
 ];
 
 const TIMELINE: { day: string; text: string; icon: IconName }[] = [
@@ -97,6 +116,7 @@ type Props = {
   /** Terms / Privacy links (required on a subscription screen). They open over the paywall. */
   showLegal?: boolean;
   /** Swipe down to close (the in-app overlay). Off on the sign-up step, which has nothing behind it. */
+  /** @deprecated The paywall is never draggable now; kept so existing callers still compile. */
   swipeToClose?: boolean;
 };
 
@@ -119,7 +139,6 @@ export function PaywallScreen({
   placement = 'other',
   showRefer = true,
   showLegal = true,
-  swipeToClose = true,
 }: Props) {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
@@ -264,52 +283,18 @@ export function PaywallScreen({
     }
   };
 
-  // Swipe down to close, like Moments: the page follows your finger and
-  // slides away. A drag that starts while the page is scrolled down only
-  // scrolls it (decided once, on touch down).
-  const canClose = !!(showClose && onClose && swipeToClose);
+  // Not draggable: it closes only from the close button (which slides it away).
   const translateY = useSharedValue(0);
   const scrollY = useSharedValue(0);
-  const dragsPage = useSharedValue(false);
-  const native = useMemo(() => Gesture.Native(), []);
   const finish = () => {
     void trackForCouple(AnalyticsEvents.PAYWALL_CLOSED, { placement });
     onClose?.();
   };
-  const slideAway = (velocity = 0) => {
-    translateY.value = withTiming(SCREEN_H, { duration: Math.max(140, 220 - Math.abs(velocity) / 20) }, (done) => {
+  const closeAnimated = () => {
+    translateY.value = withTiming(SCREEN_H, { duration: 220 }, (done) => {
       if (done) runOnJS(finish)();
     });
   };
-  const closeAnimated = () => (canClose ? slideAway(0) : onClose?.());
-
-  const pan = Gesture.Pan()
-    .enabled(canClose)
-    .activeOffsetY([-8, 8])
-    .failOffsetX([-14, 14])
-    .simultaneousWithExternalGesture(native)
-    .onBegin(() => {
-      dragsPage.value = scrollY.value <= 0;
-    })
-    .onUpdate((e) => {
-      if (!dragsPage.value) return;
-      if (scrollY.value > 0 && translateY.value <= 0) {
-        dragsPage.value = false;
-        return;
-      }
-      translateY.value = Math.max(0, e.translationY);
-    })
-    .onEnd((e) => {
-      if (
-        dragsPage.value &&
-        translateY.value > 0 &&
-        (e.translationY > DISMISS_DISTANCE || e.velocityY > DISMISS_VELOCITY)
-      ) {
-        runOnJS(slideAway)(e.velocityY);
-        return;
-      }
-      if (translateY.value !== 0) translateY.value = withSpring(0, { damping: 26, stiffness: 300 });
-    });
 
   // Past the colored banner, the page's own color slides in behind the
   // status bar and its text flips to match, so the clock and battery stay
@@ -336,333 +321,343 @@ export function PaywallScreen({
 
   return (
     <View style={styles.root}>
-      <GestureDetector gesture={pan}>
-        <Animated.View style={[styles.root, { backgroundColor: colors.background }, pageStyle]}>
-          {/* Match the status bar text to whatever is behind it: banner or page. */}
-          <StatusBar style={pastHero ? pageBarStyle : heroBarStyle} />
-          <GestureDetector gesture={native}>
-            <Animated.ScrollView
-              showsVerticalScrollIndicator={false}
-              bounces={false}
-              scrollEventThrottle={16}
-              onScroll={onScroll}
-              contentContainerStyle={{ paddingBottom: footerH + 16 }}>
-              <LinearGradient
-                colors={colors.gradient}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                onLayout={(e) => {
-                  heroBottom.set(e.nativeEvent.layout.y + e.nativeEvent.layout.height);
-                }}
-                style={[styles.hero, { paddingTop: insets.top + 8 }]}>
-                {showClose && onClose ? (
-                  <Pressable
-                    onPress={closeAnimated}
-                    accessibilityLabel="Close"
-                    hitSlop={8}
-                    style={[
-                      styles.closeBtn,
-                      { top: insets.top + 8, backgroundColor: colorWithAlpha(colors.onAccent, 0.22) },
-                    ]}>
-                    <Icon name="close" size={20} color={colors.onAccent} />
-                  </Pressable>
-                ) : null}
-                {/* Notes sit in their own row under the close button. */}
-                <View style={styles.stickyRow}>
-                  <Text style={[styles.sticky, styles.stickyLeft]}>more “us” time</Text>
-                  <Text style={[styles.sticky, styles.stickyRight]}>every deck unlocked</Text>
-                </View>
-                {/* Illustration, hidden for now (kept to bring back easily):
+      <Animated.View style={[styles.root, { backgroundColor: colors.background }, pageStyle]}>
+        {/* Match the status bar text to whatever is behind it: banner or page. */}
+        <StatusBar style={pastHero ? pageBarStyle : heroBarStyle} />
+        <Animated.ScrollView
+          showsVerticalScrollIndicator={false}
+          bounces={false}
+          scrollEventThrottle={16}
+          onScroll={onScroll}
+          contentContainerStyle={{ paddingBottom: footerH + 16 }}>
+          <LinearGradient
+            colors={colors.gradient}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            onLayout={(e) => {
+              heroBottom.set(e.nativeEvent.layout.y + e.nativeEvent.layout.height);
+            }}
+            style={[styles.hero, { paddingTop: insets.top + 8 }]}>
+            {showClose && onClose ? (
+              <Pressable
+                onPress={closeAnimated}
+                accessibilityLabel="Close"
+                hitSlop={8}
+                style={[
+                  styles.closeBtn,
+                  { top: insets.top + 8, backgroundColor: colorWithAlpha(colors.onAccent, 0.22) },
+                ]}>
+                <Icon name="close" size={20} color={colors.onAccent} />
+              </Pressable>
+            ) : null}
+            {/* Notes sit in their own row under the close button. */}
+            <View style={styles.stickyRow}>
+              <Text style={[styles.sticky, styles.stickyLeft]}>more “us” time</Text>
+              <Text style={[styles.sticky, styles.stickyRight]}>every deck unlocked</Text>
+            </View>
+            {/* Illustration, hidden for now (kept to bring back easily):
                 <View style={styles.heroArt}>
                   <FloatingArt>
                     <CoupleCharacters width={200} />
                   </FloatingArt>
                 </View>
                 */}
-                {/* The two of you: Plus is for the couple, not one phone. */}
-                <View style={styles.couple}>
-                  <View style={[styles.coupleRing, { borderColor: colors.onAccent }]}>
-                    <Avatar name={me?.name} imageUrl={me?.avatar_url} size={52} />
-                  </View>
-                  <View style={[styles.coupleRing, styles.coupleSecond, { borderColor: colors.onAccent }]}>
-                    {partner ? (
-                      <Avatar name={partner.name} imageUrl={partner.avatar_url} size={52} />
-                    ) : (
-                      <View style={[styles.couplePlaceholder, { backgroundColor: colorWithAlpha(colors.onAccent, 0.22) }]}>
-                        <Icon name="heart" size={22} color={colors.onAccent} />
-                      </View>
-                    )}
-                  </View>
-                </View>
-                <Text style={[styles.heroTitle, { color: colors.onAccent }]} numberOfLines={1} adjustsFontSizeToFit>
-                  {headline ??
-                    (winback
-                      ? 'A gift for you two'
-                      : reason
-                        ? `Unlock ${reason.charAt(0).toLowerCase()}${reason.slice(1)}`
-                        : 'Unlock Moments Plus')}
-                </Text>
-                <Text style={[styles.heroSub, { color: colorWithAlpha(colors.onAccent, 0.85) }]}>
-                  {them ? `Plus for you and ${them}. One plan, both phones.` : 'Plus for both of you. Your person joins free.'}
-                </Text>
-              </LinearGradient>
-
-              <View style={styles.body}>
-                <View style={[styles.card, surface]}>
-                  {(allPerks ? PERKS : PERKS.slice(0, PERKS_SHOWN)).map((p, i, shown) => (
-                    <View
-                      key={p.title}
-                      style={[
-                        styles.perk,
-                        // A line under every row: the See all / Show less button follows.
-                        {
-                          borderBottomWidth: 1,
-                          borderBottomColor: separatorColor(colors),
-                        },
-                      ]}>
-                      <View style={[styles.perkTile, { backgroundColor: p.tint }]}>
-                        <Icon name={p.icon} size={18} color={INK} />
-                      </View>
-                      <View style={styles.flex}>
-                        <Text style={[styles.perkTitle, { color: colors.text }]}>{p.title}</Text>
-                        <Text style={[styles.perkFree, { color: colors.textSecondary }]}>{p.free}</Text>
-                      </View>
-                      <Icon name="check" size={18} color={colors.success} />
-                    </View>
-                  ))}
-                  {/* Opens the rest, then folds them away again. */}
-                  <Pressable
-                    onPress={() => {
-                      void Haptics.selectionAsync();
-                      setAllPerks((v) => !v);
-                    }}
-                    accessibilityRole="button"
-                    accessibilityState={{ expanded: allPerks }}
-                    style={({ pressed }) => [styles.morePerks, pressed && styles.pressed]}>
-                    <Text style={[styles.morePerksText, { color: colors.text }]}>
-                      {allPerks ? 'Show less' : `See all ${PERKS.length} Plus features`}
-                    </Text>
-                    <View style={allPerks ? styles.flipped : undefined}>
-                      <Icon name="chevronDown" size={16} color={colors.text} />
-                    </View>
-                  </Pressable>
-                </View>
-
-                <View style={styles.plans} accessibilityRole="radiogroup">
-                  {shownPlans.map((p) => {
-                    const on = p.id === selectedPlan;
-                    const yearly = p.id === 'yearly';
-                    const trial = introOf(p)?.kind === 'free';
-                    const pIntro = introOf(p);
-                    const pIntroPrice = introPriceOf(p);
-                    // Corner badge: only the plan we recommend (or the one-time offer).
-                    const badge = winback ? 'One-time offer' : yearly ? `Best value · Save ${YEARLY_SAVING_PERCENT}%` : null;
-                    // "/year", "/month", "/week" (yearly is shown as its monthly rate).
-                    const period = yearly && !winback ? '/month' : p.per;
-                    return (
-                      <Pressable
-                        key={p.id}
-                        onPress={() => {
-                          void Haptics.selectionAsync();
-                          setSelectedPlan(p.id);
-                        }}
-                        accessibilityRole="radio"
-                        accessibilityState={{ selected: on }}
-                        style={({ pressed }) => [
-                          styles.plan,
-                          {
-                            // Selected: the accent outline and a light accent wash.
-                            backgroundColor: on ? colorWithAlpha(colors.accent, colors.isDark ? 0.16 : 0.07) : colors.surface,
-                            borderColor: on ? colors.accent : colors.border,
-                            borderWidth: on ? 2.5 : 1.5,
-                          },
-                          pressed && styles.pressed,
-                        ]}>
-                        {badge ? (
-                          <View style={[styles.badge, { backgroundColor: colors.accent }]}>
-                            <Text style={[styles.badgeText, { color: colors.onAccent }]}>{badge}</Text>
-                          </View>
-                        ) : null}
-                        {/* Check: filled when chosen. */}
-                        <View
-                          style={[
-                            styles.radio,
-                            on ? { backgroundColor: colors.accent, borderColor: colors.accent } : { borderColor: colors.border },
-                          ]}>
-                          {on ? <Icon name="check" size={14} color={colors.onAccent} /> : null}
-                        </View>
-                        {/* Left: what it is, and how it starts. */}
-                        <View style={styles.planInfo}>
-                          <Text style={[styles.planName, { color: colors.text }]}>{p.name}</Text>
-                          <Text style={[styles.planSub, { color: colors.textSecondary }]}>
-                            {winback
-                              ? `Your first year, then ${priceOf('yearly')} a year`
-                              : yearly
-                                ? // Yearly: what you're billed, in words, under the monthly rate.
-                                  trial
-                                  ? `${TRIAL_DAYS} days free, then ${priceOf('yearly')} a year`
-                                  : `${priceOf('yearly')} billed once a year`
-                                : trial
-                                  ? `${TRIAL_DAYS} days free, then billed ${p.perWords}`
-                                  : pIntroPrice && pIntro
-                                    ? `${pIntroPrice} your first ${introSpan(pIntro.days)}, then billed ${p.perWords}`
-                                    : `Starts today, billed ${p.perWords}`}
-                          </Text>
-                        </View>
-                        {/* Right: the price. Yearly reads as its monthly rate; the yearly charge is
-                            spelled out beside it and in the line under the button. */}
-                        <View style={styles.priceCol}>
-                          <Text style={[styles.price, { color: colors.text }]}>
-                            {winback ? winbackPrice : yearly ? yearlyPerMonth : priceOf(p.id)}
-                          </Text>
-                          <Text style={[styles.per, { color: colors.textSecondary }]}>
-                            {period}
-                          </Text>
-                        </View>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-
-                {partner && relationship && !winback ? (
-                  <Pressable
-                    onPress={() => void sendToPartner()}
-                    disabled={suggest !== 'idle'}
-                    accessibilityRole="button"
-                    style={({ pressed }) => [styles.suggest, { borderColor: colors.text }, pressed && styles.pressed]}>
-                    <Avatar name={partner.name} imageUrl={partner.avatar_url} size={40} />
-                    <View style={styles.flex}>
-                      <Text style={[styles.referTitle, { color: colors.text }]}>
-                        {suggest === 'sent' ? `Sent to ${them ?? 'your person'}` : `Send it to ${them ?? 'your person'}`}
-                      </Text>
-                      <Text style={[styles.referSub, { color: colors.textSecondary }]}>
-                        {suggest === 'sent'
-                          ? 'They’ll get a notification that opens this page. Either of you can start it.'
-                          : 'Decide together. Either of you can start it, and it unlocks for both.'}
-                      </Text>
-                    </View>
-                    {suggest === 'sending' ? (
-                      <ActivityIndicator color={colors.text} />
-                    ) : (
-                      <Icon
-                        name={suggest === 'sent' ? 'check' : 'send'}
-                        size={18}
-                        color={suggest === 'sent' ? colors.success : colors.text}
-                      />
-                    )}
-                  </Pressable>
-                ) : null}
-
-                {showRefer ? (
-                  <View style={styles.orRow}>
-                    <View style={[styles.orLine, { backgroundColor: separatorColor(colors) }]} />
-                    <Text style={[styles.orText, { color: colors.textTertiary }]}>or</Text>
-                    <View style={[styles.orLine, { backgroundColor: separatorColor(colors) }]} />
-                  </View>
-                ) : null}
-
-                {showRefer ? (
-                  <Pressable
-                    onPress={() => setDetour('refer')}
-                    accessibilityRole="button"
-                    style={({ pressed }) => [styles.refer, { borderColor: colors.text }, pressed && styles.pressed]}>
-                    <View style={[styles.referTile, { backgroundColor: '#FFE7A0' }]}>
-                      <Icon name="gift" size={20} color={INK} />
-                    </View>
-                    <View style={styles.flex}>
-                      <Text style={[styles.referTitle, { color: colors.text }]}>Not ready? Get {REFERRAL_DAYS} days free</Text>
-                      <Text style={[styles.referSub, { color: colors.textSecondary }]}>
-                        Invite another couple. When they join, you both get {REFERRAL_DAYS} days of Plus.
-                      </Text>
-                    </View>
-                    <Icon name="chevronRight" size={16} color={colors.textTertiary} />
-                  </Pressable>
-                ) : null}
-
-                {/* How the trial works: last, with a line joining the steps (not on the win back offer). */}
-                {winback ? null : (
-                  <View
-                    style={[
-                      styles.timeline,
-                      {
-                        backgroundColor: colors.boldBorder ? colors.backgroundElevated : colors.surfaceElevated,
-                        opacity: hasTrial ? 1 : 0.4,
-                      },
-                    ]}>
-                    <Text style={[styles.timelineTitle, { color: colors.text }]}>How your free trial works</Text>
-                    {TIMELINE.map((s, i) => (
-                      <View key={s.day} style={styles.step}>
-                        <View style={styles.rail}>
-                          <View style={[styles.stepDot, { backgroundColor: colors.accent }]}>
-                            <Icon name={s.icon} size={14} color={colors.onAccent} />
-                          </View>
-                          {i < TIMELINE.length - 1 ? (
-                            <View style={[styles.railLine, { backgroundColor: colors.accent }]} />
-                          ) : null}
-                        </View>
-                        <View style={[styles.flex, styles.stepCopy]}>
-                          <Text style={[styles.stepDay, { color: colors.text }]}>{s.day}</Text>
-                          <Text style={[styles.stepText, { color: colors.textSecondary }]}>{s.text}</Text>
-                        </View>
-                      </View>
-                    ))}
+            {/* The two of you: Plus is for the couple, not one phone. */}
+            <View style={styles.couple}>
+              <View style={[styles.coupleRing, { borderColor: colors.onAccent }]}>
+                <Avatar name={me?.name} imageUrl={me?.avatar_url} size={52} />
+              </View>
+              <View style={[styles.coupleRing, styles.coupleSecond, { borderColor: colors.onAccent }]}>
+                {partner ? (
+                  <Avatar name={partner.name} imageUrl={partner.avatar_url} size={52} />
+                ) : (
+                  <View style={[styles.couplePlaceholder, { backgroundColor: colorWithAlpha(colors.onAccent, 0.22) }]}>
+                    <Icon name="heart" size={22} color={colors.onAccent} />
                   </View>
                 )}
-
-                <View style={styles.links}>
-                  <Pressable onPress={() => void handleRestore()} hitSlop={8}>
-                    <Text style={[styles.link, { color: colors.textSecondary }]}>Restore purchase</Text>
-                  </Pressable>
-                  {showLegal ? (
-                    <>
-                      <Pressable onPress={() => setDetour('terms')} hitSlop={8}>
-                        <Text style={[styles.link, { color: colors.textSecondary }]}>Terms</Text>
-                      </Pressable>
-                      <Pressable onPress={() => setDetour('privacy')} hitSlop={8}>
-                        <Text style={[styles.link, { color: colors.textSecondary }]}>Privacy</Text>
-                      </Pressable>
-                    </>
-                  ) : null}
-                </View>
               </View>
-            </Animated.ScrollView>
-          </GestureDetector>
-          {/* Pinned to the bottom: the button and exactly what it costs are always in view. */}
-          <View
-            onLayout={(e) => setFooterH(e.nativeEvent.layout.height)}
-            style={[
-              styles.footer,
-              { paddingBottom: insets.bottom + 10, backgroundColor: colors.background, borderTopColor: separatorColor(colors) },
-            ]}>
-            {/* With a free trial, nothing is charged today: say so right above the button. */}
-            {hasTrial ? (
-              <View style={styles.noPayment}>
-                <Icon name="checkDone" size={16} color={colors.success} />
-                <Text style={[styles.noPaymentText, { color: colors.text }]}>No payment due now</Text>
+            </View>
+            <Text style={[styles.heroTitle, { color: colors.onAccent }]} numberOfLines={1} adjustsFontSizeToFit>
+              {headline ??
+                (winback
+                  ? 'A gift for you two'
+                  : reason
+                    ? `Unlock ${reason.charAt(0).toLowerCase()}${reason.slice(1)}`
+                    : 'Unlock Moments Plus')}
+            </Text>
+            <Text style={[styles.heroSub, { color: colorWithAlpha(colors.onAccent, 0.85) }]}>
+              {them
+                ? `Plus for you and ${them}. One plan, both phones.`
+                : 'Plus for both of you. Your person joins free.'}
+            </Text>
+          </LinearGradient>
+
+          <View style={styles.body}>
+            <View style={[styles.card, surface]}>
+              {(allPerks ? PERKS : PERKS.slice(0, PERKS_SHOWN)).map((p, i, shown) => (
+                <View
+                  key={p.title}
+                  style={[
+                    styles.perk,
+                    // A line under every row: the See all / Show less button follows.
+                    {
+                      borderBottomWidth: 1,
+                      borderBottomColor: separatorColor(colors),
+                    },
+                  ]}>
+                  <View style={[styles.perkTile, { backgroundColor: p.tint }]}>
+                    <Icon name={p.icon} size={18} color={INK} />
+                  </View>
+                  <View style={styles.flex}>
+                    <Text style={[styles.perkTitle, { color: colors.text }]}>{p.title}</Text>
+                    <Text style={[styles.perkFree, { color: colors.textSecondary }]}>{p.free}</Text>
+                  </View>
+                  <Icon name="check" size={18} color={colors.success} />
+                </View>
+              ))}
+              {/* Opens the rest, then folds them away again. */}
+              <Pressable
+                onPress={() => {
+                  void Haptics.selectionAsync();
+                  setAllPerks((v) => !v);
+                }}
+                accessibilityRole="button"
+                accessibilityState={{ expanded: allPerks }}
+                style={({ pressed }) => [styles.morePerks, pressed && styles.pressed]}>
+                <Text style={[styles.morePerksText, { color: colors.text }]}>
+                  {allPerks ? 'Show less' : `See all ${PERKS.length} Plus features`}
+                </Text>
+                <View style={allPerks ? styles.flipped : undefined}>
+                  <Icon name="chevronDown" size={16} color={colors.text} />
+                </View>
+              </Pressable>
+            </View>
+
+            <View style={styles.plans} accessibilityRole="radiogroup">
+              {shownPlans.map((p) => {
+                const on = p.id === selectedPlan;
+                const yearly = p.id === 'yearly';
+                const trial = introOf(p)?.kind === 'free';
+                const pIntro = introOf(p);
+                const pIntroPrice = introPriceOf(p);
+                // Corner badge: only the plan we recommend (or the one-time offer).
+                const badge = winback
+                  ? 'One-time offer'
+                  : yearly
+                    ? `Best value · Save ${YEARLY_SAVING_PERCENT}%`
+                    : null;
+                // "/year", "/month", "/week" (yearly is shown as its monthly rate).
+                const period = yearly && !winback ? '/month' : p.per;
+                return (
+                  <Pressable
+                    key={p.id}
+                    onPress={() => {
+                      void Haptics.selectionAsync();
+                      setSelectedPlan(p.id);
+                    }}
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected: on }}
+                    style={({ pressed }) => [
+                      styles.plan,
+                      {
+                        // Selected: the accent outline and a light accent wash.
+                        backgroundColor: on
+                          ? colorWithAlpha(colors.accent, colors.isDark ? 0.16 : 0.07)
+                          : colors.surface,
+                        borderColor: on ? colors.accent : colors.border,
+                        borderWidth: on ? 2.5 : 1.5,
+                      },
+                      pressed && styles.pressed,
+                    ]}>
+                    {badge ? (
+                      <View style={[styles.badge, { backgroundColor: colors.accent }]}>
+                        <Text style={[styles.badgeText, { color: colors.onAccent }]}>{badge}</Text>
+                      </View>
+                    ) : null}
+                    {/* Check: filled when chosen. */}
+                    <View
+                      style={[
+                        styles.radio,
+                        on
+                          ? { backgroundColor: colors.accent, borderColor: colors.accent }
+                          : { borderColor: colors.border },
+                      ]}>
+                      {on ? <Icon name="check" size={14} color={colors.onAccent} /> : null}
+                    </View>
+                    {/* Left: what it is, and how it starts. */}
+                    <View style={styles.planInfo}>
+                      <Text style={[styles.planName, { color: colors.text }]}>{p.name}</Text>
+                      <Text style={[styles.planSub, { color: colors.textSecondary }]}>
+                        {winback
+                          ? `Your first year, then ${priceOf('yearly')} a year`
+                          : yearly
+                            ? // Yearly: what you're billed, in words, under the monthly rate.
+                              trial
+                              ? `${TRIAL_DAYS} days free, then ${priceOf('yearly')} a year`
+                              : `${priceOf('yearly')} billed once a year`
+                            : trial
+                              ? `${TRIAL_DAYS} days free, then billed ${p.perWords}`
+                              : pIntroPrice && pIntro
+                                ? `${pIntroPrice} your first ${introSpan(pIntro.days)}, then billed ${p.perWords}`
+                                : `Starts today, billed ${p.perWords}`}
+                      </Text>
+                    </View>
+                    {/* Right: the price. Yearly reads as its monthly rate; the yearly charge is
+                            spelled out beside it and in the line under the button. */}
+                    <View style={styles.priceCol}>
+                      <Text style={[styles.price, { color: colors.text }]}>
+                        {winback ? winbackPrice : yearly ? yearlyPerMonth : priceOf(p.id)}
+                      </Text>
+                      <Text style={[styles.per, { color: colors.textSecondary }]}>{period}</Text>
+                    </View>
+                  </Pressable>
+                );
+              })}
+            </View>
+
+            {partner && relationship && !winback ? (
+              <Pressable
+                onPress={() => void sendToPartner()}
+                disabled={suggest !== 'idle'}
+                accessibilityRole="button"
+                style={({ pressed }) => [styles.suggest, { borderColor: colors.text }, pressed && styles.pressed]}>
+                <Avatar name={partner.name} imageUrl={partner.avatar_url} size={40} />
+                <View style={styles.flex}>
+                  <Text style={[styles.referTitle, { color: colors.text }]}>
+                    {suggest === 'sent' ? `Sent to ${them ?? 'your person'}` : `Send it to ${them ?? 'your person'}`}
+                  </Text>
+                  <Text style={[styles.referSub, { color: colors.textSecondary }]}>
+                    {suggest === 'sent'
+                      ? 'They’ll get a notification that opens this page. Either of you can start it.'
+                      : 'Decide together. Either of you can start it, and it unlocks for both.'}
+                  </Text>
+                </View>
+                {suggest === 'sending' ? (
+                  <ActivityIndicator color={colors.text} />
+                ) : (
+                  <Icon
+                    name={suggest === 'sent' ? 'check' : 'send'}
+                    size={18}
+                    color={suggest === 'sent' ? colors.success : colors.text}
+                  />
+                )}
+              </Pressable>
+            ) : null}
+
+            {showRefer ? (
+              <View style={styles.orRow}>
+                <View style={[styles.orLine, { backgroundColor: separatorColor(colors) }]} />
+                <Text style={[styles.orText, { color: colors.textTertiary }]}>or</Text>
+                <View style={[styles.orLine, { backgroundColor: separatorColor(colors) }]} />
               </View>
             ) : null}
-            <Pressable
-              onPress={() => void handleSubscribe()}
-              disabled={loading}
-              accessibilityRole="button"
-              accessibilityHint={fine}
-              style={({ pressed }) => [styles.cta, { backgroundColor: colors.accent, opacity: pressed ? 0.85 : 1 }]}>
-              {loading ? (
-                <ActivityIndicator color={colors.onAccent} />
-              ) : (
-                <Text style={[styles.ctaText, { color: colors.onAccent }]} numberOfLines={1} adjustsFontSizeToFit>
-                  {cta}
-                </Text>
-              )}
-            </Pressable>
-            <Text style={[styles.fine, { color: colors.textSecondary }]}>{fine}</Text>
+
+            {showRefer ? (
+              <Pressable
+                onPress={() => setDetour('refer')}
+                accessibilityRole="button"
+                style={({ pressed }) => [styles.refer, { borderColor: colors.text }, pressed && styles.pressed]}>
+                <View style={[styles.referTile, { backgroundColor: '#FFE7A0' }]}>
+                  <Icon name="gift" size={20} color={INK} />
+                </View>
+                <View style={styles.flex}>
+                  <Text style={[styles.referTitle, { color: colors.text }]}>
+                    Not ready? Get {REFERRAL_DAYS} days free
+                  </Text>
+                  <Text style={[styles.referSub, { color: colors.textSecondary }]}>
+                    Invite another couple. When they join, you both get {REFERRAL_DAYS} days of Plus.
+                  </Text>
+                </View>
+                <Icon name="chevronRight" size={16} color={colors.textTertiary} />
+              </Pressable>
+            ) : null}
+
+            {/* How the trial works: last, with a line joining the steps (not on the win back offer). */}
+            {winback ? null : (
+              <View
+                style={[
+                  styles.timeline,
+                  {
+                    backgroundColor: colors.boldBorder ? colors.backgroundElevated : colors.surfaceElevated,
+                    opacity: hasTrial ? 1 : 0.4,
+                  },
+                ]}>
+                <Text style={[styles.timelineTitle, { color: colors.text }]}>How your free trial works</Text>
+                {TIMELINE.map((s, i) => (
+                  <View key={s.day} style={styles.step}>
+                    <View style={styles.rail}>
+                      <View style={[styles.stepDot, { backgroundColor: colors.accent }]}>
+                        <Icon name={s.icon} size={14} color={colors.onAccent} />
+                      </View>
+                      {i < TIMELINE.length - 1 ? (
+                        <View style={[styles.railLine, { backgroundColor: colors.accent }]} />
+                      ) : null}
+                    </View>
+                    <View style={[styles.flex, styles.stepCopy]}>
+                      <Text style={[styles.stepDay, { color: colors.text }]}>{s.day}</Text>
+                      <Text style={[styles.stepText, { color: colors.textSecondary }]}>{s.text}</Text>
+                    </View>
+                  </View>
+                ))}
+              </View>
+            )}
+
+            <View style={styles.links}>
+              <Pressable onPress={() => void handleRestore()} hitSlop={8}>
+                <Text style={[styles.link, { color: colors.textSecondary }]}>Restore purchase</Text>
+              </Pressable>
+              {showLegal ? (
+                <>
+                  <Pressable onPress={() => setDetour('terms')} hitSlop={8}>
+                    <Text style={[styles.link, { color: colors.textSecondary }]}>Terms</Text>
+                  </Pressable>
+                  <Pressable onPress={() => setDetour('privacy')} hitSlop={8}>
+                    <Text style={[styles.link, { color: colors.textSecondary }]}>Privacy</Text>
+                  </Pressable>
+                </>
+              ) : null}
+            </View>
           </View>
-          <Animated.View
-            pointerEvents="none"
-            style={[styles.statusCover, { height: insets.top, backgroundColor: colors.background }, statusCoverStyle]}
-          />
-        </Animated.View>
-      </GestureDetector>
+        </Animated.ScrollView>
+        {/* Pinned to the bottom: the button and exactly what it costs are always in view. */}
+        <View
+          onLayout={(e) => setFooterH(e.nativeEvent.layout.height)}
+          style={[
+            styles.footer,
+            {
+              paddingBottom: insets.bottom + 10,
+              backgroundColor: colors.background,
+              borderTopColor: separatorColor(colors),
+            },
+          ]}>
+          {/* With a free trial, nothing is charged today: say so right above the button. */}
+          {hasTrial ? (
+            <View style={styles.noPayment}>
+              <Icon name="checkDone" size={16} color={colors.success} />
+              <Text style={[styles.noPaymentText, { color: colors.text }]}>No payment due now</Text>
+            </View>
+          ) : null}
+          <Pressable
+            onPress={() => void handleSubscribe()}
+            disabled={loading}
+            accessibilityRole="button"
+            accessibilityHint={fine}
+            style={({ pressed }) => [styles.cta, { backgroundColor: colors.accent, opacity: pressed ? 0.85 : 1 }]}>
+            {loading ? (
+              <ActivityIndicator color={colors.onAccent} />
+            ) : (
+              <Text style={[styles.ctaText, { color: colors.onAccent }]} numberOfLines={1} adjustsFontSizeToFit>
+                {cta}
+              </Text>
+            )}
+          </Pressable>
+          <Text style={[styles.fine, { color: colors.textSecondary }]}>{fine}</Text>
+        </View>
+        <Animated.View
+          pointerEvents="none"
+          style={[styles.statusCover, { height: insets.top, backgroundColor: colors.background }, statusCoverStyle]}
+        />
+      </Animated.View>
       {/* Terms, Privacy, invite a couple: over the paywall, never instead of it. */}
       {detour ? <PaywallDetour page={detour} onClose={() => setDetour(null)} /> : null}
     </View>

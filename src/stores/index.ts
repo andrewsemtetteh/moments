@@ -94,6 +94,11 @@ interface UIState {
   showPartnerProfile: boolean;
   partnerLocationMap: PartnerLocationMapState | null;
   streakMilestoneCount: number | null;
+  /** Dev preview: the sign-in screens, opened from Settings (shows an "Exit preview" button). */
+  authPreview: boolean;
+  /** Dev preview: bumped to start the app tour again. */
+  tourRequest: number;
+  requestTour: () => void;
   /** A together milestone (days in a row you both checked in) being celebrated. */
   togetherMilestoneCount: number | null;
   openTogetherMilestone: (count: number) => void;
@@ -153,6 +158,28 @@ interface UIState {
 /** How long a full-screen Modal takes to go away before another can open (iPhone). */
 const MODAL_HANDOFF_MS = 350;
 
+/**
+ * Something full-screen is on screen (Moments, the partner's profile, Wrapped, mood history,
+ * the map, the paywall, or another celebration). A streak celebration has to wait for it to
+ * close: on iPhone a full-screen layer opened over another one never appears — which is why
+ * the celebration went missing after sending a moment from the camera.
+ */
+export function isFullScreenLayerOpen(s: UIState): boolean {
+  return (
+    s.showMomentCreator ||
+    s.showMomentHistory ||
+    !!s.momentViewer ||
+    s.showPartnerProfile ||
+    !!s.partnerLocationMap ||
+    s.showWrapped ||
+    s.showMoodHistory ||
+    s.showPaywall ||
+    s.streakSpark != null ||
+    s.streakMilestoneCount != null ||
+    s.togetherMilestoneCount != null
+  );
+}
+
 export const useUIStore = create<UIState>((set, get) => ({
   // Default until the theme-picker onboarding step runs and saves an explicit
   // choice (src/lib/theme-storage.ts) — i.e. this is what every new signup sees
@@ -179,6 +206,9 @@ export const useUIStore = create<UIState>((set, get) => ({
   partnerLocationMap: null,
   streakMilestoneCount: null,
   togetherMilestoneCount: null,
+  authPreview: false,
+  tourRequest: 0,
+  requestTour: () => set((s) => ({ tourRequest: s.tourRequest + 1 })),
   openTogetherMilestone: (togetherMilestoneCount) => set({ togetherMilestoneCount }),
   closeTogetherMilestone: () => set({ togetherMilestoneCount: null }),
   streakSpark: null,

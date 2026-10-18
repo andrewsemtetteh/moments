@@ -67,8 +67,7 @@ export function ChatBubble({
   // Boxy cards (maps, contacts, photos) sit flush against their own borders — the default
   // bubble gap reads as touching when two are stacked back to back, so give them more room.
   const isBoxyContent = !isDeleted && (!!attachment || (!!message.media_url && message.media_type !== 'voice'));
-  const replyAuthor =
-    replyToMessage?.sender_id === user?.id ? 'You' : partner?.name ?? 'Partner';
+  const replyAuthor = replyToMessage?.sender_id === user?.id ? 'You' : (partner?.name ?? 'Partner');
 
   const partnerBorderColor = colors.glass ? colors.borderStrong : colors.border;
 
@@ -88,10 +87,7 @@ export function ChatBubble({
       }
     })
     .onEnd((event) => {
-      if (
-        onSwipeReply &&
-        (event.translationX < -SWIPE_REPLY_THRESHOLD || event.velocityX < -SWIPE_REPLY_VELOCITY)
-      ) {
+      if (onSwipeReply && (event.translationX < -SWIPE_REPLY_THRESHOLD || event.velocityX < -SWIPE_REPLY_VELOCITY)) {
         runOnJS(triggerReply)();
       }
       translateX.value = withSpring(0, { damping: 22, stiffness: 280 });
@@ -124,8 +120,7 @@ export function ChatBubble({
         pointerEvents="none"
         style={[styles.flash, { backgroundColor: colorWithAlpha(colors.accent, 0.2) }, flashStyle]}
       />
-      <Animated.View
-        style={[styles.replyHint, replyHintStyle]}>
+      <Animated.View style={[styles.replyHint, replyHintStyle]}>
         <Icon name="reply" size={20} color={colors.accent} />
       </Animated.View>
 
@@ -157,11 +152,12 @@ export function ChatBubble({
                 style={[
                   styles.replyQuote,
                   {
-                    borderLeftColor: colors.accent,
-                    backgroundColor: isSelf ? 'rgba(255,255,255,0.12)' : colors.accentSoft,
+                    // Your bubble is the accent colour in most themes: draw the quote in its text colour there.
+                    borderLeftColor: isSelf ? selfTextColor : colors.accent,
+                    backgroundColor: isSelf ? `${selfTextColor}1F` : colors.accentSoft,
                   },
                 ]}>
-                <Text style={[styles.replyAuthor, { color: colors.accent }]} numberOfLines={1}>
+                <Text style={[styles.replyAuthor, { color: isSelf ? selfTextColor : colors.accent }]} numberOfLines={1}>
                   {replyAuthor}
                 </Text>
                 <Text
@@ -194,11 +190,11 @@ export function ChatBubble({
 
                 {attachment && <ChatAttachmentCard attachment={attachment} isSelf={isSelf} />}
 
-                {message.content && message.media_type !== 'voice' && message.media_type !== 'video' && message.media_type !== 'image' && !attachment && (
-                  <Text style={[styles.text, { color: textColor }]}>
-                    {message.content}
-                  </Text>
-                )}
+                {message.content &&
+                  message.media_type !== 'voice' &&
+                  message.media_type !== 'video' &&
+                  message.media_type !== 'image' &&
+                  !attachment && <Text style={[styles.text, { color: textColor }]}>{message.content}</Text>}
               </>
             )}
 

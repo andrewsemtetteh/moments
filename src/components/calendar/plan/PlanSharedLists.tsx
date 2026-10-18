@@ -1,6 +1,6 @@
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { paperEdge } from '@/components/ui/primitives';
+import { paperEdge, trackColor } from '@/components/ui/primitives';
 import { listProgress, type PlanList } from '@/lib/plan-local';
 import { useTheme } from '@/hooks/useTheme';
 
@@ -89,7 +89,7 @@ export function PlanSharedLists({
                     </Text>
                   </View>
                 </View>
-                <View style={[styles.track, { backgroundColor: colors.surfaceElevated }, paperEdge(colors, 1.5)]}>
+                <View style={[styles.track, { backgroundColor: trackColor(colors) }, paperEdge(colors, 1.5)]}>
                   <View style={[styles.fill, { width: `${pct}%`, backgroundColor: colors.accent }]} />
                 </View>
               </Pressable>

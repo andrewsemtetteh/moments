@@ -1,7 +1,7 @@
 import { format } from 'date-fns';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { paperEdge } from '@/components/ui/primitives';
+import { paperEdge, trackColor } from '@/components/ui/primitives';
 import { Icon } from '@/components/ui/Icon';
 import { Radius, Spacing } from '@/constants/design-system';
 import { useTheme } from '@/hooks/useTheme';
@@ -51,7 +51,7 @@ export function AnniversaryCountdownMilestone({ anniversaryIso, onEdit }: Annive
         {format(anniversaryDate, 'EEEE · MMMM d, yyyy')}
       </Text>
 
-      <View style={[styles.progressTrack, { backgroundColor: colors.boldBorder ? colors.background : colors.border }, paperEdge(colors, 1.5)]}>
+      <View style={[styles.progressTrack, { backgroundColor: trackColor(colors) }, paperEdge(colors, 1.5)]}>
         <View style={[styles.progressFill, { width: `${yearProgress * 100}%`, backgroundColor: colors.accent }]} />
       </View>
       <Text style={[styles.progressHint, { color: colors.textTertiary }]}>

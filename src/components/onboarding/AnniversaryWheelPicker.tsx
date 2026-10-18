@@ -164,9 +164,11 @@ type Props = {
   value: string;
   onChange: (isoDate: string) => void;
   surfaceColor?: string;
+  /** The earliest year on the wheel (birthdays go back further than anniversaries). */
+  minYear?: number;
 };
 
-export function AnniversaryWheelPicker({ value, onChange, surfaceColor }: Props) {
+export function AnniversaryWheelPicker({ value, onChange, surfaceColor, minYear = MIN_YEAR }: Props) {
   const { colors } = useTheme();
   const fadeBase = surfaceColor ?? colors.background;
 
@@ -203,11 +205,11 @@ export function AnniversaryWheelPicker({ value, onChange, surfaceColor }: Props)
 
   const yearRows = useMemo(() => {
     const currentYear = new Date().getFullYear();
-    return Array.from({ length: currentYear - MIN_YEAR + 1 }, (_, i) => {
+    return Array.from({ length: currentYear - minYear + 1 }, (_, i) => {
       const y = currentYear - i;
       return { key: `year-${y}`, value: y, label: String(y) };
     });
-  }, []);
+  }, [minYear]);
 
   const dayRows = useMemo(() => {
     const maxDay = getDaysInMonth(new Date(year, month, 1));

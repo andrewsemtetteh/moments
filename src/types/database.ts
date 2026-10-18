@@ -28,7 +28,7 @@ export type MoodType =
 export type ActivityStatus = 'pending' | 'in_progress' | 'completed';
 export type EventType = 'date' | 'anniversary' | 'reminder' | 'experience' | 'custom';
 export type SubscriptionTier = 'free' | 'plus';
-export type ProfileGender = 'male' | 'female' | 'other';
+export type ProfileGender = 'male' | 'female' | 'non_binary' | 'other';
 export type RelationshipType = 'dating' | 'long_distance' | 'engaged' | 'married' | 'other';
 
 export interface UserProfile {
@@ -37,6 +37,10 @@ export interface UserProfile {
   name: string | null;
   avatar_url: string | null;
   gender?: ProfileGender | null;
+  /** How you identify (the newer column, with every option; see lib/profile-gender). */
+  gender_identity?: ProfileGender | null;
+  /** YYYY-MM-DD, optional. Your partner sees it (countdown and reminders). */
+  birthday?: string | null;
   subscription_tier?: SubscriptionTier;
   subscription_expires_at?: string | null;
   /** Superwall user id (UUID derived from the Clerk id). Server-written. */
@@ -210,7 +214,7 @@ export interface Streak {
 /** Live streak snapshot from get_streak_status RPC (includes at-risk + partner activity). */
 /**
  * Streaks are individual (like Paired): each of you keeps your own with a daily check-in
- * (a moment, a mood, or answering today's question). `current_streak`, `longest_streak`,
+ * (a moment, a mood, answering today's question, or playing). `current_streak`, `longest_streak`,
  * `at_risk`, the restore fields and `active_days` are YOURS — what every screen shows.
  * Your partner's streak and the together streak (days you both showed up) come alongside.
  */

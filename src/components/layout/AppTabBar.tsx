@@ -108,7 +108,7 @@ export function AppTabBar({ state, navigation }: TabBarLikeProps) {
           // avatar never shifts or shrinks when the tab is selected — previously
           // the border was added on focus and squeezed the avatar inside it.
           <View style={[styles.profileAvatar, { borderColor: focused ? activeColor : 'transparent' }]}>
-            <Avatar name={user?.name} imageUrl={user?.avatar_url} size={TAB_ICON_SIZE - 6} />
+            <Avatar name={user?.name} imageUrl={user?.avatar_url} size={TAB_ICON_SIZE} />
           </View>
         ) : (
           <View>
@@ -232,10 +232,13 @@ const styles = StyleSheet.create({
   // "9+" needs a fixed wider pill: the icon's narrow box would otherwise squeeze it to "9…".
   badgeWide: { width: 26, paddingHorizontal: 0 },
   badgeText: { color: '#fff', fontSize: 10, fontWeight: '800', lineHeight: 12 },
+  // The photo is as big as the other tabs' icons (28); its 2pt selection ring sits
+  // outside it, overlapping 2pt above and below so the label lines up with the rest.
   profileAvatar: {
-    width: TAB_ICON_SIZE,
-    height: TAB_ICON_SIZE,
-    borderRadius: TAB_ICON_SIZE / 2,
+    width: TAB_ICON_SIZE + 4,
+    height: TAB_ICON_SIZE + 4,
+    borderRadius: (TAB_ICON_SIZE + 4) / 2,
+    marginVertical: -2,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',

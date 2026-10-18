@@ -12,7 +12,7 @@ import {
   startOfDay,
   startOfMonth,
 } from 'date-fns';
-import { paperEdge } from '@/components/ui/primitives';
+import { Avatar, separatorColor, cardSurface } from '@/components/ui/primitives';
 import * as Haptics from '@/lib/haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useQueryClient } from '@tanstack/react-query';
@@ -31,7 +31,7 @@ import {
   memoryPhotos,
   type MemoryDraft,
 } from '@/components/calendar/plan/MemorySheets';
-import { PlanDayView, ownerColor } from '@/components/calendar/plan/PlanDayView';
+import { PlanDayView } from '@/components/calendar/plan/PlanDayView';
 import {
   PlanMemoriesTab,
   buildSuggestions,
@@ -52,8 +52,10 @@ import {
   usePlanCalendarEvents,
   useRealtimeSubscription,
   useStreak,
+  useSendMessage,
   useUpcomingCalendarEvents,
 } from '@/hooks/queries';
+import { encodeAttachment } from '@/lib/chat-attachments';
 import { useTheme } from '@/hooks/useTheme';
 import {
   createListFromPlan,
@@ -129,13 +131,14 @@ const afterSheetCloses = (fn: () => void) => setTimeout(fn, SHEET_SWAP_MS);
 const NO_LISTS: PlanList[] = [];
 
 export default function CalendarScreen() {
-  const { create, tab: tabParam } = useLocalSearchParams<{ create?: string; tab?: string }>();
+  const { create, tab: tabParam, plan: planParam } = useLocalSearchParams<{ create?: string; tab?: string; plan?: string }>();
   const insets = useSafeAreaInsets();
   const closePlan = useCallback(() => closeStackScreen(router), []);
   const relationship = useRelationshipStore((s) => s.relationship);
   const partner = useRelationshipStore((s) => s.partner);
   const me = useAuthStore((s) => s.user);
   const queryClient = useQueryClient();
+  const sendChatMessage = useSendMessage();
   const { colors } = useTheme();
   const partnerName = getFirstName(partner?.name) ?? 'Partner';
 
@@ -172,8 +175,28 @@ export default function CalendarScreen() {
         setDetailEvent(null);
         setActiveListId(null);
       };
-    }, []),
+    }, [setCreateOpen, setDetailEvent, setActiveListId]),
   );
+
+  // `?plan=<id>` (a plan card in Chat) opens that plan's page, once per link.
+  useEffect(() => {
+    if (!planParam) return;
+    let cancelled = false;
+    void api
+      .fetchCalendarEvent(planParam)
+      .then((event) => {
+        if (cancelled) return;
+        if (event) {
+          setTab('upcoming');
+          setDetailEvent(event);
+        }
+        else Alert.alert('Plan not found', 'It may have been deleted.');
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [planParam]);
 
   // `?create=1` (e.g. "Plan something" elsewhere) opens New plan, once per link.
   const [seenCreate, setSeenCreate] = useState<string | undefined>(undefined);
@@ -507,8 +530,8 @@ export default function CalendarScreen() {
             notes: draft.note || undefined,
           }),
         });
-        // Back to the memory, once the editor has slid away.
-        afterSheetCloses(() => setOpenMemory(updated));
+        // The memory's page is still open under the editor: show the saved version there.
+        setOpenMemory(updated);
         void invalidate();
       } else {
         await createMemory(draft);
@@ -532,12 +555,11 @@ export default function CalendarScreen() {
   };
 
   const editMemory = (entry: CalendarEvent) => {
-    // From the memory's sheet: let it close first, then open the editor.
-    if (openMemory) {
-      setOpenMemory(null);
-      afterSheetCloses(() => editMemory(entry));
-      return;
-    }
+    // Opens over the memory's page (see `memoryEditor`), which stays open underneath.
+    openMemoryEditor(entry);
+  };
+
+  const openMemoryEditor = (entry: CalendarEvent) => {
     const meta = parsePlanMeta(entry.description);
     setEditingMemory(entry);
     setEditorInitial({
@@ -582,10 +604,24 @@ export default function CalendarScreen() {
   };
 
 
-  const cardBorder = {
-    borderColor: colors.border,
-    borderWidth: colors.boldBorder ? 2 : StyleSheet.hairlineWidth,
-  };
+  const memoryEditor = (
+    <MemoryEditorSheet
+      key={editorKey}
+      visible={editorOpen}
+      initial={editorInitial}
+      recentMoments={allMoments}
+      placeNames={placeNames}
+      saving={savingMemory}
+      onUploadPhoto={(uri) =>
+        api.uploadMomentMedia(`${relationship?.id}/${me?.id}/memory-${Date.now()}.jpg`, uri, 'image/jpeg')
+      }
+      onClose={() => {
+        setEditorOpen(false);
+        setEditingMemory(null);
+      }}
+      onSave={(draft) => void saveMemoryDraft(draft)}
+    />
+  );
 
   return (
     <View style={[styles.flex, { backgroundColor: colors.background }]}>
@@ -593,7 +629,7 @@ export default function CalendarScreen() {
           closes toward the left: chevron on the right, or swipe left. */}
       <ScreenHeader title="Together" onClose={closePlan} />
 
-      <View style={[styles.tabs, { backgroundColor: colors.surface }, paperEdge(colors)]}>
+      <View style={[styles.tabs, cardSurface(colors)]}>
         {(['upcoming', 'memories'] as const).map((key) => {
           const on = tab === key;
           return (
@@ -605,8 +641,8 @@ export default function CalendarScreen() {
               }}
               accessibilityRole="tab"
               accessibilityState={{ selected: on }}
-              style={[styles.tabBtn, on && { backgroundColor: colors.text }]}>
-              <Text style={[styles.tabText, { color: on ? colors.background : colors.textSecondary }]}>
+              style={[styles.tabBtn, on && { backgroundColor: colors.accent }]}>
+              <Text style={[styles.tabText, { color: on ? colors.onAccent : colors.textSecondary }]}>
                 {key === 'upcoming' ? 'Plan' : 'Memories'}
               </Text>
             </Pressable>
@@ -643,10 +679,10 @@ export default function CalendarScreen() {
             contentContainerStyle={styles.ownerChips}>
             {(
               [
-                { key: 'all', label: 'All', dot: null },
-                { key: 'together', label: 'Together', dot: ownerColor('together', me?.id, colors) },
-                { key: 'me', label: 'Me', dot: ownerColor(me?.id ?? 'me', me?.id, colors) },
-                { key: 'partner', label: partnerName, dot: ownerColor('partner', me?.id, colors) },
+                { key: 'all', label: 'All', people: [] },
+                { key: 'together', label: 'Together', people: [me, partner] },
+                { key: 'me', label: 'Me', people: [me] },
+                { key: 'partner', label: partnerName, people: [partner] },
               ] as const
             ).map((c) => {
               const on = ownerFilter === c.key;
@@ -659,9 +695,24 @@ export default function CalendarScreen() {
                   }}
                   accessibilityRole="button"
                   accessibilityState={{ selected: on }}
-                  style={[styles.ownerChip, { backgroundColor: on ? colors.text : colors.surface }]}>
-                  {c.dot ? <View style={[styles.ownerDot, { backgroundColor: c.dot }]} /> : null}
-                  <Text style={[styles.ownerChipText, { color: on ? colors.background : colors.text }]} numberOfLines={1}>
+                  style={[styles.ownerChip, on ? { backgroundColor: colors.accent, borderWidth: cardSurface(colors).borderWidth, borderColor: colors.accent } : cardSurface(colors)]}>
+                  {/* Whose plans: their photos (both, overlapping, for Together). */}
+                  {c.people.length ? (
+                    <View style={styles.ownerFaces}>
+                      {c.people.map((person, i) => (
+                        <View
+                          key={i}
+                          style={[
+                            styles.ownerFace,
+                            i > 0 && styles.ownerFaceOverlap,
+                            { borderColor: on ? colors.accent : colors.surface },
+                          ]}>
+                          <Avatar name={person?.name} imageUrl={person?.avatar_url} size={24} />
+                        </View>
+                      ))}
+                    </View>
+                  ) : null}
+                  <Text style={[styles.ownerChipText, { color: on ? colors.onAccent : colors.text }]} numberOfLines={1}>
                     {c.label}
                   </Text>
                 </Pressable>
@@ -674,7 +725,7 @@ export default function CalendarScreen() {
             when the month label expands the week strip into the full month. */}
         <Animated.View
           layout={LinearTransition.duration(260)}
-          style={[styles.calendarCard, cardBorder, { backgroundColor: colors.surface }]}>
+          style={[styles.calendarCard, cardSurface(colors)]}>
           <PlanToolbar
             month={currentMonth}
             mode={mode}
@@ -765,7 +816,7 @@ export default function CalendarScreen() {
         {comingUp.length > 0 ? (
           <Animated.View layout={LinearTransition.duration(260)} style={styles.section}>
             <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>Coming up</Text>
-            <View style={[styles.upcomingCard, cardBorder, { backgroundColor: colors.surface }]}>
+            <View style={[styles.upcomingCard, cardSurface(colors)]}>
               {comingUp.map((event, i) => {
                 const at = new Date(event.date_time);
                 const tc = getEventTypeColors(event.type, colors);
@@ -776,8 +827,8 @@ export default function CalendarScreen() {
                     style={({ pressed }) => [
                       styles.upcomingRow,
                       i > 0 && {
-                        borderTopWidth: StyleSheet.hairlineWidth,
-                        borderTopColor: colors.border,
+                        borderTopWidth: 1,
+                        borderTopColor: separatorColor(colors),
                       },
                       pressed && { opacity: 0.6 },
                     ]}
@@ -841,32 +892,9 @@ export default function CalendarScreen() {
         partnerName={partner ? partnerName : undefined}
       />
 
-      <MemoryEditorSheet
-        key={editorKey}
-        visible={editorOpen}
-        initial={editorInitial}
-        recentMoments={allMoments}
-        placeNames={placeNames}
-        saving={savingMemory}
-        onUploadPhoto={(uri) =>
-          api.uploadMomentMedia(`${relationship?.id}/${me?.id}/memory-${Date.now()}.jpg`, uri, 'image/jpeg')
-        }
-        onClose={() => {
-          setEditorOpen(false);
-          setEditingMemory(null);
-        }}
-        onSave={(draft) => void saveMemoryDraft(draft)}
-        onDelete={
-          editingMemory
-            ? () => {
-                const entry = editingMemory;
-                setEditorOpen(false);
-                setEditingMemory(null);
-                void deleteMemory(entry);
-              }
-            : undefined
-        }
-      />
+      {/* The editor opens on top of a memory's page when editing from it (inside its Modal, so going
+          back lands on the memory, not the timeline); a new memory opens it over the timeline. */}
+      {openMemory ? null : memoryEditor}
 
       <MemoryDetailSheet
         entry={openMemory}
@@ -876,6 +904,7 @@ export default function CalendarScreen() {
         onClose={() => setOpenMemory(null)}
         onEdit={() => openMemory && editMemory(openMemory)}
         onDelete={() => openMemory && void deleteMemory(openMemory)}
+        editor={openMemory ? memoryEditor : null}
       />
 
       <EventDetailsSheet
@@ -896,6 +925,20 @@ export default function CalendarScreen() {
         onMessage={() => {
           setDetailEvent(null);
           router.push('/chat');
+        }}
+        onSendMessage={async (text) => {
+          if (!detailEvent) return;
+          const meta = parsePlanMeta(detailEvent.description);
+          await sendChatMessage.mutateAsync({
+            content: encodeAttachment({
+              type: 'plan',
+              planId: detailEvent.id,
+              title: displayTitle(detailEvent, me?.id),
+              at: detailEvent.date_time,
+              location: meta.location || undefined,
+              reply: text || undefined,
+            }),
+          });
         }}
         onOpenLinkedList={() => {
           if (!detailEvent) return;
@@ -968,12 +1011,14 @@ const styles = StyleSheet.create({
   ownerChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 999,
+    gap: 7,
+    paddingHorizontal: 14,
+    height: 38,
+    borderRadius: 19,
   },
-  ownerDot: { width: 8, height: 8, borderRadius: 4 },
+  ownerFaces: { flexDirection: 'row', alignItems: 'center' },
+  ownerFace: { borderWidth: 1.5, borderRadius: 14 },
+  ownerFaceOverlap: { marginLeft: -8 },
   ownerChipText: { fontSize: 14, fontWeight: '700' },
   calendarCard: {
     borderRadius: Radius.xl,

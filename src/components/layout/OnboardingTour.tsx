@@ -57,6 +57,16 @@ export function OnboardingTour() {
     };
   }, [userId]);
 
+  // Settings › Developer › Preview app tour: a new request starts it from the top.
+  const tourRequest = useUIStore((s) => s.tourRequest);
+  const [seenRequest, setSeenRequest] = useState(tourRequest);
+  if (tourRequest !== seenRequest) {
+    setSeenRequest(tourRequest);
+    setIndex(0);
+    setSpot(null);
+    setVisible(true);
+  }
+
   const close = useCallback(() => {
     setVisible(false);
     setIndex(0);

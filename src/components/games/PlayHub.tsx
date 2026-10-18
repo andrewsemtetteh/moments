@@ -14,8 +14,9 @@ import {
   DraggableSheet,
   SheetScrollView,
 } from "@/components/ui/DraggableSheet";
+import { SheetHeader, sheetListStyle } from "@/components/ui/SheetHeader";
 import { Icon } from "@/components/ui/Icon";
-import { Avatar, colorWithAlpha } from "@/components/ui/primitives";
+import { colorWithAlpha, outlineColor, separatorColor, trackColor } from "@/components/ui/primitives";
 import { StickerFlame } from "@/components/home/StickerFlame";
 import { useStreak } from "@/hooks/queries";
 import { ShareCardModal } from "@/components/share/ShareCardModal";
@@ -32,7 +33,6 @@ import {
   questView,
   todayKey,
 } from "@/lib/play-progress";
-import { useAuthStore, useRelationshipStore } from "@/stores";
 import { usePlayProgressStore } from "@/stores/play-progress-store";
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
@@ -117,8 +117,6 @@ export function LevelRing({
 export function PlayHero() {
   const { colors } = useTheme();
   const router = useRouter();
-  const user = useAuthStore((s) => s.user);
-  const partner = useRelationshipStore((s) => s.partner);
   const progress = useProgress();
   const info = useMemo(() => levelInfo(progress.xp), [progress.xp]);
   const { data: streakStatus } = useStreak();
@@ -172,16 +170,6 @@ export function PlayHero() {
               {info.nextTitle}
             </Text>
           </View>
-          <View style={styles.avatars}>
-            <Avatar name={user?.name} imageUrl={user?.avatar_url} size={34} />
-            <View style={styles.avatarOverlap}>
-              <Avatar
-                name={partner?.name}
-                imageUrl={partner?.avatar_url}
-                size={34}
-              />
-            </View>
-          </View>
         </View>
 
         <View style={styles.heroChips}>
@@ -205,8 +193,9 @@ export function PlayHero() {
               { backgroundColor: colorWithAlpha(colors.onAccent, 0.2) },
             ]}
           >
+            <Icon name="trophy" size={15} color={colors.onAccent} filled />
             <Text style={[styles.heroChipText, { color: colors.onAccent }]}>
-              🏅 {progress.badges.length}/{BADGES.length} badges
+              {progress.badges.length}/{BADGES.length} trophies
             </Text>
           </View>
           <View
@@ -215,8 +204,9 @@ export function PlayHero() {
               { backgroundColor: colorWithAlpha(colors.onAccent, 0.2) },
             ]}
           >
+            <Icon name="star" size={15} color={colors.onAccent} filled />
             <Text style={[styles.heroChipText, { color: colors.onAccent }]}>
-              ⭐ {progress.xp.toLocaleString()} XP
+              {progress.xp.toLocaleString()} XP
             </Text>
           </View>
         </View>
@@ -254,7 +244,7 @@ export function QuestsCard() {
             backgroundColor: colors.isDark
               ? colors.surface
               : colors.surfaceElevated,
-            borderColor: colors.border,
+            borderColor: outlineColor(colors),
           },
         ]}
       >
@@ -266,8 +256,8 @@ export function QuestsCard() {
               style={[
                 styles.questRow,
                 i > 0 && {
-                  borderTopWidth: StyleSheet.hairlineWidth,
-                  borderTopColor: colors.border,
+                  borderTopWidth: 1,
+                  borderTopColor: separatorColor(colors),
                 },
               ]}
             >
@@ -303,7 +293,7 @@ export function QuestsCard() {
                 <View
                   style={[
                     styles.questTrack,
-                    { backgroundColor: colors.border },
+                    { backgroundColor: trackColor(colors) },
                   ]}
                 >
                   <View
@@ -416,7 +406,7 @@ export function BadgesShelf() {
                   backgroundColor: colors.isDark
                     ? colors.surface
                     : colors.surfaceElevated,
-                  borderColor: has ? colors.accent : colors.border,
+                  borderColor: has ? colors.accent : outlineColor(colors),
                 },
                 pressed && styles.pressed,
               ]}
@@ -467,7 +457,7 @@ export function BadgesShelf() {
                   <View
                     style={[
                       styles.badgeTrack,
-                      { backgroundColor: colors.border },
+                      { backgroundColor: trackColor(colors) },
                     ]}
                   >
                     <View
@@ -497,9 +487,11 @@ export function BadgesShelf() {
         onClose={() => setOpen(false)}
         dragAnywhere
       >
-        <Text style={[styles.sheetTitle, { color: colors.text }]}>
-          Trophy room
-        </Text>
+        <SheetHeader
+          title="Trophy room"
+          hint={`${owned.size} of ${BADGES.length} unlocked · tap one you've won to share it`}
+          onClose={() => setOpen(false)}
+        />
         <SheetScrollView contentContainerStyle={styles.trophyRoom}>
           {BADGE_GROUPS.map((group) => {
             const ladder = BADGES.filter((b) => b.group === group);
@@ -521,7 +513,7 @@ export function BadgesShelf() {
                     {got} of {ladder.length}
                   </Text>
                 </View>
-                <View style={styles.trophyGrid}>
+                <View style={[styles.trophyGrid, styles.trophyGridCard, ...sheetListStyle(colors)]}>
                   {ladder.map((badge) => {
                     const has = owned.has(badge.id);
                     return (
@@ -547,7 +539,7 @@ export function BadgesShelf() {
                               backgroundColor: has
                                 ? colors.accentSoft
                                 : colors.surface,
-                              borderColor: has ? colors.accent : colors.border,
+                              borderColor: has ? colors.accent : outlineColor(colors),
                             },
                           ]}
                         >
@@ -726,6 +718,7 @@ const styles = StyleSheet.create({
   trophyGroupTitle: { fontSize: 16, fontWeight: "900" },
   trophyGroupCount: { fontSize: 12, fontWeight: "700" },
   trophyGrid: { flexDirection: "row", flexWrap: "wrap", gap: 14 },
+  trophyGridCard: { padding: 14, overflow: "visible" },
   badgeProgress: { alignSelf: "stretch", gap: 4, marginTop: 4 },
   badgeTrack: { height: 5, borderRadius: 3, overflow: "hidden" },
   badgeFill: { height: 5, borderRadius: 3 },

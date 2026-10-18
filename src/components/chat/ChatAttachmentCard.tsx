@@ -1,3 +1,4 @@
+import { format } from 'date-fns';
 import * as Linking from 'expo-linking';
 import { router } from 'expo-router';
 import { useState } from 'react';
@@ -168,6 +169,50 @@ export function ChatAttachmentCard({ attachment, isSelf }: Props) {
             </Text>
           </View>
         </View>
+      </Pressable>
+    );
+  }
+
+  if (attachment.type === 'plan') {
+    // The plan quoted as a card (tap to open it in Plan), then what was said about it.
+    const at = new Date(attachment.at);
+    const when = Number.isNaN(at.getTime()) ? '' : format(at, "EEE d MMM 'at' h:mm a");
+    return (
+      <Pressable
+        onPress={() => router.push({ pathname: '/calendar', params: { plan: attachment.planId } })}
+        accessibilityRole="button"
+        accessibilityLabel={`Plan: ${attachment.title}${when ? `, ${when}` : ''}. Open the plan`}
+        style={({ pressed }) => [
+          styles.card,
+          styles.wide,
+          styles.playCard,
+          { backgroundColor: cardBg, borderColor: cardBorder },
+          pressed && styles.pressed,
+        ]}>
+        <View style={styles.playHead}>
+          <View style={[styles.iconBadge, { backgroundColor: badgeBg }]}>
+            <Icon name="calendar" size={18} color={badgeIconColor} />
+          </View>
+          <View style={styles.metaText}>
+            <Text style={[styles.contactKicker, { color: subColor }]}>PLAN</Text>
+            <Text style={[styles.title, { color: textColor }]} numberOfLines={2}>
+              {attachment.title}
+            </Text>
+            {when ? (
+              <Text style={[styles.sub, { color: subColor }]} numberOfLines={1}>
+                {when}
+                {attachment.location ? ` · ${attachment.location}` : ''}
+              </Text>
+            ) : null}
+          </View>
+          <Icon name="chevronRight" size={16} color={subColor} />
+        </View>
+        {attachment.reply ? (
+          <>
+            <View style={[styles.divider, { backgroundColor: dividerColor }]} />
+            <Text style={[styles.playReply, { color: textColor }]}>{attachment.reply}</Text>
+          </>
+        ) : null}
       </Pressable>
     );
   }

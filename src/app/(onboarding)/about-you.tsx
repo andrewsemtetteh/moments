@@ -114,8 +114,8 @@ export default function AboutYouScreen() {
   return (
     <OnboardingStepScreen
       step="about-you"
-      title="First, what should we call you?"
-      subtitle="Your name or a nickname, whatever feels like you. Add a photo too if you like."
+      title="First, what does your partner call you?"
+      subtitle="Your name or the nickname they use for you. Add a photo too if you like."
       primaryLabel="Continue"
       onPrimary={() => void save(true)}
       primaryDisabled={!name.trim()}

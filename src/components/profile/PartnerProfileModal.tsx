@@ -19,7 +19,7 @@ import { LocationMapPreview } from '@/components/moments/LocationMapPreview';
 import { FullScreenLocationMapModal } from '@/components/profile/FullScreenLocationMapModal';
 import { FullScreenImageModal } from '@/components/ui/FullScreenImageModal';
 import { Icon, type IconName } from '@/components/ui/Icon';
-import { Avatar, colorWithAlpha } from '@/components/ui/primitives';
+import { Avatar, colorWithAlpha, separatorColor } from '@/components/ui/primitives';
 import { MOOD_COLORS, MOOD_EMOJI, MOOD_LABELS, type ThemeColors } from '@/constants/design-system';
 import { useMoods, useStreak } from '@/hooks/queries';
 import { usePartnerActiveMoments } from '@/hooks/usePartnerActiveMoments';
@@ -555,7 +555,7 @@ function InfoRow({ icon, label, value, last }: { icon: ReactNode; label: string;
       <View
         style={[
           styles.infoBody,
-          !last && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
+          !last && { borderBottomWidth: 1, borderBottomColor: separatorColor(colors) },
         ]}>
         <Text style={[styles.rowLabel, styles.flex, { color: colors.text }]}>{label}</Text>
         <Text style={[styles.infoValue, { color: colors.textSecondary }]} numberOfLines={1}>

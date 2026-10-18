@@ -1,4 +1,4 @@
-import { paperEdge } from '@/components/ui/primitives';
+import { trackColor, insetCardStyle, separatorColor } from '@/components/ui/primitives';
 import * as Haptics from '@/lib/haptics';
 import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -154,20 +154,23 @@ export function PlanListSheet({
             </View>
             <Pressable
               onPress={onClose}
-              style={[styles.close, { backgroundColor: colors.surfaceElevated }, paperEdge(colors)]}>
-              <Icon name="close" size={18} color={colors.textSecondary} />
+              hitSlop={6}
+              accessibilityRole="button"
+              accessibilityLabel="Close"
+              style={({ pressed }) => [styles.close, insetCardStyle(colors, 'sheet'), pressed && { opacity: 0.7 }]}>
+              <Icon name="close" size={22} color={colors.text} />
             </Pressable>
           </View>
 
           {progress && progress.total > 0 ? (
-            <View style={[styles.track, { backgroundColor: colors.surfaceElevated }, paperEdge(colors, 1.5)]}>
+            <View style={[styles.track, { backgroundColor: trackColor(colors) }]}>
               <View
                 style={[styles.fill, { width: `${progress.pct}%`, backgroundColor: colors.accent }]}
               />
             </View>
           ) : null}
 
-          <View style={[styles.addField, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <View style={[styles.addField, insetCardStyle(colors, 'sheet')]}>
             <Icon name="plus" size={18} color={colors.accent} />
             <TextInput
               value={draft}
@@ -207,8 +210,15 @@ export function PlanListSheet({
                     <Text style={[styles.sectionTitle, { color: colors.text }]}>{section.title}</Text>
                   </Pressable>
                 )}
+                {section.items.length ? (
+                <View style={[styles.list, insetCardStyle(colors, 'sheet')]}>
                 {section.items.map((item, index) => (
-                  <View key={item.id} style={styles.row}>
+                  <View
+                    key={item.id}
+                    style={[
+                      styles.row,
+                      index < section.items.length - 1 && { borderBottomWidth: 1, borderBottomColor: separatorColor(colors) },
+                    ]}>
                     <Pressable onPress={() => toggle(section.id, item)} style={styles.rowMain}>
                       <View
                         style={[
@@ -279,12 +289,14 @@ export function PlanListSheet({
                     </Pressable>
                   </View>
                 ))}
+                </View>
+                ) : null}
               </View>
             ))}
 
             <Pressable
               onPress={addSection}
-              style={[styles.addSection, { backgroundColor: colors.accentSoft }]}>
+              style={({ pressed }) => [styles.addSection, insetCardStyle(colors, 'sheet'), pressed && { opacity: 0.7 }]}>
               <Icon name="plus" size={16} color={colors.accent} />
               <Text style={{ color: colors.accent, fontWeight: '700' }}>Add section</Text>
             </Pressable>
@@ -301,18 +313,18 @@ const styles = StyleSheet.create({
     paddingBottom: 28,
   },
   header: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 },
-  title: { fontSize: 24, fontWeight: '800', letterSpacing: -0.4 },
-  close: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+  title: { fontSize: 20, fontWeight: '800', letterSpacing: -0.3 },
+  close: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
+  list: { borderRadius: 18, overflow: 'hidden' },
   track: { height: 6, borderRadius: 999, overflow: 'hidden', marginBottom: 14 },
   fill: { height: '100%', borderRadius: 999 },
   addField: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    borderRadius: 14,
-    borderWidth: StyleSheet.hairlineWidth,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
+    borderRadius: 18,
+    paddingHorizontal: 16,
+    minHeight: 54,
     marginBottom: 16,
   },
   input: { flex: 1, fontSize: 16, fontWeight: '600', padding: 0 },
@@ -322,7 +334,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    paddingVertical: 10,
+    minHeight: 54,
+    paddingHorizontal: 16,
   },
   rowMain: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12 },
   check: {
@@ -338,8 +351,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    borderRadius: 14,
-    paddingVertical: 14,
+    borderRadius: 18,
+    minHeight: 54,
     marginBottom: 8,
   },
 });

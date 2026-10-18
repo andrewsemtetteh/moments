@@ -16,7 +16,7 @@ export function EditGenderModal({ visible, value, savingValue, onSelect, onClose
     <SettingsChoiceSheet
       visible={visible}
       title="Gender"
-      hint="This helps us personalise your experience."
+      hint="Optional. It helps us personalise Moments for you."
       options={PROFILE_GENDER_OPTIONS}
       value={value}
       savingValue={savingValue}

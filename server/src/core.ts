@@ -480,7 +480,7 @@ export async function getStreakStatus(env: Env, relationshipId: string, userId: 
       relationshipId,
       recipientId: userId,
       type: 'streak',
-      content: `Your ${myStreak}-day streak ends tonight. Send a moment, share your mood or answer today’s question to keep it.`,
+      content: `Your ${myStreak}-day streak ends tonight. Send a moment, share your mood, answer today’s question or play a game to keep it.`,
     });
   }
 
