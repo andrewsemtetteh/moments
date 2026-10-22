@@ -1,0 +1,25 @@
+{
+  "id": "3.3",
+  "title": "What to do when your partner is stressed",
+  "theme": "sky",
+  "series": "Support",
+  "illustration": "backhug",
+  "slides": [
+    {
+      "type": "cover",
+      "title": "What to do when your partner is *stressed*",
+      "sub": "Small things that help more than you think."
+    },
+    { "type": "teabag", "n": 1, "title": "Ask: *advice or a hug?*", "body": "Sometimes they want solutions. Sometimes they just want you." },
+    { "type": "teabag", "n": 2, "title": "Take one thing *off their list.*", "body": "The errand, the email, the dishes. Just one." },
+    { "type": "teabag", "n": 3, "title": "Make their *favorite drink.*", "body": "No questions asked. Just set it down next to them." },
+    { "type": "teabag", "n": 4, "title": "Be quiet, *but stay.*", "body": "You don’t have to fill the silence. Just be close." },
+    { "type": "teabag", "n": 5, "title": "Plan something *to look forward to.*", "body": "A takeaway on Friday. A walk on Sunday. Something small." },
+    { "type": "teabag", "n": 6, "title": "Remind them: *we’ll figure it out.*", "body": "Not “it’s fine.” Just “we’re in this together.”" },
+    {
+      "type": "save",
+      "title": "Save this *for when they need it.*",
+      "sub": "Then quietly start with number two."
+    }
+  ]
+}

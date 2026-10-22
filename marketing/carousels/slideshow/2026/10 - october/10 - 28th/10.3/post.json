@@ -1,0 +1,49 @@
+{
+  "id": "10.3",
+  "title": "Questions about the future (no pressure)",
+  "theme": "lilac",
+  "variant": "capsule",
+  "illustration": "d10_3",
+  "slides": [
+    {
+      "type": "cover",
+      "title": "Questions about the future, *no pressure*",
+      "sub": "Dreamy, not scary. Promise."
+    },
+    {
+      "type": "k",
+      "n": 1,
+      "title": "Where do you see us *spending holidays?*"
+    },
+    {
+      "type": "k",
+      "n": 2,
+      "title": "Where would you want to *live, even for a month?*"
+    },
+    {
+      "type": "k",
+      "n": 3,
+      "title": "What do you want to *learn* in the next five years?"
+    },
+    {
+      "type": "k",
+      "n": 4,
+      "title": "What would a *perfect birthday* look like in ten years?"
+    },
+    {
+      "type": "k",
+      "n": 5,
+      "title": "What’s one adventure you’d *regret not taking?*"
+    },
+    {
+      "type": "k",
+      "n": 6,
+      "title": "What does *“home”* feel like to you?"
+    },
+    {
+      "type": "save",
+      "title": "Save this *and ask again in a year.*",
+      "sub": "See how your answers change."
+    }
+  ]
+}

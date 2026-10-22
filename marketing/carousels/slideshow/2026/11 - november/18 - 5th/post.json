@@ -1,0 +1,25 @@
+{
+  "id": 18,
+  "title": "Grade your relationship",
+  "theme": "sunny",
+  "series": "Play",
+  "illustration": "reportcard",
+  "slides": [
+    {
+      "type": "cover",
+      "title": "*Grade* your relationship",
+      "sub": "Six subjects. Be honest. Comment your report card."
+    },
+    { "type": "report", "n": 1, "subject": "Communication", "prompt": "Do you say what you mean, and *actually listen?*", "note": "Talks a lot. Listens… sometimes." },
+    { "type": "report", "n": 2, "subject": "Teamwork", "prompt": "Chores, plans, decisions. Do you *show up together?*", "note": "Excellent at assembling furniture. Mostly." },
+    { "type": "report", "n": 3, "subject": "Romance", "prompt": "Dates, little surprises, *still flirting?*", "note": "Strong start. Needs more surprise flowers." },
+    { "type": "report", "n": 4, "subject": "Laughing together", "prompt": "Inside jokes, *silly voices*, crying laughing.", "note": "Disrupts class with inside jokes. A+ energy." },
+    { "type": "report", "n": 5, "subject": "Fighting fair", "prompt": "No name-calling, no score-keeping, *always repair.*", "note": "Improving. Please stop bringing up 2019." },
+    { "type": "report", "n": 6, "subject": "Snack sharing", "prompt": "Do you share fries *without being asked?*", "note": "Says “I’m not hungry.” Eats half my plate." },
+    {
+      "type": "save",
+      "title": "Save this *and grade again in a month.*",
+      "sub": "Then comment your report card: A, B, B, A, C, A…"
+    }
+  ]
+}

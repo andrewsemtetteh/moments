@@ -1,0 +1,49 @@
+{
+  "id": "5.4",
+  "title": "Conversation starters for a phone-free dinner",
+  "theme": "ink",
+  "series": "Questions",
+  "illustration": "fortunes",
+  "slides": [
+    {
+      "type": "cover",
+      "title": "Conversation starters for a *phone-free dinner*",
+      "sub": "Crack one open between courses."
+    },
+    {
+      "type": "fortune",
+      "n": 1,
+      "text": "What *small thing* made you happy this week?"
+    },
+    {
+      "type": "fortune",
+      "n": 2,
+      "text": "If we had a *free year*, what would we do?"
+    },
+    {
+      "type": "fortune",
+      "n": 3,
+      "text": "What’s a skill you *wish* you had?"
+    },
+    {
+      "type": "fortune",
+      "n": 4,
+      "text": "What’s the *best advice* you’ve ever gotten?"
+    },
+    {
+      "type": "fortune",
+      "n": 5,
+      "text": "What have you *changed your mind* about lately?"
+    },
+    {
+      "type": "fortune",
+      "n": 6,
+      "text": "Who has *shaped you* the most?"
+    },
+    {
+      "type": "save",
+      "title": "Save this *for dinner tonight.*",
+      "sub": "Phones in another room. Cookies optional."
+    }
+  ]
+}

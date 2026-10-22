@@ -1,0 +1,61 @@
+{
+  "id": "11.4",
+  "title": "Date ideas for homebodies",
+  "theme": "mint",
+  "variant": "house",
+  "illustration": "d11_4",
+  "slides": [
+    {
+      "type": "cover",
+      "title": "Date ideas for *homebodies*",
+      "sub": "A room-by-room guide."
+    },
+    {
+      "type": "k",
+      "n": 1,
+      "title": "A *board game* tournament",
+      "body": "Best of five. Trash talk allowed.",
+      "room": "The living room"
+    },
+    {
+      "type": "k",
+      "n": 2,
+      "title": "Make *pizza* from scratch",
+      "body": "Toppings are a negotiation.",
+      "room": "The kitchen"
+    },
+    {
+      "type": "k",
+      "n": 3,
+      "title": "Pillows and *a podcast*",
+      "body": "One episode. A lot of pillows.",
+      "room": "The bedroom"
+    },
+    {
+      "type": "k",
+      "n": 4,
+      "title": "Watch *the sunset* with tea",
+      "body": "Sit close. Say little.",
+      "room": "The window seat"
+    },
+    {
+      "type": "k",
+      "n": 5,
+      "title": "A *bubble bath* and candles",
+      "body": "Bring snacks. Obviously.",
+      "room": "The bathroom"
+    },
+    {
+      "type": "k",
+      "n": 6,
+      "title": "*Plant something* together",
+      "body": "Name it after an inside joke.",
+      "room": "The doorstep"
+    },
+    {
+      "type": "save",
+      "title": "Save this *for a stay-in weekend.*",
+      "sub": "Pick a room. Lock the door."
+    }
+  ]
+}

@@ -1,0 +1,43 @@
+{
+  "id": "2.3",
+  "title": "A couples bucket list",
+  "theme": "cream",
+  "series": "Adventure",
+  "illustration": "map",
+  "slides": [
+    {
+      "type": "cover",
+      "title": "Our couples *bucket list*",
+      "sub": "Sixteen stamps for your passport together. Fill in the dates."
+    },
+    { "type": "stamps", "page": 1, "items": [
+      { "n": 1, "tag": "Adventure", "text": "Watch a sunrise *somewhere new*" },
+      { "n": 2, "tag": "Approved", "text": "Take a trip *with no plan*" },
+      { "n": 3, "tag": "Visa", "text": "Learn a *dance* together" },
+      { "n": 4, "tag": "Entry", "text": "Cook a dish from *each other’s childhood*" }
+    ]},
+    { "type": "stamps", "page": 2, "items": [
+      { "n": 5, "tag": "Adventure", "text": "Stay up *all night* talking" },
+      { "n": 6, "tag": "Approved", "text": "Keep a plant *alive* together" },
+      { "n": 7, "tag": "Visa", "text": "Recreate your *first date*" },
+      { "n": 8, "tag": "Entry", "text": "Swim in the sea *at night*" }
+    ]},
+    { "type": "stamps", "page": 3, "items": [
+      { "n": 9, "tag": "Adventure", "text": "Take *a class* together" },
+      { "n": 10, "tag": "Approved", "text": "Picnic *in the rain*" },
+      { "n": 11, "tag": "Visa", "text": "Write letters to open *in five years*" },
+      { "n": 12, "tag": "Entry", "text": "Visit a city *neither of you knows*" }
+    ]},
+    { "type": "stamps", "page": 4, "items": [
+      { "n": 13, "tag": "Adventure", "text": "Get *matching* something" },
+      { "n": 14, "tag": "Approved", "text": "A full weekend *with no phones*" },
+      { "n": 15, "tag": "Visa", "text": "Make a *scrapbook* of your year" },
+      { "n": 16, "tag": "Entry", "text": "Say *yes* to every plan for a day" }
+    ]},
+    {
+      "type": "save",
+      "title": "Save this *and start stamping.*",
+      "sub": "Screenshot it, pick one for this month and fill in the date."
+    }
+  ]
+}

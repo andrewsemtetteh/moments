@@ -1,0 +1,55 @@
+{
+  "id": "13.4",
+  "title": "What couples argue about most (and the fix)",
+  "theme": "blue",
+  "variant": "boxing",
+  "illustration": "d13_4",
+  "slides": [
+    {
+      "type": "cover",
+      "title": "What couples *argue about most*",
+      "sub": "And the fix for each round."
+    },
+    {
+      "type": "k",
+      "n": 1,
+      "title": "*Chores*",
+      "body": "The fix: split by preference, not by keeping score."
+    },
+    {
+      "type": "k",
+      "n": 2,
+      "title": "*Money*",
+      "body": "The fix: one calm money talk a month."
+    },
+    {
+      "type": "k",
+      "n": 3,
+      "title": "*Phones*",
+      "body": "The fix: phone-free zones, like the dinner table."
+    },
+    {
+      "type": "k",
+      "n": 4,
+      "title": "*Family*",
+      "body": "The fix: you handle yours, I handle mine."
+    },
+    {
+      "type": "k",
+      "n": 5,
+      "title": "*Time together*",
+      "body": "The fix: one protected night a week."
+    },
+    {
+      "type": "k",
+      "n": 6,
+      "title": "*Where to eat*",
+      "body": "The fix: the one asking gives three options."
+    },
+    {
+      "type": "save",
+      "title": "Save this *and end round one early.*",
+      "sub": "Nobody wins a fight. Teams win fights."
+    }
+  ]
+}

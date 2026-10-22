@@ -1,0 +1,49 @@
+{
+  "id": "5.2",
+  "title": "How well do you really know me?",
+  "theme": "coral",
+  "series": "Play",
+  "illustration": "trivia",
+  "slides": [
+    {
+      "type": "cover",
+      "title": "How well do you *really* know me?",
+      "sub": "Write your guess, they reveal the answer. Keep score."
+    },
+    {
+      "type": "scratch",
+      "n": 1,
+      "text": "What’s my *most-used* emoji?"
+    },
+    {
+      "type": "scratch",
+      "n": 2,
+      "text": "Which song would I pick *at karaoke?*"
+    },
+    {
+      "type": "scratch",
+      "n": 3,
+      "text": "What’s my *biggest* pet peeve?"
+    },
+    {
+      "type": "scratch",
+      "n": 4,
+      "text": "Who was my *childhood* celebrity crush?"
+    },
+    {
+      "type": "scratch",
+      "n": 5,
+      "text": "What would I order at a *brand-new* restaurant?"
+    },
+    {
+      "type": "scratch",
+      "n": 6,
+      "text": "What would I grab first *if the power went out?*"
+    },
+    {
+      "type": "save",
+      "title": "Save this *for your next car ride.*",
+      "sub": "Score yourselves out of six. Comment your total."
+    }
+  ]
+}

@@ -1,0 +1,118 @@
+{
+  "id": "8.2",
+  "title": "15 date ideas to try this month",
+  "theme": "sunny",
+  "illustration": "d8_2",
+  "slides": [
+    {
+      "type": "cover",
+      "title": "15 date ideas to try *this month*",
+      "sub": "Screenshot it. Tick them off one by one."
+    },
+    {
+      "type": "list",
+      "items": [
+        {
+          "n": 1,
+          "text": "A *farmers market* morning, then cook lunch with what you find",
+          "label": ""
+        },
+        {
+          "n": 2,
+          "text": "A *yes day*: one plans everything, the other says yes",
+          "label": ""
+        },
+        {
+          "n": 3,
+          "text": "A *double date* brunch with your favorite couple",
+          "label": ""
+        }
+      ]
+    },
+    {
+      "type": "list",
+      "items": [
+        {
+          "n": 4,
+          "text": "*Paint and sip* at home, frame the results",
+          "label": ""
+        },
+        {
+          "n": 5,
+          "text": "A *five-course tasting menu* at home, tiny portions only",
+          "label": ""
+        },
+        {
+          "n": 6,
+          "text": "A *comedy night* somewhere new",
+          "label": ""
+        }
+      ]
+    },
+    {
+      "type": "list",
+      "items": [
+        {
+          "n": 7,
+          "text": "Order *blind* at a cuisine you’ve never tried",
+          "label": ""
+        },
+        {
+          "n": 8,
+          "text": "*Roller or ice skating*, hand in hand (for balance)",
+          "label": ""
+        },
+        {
+          "n": 9,
+          "text": "A *bike ride* to somewhere you’ve never been",
+          "label": ""
+        }
+      ]
+    },
+    {
+      "type": "list",
+      "items": [
+        {
+          "n": 10,
+          "text": "An *escape room*. Find out who panics",
+          "label": ""
+        },
+        {
+          "n": 11,
+          "text": "A *live music* night, any genre",
+          "label": ""
+        },
+        {
+          "n": 12,
+          "text": "A visit to the *aquarium*",
+          "label": ""
+        }
+      ]
+    },
+    {
+      "type": "list",
+      "items": [
+        {
+          "n": 13,
+          "text": "*Breakfast for dinner*, pajamas required",
+          "label": ""
+        },
+        {
+          "n": 14,
+          "text": "Shoot a *one-minute film* on your phones",
+          "label": ""
+        },
+        {
+          "n": 15,
+          "text": "A *staycation* night at a hotel in your own city",
+          "label": ""
+        }
+      ]
+    },
+    {
+      "type": "save",
+      "title": "Save this *and pick tonight’s date.*",
+      "sub": "Comment the number you’re doing first."
+    }
+  ]
+}

@@ -1,0 +1,62 @@
+{
+  "id": "6.1",
+  "title": "Small habits of couples who last",
+  "theme": "sunny",
+  "cardStyle": "tracker",
+  "series": "Habits",
+  "illustration": "habits",
+  "slides": [
+    {
+      "type": "cover",
+      "title": "Small habits of *couples who last*",
+      "sub": "None of them take more than a minute."
+    },
+    {
+      "type": "tip",
+      "n": 1,
+      "week": "1111111",
+      "title": "Say *good morning.*",
+      "body": "Even on busy days. A two-word text still counts."
+    },
+    {
+      "type": "tip",
+      "n": 2,
+      "week": "1111100",
+      "title": "Ask about the *small stuff.*",
+      "body": "How was the meeting? Did the bus show up on time?"
+    },
+    {
+      "type": "tip",
+      "n": 3,
+      "week": "1111110",
+      "title": "Say *thank you* for normal things.",
+      "body": "Dinner. The dishes. Remembering your coffee order."
+    },
+    {
+      "type": "tip",
+      "n": 4,
+      "week": "1110110",
+      "title": "Go to bed *at the same time.*",
+      "body": "Even twice a week. The pillow talk is the point."
+    },
+    {
+      "type": "tip",
+      "n": 5,
+      "week": "1111111",
+      "title": "Fight the *problem*, not each other.",
+      "body": "It’s the two of you against the issue. Always."
+    },
+    {
+      "type": "tip",
+      "n": 6,
+      "week": "1111110",
+      "title": "Keep a *running joke.*",
+      "body": "The thing only you two find funny. Protect it."
+    },
+    {
+      "type": "save",
+      "title": "Save this *and start tomorrow.*",
+      "sub": "Pick one habit. Do it for a week. Watch what changes."
+    }
+  ]
+}

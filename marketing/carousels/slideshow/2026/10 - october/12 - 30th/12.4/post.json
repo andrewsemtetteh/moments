@@ -1,0 +1,54 @@
+{
+  "id": "12.4",
+  "title": "How to be a better listener",
+  "theme": "night",
+  "variant": "wave",
+  "illustration": "d12_4",
+  "slides": [
+    {
+      "type": "cover",
+      "title": "How to be a *better listener*"
+    },
+    {
+      "type": "k",
+      "n": 1,
+      "title": "Put the phone *face down*",
+      "body": "Your attention is the gift."
+    },
+    {
+      "type": "k",
+      "n": 2,
+      "title": "Don’t plan *your reply*",
+      "body": "Just listen until they’re done."
+    },
+    {
+      "type": "k",
+      "n": 3,
+      "title": "Ask *“and then what?”*",
+      "body": "Curiosity keeps them talking."
+    },
+    {
+      "type": "k",
+      "n": 4,
+      "title": "Say it *back*",
+      "body": "“So you felt…” shows you got it."
+    },
+    {
+      "type": "k",
+      "n": 5,
+      "title": "Notice *what’s not said*",
+      "body": "Tone, pauses, the sigh."
+    },
+    {
+      "type": "k",
+      "n": 6,
+      "title": "Remember it *later*",
+      "body": "Bring it up tomorrow. That’s listening."
+    },
+    {
+      "type": "save",
+      "title": "Save this *for your next deep talk.*",
+      "sub": "Listening is a love language too."
+    }
+  ]
+}

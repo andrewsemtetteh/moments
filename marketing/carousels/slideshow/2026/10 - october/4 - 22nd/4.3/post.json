@@ -1,0 +1,25 @@
+{
+  "id": "4.3",
+  "title": "Things more romantic than flowers",
+  "theme": "night",
+  "series": "Relatable",
+  "illustration": "gallery",
+  "slides": [
+    {
+      "type": "cover",
+      "title": "Things more romantic *than flowers*",
+      "sub": "An exhibition of small gestures."
+    },
+    { "type": "exhibit", "n": 1, "title": "Remembering what they *said three weeks ago*", "medium": "paying attention, quietly" },
+    { "type": "exhibit", "n": 2, "title": "Saving them *the good spot* on the sofa", "medium": "one cushion, warmed up" },
+    { "type": "exhibit", "n": 3, "title": "Texting *“did you eat?”*", "medium": "four words, sent daily" },
+    { "type": "exhibit", "n": 4, "title": "Making *two cups* without asking", "medium": "tea, or coffee, exactly right" },
+    { "type": "exhibit", "n": 5, "title": "Knowing their *family’s names*", "medium": "remembered, not reminded" },
+    { "type": "exhibit", "n": 6, "title": "Pausing the show *when they leave the room*", "medium": "self-control, mostly" },
+    {
+      "type": "save",
+      "title": "Save this *and add to the collection.*",
+      "sub": "What’s one small gesture that means everything to you?"
+    }
+  ]
+}

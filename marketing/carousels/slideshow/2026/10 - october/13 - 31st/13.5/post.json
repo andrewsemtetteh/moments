@@ -1,0 +1,48 @@
+{
+  "id": "13.5",
+  "title": "Small promises to make each other",
+  "theme": "cream",
+  "variant": "contract",
+  "illustration": "d13_5",
+  "slides": [
+    {
+      "type": "cover",
+      "title": "Small promises to *make each other*"
+    },
+    {
+      "type": "k",
+      "n": 1,
+      "title": "I’ll *tell you* when something’s wrong."
+    },
+    {
+      "type": "k",
+      "n": 2,
+      "title": "I’ll ask before I *assume.*"
+    },
+    {
+      "type": "k",
+      "n": 3,
+      "title": "I’ll make time for *us*, even on busy weeks."
+    },
+    {
+      "type": "k",
+      "n": 4,
+      "title": "I’ll *apologize* when I’m wrong. Quickly."
+    },
+    {
+      "type": "k",
+      "n": 5,
+      "title": "I’ll celebrate *your wins* like they’re mine."
+    },
+    {
+      "type": "k",
+      "n": 6,
+      "title": "I’ll keep *learning you.*"
+    },
+    {
+      "type": "save",
+      "title": "Save this *and sign it together.*",
+      "sub": "No lawyers required."
+    }
+  ]
+}

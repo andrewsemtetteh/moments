@@ -1,0 +1,54 @@
+{
+  "id": "8.4",
+  "title": "Ways to make a normal day feel special",
+  "theme": "mint",
+  "variant": "seeds",
+  "illustration": "d8_4",
+  "slides": [
+    {
+      "type": "cover",
+      "title": "Ways to make a *normal day* feel special"
+    },
+    {
+      "type": "k",
+      "n": 1,
+      "title": "*Breakfast in bed* on a weekday",
+      "body": "How to grow: no occasion needed."
+    },
+    {
+      "type": "k",
+      "n": 2,
+      "title": "*Dress up* for a regular dinner",
+      "body": "How to grow: same food, better outfits."
+    },
+    {
+      "type": "k",
+      "n": 3,
+      "title": "Take the *long way* home",
+      "body": "How to grow: walk, talk, no rush."
+    },
+    {
+      "type": "k",
+      "n": 4,
+      "title": "Toast to *something small*",
+      "body": "How to grow: “To surviving Tuesday.”"
+    },
+    {
+      "type": "k",
+      "n": 5,
+      "title": "*Dance* while you cook",
+      "body": "How to grow: one song, full commitment."
+    },
+    {
+      "type": "k",
+      "n": 6,
+      "title": "Photograph an *ordinary moment*",
+      "body": "How to grow: ordinary is the point."
+    },
+    {
+      "type": "save",
+      "title": "Save this *for an ordinary day.*",
+      "sub": "Ordinary is where the good stuff grows."
+    }
+  ]
+}

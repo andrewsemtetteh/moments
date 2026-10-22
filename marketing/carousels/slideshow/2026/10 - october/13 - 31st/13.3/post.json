@@ -1,0 +1,48 @@
+{
+  "id": "13.3",
+  "title": "Questions to rekindle romance",
+  "theme": "ink",
+  "variant": "candle",
+  "illustration": "d13_3",
+  "slides": [
+    {
+      "type": "cover",
+      "title": "Questions to *rekindle romance*"
+    },
+    {
+      "type": "k",
+      "n": 1,
+      "title": "When did you last feel *butterflies* around me?"
+    },
+    {
+      "type": "k",
+      "n": 2,
+      "title": "Which *date* should we repeat?"
+    },
+    {
+      "type": "k",
+      "n": 3,
+      "title": "What do you find attractive about me *now* that you didn’t before?"
+    },
+    {
+      "type": "k",
+      "n": 4,
+      "title": "What’s a *small thing* I do that you love?"
+    },
+    {
+      "type": "k",
+      "n": 5,
+      "title": "Where would you take me for a *perfect date?*"
+    },
+    {
+      "type": "k",
+      "n": 6,
+      "title": "What *romantic thing* have you always wanted to try?"
+    },
+    {
+      "type": "save",
+      "title": "Save this *for a candlelit night.*",
+      "sub": "Light a candle. Ask slowly."
+    }
+  ]
+}

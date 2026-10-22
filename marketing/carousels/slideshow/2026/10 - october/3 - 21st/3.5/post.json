@@ -1,0 +1,25 @@
+{
+  "id": "3.5",
+  "title": "What couples say vs. what they mean",
+  "theme": "lilac",
+  "series": "Humor",
+  "illustration": "dictionary",
+  "slides": [
+    {
+      "type": "cover",
+      "title": "What couples say *vs. what they mean*",
+      "sub": "A very official dictionary."
+    },
+    { "type": "dict", "n": 1, "word": "“I’m fine.”", "say": "/ ahym · fyn /", "means": "I am *not* fine. Ask again, gently.", "example": "said with arms crossed, looking at the wall." },
+    { "type": "dict", "n": 2, "word": "“I’m not tired.”", "say": "/ nät · tī·ərd /", "means": "Asleep *in four minutes.*", "example": "said at the start of a three-hour movie." },
+    { "type": "dict", "n": 3, "word": "“Five more minutes.”", "say": "/ fyv · mor /", "means": "At least *forty* minutes.", "example": "said from under the duvet." },
+    { "type": "dict", "n": 4, "word": "“I’m almost ready.”", "say": "/ ôl·mōst · red·ē /", "means": "I have *not started.*", "example": "said in a towel, holding a hairdryer." },
+    { "type": "dict", "n": 5, "word": "“I’ll be quick.”", "say": "/ ahyl · kwik /", "means": "Make yourself *comfortable.*", "example": "said walking into a shop “for one thing.”" },
+    { "type": "dict", "n": 6, "word": "“We should talk.”", "say": "/ shood · tôk /", "means": "It’s probably nothing. *Probably.*", "example": "said, then followed by a full day of silence." },
+    {
+      "type": "save",
+      "title": "Save this *and tag your translator.*",
+      "sub": "Every couple needs one."
+    }
+  ]
+}

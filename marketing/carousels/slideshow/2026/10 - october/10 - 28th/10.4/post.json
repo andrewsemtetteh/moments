@@ -1,0 +1,54 @@
+{
+  "id": "10.4",
+  "title": "Inside jokes every couple has",
+  "theme": "sunny",
+  "variant": "comic",
+  "illustration": "d10_4",
+  "slides": [
+    {
+      "type": "cover",
+      "title": "Inside jokes *every couple has*"
+    },
+    {
+      "type": "k",
+      "n": 1,
+      "title": "The word you *mispronounce* on purpose",
+      "body": "It started as an accident. Now it’s law."
+    },
+    {
+      "type": "k",
+      "n": 2,
+      "title": "A *song* you both sing wrong",
+      "body": "Loudly. Proudly. Wrong."
+    },
+    {
+      "type": "k",
+      "n": 3,
+      "title": "The *fake name* at coffee shops",
+      "body": "Your barista thinks you’re someone else."
+    },
+    {
+      "type": "k",
+      "n": 4,
+      "title": "A quote from a *terrible movie*",
+      "body": "You’ve never even finished the movie."
+    },
+    {
+      "type": "k",
+      "n": 5,
+      "title": "The *noise* that means “I’m hungry”",
+      "body": "Words are no longer required."
+    },
+    {
+      "type": "k",
+      "n": 6,
+      "title": "Voices you’d *never use in public*",
+      "body": "Unless you trust the public."
+    },
+    {
+      "type": "save",
+      "title": "Save this *and tag your co-comedian.*",
+      "sub": "Which one do you two have?"
+    }
+  ]
+}

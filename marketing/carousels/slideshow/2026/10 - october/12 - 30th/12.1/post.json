@@ -1,0 +1,218 @@
+{
+  "id": "12.1",
+  "title": "30 truth or dare questions for couples",
+  "theme": "ink",
+  "illustration": "truthdare",
+  "slides": [
+    {
+      "type": "cover",
+      "title": "30 *truth or dare* questions for couples",
+      "sub": "Take turns. Two passes each. That’s it."
+    },
+    {
+      "type": "list",
+      "items": [
+        {
+          "n": 1,
+          "text": "What was your *first thought* when you saw me?",
+          "label": "Truth"
+        },
+        {
+          "n": 2,
+          "text": "Describe me using *only three emojis.*",
+          "label": "Dare"
+        },
+        {
+          "n": 3,
+          "text": "What’s the most embarrassing thing you did *to impress me?*",
+          "label": "Truth"
+        }
+      ]
+    },
+    {
+      "type": "list",
+      "items": [
+        {
+          "n": 4,
+          "text": "Do your best impression of me *waking up.*",
+          "label": "Dare"
+        },
+        {
+          "n": 5,
+          "text": "Have you ever pretended to like something *because I did?*",
+          "label": "Truth"
+        },
+        {
+          "n": 6,
+          "text": "Serenade me with *the last song* you played.",
+          "label": "Dare"
+        }
+      ]
+    },
+    {
+      "type": "list",
+      "items": [
+        {
+          "n": 7,
+          "text": "Which habit of mine have you *secretly copied?*",
+          "label": "Truth"
+        },
+        {
+          "n": 8,
+          "text": "Let me pick your *phone wallpaper* for a week.",
+          "label": "Dare"
+        },
+        {
+          "n": 9,
+          "text": "When did you realize you *liked me?*",
+          "label": "Truth"
+        }
+      ]
+    },
+    {
+      "type": "list",
+      "items": [
+        {
+          "n": 10,
+          "text": "Slow dance with me, *no music.*",
+          "label": "Dare"
+        },
+        {
+          "n": 11,
+          "text": "What’s something you’ve *never told me?*",
+          "label": "Truth"
+        },
+        {
+          "n": 12,
+          "text": "Give me a *thirty-second* shoulder massage.",
+          "label": "Dare"
+        }
+      ]
+    },
+    {
+      "type": "list",
+      "items": [
+        {
+          "n": 13,
+          "text": "What’s your *favorite photo* of me, and why?",
+          "label": "Truth"
+        },
+        {
+          "n": 14,
+          "text": "Talk in *an accent* for the next three rounds.",
+          "label": "Dare"
+        },
+        {
+          "n": 15,
+          "text": "What’s the *weirdest dream* you’ve had about me?",
+          "label": "Truth"
+        }
+      ]
+    },
+    {
+      "type": "list",
+      "items": [
+        {
+          "n": 16,
+          "text": "Recreate *our first kiss.*",
+          "label": "Dare"
+        },
+        {
+          "n": 17,
+          "text": "What do you *miss most* when I’m away?",
+          "label": "Truth"
+        },
+        {
+          "n": 18,
+          "text": "Write me a *two-line love poem*, right now.",
+          "label": "Dare"
+        }
+      ]
+    },
+    {
+      "type": "list",
+      "items": [
+        {
+          "n": 19,
+          "text": "Who was your *first ever crush?*",
+          "label": "Truth"
+        },
+        {
+          "n": 20,
+          "text": "Show me your *most embarrassing* playlist.",
+          "label": "Dare"
+        },
+        {
+          "n": 21,
+          "text": "What would you change about *our first date?*",
+          "label": "Truth"
+        }
+      ]
+    },
+    {
+      "type": "list",
+      "items": [
+        {
+          "n": 22,
+          "text": "Let me style *your hair* however I want.",
+          "label": "Dare"
+        },
+        {
+          "n": 23,
+          "text": "What’s the *pettiest* thing that annoys you about me?",
+          "label": "Truth"
+        },
+        {
+          "n": 24,
+          "text": "Call me a *new nickname* for the rest of the night.",
+          "label": "Dare"
+        }
+      ]
+    },
+    {
+      "type": "list",
+      "items": [
+        {
+          "n": 25,
+          "text": "What’s the most *romantic* thing I’ve done?",
+          "label": "Truth"
+        },
+        {
+          "n": 26,
+          "text": "Draw my portrait *in sixty seconds.*",
+          "label": "Dare"
+        },
+        {
+          "n": 27,
+          "text": "Which day with me would you *relive?*",
+          "label": "Truth"
+        }
+      ]
+    },
+    {
+      "type": "list",
+      "items": [
+        {
+          "n": 28,
+          "text": "Plan our next date *in under a minute.*",
+          "label": "Dare"
+        },
+        {
+          "n": 29,
+          "text": "What’s your *biggest* green flag in me?",
+          "label": "Truth"
+        },
+        {
+          "n": 30,
+          "text": "Tell me *five things* you love about me. Go.",
+          "label": "Dare"
+        }
+      ]
+    },
+    {
+      "type": "save",
+      "title": "Save this *for your next game night.*",
+      "sub": "Comment which dare you’d never do."
+    }
+  ]
+}

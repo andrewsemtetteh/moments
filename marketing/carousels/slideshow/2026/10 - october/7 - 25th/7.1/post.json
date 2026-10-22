@@ -1,0 +1,73 @@
+{
+  "id": "7.1",
+  "title": "Date ideas for when you're both exhausted",
+  "theme": "blush",
+  "cardStyle": "receipt",
+  "series": "Date ideas",
+  "illustration": "exhausted",
+  "slides": [
+    {
+      "type": "cover",
+      "title": "Date ideas for when you’re *both exhausted*"
+    },
+    {
+      "type": "tip",
+      "n": 1,
+      "effort": 1,
+      "cost": "Low",
+      "time": "2 hrs",
+      "title": "Takeout and *a rewatch.*",
+      "body": "Order your usual. Put on the show you’ve both seen ten times."
+    },
+    {
+      "type": "tip",
+      "n": 2,
+      "effort": 1,
+      "cost": "Low",
+      "time": "1 hr",
+      "title": "Face mask *night.*",
+      "body": "Two face masks, one bad movie, zero talking about work."
+    },
+    {
+      "type": "tip",
+      "n": 3,
+      "effort": 1,
+      "cost": "Free",
+      "time": "1 hr",
+      "title": "Picnic *in bed.*",
+      "body": "Whatever’s in the kitchen. Crumbs are allowed tonight."
+    },
+    {
+      "type": "tip",
+      "n": 4,
+      "effort": 1,
+      "cost": "Free",
+      "time": "45 min",
+      "title": "Read *side by side.*",
+      "body": "Same sofa, different books. Read the best line out loud."
+    },
+    {
+      "type": "tip",
+      "n": 5,
+      "effort": 2,
+      "cost": "Free",
+      "time": "15 min",
+      "title": "A slow walk *around the block.*",
+      "body": "No destination. Phones in pockets. Just walk."
+    },
+    {
+      "type": "tip",
+      "n": 6,
+      "effort": 1,
+      "cost": "Free",
+      "time": "All night",
+      "title": "An early night, *together.*",
+      "body": "Lights off early. Talk until one of you falls asleep."
+    },
+    {
+      "type": "save",
+      "title": "Save this *for your next long week.*",
+      "sub": "Then send it to the one who just said “I’m so tired.”"
+    }
+  ]
+}

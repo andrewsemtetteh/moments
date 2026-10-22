@@ -1,0 +1,54 @@
+{
+  "id": "6.2",
+  "title": "Rainy day dates for couples who love staying in",
+  "theme": "sky",
+  "variant": "rain",
+  "illustration": "d6_2",
+  "slides": [
+    {
+      "type": "cover",
+      "title": "Rainy day dates for couples who *love staying in*"
+    },
+    {
+      "type": "k",
+      "n": 1,
+      "title": "Make *homemade soup*",
+      "body": "One pot, one playlist, zero rush."
+    },
+    {
+      "type": "k",
+      "n": 2,
+      "title": "Paint *each other’s portrait*",
+      "body": "Cheap paints. No talent required."
+    },
+    {
+      "type": "k",
+      "n": 3,
+      "title": "Go on a *puddle walk*",
+      "body": "Ten minutes outside, then something warm."
+    },
+    {
+      "type": "k",
+      "n": 4,
+      "title": "Learn a *song* together",
+      "body": "One video tutorial. Two very bad singers."
+    },
+    {
+      "type": "k",
+      "n": 5,
+      "title": "Write a *story* together",
+      "body": "Take turns, one sentence each."
+    },
+    {
+      "type": "k",
+      "n": 6,
+      "title": "Plan your *dream trip*",
+      "body": "Maps out, budget optional."
+    },
+    {
+      "type": "save",
+      "title": "Save this *for the next rainy day.*",
+      "sub": "Then secretly hope for rain."
+    }
+  ]
+}

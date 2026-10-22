@@ -1,0 +1,25 @@
+{
+  "id": "2.5",
+  "title": "Things to say instead of \"calm down\"",
+  "theme": "peach",
+  "series": "Communication",
+  "illustration": "talkitout",
+  "slides": [
+    {
+      "type": "cover",
+      "title": "Things to say instead of *“calm down”*",
+      "sub": "Small swaps that end arguments faster."
+    },
+    { "type": "swap", "n": 1, "old": "“Calm down.”", "new": "“I can see this *really matters* to you.”" },
+    { "type": "swap", "n": 2, "old": "“You always…”", "new": "“Lately I’ve *noticed*…”" },
+    { "type": "swap", "n": 3, "old": "“Whatever.”", "new": "“I need a minute. *Then let’s talk.*”" },
+    { "type": "swap", "n": 4, "old": "“I’m fine.”", "new": "“I’m not okay yet, *but I want to be.*”" },
+    { "type": "swap", "n": 5, "old": "“You’re overreacting.”", "new": "“Help me *understand* how it felt.”" },
+    { "type": "swap", "n": 6, "old": "“It’s not a big deal.”", "new": "“It’s a big deal to you, *so it matters to me.*”" },
+    {
+      "type": "save",
+      "title": "Save this *for the next heated moment.*",
+      "sub": "Then send it to the one who still says “whatever.”"
+    }
+  ]
+}

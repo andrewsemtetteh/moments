@@ -1,0 +1,55 @@
+{
+  "id": "12.5",
+  "title": "Signs you're living like roommates",
+  "theme": "coral",
+  "variant": "thermo",
+  "illustration": "d12_5",
+  "slides": [
+    {
+      "type": "cover",
+      "title": "Signs you’re living *like roommates*",
+      "sub": "And how to turn the heat back up."
+    },
+    {
+      "type": "k",
+      "n": 1,
+      "title": "Your texts are *shopping lists*",
+      "body": "Turn it up: one flirty text a day."
+    },
+    {
+      "type": "k",
+      "n": 2,
+      "title": "You eat in *different rooms*",
+      "body": "Turn it up: sit together, even for snacks."
+    },
+    {
+      "type": "k",
+      "n": 3,
+      "title": "Date night is *“maybe next week”*",
+      "body": "Turn it up: book one for this week."
+    },
+    {
+      "type": "k",
+      "n": 4,
+      "title": "You only touch *by accident*",
+      "body": "Turn it up: a six-second hug."
+    },
+    {
+      "type": "k",
+      "n": 5,
+      "title": "You haven’t *laughed together* lately",
+      "body": "Turn it up: watch something silly."
+    },
+    {
+      "type": "k",
+      "n": 6,
+      "title": "Goodbyes are a quick *“see ya”*",
+      "body": "Turn it up: look up and say “love you.”"
+    },
+    {
+      "type": "save",
+      "title": "Save this *and turn it up tonight.*",
+      "sub": "Start with number four. It takes six seconds."
+    }
+  ]
+}

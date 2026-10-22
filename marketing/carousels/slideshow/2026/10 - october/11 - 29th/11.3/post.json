@@ -1,0 +1,55 @@
+{
+  "id": "11.3",
+  "title": "Little rituals happy couples have",
+  "theme": "sky",
+  "variant": "clock",
+  "illustration": "d11_3",
+  "slides": [
+    {
+      "type": "cover",
+      "title": "Little rituals *happy couples* have"
+    },
+    {
+      "type": "k",
+      "n": 1,
+      "title": "Coffee together, *before phones*",
+      "time": "7:00 am"
+    },
+    {
+      "type": "k",
+      "n": 2,
+      "title": "A goodbye kiss, *every time*",
+      "body": "Even when you’re late.",
+      "time": "8:30 am"
+    },
+    {
+      "type": "k",
+      "n": 3,
+      "title": "A *midday* check-in text",
+      "time": "1:00 pm"
+    },
+    {
+      "type": "k",
+      "n": 4,
+      "title": "A *“how was your day?”* that means it",
+      "time": "6:30 pm"
+    },
+    {
+      "type": "k",
+      "n": 5,
+      "title": "A walk *after dinner*",
+      "time": "8:00 pm"
+    },
+    {
+      "type": "k",
+      "n": 6,
+      "title": "One *last laugh* before sleep",
+      "time": "11:00 pm"
+    },
+    {
+      "type": "save",
+      "title": "Save this *and start one ritual.*",
+      "sub": "Small, daily, yours."
+    }
+  ]
+}

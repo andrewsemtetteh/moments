@@ -1,0 +1,54 @@
+{
+  "id": "9.5",
+  "title": "How to keep the spark after years together",
+  "theme": "ink",
+  "variant": "matches",
+  "illustration": "d9_5",
+  "slides": [
+    {
+      "type": "cover",
+      "title": "How to keep the spark *after years together*"
+    },
+    {
+      "type": "k",
+      "n": 1,
+      "title": "Try *something new* together",
+      "body": "New is the fastest way back to “us.”"
+    },
+    {
+      "type": "k",
+      "n": 2,
+      "title": "Flirt like it’s *the beginning*",
+      "body": "Compliments, notes, a wink across the room."
+    },
+    {
+      "type": "k",
+      "n": 3,
+      "title": "Plan dates *on purpose*",
+      "body": "Put them in the calendar. Then protect them."
+    },
+    {
+      "type": "k",
+      "n": 4,
+      "title": "Keep *a little mystery*",
+      "body": "Not every plan needs announcing."
+    },
+    {
+      "type": "k",
+      "n": 5,
+      "title": "Touch *for no reason*",
+      "body": "A hand on their back as you pass by."
+    },
+    {
+      "type": "k",
+      "n": 6,
+      "title": "Talk about *more than logistics*",
+      "body": "Ban “who’s picking up what” for one night."
+    },
+    {
+      "type": "save",
+      "title": "Save this *and strike one tonight.*",
+      "sub": "Small sparks, big fire."
+    }
+  ]
+}

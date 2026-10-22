@@ -1,0 +1,187 @@
+{
+  "id": "13.1",
+  "title": "30 getting-to-know-you questions (even after years together)",
+  "theme": "mint",
+  "series": "Questions",
+  "illustration": "picnic",
+  "slides": [
+    {
+      "type": "cover",
+      "title": "30 questions to *get to know each other* again",
+      "sub": "Even after years together. Six courses, no phones."
+    },
+    {
+      "type": "menu",
+      "course": 1,
+      "title": "Starters",
+      "sub": "the easy ones",
+      "items": [
+        {
+          "n": 1,
+          "text": "What did you want to be *when you were little?*"
+        },
+        {
+          "n": 2,
+          "text": "What smell takes you straight back to childhood?"
+        },
+        {
+          "n": 3,
+          "text": "What’s your comfort food after a bad day?"
+        },
+        {
+          "n": 4,
+          "text": "Which song could you listen to forever?"
+        },
+        {
+          "n": 5,
+          "text": "What’s the best gift you’ve ever received?"
+        }
+      ]
+    },
+    {
+      "type": "menu",
+      "course": 2,
+      "title": "Favorites",
+      "sub": "the fun ones",
+      "items": [
+        {
+          "n": 6,
+          "text": "What’s your ideal free Sunday?"
+        },
+        {
+          "n": 7,
+          "text": "Which place in the world feels *most like you?*"
+        },
+        {
+          "n": 8,
+          "text": "What movie could you rewatch endlessly?"
+        },
+        {
+          "n": 9,
+          "text": "What’s your favorite memory from this year?"
+        },
+        {
+          "n": 10,
+          "text": "What compliment do you never forget?"
+        }
+      ]
+    },
+    {
+      "type": "menu",
+      "course": 3,
+      "title": "Little secrets",
+      "sub": "the honest ones",
+      "items": [
+        {
+          "n": 11,
+          "text": "What small thing always makes your day?"
+        },
+        {
+          "n": 12,
+          "text": "What’s a fear you’ve *never outgrown?*"
+        },
+        {
+          "n": 13,
+          "text": "What habit are you trying to break?"
+        },
+        {
+          "n": 14,
+          "text": "What was the last thing that made you cry?"
+        },
+        {
+          "n": 15,
+          "text": "What do you pretend to like but secretly don’t?"
+        }
+      ]
+    },
+    {
+      "type": "menu",
+      "course": 4,
+      "title": "About us",
+      "sub": "the sweet ones",
+      "items": [
+        {
+          "n": 16,
+          "text": "What’s your favorite thing we do together?"
+        },
+        {
+          "n": 17,
+          "text": "When do you feel *closest to me?*"
+        },
+        {
+          "n": 18,
+          "text": "What do I do that you’d never want me to stop?"
+        },
+        {
+          "n": 19,
+          "text": "What tradition should we start?"
+        },
+        {
+          "n": 20,
+          "text": "Which place do you want us to go back to?"
+        }
+      ]
+    },
+    {
+      "type": "menu",
+      "course": 5,
+      "title": "Big picture",
+      "sub": "the deep ones",
+      "items": [
+        {
+          "n": 21,
+          "text": "What does a perfect *ordinary* day look like?"
+        },
+        {
+          "n": 22,
+          "text": "What’s a dream you haven’t chased yet?"
+        },
+        {
+          "n": 23,
+          "text": "What are you most proud of?"
+        },
+        {
+          "n": 24,
+          "text": "What do you want to be remembered for?"
+        },
+        {
+          "n": 25,
+          "text": "What’s one thing you want us to learn together?"
+        }
+      ]
+    },
+    {
+      "type": "menu",
+      "course": 6,
+      "title": "Dessert",
+      "sub": "save the best for last",
+      "items": [
+        {
+          "n": 26,
+          "text": "What made you *fall for me?*"
+        },
+        {
+          "n": 27,
+          "text": "What’s your favorite photo of us?"
+        },
+        {
+          "n": 28,
+          "text": "What’s one word that describes us?"
+        },
+        {
+          "n": 29,
+          "text": "What’s a song that reminds you of us?"
+        },
+        {
+          "n": 30,
+          "text": "What have you *always wanted to tell me?*"
+        }
+      ]
+    },
+    {
+      "type": "save",
+      "title": "Save this *for your next dinner date.*",
+      "sub": "One course per date. You’ll get through the menu in six."
+    }
+  ]
+}

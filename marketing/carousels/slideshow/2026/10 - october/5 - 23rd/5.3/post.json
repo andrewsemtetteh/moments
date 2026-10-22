@@ -1,0 +1,56 @@
+{
+  "id": "5.3",
+  "title": "Things happy couples stopped doing",
+  "theme": "blue",
+  "series": "Psychology",
+  "illustration": "uturn",
+  "slides": [
+    {
+      "type": "cover",
+      "title": "Things happy couples *stopped doing*",
+      "sub": "Small swaps. Big difference."
+    },
+    {
+      "type": "signs",
+      "n": 1,
+      "old": "Keeping score",
+      "new": "Taking turns *without counting*"
+    },
+    {
+      "type": "signs",
+      "n": 2,
+      "old": "Guessing what they meant",
+      "new": "Asking *“what did you mean?”*"
+    },
+    {
+      "type": "signs",
+      "n": 3,
+      "old": "Phones at every meal",
+      "new": "One meal a day, *no screens*"
+    },
+    {
+      "type": "signs",
+      "n": 4,
+      "old": "Venting to friends first",
+      "new": "Talking to *each other* first"
+    },
+    {
+      "type": "signs",
+      "n": 5,
+      "old": "Comparing us to other couples",
+      "new": "Building *our own* normal"
+    },
+    {
+      "type": "signs",
+      "n": 6,
+      "old": "Going to bed angry",
+      "new": "Making peace *before you sleep*",
+      "note": "The big talk can wait until morning."
+    },
+    {
+      "type": "save",
+      "title": "Save this *for a fresh start.*",
+      "sub": "Pick one to stop this week. Then swap it for the green one."
+    }
+  ]
+}

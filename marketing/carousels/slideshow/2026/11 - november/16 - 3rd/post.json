@@ -1,0 +1,35 @@
+{
+  "id": 16,
+  "title": "Things only long distance couples understand",
+  "theme": "lilac",
+  "series": "Long distance",
+  "illustration": "arrivals",
+  "slides": [
+    {
+      "type": "cover",
+      "title": "Things only *long distance* couples understand",
+      "sub": "If you’ve ever fallen asleep on a call, this one’s for you."
+    },
+    { "type": "tags", "items": [
+      { "n": 1, "title": "Falling asleep *on call.*", "body": "Then waking up to a six-hour call log." },
+      { "n": 2, "title": "Your phone is *basically them.*", "body": "Five percent battery feels like an emergency." }
+    ]},
+    { "type": "tags", "items": [
+      { "n": 3, "title": "Your good morning is *their good night.*", "body": "You’ve memorized their time zone better than your own." },
+      { "n": 4, "title": "Airports are *emotional.*", "body": "Arrivals: the best place on earth. Departures: the worst." }
+    ]},
+    { "type": "tags", "items": [
+      { "n": 5, "title": "The countdown is *sacred.*", "body": "Every crossed-off day is a tiny win." },
+      { "n": 6, "title": "Your couple photos are *screenshots.*", "body": "And honestly? They’re still the cutest ones." }
+    ]},
+    { "type": "tags", "items": [
+      { "n": 7, "title": "You save places *for later.*", "body": "Every café, every view: “we’re going here when you visit.”" },
+      { "n": 8, "title": "The first hug *hits different.*", "body": "Months of waiting, gone in one second." }
+    ]},
+    {
+      "type": "save",
+      "title": "Save this *and send it across the miles.*",
+      "sub": "They’ll get it. They’re living it too."
+    }
+  ]
+}

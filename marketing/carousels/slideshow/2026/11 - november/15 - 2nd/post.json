@@ -1,0 +1,26 @@
+{
+  "id": 15,
+  "title": "What to ask after an argument (that actually helps)",
+  "theme": "sky",
+  "cardStyle": "calm",
+  "series": "Conflict",
+  "illustration": "pinky",
+  "slides": [
+    {
+      "type": "cover",
+      "title": "What to ask *after an argument*",
+      "sub": "Wait until you’re both calm. Then go in this order."
+    },
+    { "type": "question", "n": 1, "step": "Listen first", "text": "What did you *need from me* in that moment?", "tip": "Don’t defend yourself. Just hear it." },
+    { "type": "question", "n": 2, "step": "Own it", "text": "What did I say that *hurt the most?*", "tip": "Then apologize for that part, specifically." },
+    { "type": "question", "n": 3, "step": "Go deeper", "text": "What were you *really* upset about?", "tip": "It’s rarely about the dishes." },
+    { "type": "question", "n": 4, "step": "Clear the air", "text": "Is there anything you *still need to say?*", "tip": "Leave space. A little silence is okay." },
+    { "type": "question", "n": 5, "step": "Plan ahead", "text": "What can we do *differently* next time?", "tip": "Pick one small change you’ll both actually keep." },
+    { "type": "question", "n": 6, "step": "Reconnect", "text": "Are we *okay?*", "tip": "Ask it. Mean it. Then hug it out." },
+    {
+      "type": "save",
+      "title": "Save this *for the next hard talk.*",
+      "sub": "You won’t remember these mid-argument. That’s what saving is for."
+    }
+  ]
+}

@@ -1,0 +1,48 @@
+{
+  "id": "12.3",
+  "title": "Questions to ask on a road trip",
+  "theme": "sunny",
+  "variant": "plate",
+  "illustration": "d12_3",
+  "slides": [
+    {
+      "type": "cover",
+      "title": "Questions to ask *on a road trip*"
+    },
+    {
+      "type": "k",
+      "n": 1,
+      "title": "What’s the best *road trip snack*, final answer?"
+    },
+    {
+      "type": "k",
+      "n": 2,
+      "title": "If we could drive *anywhere*, where are we going?"
+    },
+    {
+      "type": "k",
+      "n": 3,
+      "title": "Which song *has to* be on our playlist?"
+    },
+    {
+      "type": "k",
+      "n": 4,
+      "title": "Windows down or *air con?*"
+    },
+    {
+      "type": "k",
+      "n": 5,
+      "title": "What’s the *longest* you’ve ever been in a car?"
+    },
+    {
+      "type": "k",
+      "n": 6,
+      "title": "Who’s the better *navigator*, honestly?"
+    },
+    {
+      "type": "save",
+      "title": "Save this *before you hit the road.*",
+      "sub": "Snacks in, questions on."
+    }
+  ]
+}

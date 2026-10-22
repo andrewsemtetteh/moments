@@ -1,0 +1,54 @@
+{
+  "id": "7.3",
+  "title": "Little love notes to leave around the house",
+  "theme": "cream",
+  "variant": "napkin",
+  "illustration": "d7_3",
+  "slides": [
+    {
+      "type": "cover",
+      "title": "Little love notes to leave *around the house*"
+    },
+    {
+      "type": "k",
+      "n": 1,
+      "title": "You look *good* today. Just saying.",
+      "where": "on the mirror"
+    },
+    {
+      "type": "k",
+      "n": 2,
+      "title": "Coffee first. *Then* conquer the world.",
+      "where": "on the coffee jar"
+    },
+    {
+      "type": "k",
+      "n": 3,
+      "title": "Good luck today. *You’ve got this.*",
+      "where": "in their bag"
+    },
+    {
+      "type": "k",
+      "n": 4,
+      "title": "Can’t wait to see you *tonight.*",
+      "where": "on the fridge"
+    },
+    {
+      "type": "k",
+      "n": 5,
+      "title": "Sweet dreams. *Same time tomorrow?*",
+      "where": "on the pillow"
+    },
+    {
+      "type": "k",
+      "n": 6,
+      "title": "Drive safe. *Text me* when you’re there.",
+      "where": "on the car keys"
+    },
+    {
+      "type": "save",
+      "title": "Save this *and leave one tomorrow.*",
+      "sub": "Then act like you have no idea how it got there."
+    }
+  ]
+}

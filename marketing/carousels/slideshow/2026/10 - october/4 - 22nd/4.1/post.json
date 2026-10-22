@@ -1,0 +1,55 @@
+{
+  "id": "4.1",
+  "title": "Couples This or That",
+  "theme": "violet",
+  "series": "This or That",
+  "illustration": "thisorthat",
+  "slides": [
+    {
+      "type": "cover",
+      "title": "Couples *This or That*",
+      "sub": "Answer honestly, then make your partner do it."
+    },
+    {
+      "type": "choice",
+      "n": 1,
+      "a": "Text *all day*",
+      "b": "One long *call*"
+    },
+    {
+      "type": "choice",
+      "n": 2,
+      "a": "Night *in*",
+      "b": "Night *out*"
+    },
+    {
+      "type": "choice",
+      "n": 3,
+      "a": "Plan the *date*",
+      "b": "Be *surprised*"
+    },
+    {
+      "type": "choice",
+      "n": 4,
+      "a": "Morning *person*",
+      "b": "Night *owl*"
+    },
+    {
+      "type": "choice",
+      "n": 5,
+      "a": "Cook *together*",
+      "b": "Order *in*"
+    },
+    {
+      "type": "choice",
+      "n": 6,
+      "a": "Sunrise *walks*",
+      "b": "Late-night *drives*"
+    },
+    {
+      "type": "save",
+      "title": "Save this *for your next date night.*",
+      "sub": "Then compare answers. Comment yours: 1A, 2B, 3A…"
+    }
+  ]
+}

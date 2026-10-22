@@ -1,0 +1,44 @@
+{
+  "id": "1.2",
+  "title": "15 ways to say I love you without saying it",
+  "theme": "coral",
+  "series": "Love",
+  "illustration": "lovejar",
+  "slides": [
+    {
+      "type": "cover",
+      "title": "15 ways to say *I love you* without saying it",
+      "sub": "Pulled straight from our love jar."
+    },
+    { "type": "notes", "items": [
+      { "n": 1, "text": "Save them *the last bite.*" },
+      { "n": 2, "text": "Warm up *their side* of the bed." },
+      { "n": 3, "text": "Send a song that *made you think of them.*" }
+    ]},
+    { "type": "notes", "items": [
+      { "n": 4, "text": "Text them *when you land.*" },
+      { "n": 5, "text": "Hide a note *in their bag.*" },
+      { "n": 6, "text": "Keep *their favorite snack* stocked." }
+    ]},
+    { "type": "notes", "items": [
+      { "n": 7, "text": "Ask how *the scary thing* went." },
+      { "n": 8, "text": "Laugh at their bad jokes. *Every time.*" },
+      { "n": 9, "text": "Hold their hand *in public.*" }
+    ]},
+    { "type": "notes", "items": [
+      { "n": 10, "text": "Send a photo of *what reminded you of them.*" },
+      { "n": 11, "text": "Let them pick the movie. *Again.*" },
+      { "n": 12, "text": "Bring a blanket *without being asked.*" }
+    ]},
+    { "type": "notes", "items": [
+      { "n": 13, "text": "Say *“I’m proud of you.”*" },
+      { "n": 14, "text": "Know when they *need quiet.*" },
+      { "n": 15, "text": "Take the photo they’ll *actually like.*" }
+    ]},
+    {
+      "type": "save",
+      "title": "Save this *and try one today.*",
+      "sub": "Then let them guess which one you did."
+    }
+  ]
+}

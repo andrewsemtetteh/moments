@@ -1,0 +1,25 @@
+{
+  "id": "1.5",
+  "title": "Green flags nobody talks about",
+  "theme": "mint",
+  "series": "Psychology",
+  "illustration": "umbrella",
+  "slides": [
+    {
+      "type": "cover",
+      "title": "Green flags *nobody talks about*",
+      "sub": "The quiet ones. The ones that matter most."
+    },
+    { "type": "flag", "n": 1, "title": "They remember *the small things.*", "body": "Something you mentioned once, months ago. They kept it." },
+    { "type": "flag", "n": 2, "title": "They’re kind to *everyone.*", "body": "Waiters, strangers, your mum. Especially your mum." },
+    { "type": "flag", "n": 3, "title": "They say sorry *without a “but.”*", "body": "No excuses attached. Just sorry." },
+    { "type": "flag", "n": 4, "title": "They *hype you up* to their friends.", "body": "You hear about it later, and it’s glowing." },
+    { "type": "flag", "n": 5, "title": "They make room for *your bad days.*", "body": "No fixing, no rushing. Just staying." },
+    { "type": "flag", "n": 6, "title": "They’re curious about *your hobbies.*", "body": "Even the weird ones. Especially the weird ones." },
+    {
+      "type": "save",
+      "title": "Save this *as your standard.*",
+      "sub": "Then send it to the one who checks every box."
+    }
+  ]
+}

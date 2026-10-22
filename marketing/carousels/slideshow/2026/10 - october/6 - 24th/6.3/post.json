@@ -1,0 +1,55 @@
+{
+  "id": "6.3",
+  "title": "Little signs they're in love with you",
+  "theme": "coral",
+  "cardStyle": "stack",
+  "series": "Relatable",
+  "illustration": "d6_3",
+  "slides": [
+    {
+      "type": "cover",
+      "title": "Little signs they’re *in love with you*"
+    },
+    {
+      "type": "tip",
+      "n": 1,
+      "title": "They text you *when they get home*",
+      "body": "Without being asked. Every time."
+    },
+    {
+      "type": "tip",
+      "n": 2,
+      "title": "They send you things that *remind them of you*",
+      "body": "A song, a meme, a dog that looks like you."
+    },
+    {
+      "type": "tip",
+      "n": 3,
+      "title": "They notice when *you go quiet*",
+      "body": "And ask about it gently, later."
+    },
+    {
+      "type": "tip",
+      "n": 4,
+      "title": "You’re in their plans *without thinking*",
+      "body": "“We should go there” is always a we."
+    },
+    {
+      "type": "tip",
+      "n": 5,
+      "title": "They introduce you to *the people who matter*",
+      "body": "Friends, family, the barista they love."
+    },
+    {
+      "type": "tip",
+      "n": 6,
+      "title": "They get excited about *your small news*",
+      "body": "The good email gets a full celebration."
+    },
+    {
+      "type": "save",
+      "title": "Save this *and tag your person.*",
+      "sub": "How many do they do?"
+    }
+  ]
+}

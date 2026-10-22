@@ -1,0 +1,49 @@
+{
+  "id": "1.1",
+  "title": "Questions to ask your partner before bed",
+  "theme": "night",
+  "series": "Before bed",
+  "illustration": "bedtime",
+  "slides": [
+    {
+      "type": "cover",
+      "title": "6 questions to ask your partner *before bed*",
+      "sub": "Start light, end deep. *The last one always gets them.*"
+    },
+    {
+      "type": "question",
+      "n": 1,
+      "text": "What was the best part of your day, and *did I miss it?*"
+    },
+    {
+      "type": "question",
+      "n": 2,
+      "text": "If we could wake up *anywhere* tomorrow, where would it be?"
+    },
+    {
+      "type": "question",
+      "n": 3,
+      "text": "What's something you're *looking forward to* this week?"
+    },
+    {
+      "type": "question",
+      "n": 4,
+      "text": "What's a dream you *haven't told me* about yet?"
+    },
+    {
+      "type": "question",
+      "n": 5,
+      "text": "What's one thing I can do tomorrow to make *your day easier?*"
+    },
+    {
+      "type": "question",
+      "n": 6,
+      "text": "When did you feel *most loved* by me recently?"
+    },
+    {
+      "type": "save",
+      "title": "Save this *for tonight.*",
+      "sub": "Ask one before you fall asleep. Send it to your person if you want them to go first."
+    }
+  ]
+}

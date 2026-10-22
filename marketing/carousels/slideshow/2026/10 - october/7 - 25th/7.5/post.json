@@ -1,0 +1,55 @@
+{
+  "id": "7.5",
+  "title": "Questions for a deep night talk",
+  "theme": "ink",
+  "variant": "depth",
+  "illustration": "d7_5",
+  "slides": [
+    {
+      "type": "cover",
+      "title": "Questions for a *deep night talk*",
+      "sub": "Start shallow. Go deeper."
+    },
+    {
+      "type": "k",
+      "n": 1,
+      "title": "What’s been on *your mind* lately?",
+      "depth": "the shallow end"
+    },
+    {
+      "type": "k",
+      "n": 2,
+      "title": "What made you *laugh* this week?",
+      "depth": "the shallow end"
+    },
+    {
+      "type": "k",
+      "n": 3,
+      "title": "What’s something you’re *quietly proud of?*",
+      "depth": "getting deeper"
+    },
+    {
+      "type": "k",
+      "n": 4,
+      "title": "What do you need *more of* right now?",
+      "depth": "getting deeper"
+    },
+    {
+      "type": "k",
+      "n": 5,
+      "title": "What do you think about when *you can’t sleep?*",
+      "depth": "the deep end"
+    },
+    {
+      "type": "k",
+      "n": 6,
+      "title": "What do you hope *never changes* about us?",
+      "depth": "the deep end"
+    },
+    {
+      "type": "save",
+      "title": "Save this *for a late night.*",
+      "sub": "Lights low. Phones away."
+    }
+  ]
+}

@@ -1,0 +1,48 @@
+{
+  "id": "9.2",
+  "title": "Questions to ask your partner about their childhood",
+  "theme": "coral",
+  "variant": "cassette",
+  "illustration": "d9_2",
+  "slides": [
+    {
+      "type": "cover",
+      "title": "Questions to ask your partner *about their childhood*"
+    },
+    {
+      "type": "k",
+      "n": 1,
+      "title": "What was your favorite *cartoon* growing up?"
+    },
+    {
+      "type": "k",
+      "n": 2,
+      "title": "What did you *get in trouble* for the most?"
+    },
+    {
+      "type": "k",
+      "n": 3,
+      "title": "Who was your *best friend* at school?"
+    },
+    {
+      "type": "k",
+      "n": 4,
+      "title": "What did your family do *on weekends?*"
+    },
+    {
+      "type": "k",
+      "n": 5,
+      "title": "What was your *favorite toy?*"
+    },
+    {
+      "type": "k",
+      "n": 6,
+      "title": "What would you tell *your younger self?*"
+    },
+    {
+      "type": "save",
+      "title": "Save this *for a nostalgic night.*",
+      "sub": "Old photos make it even better."
+    }
+  ]
+}

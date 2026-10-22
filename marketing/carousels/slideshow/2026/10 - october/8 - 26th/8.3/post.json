@@ -1,0 +1,60 @@
+{
+  "id": "8.3",
+  "title": "Texts to send your partner today",
+  "theme": "blue",
+  "variant": "lock",
+  "illustration": "d8_3",
+  "slides": [
+    {
+      "type": "cover",
+      "title": "Texts to send your partner *today*"
+    },
+    {
+      "type": "k",
+      "n": 1,
+      "title": "“Just thought of you *and smiled.*”",
+      "body": "Send it in the middle of the day.",
+      "clock": "12:14"
+    },
+    {
+      "type": "k",
+      "n": 2,
+      "title": "“What can I do to make *today easier?*”",
+      "body": "Send it in the morning.",
+      "clock": "8:05"
+    },
+    {
+      "type": "k",
+      "n": 3,
+      "title": "“I love the way *you laugh.*”",
+      "body": "Send it for no reason.",
+      "clock": "15:32"
+    },
+    {
+      "type": "k",
+      "n": 4,
+      "title": "“Can’t wait to *see you* later.”",
+      "body": "Send it in the afternoon.",
+      "clock": "16:48"
+    },
+    {
+      "type": "k",
+      "n": 5,
+      "title": "“Proud of you. *Always.*”",
+      "body": "Send it before their big moment.",
+      "clock": "9:30"
+    },
+    {
+      "type": "k",
+      "n": 6,
+      "title": "“Sending you a hug. *Catch it.*”",
+      "body": "Send it on a hard day.",
+      "clock": "19:21"
+    },
+    {
+      "type": "save",
+      "title": "Save this *and send one right now.*",
+      "sub": "Then put your phone down and wait."
+    }
+  ]
+}

@@ -1,0 +1,54 @@
+{
+  "id": "6.5",
+  "title": "Signs you've been together a long time",
+  "theme": "night",
+  "variant": "badge",
+  "illustration": "d6_5",
+  "slides": [
+    {
+      "type": "cover",
+      "title": "Signs you’ve been together *a long time*"
+    },
+    {
+      "type": "k",
+      "n": 1,
+      "title": "The *bathroom door* is optional",
+      "body": "You stopped closing it. Or knocking."
+    },
+    {
+      "type": "k",
+      "n": 2,
+      "title": "You each have *a side* of the bed",
+      "body": "Switching would start a war."
+    },
+    {
+      "type": "k",
+      "n": 3,
+      "title": "You talk *in looks*",
+      "body": "One glance across a room says everything."
+    },
+    {
+      "type": "k",
+      "n": 4,
+      "title": "Their family *texts you* directly",
+      "body": "Sometimes before they text them."
+    },
+    {
+      "type": "k",
+      "n": 5,
+      "title": "You’ve *survived flat-pack* furniture",
+      "body": "Together. Mostly in one piece."
+    },
+    {
+      "type": "k",
+      "n": 6,
+      "title": "Date night is *in pajamas*",
+      "body": "Honestly? The best kind."
+    },
+    {
+      "type": "save",
+      "title": "Save this *and tag your long-termer.*",
+      "sub": "How many did you unlock?"
+    }
+  ]
+}

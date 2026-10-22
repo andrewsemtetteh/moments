@@ -1,0 +1,67 @@
+{
+  "id": "5.1",
+  "title": "6 cozy date ideas you haven't tried yet",
+  "theme": "cream",
+  "series": "Date ideas",
+  "illustration": "cozy",
+  "slides": [
+    {
+      "type": "cover",
+      "title": "6 cozy date ideas you haven’t *tried yet*",
+      "sub": "No reservations. No dress code. Just the two of you."
+    },
+    {
+      "type": "idea",
+      "n": 1,
+      "art": "fort",
+      "tint": "#FFE7A0",
+      "title": "Blanket fort *movie marathon*",
+      "body": "Pick a trilogy, build the fort, phones stay outside."
+    },
+    {
+      "type": "idea",
+      "n": 2,
+      "art": "cookoff",
+      "tint": "#FFD9CC",
+      "title": "Candlelit *cook-off*",
+      "body": "Same ingredients, 45 minutes. The loser does the dishes."
+    },
+    {
+      "type": "idea",
+      "n": 3,
+      "art": "coffee",
+      "tint": "#E3DDFF",
+      "title": "Coffee *crawl*",
+      "body": "Three cafés, one rating sheet, crown a winner."
+    },
+    {
+      "type": "idea",
+      "n": 4,
+      "art": "sunset",
+      "tint": "#FFD9CC",
+      "title": "Sunset walk *and a flask*",
+      "body": "The cheapest good date there is."
+    },
+    {
+      "type": "idea",
+      "n": 5,
+      "art": "bake",
+      "tint": "#D7F2E3",
+      "title": "Bake something *new*",
+      "body": "Bonus points if it’s a disaster you’ll laugh about for years."
+    },
+    {
+      "type": "idea",
+      "n": 6,
+      "art": "vinyl",
+      "tint": "#DCEBFF",
+      "title": "Playlist *swap night*",
+      "body": "Dim lights, three songs each, and tell them why you picked them."
+    },
+    {
+      "type": "save",
+      "title": "Save this *for this weekend.*",
+      "sub": "Then send it to the one who always says “you pick.”"
+    }
+  ]
+}

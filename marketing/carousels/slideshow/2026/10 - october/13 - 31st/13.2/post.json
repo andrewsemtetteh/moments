@@ -1,0 +1,55 @@
+{
+  "id": "13.2",
+  "title": "Date ideas for introverts",
+  "theme": "lilac",
+  "variant": "hanger",
+  "illustration": "d13_2",
+  "slides": [
+    {
+      "type": "cover",
+      "title": "Date ideas for *introverts*",
+      "sub": "Quiet, cozy, zero small talk."
+    },
+    {
+      "type": "k",
+      "n": 1,
+      "title": "A *quiet museum* morning",
+      "body": "Go right when it opens."
+    },
+    {
+      "type": "k",
+      "n": 2,
+      "title": "A slow *bookshop* wander",
+      "body": "No rush, no talking required."
+    },
+    {
+      "type": "k",
+      "n": 3,
+      "title": "*Cook and stay in*",
+      "body": "The best restaurant has no other guests."
+    },
+    {
+      "type": "k",
+      "n": 4,
+      "title": "A *long drive* with snacks",
+      "body": "Talking optional."
+    },
+    {
+      "type": "k",
+      "n": 5,
+      "title": "*Sketch* in a park",
+      "body": "Cheap pencils, good bench."
+    },
+    {
+      "type": "k",
+      "n": 6,
+      "title": "A movie with *the lights off*",
+      "body": "Phones in another room."
+    },
+    {
+      "type": "save",
+      "title": "Save this *for a recharge weekend.*",
+      "sub": "Do not disturb. Seriously."
+    }
+  ]
+}

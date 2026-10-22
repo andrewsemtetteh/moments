@@ -1,0 +1,121 @@
+{
+  "id": "11.1",
+  "title": "18 would you rather questions for couples",
+  "theme": "electric",
+  "series": "Would you rather",
+  "illustration": "cardgame",
+  "slides": [
+    {
+      "type": "cover",
+      "title": "18 *would you rather* questions for couples",
+      "sub": "Answer fast. No thinking allowed."
+    },
+    {
+      "type": "list",
+      "items": [
+        {
+          "n": 1,
+          "text": "Talk only in memes *or* only in voice notes for a week?"
+        },
+        {
+          "n": 2,
+          "text": "Read their mind for a day *or* swap bodies for a day?"
+        },
+        {
+          "n": 3,
+          "text": "Relive your first date *or* skip ahead to your tenth anniversary?"
+        }
+      ]
+    },
+    {
+      "type": "list",
+      "items": [
+        {
+          "n": 4,
+          "text": "Always cook *or* always do the dishes?"
+        },
+        {
+          "n": 5,
+          "text": "A surprise trip *or* one you plan together?"
+        },
+        {
+          "n": 6,
+          "text": "Never argue again *or* never be bored again?"
+        }
+      ]
+    },
+    {
+      "type": "list",
+      "items": [
+        {
+          "n": 7,
+          "text": "Matching tattoos *or* matching outfits for a week?"
+        },
+        {
+          "n": 8,
+          "text": "Flowers for no reason *or* a playlist made just for you?"
+        },
+        {
+          "n": 9,
+          "text": "Be famous together *or* rich and completely unknown?"
+        }
+      ]
+    },
+    {
+      "type": "list",
+      "items": [
+        {
+          "n": 10,
+          "text": "Adopt a dog *or* adopt a cat together?"
+        },
+        {
+          "n": 11,
+          "text": "Go back to the day you met *or* jump five years ahead?"
+        },
+        {
+          "n": 12,
+          "text": "Share all your passwords *or* share one toothbrush?"
+        }
+      ]
+    },
+    {
+      "type": "list",
+      "items": [
+        {
+          "n": 13,
+          "text": "A love letter every week *or* a song written about you?"
+        },
+        {
+          "n": 14,
+          "text": "Live by the beach *or* up in the mountains?"
+        },
+        {
+          "n": 15,
+          "text": "A day with their family *or* them a day with yours?"
+        }
+      ]
+    },
+    {
+      "type": "list",
+      "items": [
+        {
+          "n": 16,
+          "text": "Always know what they’re thinking *or* what they want for dinner?"
+        },
+        {
+          "n": 17,
+          "text": "Karaoke night *or* game night?"
+        },
+        {
+          "n": 18,
+          "text": "Fall in love all over again *or* never have to?"
+        }
+      ]
+    },
+    {
+      "type": "save",
+      "title": "Save this *for when you’re bored together.*",
+      "sub": "Answer all 18, then compare. Screenshots encouraged."
+    }
+  ]
+}

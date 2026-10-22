@@ -1,0 +1,49 @@
+{
+  "id": "11.2",
+  "title": "60 seconds of who's more likely to",
+  "theme": "peach",
+  "variant": "stopwatch",
+  "illustration": "d11_2",
+  "slides": [
+    {
+      "type": "cover",
+      "title": "60 seconds of *who’s more likely to*",
+      "sub": "Point at each other. No thinking allowed."
+    },
+    {
+      "type": "k",
+      "n": 1,
+      "title": "Who’s more likely to …cry at *a kids’ movie?*"
+    },
+    {
+      "type": "k",
+      "n": 2,
+      "title": "Who’s more likely to …get lost *with GPS on?*"
+    },
+    {
+      "type": "k",
+      "n": 3,
+      "title": "Who’s more likely to …eat *the last slice* without asking?"
+    },
+    {
+      "type": "k",
+      "n": 4,
+      "title": "Who’s more likely to …forget why they *walked into a room?*"
+    },
+    {
+      "type": "k",
+      "n": 5,
+      "title": "Who’s more likely to …adopt a pet *without asking first?*"
+    },
+    {
+      "type": "k",
+      "n": 6,
+      "title": "Who’s more likely to …say *“I told you so”?*"
+    },
+    {
+      "type": "save",
+      "title": "Save this *and play tonight.*",
+      "sub": "Comment who won more points."
+    }
+  ]
+}

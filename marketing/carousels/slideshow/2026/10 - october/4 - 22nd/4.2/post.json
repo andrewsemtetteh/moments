@@ -1,0 +1,59 @@
+{
+  "id": "4.2",
+  "title": "A 10-minute weekly check-in for couples",
+  "theme": "mint",
+  "series": "Communication",
+  "illustration": "checkin",
+  "slides": [
+    {
+      "type": "cover",
+      "title": "A 10-minute *weekly check-in* for couples",
+      "sub": "Five questions, every Sunday. Like a weather report for your relationship."
+    },
+    {
+      "type": "weather",
+      "n": 1,
+      "icon": "sun",
+      "forecast": "Forecast: sunny",
+      "text": "What was the *best moment* of our week?",
+      "body": "Start with the good stuff."
+    },
+    {
+      "type": "weather",
+      "n": 2,
+      "icon": "cloud",
+      "forecast": "Forecast: a few clouds",
+      "text": "Was anything *bothering you* this week?",
+      "body": "Small clouds are easier to clear early."
+    },
+    {
+      "type": "weather",
+      "n": 3,
+      "icon": "rain",
+      "forecast": "Forecast: possible showers",
+      "text": "Is there *anything coming up* that feels stressful?",
+      "body": "Plan for the rain together."
+    },
+    {
+      "type": "weather",
+      "n": 4,
+      "icon": "rainbow",
+      "forecast": "Forecast: rainbow",
+      "text": "How can I *support you* this week?",
+      "body": "One specific thing. Write it down."
+    },
+    {
+      "type": "weather",
+      "n": 5,
+      "icon": "moon",
+      "forecast": "Forecast: clear nights",
+      "text": "What’s *one thing* we should do together?",
+      "body": "A walk, a meal, a movie. Put it on the calendar."
+    },
+    {
+      "type": "save",
+      "title": "Save this *for Sunday night.*",
+      "sub": "Ten minutes, two mugs, five questions. Every week."
+    }
+  ]
+}

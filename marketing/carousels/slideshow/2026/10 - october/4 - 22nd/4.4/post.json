@@ -1,0 +1,31 @@
+{
+  "id": "4.4",
+  "title": "Pick an envelope: mystery date night",
+  "theme": "blush",
+  "series": "Play",
+  "illustration": "envelopes",
+  "slides": [
+    {
+      "type": "cover",
+      "title": "Pick an envelope: *mystery date night*",
+      "sub": "Choose a number, swipe to open it, and that’s your date. No swapping."
+    },
+    { "type": "envelopes", "prompt": "Round one: pick 1, 2 or 3" },
+    { "type": "letters", "items": [
+      { "title": "A *sunset* picnic", "body": "Whatever’s in the kitchen, the best view nearby." },
+      { "title": "Cook a dish from a *new country*", "body": "Somewhere neither of you has been. Yet." },
+      { "title": "Living room *karaoke*", "body": "Three songs each. Full commitment required." }
+    ]},
+    { "type": "envelopes", "prompt": "Round two: pick again" },
+    { "type": "letters", "items": [
+      { "title": "The *thrift shop* outfit challenge", "body": "Pick each other’s outfit. Wear it to dinner." },
+      { "title": "Best *sandwich* competition", "body": "Same fridge, ten minutes, the other one judges." },
+      { "title": "Make each other *a playlist*", "body": "Ten songs that tell the story of us." }
+    ]},
+    {
+      "type": "save",
+      "title": "Save this *for your next date night.*",
+      "sub": "Comment your two numbers. No take-backs."
+    }
+  ]
+}

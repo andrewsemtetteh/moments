@@ -1,0 +1,39 @@
+{
+  "id": 14,
+  "title": "10 date ideas that cost nothing",
+  "theme": "peach",
+  "series": "Date ideas",
+  "illustration": "tandem",
+  "slides": [
+    {
+      "type": "cover",
+      "title": "10 date ideas that *cost nothing*",
+      "sub": "Free. Fun. Still very romantic."
+    },
+    { "type": "coupons", "items": [
+      { "n": 1, "title": "Watch the *sunrise.*", "body": "Set an alarm, bring a blanket, say nothing at all." },
+      { "n": 2, "title": "A *stargazing* night.", "body": "Lie outside, find shapes, make up your own constellations." }
+    ]},
+    { "type": "coupons", "items": [
+      { "n": 3, "title": "Get lost in a *new neighborhood.*", "body": "Walk somewhere you’ve never been. No plan, no spending." },
+      { "n": 4, "title": "A *library* swap.", "body": "Ten minutes to pick a book for each other. No peeking." }
+    ]},
+    { "type": "coupons", "items": [
+      { "n": 5, "title": "Living room *dance party.*", "body": "One playlist each. Push the sofa back. Go." },
+      { "n": 6, "title": "An at-home *photoshoot.*", "body": "Recreate your very first photo together." }
+    ]},
+    { "type": "coupons", "items": [
+      { "n": 7, "title": "Memory lane *night.*", "body": "Scroll your oldest photos and tell the stories behind them." },
+      { "n": 8, "title": "Teach each other *a skill.*", "body": "A song, a recipe, a card trick. Then swap." }
+    ]},
+    { "type": "coupons", "items": [
+      { "n": 9, "title": "Volunteer *together.*", "body": "An afternoon at a shelter, a food bank or a clean-up." },
+      { "n": 10, "title": "Write a *bucket list.*", "body": "Twenty things you want to do together. Start with one." }
+    ]},
+    {
+      "type": "save",
+      "title": "Save this *for the end of the month.*",
+      "sub": "Then send it to the one who keeps checking their bank app."
+    }
+  ]
+}

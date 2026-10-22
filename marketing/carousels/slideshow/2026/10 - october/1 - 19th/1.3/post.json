@@ -1,0 +1,25 @@
+{
+  "id": "1.3",
+  "title": "Things couples do but never admit",
+  "theme": "blush",
+  "series": "Relatable",
+  "illustration": "hoodie",
+  "slides": [
+    {
+      "type": "cover",
+      "title": "Things couples do but *never admit*",
+      "sub": "Highly classified. Extremely relatable."
+    },
+    { "type": "file", "n": 1, "title": "The hoodie *“borrowing.”*", "body": "It’s been eight months. It lives in your closet now." },
+    { "type": "file", "n": 2, "title": "Smelling *their pillow.*", "body": "Only when they’re away. Only a little. Okay, a lot." },
+    { "type": "file", "n": 3, "title": "Winning arguments *in the shower.*", "body": "You had the perfect comeback. Three days too late." },
+    { "type": "file", "n": 4, "title": "Checking *they’re breathing.*", "body": "They sleep too still. You had to make sure." },
+    { "type": "file", "n": 5, "title": "“I don’t mind” *(you mind).*", "body": "You minded. You still mind. You will always mind." },
+    { "type": "file", "n": 6, "title": "Keeping *their worst photos.*", "body": "A whole folder. For emergencies." },
+    {
+      "type": "save",
+      "title": "Save this *and confess in the comments.*",
+      "sub": "Which case file are you guilty of?"
+    }
+  ]
+}

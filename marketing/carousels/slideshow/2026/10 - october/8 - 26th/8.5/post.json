@@ -1,0 +1,54 @@
+{
+  "id": "8.5",
+  "title": "How to stop arguing about chores",
+  "theme": "peach",
+  "variant": "wheel",
+  "illustration": "d8_5",
+  "slides": [
+    {
+      "type": "cover",
+      "title": "How to stop *arguing about chores*"
+    },
+    {
+      "type": "k",
+      "n": 1,
+      "title": "Make the *invisible work* visible",
+      "body": "List everything, even “remembering birthdays.”"
+    },
+    {
+      "type": "k",
+      "n": 2,
+      "title": "Swap by *preference*",
+      "body": "Hate dishes? Trade them for laundry."
+    },
+    {
+      "type": "k",
+      "n": 3,
+      "title": "Use one *shared list*",
+      "body": "Tick it off. No reminders needed."
+    },
+    {
+      "type": "k",
+      "n": 4,
+      "title": "Do a *ten-minute reset*",
+      "body": "Every night, together, one playlist."
+    },
+    {
+      "type": "k",
+      "n": 5,
+      "title": "*Thank* each other for chores",
+      "body": "Yes, even the boring ones."
+    },
+    {
+      "type": "k",
+      "n": 6,
+      "title": "Let a wheel pick *the worst one*",
+      "body": "Nobody chooses. The wheel decides."
+    },
+    {
+      "type": "save",
+      "title": "Save this *before the next dish debate.*",
+      "sub": "Spin the wheel. No appeals."
+    }
+  ]
+}

@@ -1,0 +1,54 @@
+{
+  "id": "10.5",
+  "title": "How to support your partner's dreams",
+  "theme": "night",
+  "variant": "mission",
+  "illustration": "d10_5",
+  "slides": [
+    {
+      "type": "cover",
+      "title": "How to support *your partner’s dreams*"
+    },
+    {
+      "type": "k",
+      "n": 1,
+      "title": "Ask about it *often*",
+      "body": "Interest is fuel."
+    },
+    {
+      "type": "k",
+      "n": 2,
+      "title": "Learn *the details*",
+      "body": "The names, the deadlines, the hard parts."
+    },
+    {
+      "type": "k",
+      "n": 3,
+      "title": "Protect *their time*",
+      "body": "Take something off their plate so they can work."
+    },
+    {
+      "type": "k",
+      "n": 4,
+      "title": "Be their *first fan*",
+      "body": "Share it, show up, clap loudest."
+    },
+    {
+      "type": "k",
+      "n": 5,
+      "title": "Stay calm about *setbacks*",
+      "body": "“What’s next?” beats “I told you so.”"
+    },
+    {
+      "type": "k",
+      "n": 6,
+      "title": "Dream *together* too",
+      "body": "Make room for one shared goal."
+    },
+    {
+      "type": "save",
+      "title": "Save this *for their next big idea.*",
+      "sub": "Every dream needs a co-pilot."
+    }
+  ]
+}

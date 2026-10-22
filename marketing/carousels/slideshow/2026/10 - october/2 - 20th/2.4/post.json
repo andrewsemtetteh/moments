@@ -1,0 +1,25 @@
+{
+  "id": "2.4",
+  "title": "Questions to ask before moving in together",
+  "theme": "night",
+  "series": "Questions",
+  "illustration": "movingbox",
+  "slides": [
+    {
+      "type": "cover",
+      "title": "Questions to ask *before moving in* together",
+      "sub": "Unpack these before you unpack the boxes."
+    },
+    { "type": "box", "n": 1, "label": "Money", "text": "How do we split the bills, and what *feels fair* to both of us?" },
+    { "type": "box", "n": 2, "label": "Chores", "text": "Which chore do you *hate most*, and can we trade?" },
+    { "type": "box", "n": 3, "label": "Space", "text": "How much *alone time* do you need at home?" },
+    { "type": "box", "n": 4, "label": "Guests", "text": "How often can friends and family *stay over?*" },
+    { "type": "box", "n": 5, "label": "Mess", "text": "What’s *your* idea of clean, and what’s mine?" },
+    { "type": "box", "n": 6, "label": "Future", "text": "Is this a step toward *something bigger* for you?" },
+    {
+      "type": "save",
+      "title": "Save this *before you get the keys.*",
+      "sub": "Then open one box a night. Snacks help."
+    }
+  ]
+}

@@ -1,0 +1,55 @@
+{
+  "id": "5.5",
+  "title": "Relationship myths, busted",
+  "theme": "sunny",
+  "series": "Psychology",
+  "illustration": "newspaper",
+  "slides": [
+    {
+      "type": "cover",
+      "title": "Relationship *myths*, busted",
+      "sub": "Things everyone says that aren’t actually true."
+    },
+    {
+      "type": "news",
+      "n": 1,
+      "myth": "“Couples who fight *are doomed.*”",
+      "truth": "How you repair matters more than how often you argue."
+    },
+    {
+      "type": "news",
+      "n": 2,
+      "myth": "“They should *just know.*”",
+      "truth": "Nobody reads minds. Say what you need, kindly and clearly."
+    },
+    {
+      "type": "news",
+      "n": 3,
+      "myth": "“The spark lasts *on its own.*”",
+      "truth": "Sparks need fuel: new things, tried together."
+    },
+    {
+      "type": "news",
+      "n": 4,
+      "myth": "“You have to like *the same things.*”",
+      "truth": "Different hobbies keep you both interesting."
+    },
+    {
+      "type": "news",
+      "n": 5,
+      "myth": "“Love means *never needing space.*”",
+      "truth": "Time apart makes time together better."
+    },
+    {
+      "type": "news",
+      "n": 6,
+      "myth": "“Happy couples *never get bored.*”",
+      "truth": "Boring is often just another word for comfortable."
+    },
+    {
+      "type": "save",
+      "title": "Save this *and send it to the overthinker.*",
+      "sub": "Which myth did you believe the longest?"
+    }
+  ]
+}

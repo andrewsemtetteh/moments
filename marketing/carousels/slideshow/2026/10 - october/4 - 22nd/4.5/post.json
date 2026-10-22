@@ -1,0 +1,24 @@
+{
+  "id": "4.5",
+  "title": "How to apologize properly",
+  "theme": "electric",
+  "series": "Communication",
+  "illustration": "apology",
+  "slides": [
+    {
+      "type": "cover",
+      "title": "How to *apologize* properly",
+      "sub": "Assembly instructions. No parts missing."
+    },
+    { "type": "manual", "n": 1, "icon": "say", "title": "Say *what you did.*", "body": "Specific beats vague. “I forgot your thing,” not “sorry for whatever.”" },
+    { "type": "manual", "n": 2, "icon": "own", "title": "Own it. *No “but.”*", "body": "“I’m sorry, but…” cancels the sorry. Stop at sorry." },
+    { "type": "manual", "n": 3, "icon": "feel", "title": "Name *how it felt.*", "body": "“That probably made you feel ignored.” Let them correct you." },
+    { "type": "manual", "n": 4, "icon": "ask", "title": "Ask *what would help.*", "body": "Don’t guess the fix. Ask, then actually listen." },
+    { "type": "manual", "n": 5, "icon": "change", "title": "Change *the thing.*", "body": "The best apology is never having to make the same one twice.", "parts": "Assembly complete · keep these instructions" },
+    {
+      "type": "save",
+      "title": "Save this *for the next “sorry.”*",
+      "sub": "Then send it to the one who still says “sorry you feel that way.”"
+    }
+  ]
+}

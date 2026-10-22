@@ -1,0 +1,55 @@
+{
+  "id": "9.3",
+  "title": "Red flags you might be ignoring in yourself",
+  "theme": "cream",
+  "variant": "hazard",
+  "illustration": "d9_3",
+  "slides": [
+    {
+      "type": "cover",
+      "title": "Red flags you might be ignoring *in yourself*",
+      "sub": "Growth starts at home."
+    },
+    {
+      "type": "k",
+      "n": 1,
+      "title": "Keeping *score* in your head",
+      "body": "Try instead: let the small stuff go."
+    },
+    {
+      "type": "k",
+      "n": 2,
+      "title": "Going *quiet* instead of talking",
+      "body": "Try instead: “I’m upset, can we talk later?”"
+    },
+    {
+      "type": "k",
+      "n": 3,
+      "title": "Checking *their phone*",
+      "body": "Try instead: talk about what’s worrying you."
+    },
+    {
+      "type": "k",
+      "n": 4,
+      "title": "Jokes at *their expense*",
+      "body": "Try instead: tease only what they laugh at too."
+    },
+    {
+      "type": "k",
+      "n": 5,
+      "title": "Never apologizing *first*",
+      "body": "Try instead: go first. It’s not losing."
+    },
+    {
+      "type": "k",
+      "n": 6,
+      "title": "Bringing up *old fights*",
+      "body": "Try instead: settle it once, then let it rest."
+    },
+    {
+      "type": "save",
+      "title": "Save this *and be honest with yourself.*",
+      "sub": "Which one hit a little too close?"
+    }
+  ]
+}

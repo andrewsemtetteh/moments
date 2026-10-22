@@ -1,0 +1,35 @@
+{
+  "id": 17,
+  "title": "Your attachment style might explain your arguments",
+  "theme": "cream",
+  "series": "Psychology",
+  "illustration": "backtoback",
+  "slides": [
+    {
+      "type": "cover",
+      "title": "Your *attachment style* might explain your arguments",
+      "sub": "Not a diagnosis. Just a lens that makes fights make sense."
+    },
+    { "type": "folder", "n": 1, "name": "Secure", "icon": "secure", "tab": "#88E3B5", "nextTab": "#FFB38A",
+      "title": "The *steady* one",
+      "fight": "You stay calm, say how you feel and trust you’ll be okay.",
+      "helps": "Keep it up. Your steadiness helps both of you." },
+    { "type": "folder", "n": 2, "name": "Anxious", "icon": "anxious", "tab": "#FFB38A", "nextTab": "#8EC5FF",
+      "title": "The *fix it now* one",
+      "fight": "Silence feels scary, so you push to solve it right away.",
+      "helps": "Reassurance: “We’re okay. I just need a minute.”" },
+    { "type": "folder", "n": 3, "name": "Avoidant", "icon": "avoidant", "tab": "#8EC5FF", "nextTab": "#C3B1FF",
+      "title": "The *needs space* one",
+      "fight": "You go quiet and need time before you can really talk.",
+      "helps": "Space to cool off, plus a promise to come back to it." },
+    { "type": "folder", "n": 4, "name": "Fearful-avoidant", "icon": "fearful", "tab": "#C3B1FF", "nextTab": "#88E3B5",
+      "title": "The *push and pull* one",
+      "fight": "You want closeness and space at the same time. It’s confusing.",
+      "helps": "Patience, consistency and naming feelings out loud." },
+    {
+      "type": "save",
+      "title": "Save this *for after your next fight.*",
+      "sub": "Then guess each other’s style. Comment yours."
+    }
+  ]
+}

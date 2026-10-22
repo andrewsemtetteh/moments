@@ -1,0 +1,49 @@
+{
+  "id": "6.4",
+  "title": "Bored? Roll a question",
+  "theme": "violet",
+  "variant": "dice",
+  "illustration": "d6_4",
+  "slides": [
+    {
+      "type": "cover",
+      "title": "Bored? *Roll a question.*",
+      "sub": "Roll a real die, or just pick a number. Silly answers only."
+    },
+    {
+      "type": "k",
+      "n": 1,
+      "title": "Would you still love me *if I was a worm?*"
+    },
+    {
+      "type": "k",
+      "n": 2,
+      "title": "If I were a vegetable, *which one* would I be?"
+    },
+    {
+      "type": "k",
+      "n": 3,
+      "title": "What would our band name be *if we were a band?*"
+    },
+    {
+      "type": "k",
+      "n": 4,
+      "title": "If we swapped bodies for a day, *what’s the first thing* you’d do?"
+    },
+    {
+      "type": "k",
+      "n": 5,
+      "title": "Which *cartoon character* am I most like?"
+    },
+    {
+      "type": "k",
+      "n": 6,
+      "title": "If we pulled off a heist, *what’s my role?*"
+    },
+    {
+      "type": "save",
+      "title": "Save this *for the next boring evening.*",
+      "sub": "Roll twice if the answer was too short."
+    }
+  ]
+}

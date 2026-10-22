@@ -1,0 +1,55 @@
+{
+  "id": "10.2",
+  "title": "Rate these date ideas from 1 to 10",
+  "theme": "electric",
+  "variant": "rating",
+  "illustration": "d10_2",
+  "slides": [
+    {
+      "type": "cover",
+      "title": "Rate these date ideas *from 1 to 10*",
+      "sub": "Then make your partner rate them too."
+    },
+    {
+      "type": "k",
+      "n": 1,
+      "title": "A *sunrise hike*",
+      "body": "Early alarm. Big reward."
+    },
+    {
+      "type": "k",
+      "n": 2,
+      "title": "A *pottery* class",
+      "body": "Expect lopsided bowls."
+    },
+    {
+      "type": "k",
+      "n": 3,
+      "title": "Dinner *with a view*",
+      "body": "Rooftop, hilltop, any top."
+    },
+    {
+      "type": "k",
+      "n": 4,
+      "title": "A *mini golf* rematch",
+      "body": "The loser plans the next date."
+    },
+    {
+      "type": "k",
+      "n": 5,
+      "title": "An *arcade* night",
+      "body": "Winner keeps the prize."
+    },
+    {
+      "type": "k",
+      "n": 6,
+      "title": "A *cooking class*",
+      "body": "Dinner, but you learn something."
+    },
+    {
+      "type": "save",
+      "title": "Save this *and rate them together.*",
+      "sub": "Highest score is your next date."
+    }
+  ]
+}

@@ -1,0 +1,56 @@
+{
+  "id": "10.1",
+  "title": "Signs you're dating your best friend",
+  "theme": "coral",
+  "cardStyle": "notebook",
+  "series": "Relatable",
+  "illustration": "bestfriends",
+  "slides": [
+    {
+      "type": "cover",
+      "title": "Signs you’re dating your *best friend*",
+      "sub": "Tag yours. You already know who they are."
+    },
+    {
+      "type": "tip",
+      "n": 1,
+      "title": "Silence is *comfortable.*",
+      "body": "No need to fill it. Being in the same room is enough."
+    },
+    {
+      "type": "tip",
+      "n": 2,
+      "title": "They’re the *first person* you tell.",
+      "body": "Good news, bad news, a weird dream. Them first."
+    },
+    {
+      "type": "tip",
+      "n": 3,
+      "title": "Your *inside jokes* need no context.",
+      "body": "One word and you’re both crying laughing."
+    },
+    {
+      "type": "tip",
+      "n": 4,
+      "title": "You can be *completely weird.*",
+      "body": "Bad singing, strange voices, zero judgment."
+    },
+    {
+      "type": "tip",
+      "n": 5,
+      "title": "They know your *usual.*",
+      "body": "Your food order, your coffee order, your hungry face."
+    },
+    {
+      "type": "tip",
+      "n": 6,
+      "title": "You’d pick them *as a friend* too.",
+      "body": "Even without the romance, you’d want them in your life."
+    },
+    {
+      "type": "save",
+      "title": "Save this *and send it to them.*",
+      "sub": "They’ll pretend it’s not about them. It is."
+    }
+  ]
+}

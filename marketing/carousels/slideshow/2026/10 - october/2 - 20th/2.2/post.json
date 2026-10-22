@@ -1,0 +1,43 @@
+{
+  "id": "2.2",
+  "title": "Couples never have I ever",
+  "theme": "electric",
+  "series": "Play",
+  "illustration": "nhie",
+  "slides": [
+    {
+      "type": "cover",
+      "title": "Couples *never have I ever*",
+      "sub": "Tick yours, tick theirs. Compare at the end."
+    },
+    { "type": "checks", "items": [
+      { "n": 1, "text": "…said *“I love you”* first." },
+      { "n": 2, "text": "…pretended to love *a gift.*" },
+      { "n": 3, "text": "…fallen asleep during *their* favorite movie." },
+      { "n": 4, "text": "…rehearsed a *serious talk* in the mirror." }
+    ]},
+    { "type": "checks", "items": [
+      { "n": 5, "text": "…eaten their leftovers and *blamed someone else.*" },
+      { "n": 6, "text": "…worn their clothes *all day.*" },
+      { "n": 7, "text": "…cried at a movie *together.*" },
+      { "n": 8, "text": "…planned *our whole future* in my head." }
+    ]},
+    { "type": "checks", "items": [
+      { "n": 9, "text": "…forgotten an *important date.*" },
+      { "n": 10, "text": "…been jealous of *their friend.*" },
+      { "n": 11, "text": "…sent a text about them *to them.*" },
+      { "n": 12, "text": "…laughed at a *serious moment.*" }
+    ]},
+    { "type": "checks", "items": [
+      { "n": 13, "text": "…told my friends *everything* about our first date." },
+      { "n": 14, "text": "…saved our *first conversation.*" },
+      { "n": 15, "text": "…looked up *their old photos* before we met." },
+      { "n": 16, "text": "…known it was love *before they did.*" }
+    ]},
+    {
+      "type": "save",
+      "title": "Save this *for your next road trip.*",
+      "sub": "Screenshot it and tick your boxes. Most ticks loses."
+    }
+  ]
+}

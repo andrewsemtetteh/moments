@@ -1,0 +1,54 @@
+{
+  "id": "12.2",
+  "title": "Compliments that hit different",
+  "theme": "blush",
+  "variant": "rosette",
+  "illustration": "d12_2",
+  "slides": [
+    {
+      "type": "cover",
+      "title": "Compliments that *hit different*"
+    },
+    {
+      "type": "k",
+      "n": 1,
+      "title": "“You make me feel *heard.*”",
+      "award": "Best listener"
+    },
+    {
+      "type": "k",
+      "n": 2,
+      "title": "“I’m *most myself* with you.”",
+      "award": "Safest place"
+    },
+    {
+      "type": "k",
+      "n": 3,
+      "title": "“You’re the best part of *my day.*”",
+      "award": "Daily highlight"
+    },
+    {
+      "type": "k",
+      "n": 4,
+      "title": "“I *admire* how hard you try.”",
+      "award": "Hardest worker"
+    },
+    {
+      "type": "k",
+      "n": 5,
+      "title": "“You make *hard things* feel lighter.”",
+      "award": "Best teammate"
+    },
+    {
+      "type": "k",
+      "n": 6,
+      "title": "“You keep becoming *more you.*”",
+      "award": "Glow-up of the year"
+    },
+    {
+      "type": "save",
+      "title": "Save this *and say one out loud today.*",
+      "sub": "Watch their face. Worth it."
+    }
+  ]
+}

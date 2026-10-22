@@ -1,0 +1,55 @@
+{
+  "id": "9.4",
+  "title": "The 7-day tiny surprise challenge",
+  "theme": "blush",
+  "variant": "advent",
+  "illustration": "d9_4",
+  "slides": [
+    {
+      "type": "cover",
+      "title": "The 7-day *tiny surprise* challenge",
+      "sub": "One small surprise a day. Don’t get caught."
+    },
+    {
+      "type": "k",
+      "n": 1,
+      "title": "Make their drink *before they wake up*"
+    },
+    {
+      "type": "k",
+      "n": 2,
+      "title": "Hide a note *in their pocket*"
+    },
+    {
+      "type": "k",
+      "n": 3,
+      "title": "Plan a *20-minute* mini date"
+    },
+    {
+      "type": "k",
+      "n": 4,
+      "title": "Do the chore *they hate most*"
+    },
+    {
+      "type": "k",
+      "n": 5,
+      "title": "Cook their *childhood favorite*"
+    },
+    {
+      "type": "k",
+      "n": 6,
+      "title": "Text them a *memory* of you two"
+    },
+    {
+      "type": "k",
+      "n": 7,
+      "title": "Plan a *surprise evening*",
+      "body": "Keep it secret until the last minute."
+    },
+    {
+      "type": "save",
+      "title": "Save this *and start on Monday.*",
+      "sub": "Then see how long until they notice."
+    }
+  ]
+}

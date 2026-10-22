@@ -1,0 +1,49 @@
+{
+  "id": "3.1",
+  "title": "How to love someone whose love language is acts of service",
+  "theme": "coral",
+  "cardStyle": "sticky",
+  "series": "Love languages",
+  "illustration": "service",
+  "slides": [
+    {
+      "type": "cover",
+      "title": "How to love someone whose love language is *acts of service*"
+    },
+    {
+      "type": "tip",
+      "n": 1,
+      "title": "Do the thing *before they ask.*",
+      "body": "The task they’ve been putting off all week? Done. Quietly."
+    },
+    {
+      "type": "tip",
+      "n": 2,
+      "title": "Make their coffee *exactly* right.",
+      "body": "Their mug, their milk, their sugar. Every single time."
+    },
+    {
+      "type": "tip",
+      "n": 3,
+      "title": "Handle one *adult thing.*",
+      "body": "A booking, a bill, that phone call they keep dodging."
+    },
+    {
+      "type": "tip",
+      "n": 4,
+      "title": "Refill the *small stuff.*",
+      "body": "Charge their phone. Fill the water bottle. Top up the gas."
+    },
+    {
+      "type": "tip",
+      "n": 5,
+      "title": "Take something *off their plate.*",
+      "body": "Ask what you can take on when they’re stressed. Then actually take it."
+    },
+    {
+      "type": "save",
+      "title": "Save this *for their next busy week.*",
+      "sub": "Then quietly start with number one."
+    }
+  ]
+}

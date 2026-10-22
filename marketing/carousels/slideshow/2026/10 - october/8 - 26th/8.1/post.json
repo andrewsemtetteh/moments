@@ -1,0 +1,56 @@
+{
+  "id": "8.1",
+  "title": "Questions that made us fall in love all over again",
+  "theme": "night",
+  "cardStyle": "chat",
+  "series": "Questions",
+  "illustration": "dance",
+  "slides": [
+    {
+      "type": "cover",
+      "title": "Questions that made us *fall in love* all over again",
+      "sub": "Ask them slowly. The answers get better as you go."
+    },
+    {
+      "type": "question",
+      "n": 1,
+      "time": "9:58 PM",
+      "text": "What was your *first impression* of me? Honestly."
+    },
+    {
+      "type": "question",
+      "n": 2,
+      "time": "10:04 PM",
+      "text": "When did you know *this was serious?*"
+    },
+    {
+      "type": "question",
+      "n": 3,
+      "time": "10:11 PM",
+      "text": "What’s a memory of us you *replay in your head?*"
+    },
+    {
+      "type": "question",
+      "n": 4,
+      "time": "10:19 PM",
+      "text": "What do I do that makes you *feel safe?*"
+    },
+    {
+      "type": "question",
+      "n": 5,
+      "time": "10:26 PM",
+      "text": "What’s something about me you’d *never change?*"
+    },
+    {
+      "type": "question",
+      "n": 6,
+      "time": "10:42 PM",
+      "text": "What do you want *us* to be like in ten years?"
+    },
+    {
+      "type": "save",
+      "title": "Save this *for a slow night.*",
+      "sub": "Then send it to your person and answer number five first."
+    }
+  ]
+}

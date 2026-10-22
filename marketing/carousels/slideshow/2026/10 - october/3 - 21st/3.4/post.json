@@ -1,0 +1,48 @@
+{
+  "id": "3.4",
+  "title": "Questions to ask on your anniversary",
+  "theme": "ink",
+  "series": "Questions",
+  "illustration": "anniversary",
+  "slides": [
+    {
+      "type": "cover",
+      "title": "Questions to ask *on your anniversary*"
+    },
+    {
+      "type": "film",
+      "n": 1,
+      "text": "What’s your *favorite memory* from this year?"
+    },
+    {
+      "type": "film",
+      "n": 2,
+      "text": "When did you feel *proudest of us?*"
+    },
+    {
+      "type": "film",
+      "n": 3,
+      "text": "What *surprised you* most about me?"
+    },
+    {
+      "type": "film",
+      "n": 4,
+      "text": "What’s something we *got better at?*"
+    },
+    {
+      "type": "film",
+      "n": 5,
+      "text": "What do you want *more of* next year?"
+    },
+    {
+      "type": "film",
+      "n": 6,
+      "text": "If this year were a movie, *what’s the title?*"
+    },
+    {
+      "type": "save",
+      "title": "Save this *for your anniversary.*",
+      "sub": "Then ask again next year and compare the answers."
+    }
+  ]
+}

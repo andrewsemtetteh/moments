@@ -1,0 +1,61 @@
+{
+  "id": "11.5",
+  "title": "What your sleeping position says about you two",
+  "theme": "violet",
+  "variant": "bed",
+  "illustration": "d11_5",
+  "slides": [
+    {
+      "type": "cover",
+      "title": "What your *sleeping position* says about you two",
+      "sub": "Very scientific. Not at all."
+    },
+    {
+      "type": "k",
+      "n": 1,
+      "title": "The *spoon*",
+      "body": "Close, cozy, and someone always gets a dead arm.",
+      "pos": "spoon"
+    },
+    {
+      "type": "k",
+      "n": 2,
+      "title": "Back to back, *touching*",
+      "body": "Independent, but connected.",
+      "pos": "back"
+    },
+    {
+      "type": "k",
+      "n": 3,
+      "title": "The *starfish*",
+      "body": "One of you has claimed the kingdom.",
+      "pos": "starfish"
+    },
+    {
+      "type": "k",
+      "n": 4,
+      "title": "The *tangle*",
+      "body": "Nobody knows whose leg is whose.",
+      "pos": "tangle"
+    },
+    {
+      "type": "k",
+      "n": 5,
+      "title": "The *cliffhanger*",
+      "body": "Edges only. Maximum personal space.",
+      "pos": "cliff"
+    },
+    {
+      "type": "k",
+      "n": 6,
+      "title": "Head *on the chest*",
+      "body": "Protective, cozy, slightly too warm.",
+      "pos": "chest"
+    },
+    {
+      "type": "save",
+      "title": "Save this *and tag your bed hog.*",
+      "sub": "Which one are you two?"
+    }
+  ]
+}

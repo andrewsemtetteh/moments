@@ -1,0 +1,54 @@
+{
+  "id": "7.4",
+  "title": "Couple goals that aren't on social media",
+  "theme": "electric",
+  "variant": "stars",
+  "illustration": "d7_4",
+  "slides": [
+    {
+      "type": "cover",
+      "title": "Couple goals that *aren’t on social media*"
+    },
+    {
+      "type": "k",
+      "n": 1,
+      "title": "Laughing at the *same dumb thing*",
+      "body": "Years later. Still funny."
+    },
+    {
+      "type": "k",
+      "n": 2,
+      "title": "Being *boring together*",
+      "body": "Errands, laundry, still having fun."
+    },
+    {
+      "type": "k",
+      "n": 3,
+      "title": "Fighting, then *actually fixing it*",
+      "body": "No silent treatment for days."
+    },
+    {
+      "type": "k",
+      "n": 4,
+      "title": "Knowing *when to give space*",
+      "body": "And not taking it personally."
+    },
+    {
+      "type": "k",
+      "n": 5,
+      "title": "Cheering for *small wins*",
+      "body": "The good email. The finished run."
+    },
+    {
+      "type": "k",
+      "n": 6,
+      "title": "Choosing each other *on the hard days*",
+      "body": "Not just the easy ones."
+    },
+    {
+      "type": "save",
+      "title": "Save this *as your real goals.*",
+      "sub": "No filter needed."
+    }
+  ]
+}

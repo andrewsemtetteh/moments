@@ -1,0 +1,62 @@
+{
+  "id": "2.1",
+  "title": "7 things that make long distance easier",
+  "theme": "blue",
+  "cardStyle": "ticket",
+  "series": "Long distance",
+  "illustration": "longdistance",
+  "slides": [
+    {
+      "type": "cover",
+      "title": "7 things that make *long distance* easier",
+      "sub": "From couples who survived the airport goodbyes."
+    },
+    {
+      "type": "tip",
+      "n": 1,
+      "title": "Always have a *countdown.*",
+      "body": "A date on the calendar turns “someday” into *23 days.*"
+    },
+    {
+      "type": "tip",
+      "n": 2,
+      "title": "Overlap your *routines.*",
+      "body": "Same coffee time. Same show. Same bedtime call."
+    },
+    {
+      "type": "tip",
+      "n": 3,
+      "title": "Send small things, *often.*",
+      "body": "A photo of your lunch beats a two-hour call *once a week.*"
+    },
+    {
+      "type": "tip",
+      "n": 4,
+      "title": "Plan dates, not just *calls.*",
+      "body": "Cook the same recipe. Watch a movie in sync. Play a game together."
+    },
+    {
+      "type": "tip",
+      "n": 5,
+      "title": "Talk about the *hard days* too.",
+      "body": "Distance gets heavier when you pretend it’s fine."
+    },
+    {
+      "type": "tip",
+      "n": 6,
+      "title": "Keep your own life *full.*",
+      "body": "Friends, hobbies, plans. You’ll have more to share when you talk."
+    },
+    {
+      "type": "tip",
+      "n": 7,
+      "title": "Make an *“after”* list.",
+      "body": "Everything you’ll do when you’re finally in the same city."
+    },
+    {
+      "type": "save",
+      "title": "Save this *for the hard weeks.*",
+      "sub": "Then send it to the person you’re counting days for."
+    }
+  ]
+}

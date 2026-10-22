@@ -1,0 +1,56 @@
+{
+  "id": "9.1",
+  "title": "Long distance dates that actually feel like a date",
+  "theme": "violet",
+  "cardStyle": "postcard",
+  "series": "Long distance",
+  "illustration": "ldrdinner",
+  "slides": [
+    {
+      "type": "cover",
+      "title": "Long distance dates that *actually feel like a date*",
+      "sub": "For when “so… how was your day?” isn’t cutting it anymore."
+    },
+    {
+      "type": "tip",
+      "n": 1,
+      "title": "Cook *the same recipe.*",
+      "body": "Pick one dish, shop separately, cook it together on video."
+    },
+    {
+      "type": "tip",
+      "n": 2,
+      "title": "Movie night, *in sync.*",
+      "body": "Press play at the same second. Text your reactions."
+    },
+    {
+      "type": "tip",
+      "n": 3,
+      "title": "Take a walk *together.*",
+      "body": "Call while you both walk your neighborhood. Show each other around."
+    },
+    {
+      "type": "tip",
+      "n": 4,
+      "title": "Send a *surprise delivery.*",
+      "body": "Their favorite snack, at their door, on a random Tuesday."
+    },
+    {
+      "type": "tip",
+      "n": 5,
+      "title": "Play a game *online.*",
+      "body": "Trivia, chess or a co-op game. The loser plans the next date."
+    },
+    {
+      "type": "tip",
+      "n": 6,
+      "title": "Write *actual letters.*",
+      "body": "On paper, in the post. It’ll arrive like a hug."
+    },
+    {
+      "type": "save",
+      "title": "Save this *for your next date apart.*",
+      "sub": "Then send it to the person on the other end of the call."
+    }
+  ]
+}

@@ -1,0 +1,25 @@
+{
+  "id": "1.4",
+  "title": "Finish the sentence: couples edition",
+  "theme": "violet",
+  "series": "Play",
+  "illustration": "notebook",
+  "slides": [
+    {
+      "type": "cover",
+      "title": "*Finish the sentence:* couples edition",
+      "sub": "Fill in the blanks, then send it to your person."
+    },
+    { "type": "blank", "n": 1, "text": "I knew I *liked you* when ___." },
+    { "type": "blank", "n": 2, "text": "My favorite thing *about us* is ___." },
+    { "type": "blank", "n": 3, "text": "You’re the *only person* who ___." },
+    { "type": "blank", "n": 4, "text": "Our song is ___, *obviously.*" },
+    { "type": "blank", "n": 5, "text": "With a free day, we’d *definitely* ___." },
+    { "type": "blank", "n": 6, "text": "I never get *tired of your* ___." },
+    {
+      "type": "save",
+      "title": "Save this *for a slow evening.*",
+      "sub": "Answer them out loud. Then swap."
+    }
+  ]
+}

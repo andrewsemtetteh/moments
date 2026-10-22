@@ -1,0 +1,31 @@
+{
+  "id": "3.2",
+  "title": "Couples bingo",
+  "theme": "sunny",
+  "series": "Play",
+  "illustration": "highfive",
+  "slides": [
+    {
+      "type": "cover",
+      "title": "Couples *bingo*",
+      "sub": "Two cards: the cute one and the chaos one. Count your squares."
+    },
+    { "type": "bingo", "edition": "Card 1 · the cute edition", "squares": [
+      "Say *good morning* first", "Share one dessert", "Have a pet name", "Own something *matching*",
+      "Finish their sentences", "Forehead kisses", "An *inside joke*", "Slow dance at home",
+      "Know their coffee order", "A selfie this week", "FREE", "Fall asleep on call",
+      "Leave a *love note*", "Hold hands on walks", "Text “home safe?”", "Say *I love you* daily"
+    ]},
+    { "type": "bingo", "edition": "Card 2 · the chaos edition", "squares": [
+      "Fight over *the blanket*", "Eat their fries", "One is *always cold*", "Get lost together",
+      "Hogs the bed", "Snores *(denies it)*", "An hour to pick a movie", "Laugh at the wrong time",
+      "Replies with just “k”", "FREE", "Leaves cups everywhere", "Sends 50 videos a day",
+      "“5 min away” *(they’re not)*", "Steals the good pillow", "Judges your music", "Forgets the plan"
+    ]},
+    {
+      "type": "save",
+      "title": "Save this *and play tonight.*",
+      "sub": "Comment both scores. Highest chaos score wins nothing."
+    }
+  ]
+}
