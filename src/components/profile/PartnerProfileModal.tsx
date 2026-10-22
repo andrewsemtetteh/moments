@@ -1,7 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { format, formatDistanceToNow } from 'date-fns';
 import * as Haptics from '@/lib/haptics';
-import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
@@ -20,6 +19,7 @@ import { FullScreenLocationMapModal } from '@/components/profile/FullScreenLocat
 import { FullScreenImageModal } from '@/components/ui/FullScreenImageModal';
 import { Icon, type IconName } from '@/components/ui/Icon';
 import { Avatar, colorWithAlpha, separatorColor } from '@/components/ui/primitives';
+import { MomentThumbImage } from '@/components/moments/MomentThumbImage';
 import { MOOD_COLORS, MOOD_EMOJI, MOOD_LABELS, type ThemeColors } from '@/constants/design-system';
 import { useMoods, useStreak } from '@/hooks/queries';
 import { usePartnerActiveMoments } from '@/hooks/usePartnerActiveMoments';
@@ -207,10 +207,6 @@ export function PartnerProfileModal() {
   const locationFreshness = locationAgeLabel(profile?.location_updated_at);
 
   const latestPartnerMoment = recentPartnerMoments[0];
-  const storyPreviewUrl =
-    latestPartnerMoment && momentHasVisual(latestPartnerMoment)
-      ? latestPartnerMoment.media_url
-      : profile?.avatar_url;
 
   const latestMomentAgo = latestPartnerMoment
     ? formatDistanceToNow(new Date(latestPartnerMoment.created_at), { addSuffix: true })
@@ -312,8 +308,9 @@ export function PartnerProfileModal() {
                     end={{ x: 1, y: 1 }}
                     style={styles.storyRing}>
                     <View style={[styles.storyGap, { backgroundColor: band }]}>
-                      {storyPreviewUrl ? (
-                        <Image source={{ uri: storyPreviewUrl }} style={styles.storyImage} contentFit="cover" />
+                      {latestPartnerMoment && momentHasVisual(latestPartnerMoment) ? (
+                        // Their latest moment, as a picture (a video's still, never the video file).
+                        <MomentThumbImage moment={latestPartnerMoment} style={styles.storyImage} playMark={false} />
                       ) : (
                         <Avatar name={profile.name} imageUrl={profile.avatar_url} size={112} />
                       )}
@@ -400,7 +397,7 @@ export function PartnerProfileModal() {
                   accessibilityRole="button"
                   style={({ pressed }) => [styles.card, styles.row, styles.momentRow, surface, pressed && styles.pressed]}>
                   {momentHasVisual(latestPartnerMoment) && latestPartnerMoment.media_url ? (
-                    <Image source={{ uri: latestPartnerMoment.media_url }} style={styles.momentThumb} contentFit="cover" />
+                    <MomentThumbImage moment={latestPartnerMoment} style={styles.momentThumb} />
                   ) : (
                     <View style={[styles.momentThumb, styles.center, { backgroundColor: tileBg }]}>
                       <Icon name="camera" size={22} color={colors.textSecondary} />

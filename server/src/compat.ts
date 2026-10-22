@@ -23,8 +23,10 @@ import { generateId, isRelationshipMember, nowIso, parseJson, relationshipIdsFor
 import { assertMomentAllowance, stripProtected } from './billing';
 import { runFunction } from './functions';
 import { normalizeContentType, sniffImageType } from './media-type';
+import { isPrivateMediaKey, signedMediaUrl } from './media-sign';
 import { onPaired } from './pairing';
 import './env';
+import { profileUpdateError } from './profile-rules';
 
 /**
  * Supabase-compatible surface for the app: a policy-checked generic table endpoint (`/db`),
@@ -334,6 +336,10 @@ compat.post('/db', async (c) => {
       for (const raw of list) {
         // Plus is granted only by the Superwall webhook.
         const values = cleanProtected(req.table, raw);
+        if (req.table === 'users') {
+          const problem = profileUpdateError(values);
+          if (problem) throw new ApiError(problem, 400, '23514');
+        }
         if (policy.forceMe) values[policy.forceMe] = userId;
         // A new space is always yours alone and waiting: only joining with its code adds a
         // partner and makes it active (join_relationship_by_invite).
@@ -430,6 +436,11 @@ compat.post('/db', async (c) => {
         throw new ApiError('Not allowed', 403, '42501');
       }
       const patch = cleanProtected(req.table, asked);
+      // The same checks as PATCH /me (birthday 16+, the gender list), so Settings can't skip them.
+      if (req.table === 'users') {
+        const problem = profileUpdateError(patch);
+        if (problem) throw new ApiError(problem, 400, '23514');
+      }
       // Who a row belongs to never changes (moving it into another couple, or making a message
       // look like your partner wrote it).
       for (const k of Object.keys(patch)) if (IMMUTABLE_COLUMNS.has(k)) delete patch[k];
@@ -881,20 +892,77 @@ async function assertStorageAccess(env: Env, userId: string, bucket: string, pat
   if (!(await isRelationshipMember(env.DB, userId, first))) throw new ApiError('Not allowed', 403);
 }
 
+const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
+
+/** Reads the first `bytes` of a stream (for the type check); `rest` carries on from there. */
+async function peekStream(stream: ReadableStream<Uint8Array>, bytes: number) {
+  const reader = stream.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  while (size < bytes) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+    size += value.byteLength;
+  }
+  const head = new Uint8Array(size);
+  let at = 0;
+  for (const chunk of chunks) {
+    head.set(chunk, at);
+    at += chunk.byteLength;
+  }
+  return { head, rest: reader };
+}
+
+/** The peeked bytes, then the rest of the upload, as one stream again. */
+function prependChunk(head: Uint8Array, rest: ReadableStreamDefaultReader<Uint8Array>) {
+  let sentHead = head.byteLength === 0;
+  return new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      if (!sentHead) {
+        sentHead = true;
+        controller.enqueue(head);
+        return;
+      }
+      const { done, value } = await rest.read();
+      if (done) controller.close();
+      else controller.enqueue(value);
+    },
+    cancel(reason) {
+      return rest.cancel(reason);
+    },
+  });
+}
+
 compat.post('/storage/:bucket/*', async (c) => {
   try {
     const bucket = c.req.param('bucket');
     const path = decodeURIComponent(c.req.path.replace(`/storage/${bucket}/`, ''));
     await assertStorageAccess(c.env, c.get('userId'), bucket, path);
     await consumeRateLimit(c.env, `upload:${c.get('userId')}`, 60, 60);
-    const body = await c.req.arrayBuffer();
-    if (body.byteLength > 50 * 1024 * 1024) throw new ApiError('File too large', 413);
-    if (body.byteLength === 0) throw new ApiError('Upload was empty', 400);
-    // Store images under their real type (from the bytes), so they display everywhere.
     const header = normalizeContentType(c.req.header('Content-Type')) || 'application/octet-stream';
-    const contentType = sniffImageType(body) ?? header;
-    await c.env.STORAGE.put(`${bucket}/${path}`, body, { httpMetadata: { contentType } });
-    return c.json({ path });
+    const key = `${bucket}/${path}`;
+    const length = Number(c.req.header('Content-Length'));
+    const body = c.req.raw.body;
+    if (body && Number.isFinite(length) && length > 0) {
+      // Streamed: written to R2 while it's still arriving (no waiting for the whole file first).
+      if (length > MAX_UPLOAD_BYTES) throw new ApiError('File too large', 413);
+      const { head, rest } = await peekStream(body, 16);
+      // Store images under their real type (from the bytes), so they display everywhere.
+      const contentType = sniffImageType(head.buffer as ArrayBuffer) ?? header;
+      const fixed = new FixedLengthStream(length);
+      void prependChunk(head, rest).pipeTo(fixed.writable).catch(() => undefined);
+      await c.env.STORAGE.put(key, fixed.readable, { httpMetadata: { contentType } });
+    } else {
+      const buffered = await c.req.arrayBuffer();
+      if (buffered.byteLength > MAX_UPLOAD_BYTES) throw new ApiError('File too large', 413);
+      if (buffered.byteLength === 0) throw new ApiError('Upload was empty', 400);
+      const contentType = sniffImageType(buffered) ?? header;
+      await c.env.STORAGE.put(key, buffered, { httpMetadata: { contentType } });
+    }
+    // Private files come back signed, so the app shows them without a second request.
+    const signedUrl = isPrivateMediaKey(key) ? await signedMediaUrl(c.env, new URL(c.req.url).origin, key) : undefined;
+    return c.json({ path, signedUrl });
   } catch (e) {
     const err = e instanceof ApiError ? e : new ApiError('Upload failed', 500);
     return c.json({ error: err.message }, err.status as 400);
@@ -907,7 +975,14 @@ compat.post('/storage-remove/:bucket', async (c) => {
     const { paths } = await c.req.json<{ paths: string[] }>();
     for (const path of paths ?? []) {
       await assertStorageAccess(c.env, c.get('userId'), bucket, path);
-      await c.env.STORAGE.delete(`${bucket}/${path}`);
+      // The photo and its small copy (grids), if it has one.
+      await c.env.STORAGE.delete([`${bucket}/${path}`, `${bucket}/${path}.t.jpg`]);
+      const edge = (globalThis as { caches?: { default?: Cache } }).caches?.default;
+      if (edge) {
+        const origin = new URL(c.req.url).origin;
+        const base = `${origin}/__media-cache/${encodeURI(`${bucket}/${path}`)}`;
+        await Promise.all([edge.delete(new Request(base)), edge.delete(new Request(`${base}?t=1`))]).catch(() => undefined);
+      }
     }
     return c.json({ ok: true });
   } catch (e) {

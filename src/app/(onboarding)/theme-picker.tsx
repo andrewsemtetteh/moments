@@ -52,6 +52,8 @@ export default function ThemePickerScreen() {
       title="Pick your look"
       subtitle="The whole app changes with it. Switch any time in Settings."
       primaryLabel={`Use ${label}`}
+      // The swatches sit under the preview, below the fold on most phones.
+      scrollHint="Scroll for more themes"
       onPrimary={() => void next()}>
       {/* The real Home, in the chosen theme. */}
       <ThemeHomePreview name={name} spaceName={spaceName} />

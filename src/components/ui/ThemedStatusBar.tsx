@@ -10,5 +10,6 @@ import { useTheme } from '@/hooks/useTheme';
  */
 export function ThemedStatusBar({ style }: { style?: 'light' | 'dark' }) {
   const { colors } = useTheme();
-  return <StatusBar style={style ?? (colors.isDark ? 'light' : 'dark')} animated />;
+  // Always shown: a viewer that hid it (the full-screen photo) must not leave every page after it bare.
+  return <StatusBar style={style ?? (colors.isDark ? 'light' : 'dark')} hidden={false} animated />;
 }

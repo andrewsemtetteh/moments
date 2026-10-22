@@ -30,6 +30,29 @@ export function notInPast(when: Date): Date {
   return next;
 }
 
+/** A day before today becomes today (plans can't be on a day that's gone). */
+function notBeforeToday(day: Date): Date {
+  const today = startOfDay(new Date());
+  return day.getTime() < today.getTime() ? today : day;
+}
+
+type TimeParts = { h: number; m: number; p: 'AM' | 'PM' };
+
+/**
+ * On today, a time that's already gone moves up to the next quarter hour from now (so the
+ * wheels can't rest on the past); other days are left as they are.
+ */
+function upcomingTime(parts: TimeParts, day: Date | undefined): TimeParts {
+  if (!day || !isToday(day)) return parts;
+  const h24 = parts.p === 'PM' ? (parts.h === 12 ? 12 : parts.h + 12) : parts.h === 12 ? 0 : parts.h;
+  if (!timeHasPassedToday(h24, parts.m)) return parts;
+  const next = notInPast(new Date());
+  // Past 11:45 PM there's no later time today: keep the last one.
+  if (!isToday(next)) return { h: 11, m: 59, p: 'PM' };
+  const nh = next.getHours();
+  return { h: nh % 12 || 12, m: next.getMinutes(), p: nh < 12 ? 'AM' : 'PM' };
+}
+
 /** The Settings drawer top: the title on the left, ✕ and a filled ✓ on the right. */
 function ModalHeader({
   title,
@@ -74,7 +97,8 @@ export function PlanDateModal({
   const [lastOpenKey, setLastOpenKey] = useState<number | null>(null);
   if (openKey !== lastOpenKey) {
     setLastOpenKey(openKey);
-    if (visible) setDraft(value);
+    // Opens on the plan's day, or today if that's already gone.
+    if (visible) setDraft(allowPast ? value : notBeforeToday(value));
   }
 
   return (
@@ -125,11 +149,21 @@ export function PlanTimeModal({
   if (openKey !== lastOpenKey) {
     setLastOpenKey(openKey);
     if (visible) {
-      setH(hour12);
-      setM(minute);
-      setP(period);
+      // Opens on the plan's time, or the next free quarter hour if that's already gone.
+      const start = upcomingTime({ h: hour12, m: minute, p: period }, day);
+      setH(start.h);
+      setM(start.m);
+      setP(start.p);
     }
   }
+
+  /** A wheel moved: past times on today snap forward, so the past can't be picked. */
+  const pick = (next: TimeParts) => {
+    const t = upcomingTime(next, day);
+    setH(t.h);
+    setM(t.m);
+    setP(t.p);
+  };
 
   const h24 = p === 'PM' ? (h === 12 ? 12 : h + 12) : h === 12 ? 0 : h;
   const passed = !!day && isToday(day) && timeHasPassedToday(h24, m);
@@ -154,10 +188,10 @@ export function PlanTimeModal({
       ) : null}
 
       <View style={[styles.wheels, styles.pickerCard, insetCardStyle(colors, 'sheet')]}>
-        <PlanWheelColumn items={hours} value={h} onChange={(v) => setH(Number(v))} width={88} />
+        <PlanWheelColumn items={hours} value={h} onChange={(v) => pick({ h: Number(v), m, p })} width={88} />
         <Text style={[styles.colon, { color: colors.textTertiary }]}>:</Text>
-        <PlanWheelColumn items={minutes} value={m} onChange={(v) => setM(Number(v))} width={88} />
-        <PlanWheelColumn items={periods} value={p} onChange={(v) => setP(v as 'AM' | 'PM')} width={72} />
+        <PlanWheelColumn items={minutes} value={m} onChange={(v) => pick({ h, m: Number(v), p })} width={88} />
+        <PlanWheelColumn items={periods} value={p} onChange={(v) => pick({ h, m, p: v as 'AM' | 'PM' })} width={72} />
       </View>
     </DraggableSheet>
   );

@@ -4,7 +4,9 @@ import { Hono } from 'hono';
 import { deleteAccount } from './account';
 import { requireAuth, type AuthVariables } from './auth';
 import { assertMomentAllowance, billingWebhooks, carryPersonalPlus, ensureBillingUserId } from './billing';
-import { ApiError, publicProfile } from './core';
+import { ApiError, emitRow, publicProfile, sendMoodCheckins, sendStreakRiskReminders } from './core';
+import { sendBirthdayHeadsUps } from './birthdays';
+import { profileUpdateError } from './profile-rules';
 import { compat } from './compat';
 import { links } from './links';
 import { coupleDocs } from './couple-docs';
@@ -14,13 +16,26 @@ import { buildUpdate, generateId, isRelationshipMember, nowIso, parseJson } from
 import { onPaired } from './pairing';
 import { isPrivateMediaKey, signedMediaUrl, signMediaInText, verifyMediaSignature } from './media-sign';
 import { isInlineMediaType, resolveImageType } from './media-type';
+import { type PushRetry, retryPushes } from './push';
 import { rateLimit } from './rate-limit';
+import { runWithContext } from './request-context';
 import { claimReferral, referralSummary } from './referrals';
 import './env';
 
 const USERNAME_PATTERN = /^[a-z0-9_]{4,64}$/;
 
 const app = new Hono<{ Bindings: Env; Variables: AuthVariables }>();
+
+// Lets helpers finish side work (pushes, realtime) after the answer is sent (request-context.ts).
+app.use('*', (c, next) => {
+  let ctx: { waitUntil(promise: Promise<unknown>): void } | undefined;
+  try {
+    ctx = c.executionCtx;
+  } catch {
+    ctx = undefined;
+  }
+  return runWithContext(ctx, next);
+});
 
 // Every JSON answer (tables, functions, profiles…) goes out with its moment and chat media
 // links signed, so the app never needs to build one (see media-sign.ts).
@@ -52,7 +67,29 @@ app.get('/media/*', async (c) => {
   }
   // Range requests: iPhone's audio/video players fetch byte ranges and wait forever without them.
   const ranged = !!c.req.header('Range');
-  const object = await c.env.STORAGE.get(key, ranged ? { range: c.req.raw.headers } : undefined);
+
+  // Cloudflare's edge cache, keyed by the file (not the signature, which was checked above): a
+  // photo seen once is served from the nearest Cloudflare location after that, without a trip to
+  // R2. (It only works on a custom domain; on workers.dev the cache is simply skipped.)
+  const variant = c.req.query('t') === '1' ? '?t=1' : '';
+  const edgeKey = new Request(`${new URL(c.req.url).origin}/__media-cache/${encodeURI(key)}${variant}`);
+  const edge = (globalThis as { caches?: { default?: Cache } }).caches?.default;
+  if (!ranged && edge) {
+    const hit = await edge.match(edgeKey).catch(() => undefined);
+    if (hit) {
+      // Back to the viewer as private (the cached copy is only shared inside Cloudflare).
+      const out = new Response(hit.body, hit);
+      out.headers.set('Cache-Control', 'private, max-age=31536000, immutable');
+      return out;
+    }
+  }
+  // `t=1`: the photo's small copy (made at upload, `<key>.t.jpg`) for grids and albums — the
+  // same signed link covers it. Older photos have none: the full one is served instead.
+  const thumb = c.req.query('t') === '1' && !ranged ? await c.env.STORAGE.get(`${key}.t.jpg`) : null;
+  // A video's still that was never made (older videos): say so, rather than send the whole
+  // video to an image — the app then grabs a frame itself.
+  if (c.req.query('t') === '1' && !ranged && !thumb && /\.(mp4|mov|m4v|webm)$/i.test(key)) return c.notFound();
+  const object = thumb ?? (await c.env.STORAGE.get(key, ranged ? { range: c.req.raw.headers } : undefined));
   if (!object) return c.notFound();
 
   const stored = object.httpMetadata?.contentType ?? 'application/octet-stream';
@@ -79,6 +116,16 @@ app.get('/media/*', async (c) => {
     return new Response(object.body, { status: 206, headers });
   }
   headers['Content-Length'] = String(size);
+  if (edge) {
+    // One copy for the viewer, one kept at the edge (files never change: a new photo is a new name).
+    const [forViewer, forEdge] = object.body.tee();
+    c.executionCtx.waitUntil(
+      edge
+        .put(edgeKey, new Response(forEdge, { headers: { ...headers, 'Cache-Control': 'public, max-age=2592000' } }))
+        .catch(() => undefined),
+    );
+    return new Response(forViewer, { headers });
+  }
   return new Response(object.body, { headers });
 });
 
@@ -114,7 +161,7 @@ app.route('/webhooks', billingWebhooks);
 app.use('*', requireAuth);
 
 /** A signed link for a file this person just uploaded (or any file in their space). */
-app.post('/media/sign', rateLimit('media-sign', 300, 600), async (c) => {
+app.post('/media/sign', rateLimit('media-sign', 60, 60), async (c) => {
   const userId = c.get('userId');
   const { key } = await c.req.json<{ key?: string }>().catch(() => ({ key: undefined }));
   const clean = String(key ?? '');
@@ -212,23 +259,41 @@ app.post('/me/email-sync', rateLimit('email-sync', 10, 3600), async (c) => {
   return c.json(await c.env.DB.prepare('SELECT * FROM users WHERE id = ?1').bind(userId).first());
 });
 
-/** The genders you can pick (or none). */
-const GENDER_IDENTITIES = new Set(['male', 'female', 'non_binary', 'other']);
+/** Is this account allowed the developer tools (DEV_TOOLS_USER_IDS)? */
+function isDevToolsUser(env: Env, userId: string): boolean {
+  return (env.DEV_TOOLS_USER_IDS ?? '')
+    .split(',')
+    .map((id) => id.trim())
+    .filter(Boolean)
+    .includes(userId);
+}
+
+/**
+ * Settings › Developer › "Pretend Plus is on": the space counts as Plus on the server too,
+ * so every Plus feature works while testing. Allowlisted accounts only.
+ */
+app.post('/dev/plus', async (c) => {
+  const userId = c.get('userId');
+  if (!isDevToolsUser(c.env, userId)) {
+    return c.json({ error: `Developer tools are off for this account. Add ${userId} to DEV_TOOLS_USER_IDS.`, userId }, 403);
+  }
+  const { on } = await c.req.json<{ on?: boolean }>();
+  const row = await c.env.DB.prepare(
+    `UPDATE relationships SET dev_plus = ?2
+     WHERE (user_1_id = ?1 OR user_2_id = ?1) AND status != 'ended' RETURNING *`,
+  )
+    .bind(userId, on ? 1 : 0)
+    .first<Record<string, unknown>>();
+  if (row) await emitRow(c.env, 'relationships', 'UPDATE', row);
+  return c.json({ ok: true, dev_plus: !!on, relationship: row ?? null });
+});
 
 app.patch('/me', async (c) => {
   const userId = c.get('userId');
   const body = await c.req.json<Record<string, unknown>>();
 
-  if ('gender_identity' in body && body.gender_identity !== null && !GENDER_IDENTITIES.has(String(body.gender_identity))) {
-    return c.json({ error: 'Pick one of the listed options' }, 400);
-  }
-  if ('birthday' in body && body.birthday !== null) {
-    const b = String(body.birthday);
-    const d = new Date(`${b}T12:00:00Z`);
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(b) || Number.isNaN(d.getTime()) || d.getTime() > Date.now() || d.getUTCFullYear() < 1900) {
-      return c.json({ error: 'That birthday doesn’t look right' }, 400);
-    }
-  }
+  const problem = profileUpdateError(body);
+  if (problem) return c.json({ error: problem }, 400);
 
   const update = buildUpdate(body, USER_UPDATE_FIELDS);
   if (!update) return c.json({ error: 'No recognized fields to update' }, 400);
@@ -737,11 +802,19 @@ export { Hub } from './hub';
 
 export default {
   fetch: app.fetch,
+  // Pushes that failed the first time (Expo down, network blip): tried again with growing gaps.
+  queue: (batch: MessageBatch<PushRetry>, env: Env) => retryPushes(batch, env),
   // Hourly: top up the emptiest shared content banks. Few AI calls per run keeps it inside the free CPU limit.
   async scheduled(_event: ScheduledController, env: Env, ctx: ExecutionContext) {
     ctx.waitUntil(stockBanks(env, 6));
+    // The day before a birthday (9am the partner's time): a heads-up to the partner.
+    ctx.waitUntil(sendBirthdayHeadsUps(env).catch(() => 0));
+    // Streaks ending tonight: a warning in each person's last 3 hours (once a day, deduped).
+    ctx.waitUntil(sendStreakRiskReminders(env).catch(() => 0));
+    // No mood shared for over a day: "How are you feeling?" (daytime, once a day).
+    ctx.waitUntil(sendMoodCheckins(env).catch(() => 0));
     // Rate-limit windows older than a day are never read again: clear them so the table stays small.
     const dayAgo = Math.floor(Date.now() / 1000) - 86_400;
     ctx.waitUntil(env.DB.prepare('DELETE FROM rate_limits WHERE window_start < ?1').bind(dayAgo).run());
   },
-} satisfies ExportedHandler<Env>;
+} satisfies ExportedHandler<Env, PushRetry>;

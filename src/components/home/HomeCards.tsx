@@ -2,6 +2,7 @@ import { differenceInCalendarYears, format, isToday, isTomorrow } from 'date-fns
 import * as Clipboard from 'expo-clipboard';
 import * as Haptics from '@/lib/haptics';
 import { Image } from 'expo-image';
+import { thumbUrl, mediaSource } from '@/lib/storage-cdn';
 import { router } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { Pressable, Share, StyleSheet, Text, View } from 'react-native';
@@ -12,21 +13,38 @@ import { useTheme } from '@/hooks/useTheme';
 import { getFirstName } from '@/lib/avatar-initial';
 import { displayTitle } from '@/lib/plan-day';
 import { parsePlanMeta, planIcon } from '@/lib/plan-meta';
-import { openCalendar, openChat } from '@/lib/router';
+import { StickerCake } from '@/components/home/StickerCake';
+import { openCalendar } from '@/lib/router';
 import { birthdayDayLabel, daysUntilBirthday, nextBirthday, turningAge } from '@/lib/birthday';
 import * as api from '@/services/api';
-import { useRelationshipStore, useUIStore } from '@/stores';
+import { type BirthdayCelebration, useRelationshipStore, useUIStore } from '@/stores';
 import type { CalendarEvent, Moment, UserProfile } from '@/types/database';
 import { useCardBorder } from '@/hooks/useCardBorder';
 import { formatInviteCode } from '@/lib/invite-code';
 import { separatorColor } from '@/components/ui/primitives';
 
+/** Birthday cards: butter yellow (like the birthday share card), clear on every theme. */
+const BDAY_INK = '#1A1A1A';
+const BDAY_SOFT = '#4A4036';
+// The border is the theme's own (as on every other Home card), not a fixed black one.
+const BDAY = StyleSheet.create({
+  card: { backgroundColor: '#FFE7A0' },
+  tile: { backgroundColor: '#FFFFFF' },
+});
+
 /**
- * Your partner's birthday, from two weeks out: a countdown that opens Plan on the
- * day (to plan something), and on the day itself opens Chat to say happy birthday.
+ * Your partner's birthday, from two weeks out: a countdown that opens Plan (to plan
+ * something); the day before and on the day it opens the birthday page (the reminder,
+ * then the celebration).
  */
-export function PartnerBirthdayCard({ partner }: { partner: UserProfile }) {
-  const { colors } = useTheme();
+export function PartnerBirthdayCard({
+  partner,
+  onOpen,
+}: {
+  partner: UserProfile;
+  /** Settings › Developer preview: open the page there instead of over Home. */
+  onOpen?: (c: BirthdayCelebration) => void;
+}) {
   const cardBorder = useCardBorder();
   const days = daysUntilBirthday(partner.birthday);
   const next = nextBirthday(partner.birthday);
@@ -38,20 +56,23 @@ export function PartnerBirthdayCard({ partner }: { partner: UserProfile }) {
     <Pressable
       onPress={() => {
         void Haptics.selectionAsync();
-        if (today) openChat(`Happy birthday ${name}! 🎂`);
-        else openCalendar({ dateISO: next.toISOString() });
+        if (days <= 1) {
+          const c: BirthdayCelebration = { kind: today ? 'today' : 'eve', whose: 'partner' };
+          if (onOpen) onOpen(c);
+          else useUIStore.setState({ birthdayCelebration: c });
+        } else if (!onOpen) openCalendar({ dateISO: next.toISOString() });
       }}
       accessibilityRole="button"
-      style={({ pressed }) => [styles.card, styles.row, { backgroundColor: colors.tints.blush }, cardBorder, pressed && styles.pressed]}>
-      <View style={[styles.rowIcon, { backgroundColor: colors.accentSoft }]}>
-        <Icon name="gift" size={22} color={colors.tintAccents?.blush ?? colors.accent} />
+      style={({ pressed }) => [styles.card, styles.row, BDAY.card, cardBorder, pressed && styles.pressed]}>
+      <View style={[styles.rowIcon, BDAY.tile, cardBorder]}>
+        <StickerCake size={30} />
       </View>
       <View style={styles.rowText}>
-        <Text style={[styles.kicker, { color: colors.textSecondary }]}>{today ? 'Today' : 'Coming up'}</Text>
-        <Text style={[styles.rowTitle, { color: colors.text }]} numberOfLines={1}>
+        <Text style={[styles.kicker, { color: BDAY_SOFT }]}>{today ? 'Today' : 'Coming up'}</Text>
+        <Text style={[styles.rowTitle, { color: BDAY_INK }]} numberOfLines={1}>
           {today ? `It’s ${name}’s birthday 🎂` : `${name}’s birthday`}
         </Text>
-        <Text style={[styles.rowSub, { color: colors.textSecondary }]} numberOfLines={1}>
+        <Text style={[styles.rowSub, { color: BDAY_SOFT }]} numberOfLines={1}>
           {today
             ? turning
               ? `They’re ${turning} today. Send some love.`
@@ -61,7 +82,46 @@ export function PartnerBirthdayCard({ partner }: { partner: UserProfile }) {
               : `In ${days} days · ${birthdayDayLabel(next)}`}
         </Text>
       </View>
-      <Icon name="chevronRight" size={18} color={colors.textTertiary} />
+      <Icon name="chevronRight" size={18} color={BDAY_INK} />
+    </Pressable>
+  );
+}
+
+/** On your own birthday: a card on Home that opens your birthday page. */
+export function MyBirthdayCard({
+  user,
+  onOpen,
+}: {
+  user: UserProfile;
+  onOpen?: (c: BirthdayCelebration) => void;
+}) {
+  const cardBorder = useCardBorder();
+  if (daysUntilBirthday(user.birthday) !== 0) return null;
+  const name = getFirstName(user.name) ?? 'you';
+  const turning = turningAge(user.birthday);
+  return (
+    <Pressable
+      onPress={() => {
+        void Haptics.selectionAsync();
+        const c: BirthdayCelebration = { kind: 'today', whose: 'me' };
+        if (onOpen) onOpen(c);
+        else useUIStore.setState({ birthdayCelebration: c });
+      }}
+      accessibilityRole="button"
+      style={({ pressed }) => [styles.card, styles.row, BDAY.card, cardBorder, pressed && styles.pressed]}>
+      <View style={[styles.rowIcon, BDAY.tile, cardBorder]}>
+        <StickerCake size={30} />
+      </View>
+      <View style={styles.rowText}>
+        <Text style={[styles.kicker, { color: BDAY_SOFT }]}>Today</Text>
+        <Text style={[styles.rowTitle, { color: BDAY_INK }]} numberOfLines={1}>
+          Happy birthday, {name}
+        </Text>
+        <Text style={[styles.rowSub, { color: BDAY_SOFT }]} numberOfLines={1}>
+          {turning ? `${turning} today. Have a lovely day.` : 'Have a lovely day.'}
+        </Text>
+      </View>
+      <Icon name="chevronRight" size={18} color={BDAY_INK} />
     </Pressable>
   );
 }
@@ -249,7 +309,7 @@ export function OnThisDayCard({ entry, momentsById }: { entry: CalendarEvent; mo
       accessibilityRole="button"
       style={({ pressed }) => [styles.card, styles.row, { backgroundColor: colors.tints.peach }, cardBorder, pressed && styles.pressed]}>
       {photos[0] ? (
-        <Image source={{ uri: photos[0] }} style={styles.memoryThumb} contentFit="cover" />
+        <Image source={mediaSource(thumbUrl(photos[0]))} style={styles.memoryThumb} contentFit="cover" cachePolicy="memory-disk" />
       ) : (
         <View style={[styles.memoryThumb, styles.memoryThumbEmpty, { backgroundColor: colors.accentSoft }]}>
           <Icon name="heart" size={28} color={colors.tintAccents?.peach ?? colors.accent} />

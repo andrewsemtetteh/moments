@@ -1,6 +1,6 @@
 import { format, setHours, setMilliseconds, setMinutes, setSeconds, startOfDay } from 'date-fns';
 import * as Haptics from '@/lib/haptics';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -33,6 +33,7 @@ import {
 } from '@/lib/plan-meta';
 import { useAuthStore, useRelationshipStore } from '@/stores';
 import type { CalendarEvent } from '@/types/database';
+import { askChoice } from '@/components/ui/ChoiceSheet';
 
 /** An id for a new checklist item (the time it was added). */
 function newChecklistId() {
@@ -56,6 +57,7 @@ export function EventDetailsSheet({
   onOpenLinkedList,
   onCreateLinkedList,
   saving,
+  listSheet,
 }: {
   visible: boolean;
   event: CalendarEvent | null;
@@ -76,6 +78,8 @@ export function EventDetailsSheet({
   onOpenLinkedList?: () => void;
   onCreateLinkedList?: () => void;
   saving?: boolean;
+  /** The shared list, opened over this page (inside its Modal, so closing it comes back here). */
+  listSheet?: ReactNode;
 }) {
   const { colors } = useTheme();
   // Keep showing the last plan while the sheet slides away, so closing it from
@@ -252,17 +256,12 @@ export function EventDetailsSheet({
   };
 
   const confirmDelete = () => {
-    Alert.alert('Delete plan?', 'This cannot be undone.', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: () => {
+    askChoice({ title: 'Delete plan?', message: 'This cannot be undone.', actions: [
+{ label: 'Delete', destructive: true, onPress: () => {
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
           onDelete();
-        },
-      },
-    ]);
+        } },
+] });
   };
 
   return (
@@ -272,7 +271,8 @@ export function EventDetailsSheet({
         visible={visible && !!eventProp}
         title="Plan"
         onBack={closeSheet}
-        dismissKeyboardOnTap={false}
+        // A tap anywhere that isn't a field or button (header and footer too) closes the keyboard.
+        dismissKeyboardOnTap
         right={
           <View style={styles.topActions}>
             <HeaderIconButton icon="trash" onPress={confirmDelete} accessibilityLabel="Delete plan" />
@@ -283,6 +283,8 @@ export function EventDetailsSheet({
             <KeyboardAwareScrollView
               showsVerticalScrollIndicator={false}
               addKeyboardSpace={false}
+              // The pinned Message / Done bar already clears the home indicator.
+              bottomSpace={12}
               contentContainerStyle={styles.scroll}>
               {/* Laid out like New plan: who it's for and how soon, the title, one grouped list of
                   rows, then the checklist and the shared list. */}
@@ -575,6 +577,8 @@ export function EventDetailsSheet({
             dirty.current = true;
           }}
         />
+
+        {listSheet}
 
         <SettingsChoiceSheet
           visible={reminderOpen}

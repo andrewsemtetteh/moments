@@ -33,6 +33,9 @@ type UploadState = {
   jobs: Record<string, { done: number; failed: number; total: number }>;
 };
 
+/** Files uploading side by side (more doesn't make a phone's connection faster). */
+const UPLOAD_AT_ONCE = 3;
+
 export const useAlbumUploadStore = create<UploadState>(() => ({ jobs: {} }));
 
 function setJob(albumId: string, job: UploadState['jobs'][string] | null) {
@@ -68,11 +71,25 @@ export async function uploadToAlbum(opts: {
   let firstUrl: string | null = null;
   setJob(albumId, { done, failed, total: media.length });
 
+  // Files go up three at a time (the slow part); each becomes a moment in the order picked,
+  // one after another, so the free daily limit and the album order stay right.
+  const uploads = media.map(() => null as Promise<string> | null);
+  const startUpload = (index: number) => {
+    const item = media[index];
+    const video = item.type === 'video';
+    const path = `${relationship.id}/${user.id}/${Date.now()}-${index}.${video ? 'mp4' : 'jpg'}`;
+    const p = api.uploadMomentMedia(path, item.uri, video ? 'video/mp4' : 'image/jpeg');
+    p.catch(() => undefined); // Handled below, in order.
+    uploads[index] = p;
+  };
+  for (let k = 0; k < Math.min(UPLOAD_AT_ONCE, media.length); k++) startUpload(k);
+  let nextToStart = Math.min(UPLOAD_AT_ONCE, media.length);
+
   for (const [index, item] of media.entries()) {
     try {
-      const video = item.type === 'video';
-      const path = `${relationship.id}/${user.id}/${Date.now()}-${index}.${video ? 'mp4' : 'jpg'}`;
-      const mediaUrl = await api.uploadMomentMedia(path, item.uri, video ? 'video/mp4' : 'image/jpeg');
+      const mediaUrl = await uploads[index]!;
+      // One slot free: start the next file while this one becomes a moment.
+      if (nextToStart < media.length) startUpload(nextToStart++);
       // No partner option: skips the per-moment "sent you a moment" notification.
       const moment = await api
         .createMoment(relationship.id, user.id, { type: item.type, media_url: mediaUrl })
@@ -87,6 +104,7 @@ export async function uploadToAlbum(opts: {
       done += 1;
       onMomentCreated?.();
     } catch {
+      if (nextToStart < media.length) startUpload(nextToStart++);
       failed += 1;
     }
     setJob(albumId, { done, failed, total: media.length });

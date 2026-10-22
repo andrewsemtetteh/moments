@@ -5,8 +5,9 @@ import { BADGES } from '@/lib/play-progress';
 import { openActivities, openCalendar, openChat } from '@/lib/router';
 import * as api from '@/services/api';
 import { getFirstName } from '@/lib/avatar-initial';
+import { daysUntilBirthday } from '@/lib/birthday';
 import { getEffectiveTier } from '@/lib/subscription';
-import { useAuthStore, useRelationshipStore, useUIStore } from '@/stores';
+import { useAuthStore, useCallStore, useRelationshipStore, useUIStore } from '@/stores';
 import { useGameRoomStore } from '@/stores/game-room-store';
 import type { Notification } from '@/types/database';
 
@@ -107,6 +108,11 @@ export async function openFromNotification(target: NotificationNavTarget, router
       goHome(router);
       return;
 
+    // "How are you feeling?": Home, where you share your mood.
+    case 'mood_checkin':
+      goHome(router);
+      return;
+
     case 'challenge':
       goHome(router);
       return;
@@ -122,10 +128,18 @@ export async function openFromNotification(target: NotificationNavTarget, router
       router.navigate('/(tabs)/profile');
       return;
 
-    // Your partner's birthday: Home, where its card is.
-    case 'birthday':
+    // Your partner's birthday: Home, with its page on top (the reminder the day before,
+    // the celebration on the day).
+    case 'birthday': {
       goHome(router);
+      const days = daysUntilBirthday(useRelationshipStore.getState().partner?.birthday);
+      if (days === 0 || days === 1) {
+        afterNavigate(() =>
+          useUIStore.setState({ birthdayCelebration: { kind: days === 0 ? 'today' : 'eve', whose: 'partner' } }),
+        );
+      }
       return;
+    }
 
     case 'wrapped':
       router.navigate('/(tabs)/profile');
@@ -146,6 +160,11 @@ export async function openFromNotification(target: NotificationNavTarget, router
     case 'call':
       return;
 
+    // "Ongoing call" (shown when you left the app mid-call): straight back to the call.
+    case 'call_ongoing':
+      useCallStore.getState().setMinimized(false);
+      return;
+
     // A trophy your partner unlocked opens that trophy; a quest (no id) opens Play.
     case 'achievement':
       if (target.relatedId && BADGES.some((b) => b.id === target.relatedId)) {
@@ -161,7 +180,10 @@ export async function openFromNotification(target: NotificationNavTarget, router
       return;
 
     case 'game_turn':
-      if (target.relatedId) {
+      // The daily duel: its id ends with the day it's for.
+      if (target.relatedId?.startsWith('duel_')) {
+        router.navigate({ pathname: '/play/duel', params: { date: target.relatedId.slice(-10) } });
+      } else if (target.relatedId) {
         router.navigate({ pathname: '/play/session/[id]', params: { id: target.relatedId } });
       } else {
         openActivities();

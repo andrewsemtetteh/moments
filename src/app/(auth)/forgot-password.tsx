@@ -64,7 +64,8 @@ export default function ForgotPasswordScreen() {
       primaryLabel={loading ? 'Sending…' : 'Send code'}
       onPrimary={() => void handleSend()}
       busy={loading}
-      secondaryLabel="Remember it? Sign in"
+      secondaryLabel="Remember it?"
+      secondaryAction="Sign in"
       onSecondary={() => router.replace('/(auth)/login')}
       onBack={() => goBackOrReplace(router, '/(auth)/login')}>
       <AuthTextField

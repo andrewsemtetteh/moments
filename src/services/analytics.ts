@@ -1,3 +1,5 @@
+import { captureEvent } from '@/lib/product-analytics';
+
 const EVENT_QUEUE: {
   relationshipId: string;
   userId: string;
@@ -13,6 +15,8 @@ export function track(event: {
   eventType: string;
   metadata?: Record<string, unknown>;
 }) {
+  // Product analytics too (PostHog; typed text is never sent there).
+  captureEvent(event.eventType, event.metadata);
   EVENT_QUEUE.push({
     relationshipId: event.relationshipId,
     userId: event.userId,

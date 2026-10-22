@@ -1,7 +1,7 @@
 import { trackColor, insetCardStyle, separatorColor } from '@/components/ui/primitives';
 import * as Haptics from '@/lib/haptics';
 import { useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Keyboard, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { TextInput } from '@/components/ui/ThemedTextInput';
 
 import { DraggableSheet, useKeptWhileClosing } from '@/components/ui/DraggableSheet';
@@ -133,24 +133,14 @@ export function PlanListSheet({
   };
 
   return (
-    <DraggableSheet visible={visible} onClose={onClose} style={styles.sheet}>
+    <DraggableSheet visible={visible} onClose={onClose} avoidKeyboard style={styles.sheet}>
+          {/* A tap on empty space closes the keyboard (fields and buttons sit on top of this). */}
+          <Pressable style={StyleSheet.absoluteFill} onPress={Keyboard.dismiss} accessible={false} />
           <View style={styles.header}>
             <View style={{ flex: 1 }}>
               <Text style={[styles.title, { color: colors.text }]}>
                 {list.emoji} {list.title}
               </Text>
-              {linkedPlanTitle ? (
-                <Text style={{ color: colors.textTertiary, fontWeight: '600', marginTop: 2 }}>
-                  For {linkedPlanTitle}
-                </Text>
-              ) : null}
-              {progress ? (
-                <Text style={{ color: colors.textSecondary, fontWeight: '600', marginTop: 4 }}>
-                  {progress.total === 0
-                    ? 'No items yet'
-                    : `${progress.done} / ${progress.total} items`}
-                </Text>
-              ) : null}
             </View>
             <Pressable
               onPress={onClose}
@@ -178,8 +168,21 @@ export function PlanListSheet({
               placeholder="Add item"
               placeholderTextColor={colors.textTertiary}
               onSubmitEditing={addItem}
+              returnKeyType="done"
               style={[styles.input, { color: colors.text }]}
             />
+            <Pressable
+              onPress={addItem}
+              disabled={!draft.trim()}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel="Add item"
+              style={({ pressed }) => [
+                styles.addBtn,
+                { backgroundColor: colors.accent, opacity: !draft.trim() ? 0.4 : pressed ? 0.8 : 1 },
+              ]}>
+              <Text style={[styles.addBtnText, { color: colors.onAccent }]}>Add</Text>
+            </Pressable>
           </View>
 
           <ScrollView style={{ maxHeight: 420 }} keyboardShouldPersistTaps="handled">
@@ -328,6 +331,8 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   input: { flex: 1, fontSize: 16, fontWeight: '600', padding: 0 },
+  addBtn: { height: 34, paddingHorizontal: 14, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
+  addBtnText: { fontSize: 14, fontWeight: '800' },
   section: { marginBottom: 18, gap: 4 },
   sectionTitle: { fontSize: 16, fontWeight: '800', marginBottom: 6 },
   row: {

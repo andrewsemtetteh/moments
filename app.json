@@ -152,13 +152,14 @@
       ],
       "expo-video",
       "@sentry/react-native",
+      "expo-localization",
       "@react-native-community/datetimepicker",
       "@bacons/apple-targets",
       [
         "expo-build-properties",
         {
           "ios": {
-            "deploymentTarget": "16.4"
+            "deploymentTarget": "17.0"
           }
         }
       ]

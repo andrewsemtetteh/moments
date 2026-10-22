@@ -1,13 +1,12 @@
 import * as Haptics from '@/lib/haptics';
 import { createContext, useContext, useEffect, type ReactNode } from 'react';
-import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import Animated, {
   Easing,
-  FadeInDown,
+  FadeIn,
   useAnimatedStyle,
   useSharedValue,
   withDelay,
-  withRepeat,
   withSequence,
   withSpring,
   withTiming,
@@ -71,6 +70,7 @@ export function ChunkyButton({
   icon,
   style,
   compact,
+  loading,
 }: {
   label: string;
   onPress: () => void;
@@ -80,14 +80,16 @@ export function ChunkyButton({
   icon?: ReactNode;
   style?: StyleProp<ViewStyle>;
   compact?: boolean;
+  /** Shows a spinner in place of the label and ignores taps. */
+  loading?: boolean;
 }) {
   const depth = compact ? 3 : 5;
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={label}
-      accessibilityState={{ disabled: !!disabled }}
-      disabled={disabled}
+      accessibilityState={{ disabled: !!disabled, busy: !!loading }}
+      disabled={disabled || loading}
       onPress={() => {
         void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
         onPress();
@@ -105,8 +107,14 @@ export function ChunkyButton({
         },
         style,
       ]}>
-      {icon}
-      <Text style={[styles.chunkyText, { color: textColor, fontSize: compact ? 15 : 17 }]}>{label}</Text>
+      {loading ? (
+        <ActivityIndicator color={textColor} />
+      ) : (
+        <>
+          {icon}
+          <Text style={[styles.chunkyText, { color: textColor, fontSize: compact ? 15 : 17 }]}>{label}</Text>
+        </>
+      )}
     </Pressable>
   );
 }
@@ -187,8 +195,8 @@ export function ScoreHeader({ state, accent }: { state: RoomState; accent: strin
         />
         <View style={styles.roundBox}>
           <Text style={[styles.roundNum, { color: colors.text }]}>
-            {Math.min(state.round + 1, total)}
-            <Text style={{ color: colors.textTertiary }}>/{total}</Text>
+            {state.endless ? state.round + 1 : Math.min(state.round + 1, total)}
+            {state.endless ? null : <Text style={{ color: colors.textTertiary }}>/{total}</Text>}
           </Text>
           {def.team && state.streak >= 2 ? (
             <Text style={[styles.streak, { color: accent }]}>🔥 {state.streak}</Text>
@@ -206,6 +214,8 @@ export function ScoreHeader({ state, accent }: { state: RoomState; accent: strin
           align="right"
         />
       </View>
+      {/* Unlimited has no end to count towards: no dots. */}
+      {state.endless ? null : (
       <View style={styles.dots}>
         {Array.from({ length: total }).map((_, i) => (
           <View
@@ -225,6 +235,7 @@ export function ScoreHeader({ state, accent }: { state: RoomState; accent: strin
           />
         ))}
       </View>
+      )}
     </View>
   );
 }
@@ -281,59 +292,55 @@ export function FloatingReactions() {
   );
 }
 
-/** Voice status + mute toggle shown in the room header. */
-export function AudioPill({ onToggleMute }: { onToggleMute: () => void }) {
+/** Voice in words and colour ("Voice live", green), for the line under the room's title. */
+export function useVoiceStatus(): { label: string; color: string } {
   const { colors } = useTheme();
   const audio = useGameRoomStore((s) => s.audio);
   const muted = useGameRoomStore((s) => s.muted);
   const partnerInRoom = useGameRoomStore((s) => s.partnerInRoom);
-  const pulse = useSharedValue(1);
+  if (audio === 'unavailable') return { label: 'No voice here', color: colors.textTertiary };
+  if (audio === 'live') return muted ? { label: 'Muted', color: colors.textSecondary } : { label: 'Voice live', color: colors.success };
+  if (audio === 'connecting') return { label: partnerInRoom ? 'Connecting voice…' : 'Voice on', color: colors.textSecondary };
+  return { label: 'Voice off', color: colors.textSecondary };
+}
 
-  useEffect(() => {
-    if (audio === 'live') {
-      pulse.value = withRepeat(withSequence(withTiming(1.5, { duration: 700 }), withTiming(1, { duration: 700 })), -1);
-    } else {
-      pulse.value = 1;
-    }
-  }, [audio, pulse]);
-
-  const dotStyle = useAnimatedStyle(() => ({ transform: [{ scale: pulse.value }], opacity: 2 - pulse.value }));
-
-  if (audio === 'unavailable') {
-    return (
-      <View style={[styles.audioPill, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
-        <Icon name="micOff" size={15} color={colors.textTertiary} />
-        <Text style={[styles.audioText, { color: colors.textTertiary }]}>Voice needs a dev build</Text>
-      </View>
-    );
-  }
-
-  const label =
-    audio === 'live' ? (muted ? 'Muted' : 'Voice live') : audio === 'connecting' ? (partnerInRoom ? 'Connecting…' : 'Waiting…') : 'Voice off';
-  const color = audio === 'live' && !muted ? colors.success : colors.textSecondary;
-
+/**
+ * The room header's mute button: a round button the size of the back button opposite, so the
+ * title sits in the true centre. A dot shows voice is live.
+ */
+export function VoiceButton({ onToggleMute }: { onToggleMute: () => void }) {
+  const { colors } = useTheme();
+  const audio = useGameRoomStore((s) => s.audio);
+  const muted = useGameRoomStore((s) => s.muted);
+  const unavailable = audio === 'unavailable';
+  const live = audio === 'live' && !muted;
   return (
     <Pressable
+      disabled={unavailable}
       onPress={() => {
         void Haptics.selectionAsync();
         onToggleMute();
       }}
+      hitSlop={6}
       accessibilityRole="button"
-      accessibilityLabel={muted ? 'Unmute microphone' : 'Mute microphone'}
-      style={[styles.audioPill, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
-      <View style={styles.audioDotWrap}>
-        <Animated.View style={[styles.audioDotHalo, { backgroundColor: color }, dotStyle]} />
-        <View style={[styles.audioDot, { backgroundColor: color }]} />
-      </View>
-      <Icon name={muted ? 'micOff' : 'mic'} size={15} color={color} />
-      <Text style={[styles.audioText, { color }]}>{label}</Text>
+      accessibilityLabel={unavailable ? 'Voice isn’t available' : muted ? 'Unmute microphone' : 'Mute microphone'}
+      style={({ pressed }) => [
+        styles.voiceBtn,
+        { backgroundColor: colors.surfaceElevated, borderColor: colors.border, opacity: pressed ? 0.7 : unavailable ? 0.5 : 1 },
+      ]}>
+      <Icon name={muted || unavailable ? 'micOff' : 'mic'} size={20} color={live ? colors.success : colors.textSecondary} />
+      {live ? <View style={[styles.voiceDot, { backgroundColor: colors.success, borderColor: colors.surfaceElevated }]} /> : null}
     </Pressable>
   );
 }
 
-/** Fades + slides children in — used as the standard entrance for every round. */
-export function RoundEnter({ children, delay = 0 }: { children: ReactNode; delay?: number }) {
-  return <Animated.View entering={FadeInDown.delay(delay).springify().damping(16)}>{children}</Animated.View>;
+/**
+ * The standard entrance for every round's cards: one short fade, all together. (It used to spring
+ * each card up from below, one after another, which was a lot of motion every round.) The delay prop is
+ * kept for callers but no longer staggers.
+ */
+export function RoundEnter({ children }: { children: ReactNode; delay?: number }) {
+  return <Animated.View entering={FadeIn.duration(160)}>{children}</Animated.View>;
 }
 
 const styles = StyleSheet.create({
@@ -373,17 +380,13 @@ const styles = StyleSheet.create({
   reactionBtn: { paddingHorizontal: 8, paddingVertical: 4 },
   reactionEmoji: { fontSize: 24 },
   floating: { position: 'absolute', bottom: 70, fontSize: 38 },
-  audioPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    borderRadius: 999,
+  voiceBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     borderWidth: StyleSheet.hairlineWidth,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  audioText: { fontSize: 12, fontWeight: '800' },
-  audioDotWrap: { width: 10, height: 10, alignItems: 'center', justifyContent: 'center' },
-  audioDot: { width: 8, height: 8, borderRadius: 4 },
-  audioDotHalo: { position: 'absolute', width: 8, height: 8, borderRadius: 4 },
+  voiceDot: { position: 'absolute', top: 8, right: 8, width: 10, height: 10, borderRadius: 5, borderWidth: 2 },
 });

@@ -3,9 +3,8 @@ import { differenceInCalendarDays, format } from 'date-fns';
 import * as Haptics from '@/lib/haptics';
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useFocusEffect, useRouter } from 'expo-router';
-import { setStatusBarStyle } from 'expo-status-bar';
-import { useCallback, useMemo, useState, type ReactNode } from 'react';
+import { useRouter } from 'expo-router';
+import { useMemo, useState, type ReactNode } from 'react';
 import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -24,9 +23,10 @@ import { Avatar, colorWithAlpha, trackColor } from '@/components/ui/primitives';
 import { Spacing, type ThemeColors } from '@/constants/design-system';
 import { useStreak } from '@/hooks/queries';
 import { useOpenPartnerProfile } from '@/hooks/useOpenPartnerProfile';
-import { REFERRAL_DAYS } from '@/constants/subscription';
+// REFERRAL_DAYS (constants/subscription) goes with the invite card when it's back.
 import { usePlanActions } from '@/hooks/usePlanActions';
 import { useSubscription } from '@/hooks/useSubscription';
+import { useStatusBarStyle } from '@/hooks/useLightStatusBar';
 import { useTheme } from '@/hooks/useTheme';
 import { getRelationshipAnniversaryDate } from '@/lib/anniversary';
 import { getFirstName } from '@/lib/avatar-initial';
@@ -37,10 +37,11 @@ import * as api from '@/services/api';
 import { useAuthStore, useRelationshipStore, useUIStore } from '@/stores';
 import { usePlayProgressStore } from '@/stores/play-progress-store';
 import { ensurePermission } from '@/lib/permissions';
-import { InviteCard } from '@/components/home/HomeCards';
+import { InviteCard, MyBirthdayCard, PartnerBirthdayCard } from '@/components/home/HomeCards';
 
 
-const PLUS_GRADIENT: [string, string, string] = ['#FF6B7A', '#F03A55', '#C41E45'];
+/** Plus's own colour (one solid red, no gradient). */
+const PLUS_BG = '#E8344F';
 /** Whether a #rrggbb colour is dark enough to need light status-bar icons. */
 function isDarkColor(hex: string) {
   const h = hex.replace('#', '');
@@ -148,13 +149,7 @@ export default function ProfileScreen() {
   // colours once the band has scrolled up under it.
   const [bandHeight, setBandHeight] = useState(0);
   const [pastBand, setPastBand] = useState(false);
-  useFocusEffect(
-    useCallback(() => {
-      const light = pastBand ? colors.isDark : bandIsDark;
-      setStatusBarStyle(light ? 'light' : 'dark', true);
-      return () => setStatusBarStyle(colors.isDark ? 'light' : 'dark', true);
-    }, [pastBand, bandIsDark, colors.isDark]),
-  );
+  useStatusBarStyle((pastBand ? colors.isDark : bandIsDark) ? 'light' : 'dark');
   const year = new Date().getFullYear();
 
   const plusLine = isPlus
@@ -251,6 +246,9 @@ export default function ProfileScreen() {
 
           {/* Once, until you add it or close it: your birthday, for your partner's countdown. */}
           <BirthdayPrompt />
+          {/* Birthdays here too, as on Home: yours on the day; theirs from two weeks out. */}
+          {user ? <MyBirthdayCard user={user} /> : null}
+          {partner ? <PartnerBirthdayCard partner={partner} /> : null}
 
           {waitingForPartner ? (
             <Section title="Invite your person">
@@ -280,11 +278,8 @@ export default function ProfileScreen() {
                 accessibilityRole="button"
                 accessibilityLabel={`Your ${year} Wrapped`}
                 style={({ pressed }) => [pressed && styles.pressedScale]}>
-                <LinearGradient
-                  colors={['#2B1B3D', '#6A2C5B', '#C9687A']}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={[styles.card, styles.cardPad, styles.row]}>
+                {/* One solid colour (no gradient). */}
+                <View style={[styles.card, styles.cardPad, styles.row, { backgroundColor: '#5B2A55' }]}>
                   <View style={[styles.tile, { backgroundColor: 'rgba(255,255,255,0.14)' }]}>
                     <Icon name="gift" size={24} color="#FFFFFF" />
                   </View>
@@ -295,7 +290,7 @@ export default function ProfileScreen() {
                     </Text>
                   </View>
                   <Icon name="chevronRight" size={18} color="#FFFFFF" />
-                </LinearGradient>
+                </View>
               </Pressable>
             </Section>
           ) : null}
@@ -326,6 +321,8 @@ export default function ProfileScreen() {
             </Section>
           ) : null}
 
+          {/* The Moments Plus card: only while on Free (with Plus, Settings › Your plan has it). */}
+          {!isPlus ? (
           <Pressable
             onPress={openPlan}
             accessibilityRole="button"
@@ -333,11 +330,9 @@ export default function ProfileScreen() {
             style={({ pressed }) => [pressed && styles.pressedScale]}>
             {/* Plus gets its own rich red, the same on every theme, so it reads
                 as the premium card rather than another plain row. */}
-            <LinearGradient
-              colors={PLUS_GRADIENT}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
+            <View
               style={[
+                { backgroundColor: PLUS_BG },
                 styles.card,
                 styles.rowPad,
                 styles.row,
@@ -359,10 +354,12 @@ export default function ProfileScreen() {
                   <Text style={[styles.tryText, { color: PLUS_RED }]}>Try</Text>
                 </View>
               )}
-            </LinearGradient>
+            </View>
           </Pressable>
+          ) : null}
 
-          {/* Not on Plus? Earn it: invite another couple, both get 14 days. */}
+          {/* The invite-a-couple card is off: the gift button at the top does it.
+          {/* Not on Plus? Earn it: invite another couple, both get 14 days. * /}
           {!isPlus ? (
             <Pressable
               onPress={() => router.push('/refer')}
@@ -381,23 +378,29 @@ export default function ProfileScreen() {
               <Icon name="chevronRight" size={18} color={colors.textTertiary} />
             </Pressable>
           ) : null}
+          */}
         </TabScreenScroll>
 
         {/* Invite a couple and Settings float over the page, always reachable (like the
             Streak page's and an album's buttons). */}
         <View pointerEvents="box-none" style={[styles.floatingChips, { top: insets.top + 6 }]}>
-          <Pressable
-            onPress={() => router.push('/refer')}
-            accessibilityRole="button"
-            accessibilityLabel="Invite a couple"
-            style={({ pressed }) => [
-              styles.bandButton,
-              styles.chipShadow,
-              { backgroundColor: colorWithAlpha('#FFFFFF', 0.86) },
-              pressed && styles.pressed,
-            ]}>
-            <Icon name="gift" size={24} color={INK} />
-          </Pressable>
+          {/* Invite a couple (14 days of Plus each): only for Free; with Plus there's nothing to earn. */}
+          {isPlus ? (
+            <View style={styles.giftSpace} />
+          ) : (
+            <Pressable
+              onPress={() => router.push('/refer')}
+              accessibilityRole="button"
+              accessibilityLabel="Invite a couple"
+              style={({ pressed }) => [
+                styles.bandButton,
+                styles.chipShadow,
+                { backgroundColor: colorWithAlpha('#FFFFFF', 0.86) },
+                pressed && styles.pressed,
+              ]}>
+              <Icon name="gift" size={24} color={INK} />
+            </Pressable>
+          )}
           <Pressable
             onPress={() => router.navigate('/settings')}
             accessibilityRole="button"
@@ -535,6 +538,7 @@ const styles = StyleSheet.create({
   bandBleed: { position: 'absolute', left: 0, right: 0, top: -600, height: 600 },
   bandTop: { alignSelf: 'stretch', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 },
   chipSpace: { height: 50 },
+  giftSpace: { width: 44, height: 44 },
   floatingChips: {
     position: 'absolute',
     left: 20,

@@ -2,20 +2,11 @@ import { useQueryClient } from '@tanstack/react-query';
 import { formatDistanceToNow } from 'date-fns';
 import * as Haptics from '@/lib/haptics';
 import { Image } from 'expo-image';
+import { mediaSource } from '@/lib/storage-cdn';
 import { StatusBar } from 'expo-status-bar';
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import {
-    ActivityIndicator,
-    Alert,
-    Dimensions,
-    Keyboard,
-    Pressable,
-    StyleSheet,
-    Text,
-    View,
-    type LayoutChangeEvent,
-} from 'react-native';
+import { ActivityIndicator, Alert, Keyboard, Pressable, StyleSheet, Text, View, type LayoutChangeEvent, useWindowDimensions } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { FadeIn, FadeOut, runOnJS, useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -35,13 +26,18 @@ import * as api from '@/services/api';
 import { useAuthStore, useRelationshipStore, useUIStore } from '@/stores';
 import type { Moment } from '@/types/database';
 import { MOMENTS_BACK, useMomentsBack } from '@/lib/moments-back';
+import { askChoice } from '@/components/ui/ChoiceSheet';
 
 const STORY_DURATION_MS = 8000;
-const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 const DOCK_APPROX = 230;
-/** The photo card: nearly full width, portrait like the photos, capped so the dock still fits. */
-const CARD_W = SCREEN_W - 20;
-const CARD_H = Math.min(Math.round(CARD_W * (4 / 3)), Math.round(SCREEN_H * 0.6));
+/**
+ * The photo card: nearly full width, portrait like the photos, capped so the dock still
+ * fits (and to a phone-like width on tablets / unfolded phones).
+ */
+function cardFor(width: number, height: number) {
+  const w = Math.min(width - 20, 520);
+  return { w, h: Math.min(Math.round(w * (4 / 3)), Math.round(height * 0.6)) };
+}
 /** Same feel as closing Our moments: swipe right, same distances and spring. */
 const DISMISS_DISTANCE = 72;
 const DISMISS_VELOCITY = 650;
@@ -55,6 +51,9 @@ function viewerSessionKey(
 
 export function MomentStoryViewer() {
   const insets = useSafeAreaInsets();
+  // Read live, so a fold / unfold, split screen or rotation redraws at the new size.
+  const { width: SCREEN_W, height: SCREEN_H } = useWindowDimensions();
+  const { w: CARD_W, h: CARD_H } = cardFor(SCREEN_W, SCREEN_H);
   const router = useRouter();
   const { colors } = useTheme();
   const chrome = viewerChrome(colors);
@@ -245,21 +244,16 @@ export function MomentStoryViewer() {
 
   const deleteCurrentMoment = () => {
     if (!moment || !isMine || deleteMomentsMutation.isPending) return;
-    Alert.alert('Delete moment?', 'This removes the moment for both of you and cannot be undone.', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: () => {
+    askChoice({ title: 'Delete moment?', message: 'This removes the moment for both of you and cannot be undone.', actions: [
+{ label: 'Delete', destructive: true, onPress: () => {
           void deleteMomentsMutation.mutateAsync([moment.id]).then(() => {
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
             dismissViewer();
           }).catch((error) => {
             Alert.alert('Could not delete', toUserFacingNetworkError(error, 'Please try again.').message);
           });
-        },
-      },
-    ]);
+        } },
+] });
   };
 
   const onLayout = (e: LayoutChangeEvent) => setWidth(e.nativeEvent.layout.width);
@@ -325,22 +319,15 @@ export function MomentStoryViewer() {
   const tapBottom = DOCK_APPROX + insets.bottom;
 
   const authorAvatar = isMine ? user?.avatar_url : (moment.author?.avatar_url ?? partner?.avatar_url);
-  const backdropUri = moment.type === 'photo' ? moment.media_url : null;
 
   return (
     <GestureDetector gesture={dismissGesture}>
-      <Animated.View style={[styles.root, dragStyle]}>
+      <Animated.View style={[styles.root, { minHeight: SCREEN_H }, dragStyle]}>
         {/* No keyboard avoidance on the screen: the moment stays exactly where it is while replying;
             only the reply bar rides up on the keyboard (see MomentViewerDock). */}
-        <View style={[styles.root, { backgroundColor: chrome.background }]} onLayout={onLayout}>
+        <View style={[styles.root, { minHeight: SCREEN_H, backgroundColor: chrome.background }]} onLayout={onLayout}>
           <StatusBar style="light" />
-          {/* The photo itself, blurred and dimmed, fills the background (Locket / Instagram style). */}
-          {backdropUri ? (
-            <>
-              <Image source={{ uri: backdropUri }} style={StyleSheet.absoluteFill} contentFit="cover" blurRadius={40} />
-              <View style={[StyleSheet.absoluteFill, styles.backdropDim]} />
-            </>
-          ) : null}
+          {/* Plain background behind the card (the blurred copy of the photo is gone). */}
 
           {showProgress && (
             <View style={[styles.progressRow, { paddingTop: insets.top + 8 }]}>
@@ -421,7 +408,7 @@ export function MomentStoryViewer() {
 
           {/* The moment: a big rounded portrait card, caption on the photo. */}
           <View style={styles.stage} pointerEvents="box-none">
-            <View style={[styles.card, { shadowColor: '#000' }]} pointerEvents="none">
+            <View style={[styles.card, { width: CARD_W, height: CARD_H, shadowColor: '#000' }]} pointerEvents="none">
               <MomentMedia moment={moment} advanceOnVideoEnd={!isFocusMode} onVideoEnd={goNext} />
               {moment.content?.trim() ? (
                 <View style={styles.captionPill}>
@@ -517,7 +504,7 @@ function MomentMedia({
   if (isPhoto && moment.media_url) {
     return (
       <View style={styles.mediaBox}>
-        <Image source={{ uri: moment.media_url }} style={StyleSheet.absoluteFill} contentFit="cover" transition={150} />
+        <Image source={mediaSource(moment.media_url)} style={StyleSheet.absoluteFill} contentFit="cover" transition={150} />
       </View>
     );
   }
@@ -530,14 +517,11 @@ function MomentMedia({
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, minHeight: SCREEN_H },
+  root: { flex: 1 },
   // Deep and calm behind the photo, so its colours carry the screen.
-  backdropDim: { backgroundColor: 'rgba(8,8,12,0.72)' },
   // Over the moment and its tap zones, under the reply bar (zIndex 6).
   replyScrim: { backgroundColor: 'rgba(0,0,0,0.55)', zIndex: 5 },
   card: {
-    width: CARD_W,
-    height: CARD_H,
     borderRadius: 34,
     overflow: 'hidden',
     shadowOffset: { width: 0, height: 10 },

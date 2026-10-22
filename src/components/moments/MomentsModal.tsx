@@ -9,6 +9,7 @@ import { useUIStore } from '@/stores';
 import { ThemedStatusBar } from '@/components/ui/ThemedStatusBar';
 import { PaywallModal } from '@/components/subscription/PaywallModal';
 import { handleMomentsBack } from '@/lib/moments-back';
+import { ChoiceSheetHost } from '@/components/ui/ChoiceSheet';
 
 /**
  * A native fullscreen Modal can't cleanly layer a second one on top — presenting/dismissing
@@ -66,6 +67,8 @@ export function MomentsModal() {
         ) : null}
         {/* Moments+ opened from in here (e.g. the album limit): on top, closing it lands back here. */}
         <PaywallModal inline />
+        {/* Choices asked from inside Moments ("Delete moment?") show over it. */}
+        <ChoiceSheetHost inline />
       </GestureHandlerRootView>
     </Modal>
   );

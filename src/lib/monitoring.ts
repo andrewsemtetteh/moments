@@ -3,6 +3,9 @@ import Constants from 'expo-constants';
 
 const DSN = process.env.EXPO_PUBLIC_SENTRY_DSN ?? '';
 
+/** Names each trace and error after the screen it happened on (expo-router). */
+export const navigationIntegration = Sentry.reactNavigationIntegration({ enableTimeToInitialDisplay: true });
+
 /**
  * Crash and error reporting (Sentry). On in real builds only: development
  * errors stay in the console. No personal data is sent beyond an opaque
@@ -18,6 +21,9 @@ export function initMonitoring() {
     sendDefaultPii: false,
     // A sample of screens and requests, to spot slow ones without the cost.
     tracesSampleRate: 0.2,
+    integrations: [navigationIntegration],
+    // Native crashes (iOS / Android) too, not just JavaScript errors.
+    enableNative: true,
   });
 }
 

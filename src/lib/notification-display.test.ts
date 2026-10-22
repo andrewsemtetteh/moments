@@ -81,3 +81,17 @@ describe('filterInboxNotifications', () => {
     expect(filterInboxNotifications(items).map((n) => n.id)).toEqual(['1', '4']);
   });
 });
+
+describe('island text', () => {
+  it('keeps the island short', async () => {
+    const { conciseIslandText } = await import('@/lib/notification-display');
+    expect(conciseIslandText('Sent you a moment')).toBe('Sent you a moment');
+    expect(
+      conciseIslandText(
+        'Your 12-day streak ends tonight. Send a moment, share your mood, answer today’s question or play a game to keep it.',
+      ),
+    ).toBe('Your 12-day streak ends tonight.');
+    const long = conciseIslandText('a'.repeat(120));
+    expect(long!.length).toBeLessThanOrEqual(71);
+  });
+});

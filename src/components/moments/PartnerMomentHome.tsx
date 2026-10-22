@@ -2,17 +2,11 @@
 import { formatDistanceToNowStrict } from 'date-fns';
 import * as Haptics from '@/lib/haptics';
 import { Image } from 'expo-image';
+import { mediaSource } from '@/lib/storage-cdn';
 import { useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
-import {
-  Dimensions,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { TextInput } from '@/components/ui/ThemedTextInput';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { runOnJS } from 'react-native-reanimated';
@@ -26,12 +20,15 @@ import { getFirstName } from '@/lib/avatar-initial';
 import { LOCKET_EXTRA_EMOJIS, getUserReactionEmoji, toggleMomentReactionForUser } from '@/lib/moment-display';
 import { momentToReplyContext } from '@/lib/moment-reply';
 import { useAuthStore, useRelationshipStore, useUIStore } from '@/stores';
+import { useContentWidth } from '@/lib/layout';
 import type { Moment } from '@/types/database';
 import { useCardBorder } from '@/hooks/useCardBorder';
 
-/** Card spans the screen minus Home's 16pt padding and its own 12pt padding. */
-const MEDIA_W = Dimensions.get('window').width - 32 - 24;
-const MEDIA_H = Math.round(Math.min(420, MEDIA_W * 1.18));
+/** The photo spans the page column minus Home's 16pt padding and the card's own 12pt. */
+function mediaSize(contentWidth: number) {
+  const width = contentWidth - 32 - 24;
+  return { width, height: Math.round(Math.min(420, width * 1.18)) };
+}
 const SWIPE_THRESHOLD = 48;
 const QUICK_REACTIONS = ['❤️', '😂', '🥹', '🔥'] as const;
 
@@ -48,6 +45,8 @@ export function PartnerMomentHome({ partnerMoments }: PartnerMomentHomeProps) {
   const router = useRouter();
   const { colors } = useTheme();
   const cardBorder = useCardBorder();
+  // Live: follows the page column (folds, tablets, rotation).
+  const { width: MEDIA_W, height: MEDIA_H } = mediaSize(useContentWidth());
   const user = useAuthStore((s) => s.user);
   const partner = useRelationshipStore((s) => s.partner);
   const openMomentViewer = useUIStore((s) => s.openMomentViewer);
@@ -186,12 +185,12 @@ export function PartnerMomentHome({ partnerMoments }: PartnerMomentHomeProps) {
 
         <GestureDetector gesture={swipe}>
           <Pressable onPress={openFullscreen} accessibilityRole="imagebutton" accessibilityLabel="Open moment">
-            <View style={[styles.media, { backgroundColor: colors.surfaceElevated }, cardEdge(colors)]}>
+            <View style={[styles.media, { width: MEDIA_W, height: MEDIA_H, backgroundColor: colors.surfaceElevated }, cardEdge(colors)]}>
               {moment.media_url ? (
                 isVideo ? (
                   <MomentVideoPlayer uri={moment.media_url} width={MEDIA_W} height={MEDIA_H} autoPlay={false} controls={false} />
                 ) : (
-                  <Image source={{ uri: moment.media_url }} style={StyleSheet.absoluteFill} contentFit="cover" transition={150} />
+                  <Image source={mediaSource(moment.media_url)} style={StyleSheet.absoluteFill} contentFit="cover" transition={150} />
                 )
               ) : null}
               {isVideo ? (
@@ -289,7 +288,7 @@ const styles = StyleSheet.create({
   name: { fontSize: 15, fontWeight: '800' },
   ago: { fontSize: 12, fontWeight: '600' },
   headBtn: { width: 44, height: 44, marginRight: -6, alignItems: 'center', justifyContent: 'center' },
-  media: { width: MEDIA_W, height: MEDIA_H, borderRadius: 22, overflow: 'hidden' },
+  media: { borderRadius: 22, overflow: 'hidden' },
   playPill: {
     position: 'absolute',
     bottom: 12,

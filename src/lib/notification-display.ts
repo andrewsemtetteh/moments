@@ -35,6 +35,7 @@ export const NOTIFICATION_TYPE_ICON: Record<string, IconName> = {
   game_turn: 'gamepad',
   plus_unlocked: 'star',
   plus_suggest: 'gift',
+  birthday: 'gift',
 };
 
 export const NOTIFICATION_TYPE_LABEL: Record<string, string> = {
@@ -52,6 +53,7 @@ export const NOTIFICATION_TYPE_LABEL: Record<string, string> = {
   game_turn: 'Your move',
   plus_unlocked: 'Moments Plus',
   plus_suggest: 'Moments Plus',
+  birthday: 'Birthday',
 };
 
 /**
@@ -181,4 +183,18 @@ export function groupNotificationsBySection(
     title,
     data: map.get(title) ?? [],
   }));
+}
+
+/**
+ * The island keeps it short: a long notification is cut to its first sentence ("Your
+ * 12-day streak ends tonight." not the whole how-to), and anything still long to ~70
+ * characters. The full text stays in the notifications list.
+ */
+export function conciseIslandText(text: string | undefined): string | undefined {
+  if (!text) return text;
+  const clean = text.trim();
+  if (clean.length <= 60) return clean;
+  const first = /^(.{12,}?[.!?])\s/.exec(clean)?.[1];
+  const short = first && first.length <= 80 ? first : clean;
+  return short.length > 72 ? `${short.slice(0, 70).trimEnd()}…` : short;
 }

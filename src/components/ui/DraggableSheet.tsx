@@ -1,16 +1,8 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import {
-  Dimensions,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  Pressable,
-  StyleProp,
-  StyleSheet,
-  View,
-  ViewStyle,
-  type ScrollViewProps,
-} from 'react-native';
+import { Modal, Pressable, StyleProp, StyleSheet, View, ViewStyle, type ScrollViewProps, useWindowDimensions } from 'react-native';
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
+
+import { KeyboardDismissRoot } from '@/components/layout/KeyboardDismissRoot';
 import { Gesture, GestureDetector, type NativeGesture } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, {
@@ -26,7 +18,6 @@ import Animated, {
 
 import { useTheme } from '@/hooks/useTheme';
 
-const SCREEN_HEIGHT = Dimensions.get('window').height;
 const DISMISS_DISTANCE = 120;
 const DISMISS_VELOCITY = 800;
 const OPEN_SPRING = { damping: 26, stiffness: 260, mass: 0.9 };
@@ -123,6 +114,8 @@ export function DraggableSheet({
   dragAnywhere = false,
   inline = false,
 }: DraggableSheetProps) {
+  // Read live, so a fold / unfold, split screen or rotation redraws at the new size.
+  const SCREEN_HEIGHT = useWindowDimensions().height;
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const [mounted, setMounted] = useState(visible);
@@ -152,7 +145,7 @@ export function DraggableSheet({
       );
       backdropOpacity.set(withTiming(0, { duration: Math.min(duration, 180) }));
     },
-    [translateY, backdropOpacity, finishClose],
+    [translateY, backdropOpacity, finishClose, SCREEN_HEIGHT],
   );
 
   // Opening mounts straight away (while rendering); closing waits for the slide-down.
@@ -193,8 +186,7 @@ export function DraggableSheet({
         return;
       }
       const shouldClose =
-        translateY.value > 0 &&
-        (event.translationY > DISMISS_DISTANCE || event.velocityY > DISMISS_VELOCITY);
+        translateY.value > 0 && (event.translationY > DISMISS_DISTANCE || event.velocityY > DISMISS_VELOCITY);
 
       if (shouldClose) {
         runOnJS(animateOut)(event.velocityY);
@@ -212,9 +204,7 @@ export function DraggableSheet({
   if (!mounted) return null;
 
   const Container = avoidKeyboard ? KeyboardAvoidingView : View;
-  const containerProps = avoidKeyboard
-    ? { behavior: Platform.OS === 'ios' ? ('padding' as const) : undefined }
-    : {};
+  const containerProps = avoidKeyboard ? { behavior: 'padding' as const } : {};
 
   const Shell = inline ? InlineShell : ModalShell;
   return (
@@ -223,10 +213,7 @@ export function DraggableSheet({
         {/* The dim fades with the sheet (it used to sit on the container: full strength
             the whole time, then gone in one frame after closing — the blink). */}
         <Animated.View style={[StyleSheet.absoluteFill, styles.dim, backdropStyle]}>
-          <Pressable
-            style={StyleSheet.absoluteFill}
-            onPress={closeOnBackdropPress ? () => animateOut(0) : undefined}
-          />
+          <Pressable style={StyleSheet.absoluteFill} onPress={closeOnBackdropPress ? () => animateOut(0) : undefined} />
         </Animated.View>
 
         <Animated.View
@@ -242,7 +229,10 @@ export function DraggableSheet({
             pointerEvents="none"
             style={[
               styles.underlap,
-              { backgroundColor: (StyleSheet.flatten(style)?.backgroundColor as string | undefined) ?? colors.surfaceElevated },
+              {
+                backgroundColor:
+                  (StyleSheet.flatten(style)?.backgroundColor as string | undefined) ?? colors.surfaceElevated,
+              },
             ]}
           />
           {dragAnywhere ? (
@@ -275,8 +265,15 @@ export function DraggableSheet({
 function ModalShell({ onRequestClose, children }: { onRequestClose: () => void; children: ReactNode }) {
   return (
     // Edge to edge on Android too, so the dim also covers the status bar (no band of colour left at the top).
-    <Modal visible transparent animationType="none" statusBarTranslucent navigationBarTranslucent onRequestClose={onRequestClose}>
-      {children}
+    <Modal
+      visible
+      transparent
+      animationType="none"
+      statusBarTranslucent
+      navigationBarTranslucent
+      onRequestClose={onRequestClose}>
+      {/* Its own window: tap outside a field (inside the sheet) closes the keyboard here too. */}
+      <KeyboardDismissRoot>{children}</KeyboardDismissRoot>
     </Modal>
   );
 }

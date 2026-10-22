@@ -4,12 +4,16 @@ import { createCallId, getIceServers, type CallMode, type CallSignal } from '@/l
 import { getWebRTCModule } from '@/lib/webrtc-native';
 import { backend } from '@/lib/backend';
 
+type NativeTrack = { stop: () => void; enabled: boolean; kind?: string };
 type NativeStream = {
-  getTracks: () => { stop: () => void; enabled: boolean }[];
-  getAudioTracks: () => { enabled: boolean }[];
-  getVideoTracks: () => { enabled: boolean }[];
+  getTracks: () => NativeTrack[];
+  getAudioTracks: () => NativeTrack[];
+  getVideoTracks: () => NativeTrack[];
+  addTrack?: (track: NativeTrack) => void;
+  removeTrack?: (track: NativeTrack) => void;
   toURL: () => string;
 };
+type Sender = { track: NativeTrack | null };
 
 export type CallManagerCallbacks = {
   onLocalStream?: (stream: NativeStream | null) => void;
@@ -17,6 +21,8 @@ export type CallManagerCallbacks = {
   onPhase?: (phase: 'connecting' | 'active' | 'ended') => void;
   onInvite?: (signal: Extract<CallSignal, { type: 'invite' }>) => void;
   onError?: (message: string) => void;
+  /** The other person turned their camera on or off. */
+  onPartnerCamera?: (on: boolean) => void;
 };
 
 /** How often a ringing call re-sends its invite, and how long it rings before giving up. */
@@ -114,7 +120,7 @@ export class CallManager {
     return mediaDevices.getUserMedia({
       audio: true,
       video: mode === 'video',
-    }) as Promise<NativeStream>;
+    }) as unknown as Promise<NativeStream>;
   }
 
   private async createPeerConnection() {
@@ -265,7 +271,7 @@ export class CallManager {
       case 'offer': {
         const peer = pc ?? (await this.createPeerConnection());
         await peer.setRemoteDescription(signal.sdp);
-        if (this.isInitiator) break;
+        // Either side may re-offer mid-call (switching to video or back), so always answer.
         const answer = await peer.createAnswer();
         await peer.setLocalDescription(answer);
         await this.sendSignal({
@@ -290,6 +296,9 @@ export class CallManager {
         this.callbacks.onPhase?.('ended');
         await this.cleanup();
         break;
+      case 'camera':
+        this.callbacks.onPartnerCamera?.(signal.on);
+        break;
       default:
         break;
     }
@@ -298,6 +307,54 @@ export class CallManager {
   toggleMute(muted: boolean) {
     this.localStream?.getAudioTracks().forEach((track) => {
       track.enabled = !muted;
+    });
+  }
+
+  /**
+   * Your own camera, on or off, mid-call (as on Instagram and Snapchat: each person's camera
+   * is their own; turning yours on never turns theirs on). On: the camera is added and the
+   * call renegotiated. Off: it's stopped and removed (the camera light goes off). Either
+   * way the other phone is told, so it shows your video or your photo.
+   */
+  async setCamera(on: boolean) {
+    if (!this.callId) return;
+    const mode: CallMode = on ? 'video' : 'audio';
+    const hasCamera = (this.localStream?.getVideoTracks().length ?? 0) > 0;
+    if (on === hasCamera) {
+      await this.sendSignal({ type: 'camera', callId: this.callId, fromUserId: this.userId, on });
+      return;
+    }
+    const pc = this.pc as {
+      addTrack: (track: NativeTrack, stream: NativeStream) => Sender;
+      removeTrack: (sender: Sender) => void;
+      getSenders: () => Sender[];
+    } | null;
+    if (mode === 'video') {
+      const { mediaDevices } = this.ensureWebRTC();
+      const camera = (await mediaDevices.getUserMedia({ video: true, audio: false })) as unknown as NativeStream;
+      const [track] = camera.getVideoTracks();
+      if (track && this.localStream) {
+        this.localStream.addTrack?.(track);
+        pc?.addTrack(track, this.localStream);
+      }
+    } else {
+      for (const track of this.localStream?.getVideoTracks() ?? []) {
+        const sender = pc?.getSenders().find((s) => s.track === track);
+        if (sender) pc?.removeTrack(sender);
+        track.stop();
+        this.localStream?.removeTrack?.(track);
+      }
+    }
+    this.mode = mode;
+    this.emitLocalStream();
+    await this.sendSignal({ type: 'camera', callId: this.callId, fromUserId: this.userId, on });
+    await this.sendOffer();
+  }
+
+  /** Front ↔ back camera (react-native-webrtc's own switch on the video track). */
+  switchCamera() {
+    this.localStream?.getVideoTracks().forEach((track) => {
+      (track as unknown as { _switchCamera?: () => void })._switchCamera?.();
     });
   }
 

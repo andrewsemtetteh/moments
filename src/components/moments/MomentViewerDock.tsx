@@ -1,6 +1,6 @@
 import { isToday } from 'date-fns';
 import { useRef, useState } from 'react';
-import { Dimensions, Keyboard, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Keyboard, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { TextInput } from '@/components/ui/ThemedTextInput';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { runOnJS, useAnimatedKeyboard, useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
@@ -16,7 +16,6 @@ import type { Moment } from '@/types/database';
 /** Reactions in the viewer (who reacted, and the emoji picker) are off for now. */
 const SHOW_REACTIONS = false;
 
-const CLUSTER_W = Math.min(Dimensions.get('window').width - 48, 340);
 
 interface MomentViewerDockProps {
   moment: Moment;
@@ -60,6 +59,8 @@ export function MomentViewerDock({
   dark = false,
   onReplyFocusChange,
 }: MomentViewerDockProps) {
+  // Read live, so a fold / unfold, split screen or rotation redraws at the new size.
+  const CLUSTER_W = Math.min(useWindowDimensions().width - 48, 340);
   const { colors } = useTheme();
   const chrome = dark ? viewerChrome(colors) : momentChrome(colors);
   const createdAt = new Date(moment.created_at);

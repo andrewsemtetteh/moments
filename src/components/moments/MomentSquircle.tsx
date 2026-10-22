@@ -1,4 +1,5 @@
 import { Image } from 'expo-image';
+import { thumbUrl, mediaSource } from '@/lib/storage-cdn';
 import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
@@ -6,7 +7,7 @@ import { Icon } from '@/components/ui/Icon';
 import { Avatar } from '@/components/ui/primitives';
 import { MOOD_COLORS, MOOD_EMOJI } from '@/constants/design-system';
 import { useTheme } from '@/hooks/useTheme';
-import { useVideoThumbnail } from '@/hooks/useVideoThumbnail';
+import { useVideoTileSource } from '@/hooks/useVideoThumbnail';
 import { momentChrome } from '@/lib/moment-theme';
 import type { Moment } from '@/types/database';
 
@@ -55,7 +56,7 @@ export function MomentSquircle({
   const authorName = moment.author?.name;
 
   const hasMedia = !!moment.media_url && (moment.type === 'photo' || moment.type === 'video');
-  const videoThumb = useVideoThumbnail(moment.type === 'video' ? moment.media_url : null);
+  const video = useVideoTileSource(moment.type === 'video' ? moment.media_url : null);
 
   const content = (
     <View style={[styles.outer, { width: size, height: size }]}>
@@ -74,8 +75,15 @@ export function MomentSquircle({
         ]}>
         {moment.type === 'video' && moment.media_url ? (
           <>
-            {videoThumb ? (
-              <Image source={videoThumb} style={StyleSheet.absoluteFill} contentFit="cover" transition={200} />
+            {video.source ? (
+              <Image
+                source={video.source}
+                style={StyleSheet.absoluteFill}
+                contentFit="cover"
+                cachePolicy="memory-disk"
+                transition={200}
+                onError={video.onError}
+              />
             ) : null}
             <View style={[styles.playPill, { backgroundColor: 'rgba(0,0,0,0.42)' }]}>
               <Icon name="play" size={10} color="#fff" filled />
@@ -83,9 +91,10 @@ export function MomentSquircle({
           </>
         ) : moment.media_url ? (
           <Image
-            source={{ uri: moment.media_url }}
+            source={mediaSource(thumbUrl(moment.media_url))}
             style={StyleSheet.absoluteFill}
             contentFit="cover"
+            cachePolicy="memory-disk"
             transition={220}
             onLoad={() => setLoaded(true)}
           />

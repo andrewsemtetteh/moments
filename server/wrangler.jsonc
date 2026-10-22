@@ -11,6 +11,20 @@
   "observability": {
     "enabled": true
   },
+  // Runs the Worker next to its D1 database: each request makes several database calls, and
+  // from a far-away edge every one of them crossed the ocean.
+  "placement": { "mode": "smart" },
+  // In-memory rate limiters for the busy per-minute limits (see consumeRateLimit): no D1 write per call.
+  // Pushes that failed the first time, retried with growing gaps (push.ts). Up to 8 tries, then the in-app catch-up.
+  "queues": {
+    "producers": [{ "binding": "PUSH_QUEUE", "queue": "moments-push-retry" }],
+    "consumers": [{ "queue": "moments-push-retry", "max_batch_size": 20, "max_batch_timeout": 5, "max_retries": 8 }]
+  },
+  "ratelimits": [
+    { "name": "RL_30_PER_MIN", "namespace_id": "1030", "simple": { "limit": 30, "period": 60 } },
+    { "name": "RL_60_PER_MIN", "namespace_id": "1060", "simple": { "limit": 60, "period": 60 } },
+    { "name": "RL_120_PER_MIN", "namespace_id": "1120", "simple": { "limit": 120, "period": 60 } }
+  ],
   "d1_databases": [
     {
       "binding": "DB",

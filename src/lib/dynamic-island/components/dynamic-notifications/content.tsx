@@ -10,6 +10,9 @@ import { StyleSheet } from "react-native";
 import { GestureDetector } from "react-native-gesture-handler";
 import Animated from "react-native-reanimated";
 
+import { outlineColor } from "@/components/ui/primitives";
+import { useTheme } from "@/hooks/useTheme";
+
 const Content: React.FC<INotificationContent> &
   React.FunctionComponent<INotificationContent> = memo<INotificationContent>(
   ({
@@ -37,6 +40,7 @@ const Content: React.FC<INotificationContent> &
       layout,
     });
     const blur = useContentBlur({ reveal });
+    const { colors } = useTheme();
     const gesture = useDismissGesture({
       offset: dragY,
       onDismiss: dismiss,
@@ -59,6 +63,9 @@ const Content: React.FC<INotificationContent> &
               width: layout.cardWidth,
               height: layout.cardHeight,
               borderRadius: layout.cardRadius,
+              // Outlined like the trophy shelf's cards, so it stands out on any screen.
+              borderWidth: 1.5,
+              borderColor: outlineColor(colors),
             },
             animated,
             style,

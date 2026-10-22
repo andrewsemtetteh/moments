@@ -6,7 +6,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { Pressable, type ScrollView as RNScrollView, StyleSheet, Text, View } from 'react-native';
 import { ScrollView } from 'react-native-gesture-handler';
-import Animated, { FadeIn, FadeInUp } from 'react-native-reanimated';
+import Animated, { FadeIn, FadeInUp, FadeOut } from 'react-native-reanimated';
 
 import { StreakFlame } from '@/components/home/StreakFlame';
 import { OnboardingStepScreen } from '@/components/onboarding/OnboardingStepScreen';
@@ -421,6 +421,8 @@ export default function WidgetPromptScreen() {
   // and nothing moves while a finger is on it.
   const pager = useRef<RNScrollView>(null);
   const touching = useRef(false);
+  // "Swipe for more widgets": until they've swiped (or tapped a dot) themselves.
+  const [swiped, setSwiped] = useState(false);
   const goToPage = (i: number) => {
     pager.current?.scrollTo({ x: i * box.width, animated: true });
     setPage(i);
@@ -534,6 +536,7 @@ export default function WidgetPromptScreen() {
               showsHorizontalScrollIndicator={false}
               onScrollBeginDrag={() => {
                 touching.current = true;
+                setSwiped(true);
               }}
               onScrollEndDrag={() => {
                 touching.current = false;
@@ -556,6 +559,26 @@ export default function WidgetPromptScreen() {
                 </View>
               ))}
             </ScrollView>
+            {/* Like the themes' "Scroll for more": the other pages aren't obvious from the first. */}
+            {swiped ? null : (
+              <Animated.View
+                entering={FadeIn.delay(900).duration(360)}
+                exiting={FadeOut.duration(180)}
+                pointerEvents="box-none"
+                style={[styles.hintWrap, { bottom: DOTS_H + 10 }]}>
+                <Pressable
+                  onPress={() => {
+                    void Haptics.selectionAsync();
+                    setSwiped(true);
+                    goToPage((page + 1) % PAGES.length);
+                  }}
+                  accessibilityRole="button"
+                  style={({ pressed }) => [styles.hint, { backgroundColor: colors.text }, pressed && { opacity: 0.85 }]}>
+                  <Text style={[styles.hintText, { color: colors.background }]}>Swipe for more widgets</Text>
+                  <Icon name="chevronRight" size={16} color={colors.background} />
+                </Pressable>
+              </Animated.View>
+            )}
             {/* Page indicator, just above the buttons: the current page is a long pill. Tap to jump. */}
             <View style={styles.dotsRow}>
               {PAGES.map((p, i) => (
@@ -563,6 +586,7 @@ export default function WidgetPromptScreen() {
                   key={p.title}
                   onPress={() => {
                     void Haptics.selectionAsync();
+                    setSwiped(true);
                     goToPage(i);
                   }}
                   hitSlop={8}
@@ -608,6 +632,21 @@ const styles = StyleSheet.create({
 
   page: { alignItems: 'center', justifyContent: 'center' },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: GAP },
+  hintWrap: { position: 'absolute', left: 0, right: 0, alignItems: 'center' },
+  hint: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    height: 36,
+    paddingHorizontal: 16,
+    borderRadius: 18,
+    shadowColor: '#000',
+    shadowOpacity: 0.18,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 4,
+  },
+  hintText: { fontSize: 14, fontWeight: '800' },
   dotsRow: { height: DOTS_H, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
   dot: { width: 8, height: 8, borderRadius: 4 },
   dotOn: { width: 22 },

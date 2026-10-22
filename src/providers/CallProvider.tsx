@@ -37,6 +37,8 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
         if (next === 'ended') reset();
       },
       onError: (message) => setError(message),
+      // Their camera went on or off (yours stays as it is).
+      onPartnerCamera: (on) => useCallStore.getState().setPartnerCamera(on),
     });
 
     void callManager.attachChannel(relationship.id, user.id, user.name ?? 'You');

@@ -3,7 +3,12 @@ import { getFirstName } from '@/lib/avatar-initial';
 import { parseDbTimestampMs } from '@/lib/db-time';
 import { PACKS } from '@/lib/handpicked';
 import { getMessagePreviewText } from '@/lib/message-preview';
-import { formatNotificationContent, NOTIFICATION_TYPE_ICON, NOTIFICATION_TYPE_LABEL } from '@/lib/notification-display';
+import {
+  conciseIslandText,
+  formatNotificationContent,
+  NOTIFICATION_TYPE_ICON,
+  NOTIFICATION_TYPE_LABEL,
+} from '@/lib/notification-display';
 import type { NotificationNavTarget } from '@/lib/notification-navigation';
 import { useRelationshipStore } from '@/stores';
 import { useGameRoomStore } from '@/stores/game-room-store';
@@ -97,7 +102,7 @@ export function islandFromNotification(n: Notification, now = Date.now()): Islan
   return {
     id: n.id,
     title: NOTIFICATION_TYPE_LABEL[n.type] ?? 'Moments',
-    message: stripEmoji(formatNotificationContent(n.content)),
+    message: conciseIslandText(stripEmoji(formatNotificationContent(n.content))),
     icon: NOTIFICATION_TYPE_ICON[n.type] ?? 'bell',
     ...face,
     target: { type: n.type, relatedId: related, mediaUrl: n.media_url },

@@ -1,9 +1,9 @@
 import { Image } from 'expo-image';
+import { mediaSource } from '@/lib/storage-cdn';
 import { Redirect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Platform,
   Pressable,
   RefreshControl,
@@ -40,6 +40,7 @@ import {
 import { closeStackScreen } from '@/lib/router';
 import { useAuthStore, useRelationshipStore } from '@/stores';
 import type { Moment, Notification } from '@/types/database';
+import { askChoice } from '@/components/ui/ChoiceSheet';
 
 type InboxFilter = 'all' | 'unread';
 
@@ -123,14 +124,9 @@ function NotificationsScreenNative() {
   };
 
   const confirmDelete = (item: Notification) => {
-    Alert.alert('Delete notification?', 'This removes it from your list.', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: () => deleteNotification.mutate(item.id),
-      },
-    ]);
+    askChoice({ title: 'Delete notification?', message: 'This removes it from your list.', actions: [
+{ label: 'Delete', destructive: true, onPress: () => deleteNotification.mutate(item.id) },
+] });
   };
 
   const errorMessage = toUserFacingNetworkError(
@@ -345,7 +341,7 @@ function NotificationRow({
         </View>
         {momentThumbUri ? (
           <Image
-            source={{ uri: momentThumbUri }}
+            source={mediaSource(momentThumbUri)}
             style={styles.momentThumb}
             contentFit="cover"
             transition={120}

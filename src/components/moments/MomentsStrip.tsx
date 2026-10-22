@@ -1,10 +1,10 @@
-import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from '@/lib/haptics';
 import type { ReactNode } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { Avatar, cardEdge, cardSurface } from '@/components/ui/primitives';
+import { MomentThumbImage } from '@/components/moments/MomentThumbImage';
 import { Icon } from '@/components/ui/Icon';
 import { useTheme } from '@/hooks/useTheme';
 import {
@@ -69,7 +69,7 @@ export function MomentsStrip({ moments, partnerOnly = false }: MomentsStripProps
           onPress={openMine}
           isAdd={myRecent.length === 0}>
           {myLatest && momentHasVisual(myLatest) ? (
-            <Image source={{ uri: myLatest.media_url! }} style={styles.ringImage} contentFit="cover" />
+            <MomentThumbImage moment={myLatest} style={styles.ringImage} playMark={false} />
           ) : (
             <View style={[styles.ringPlaceholder, { backgroundColor: colors.surfaceElevated }, cardEdge(colors)]}>
               {myRecent.length === 0 ? (
@@ -93,7 +93,7 @@ export function MomentsStrip({ moments, partnerOnly = false }: MomentsStripProps
             style={styles.ringOuter}>
             <View style={[styles.ringInner, { backgroundColor: colors.background }]}>
               {myLatest && momentHasVisual(myLatest) ? (
-                <Image source={{ uri: myLatest.media_url! }} style={styles.ringImage} contentFit="cover" />
+                <MomentThumbImage moment={myLatest} style={styles.ringImage} playMark={false} />
               ) : (
                 <View style={[styles.ringPlaceholder, { backgroundColor: colors.surfaceElevated }, cardEdge(colors)]}>
                   <Icon name="camera" size={26} color={colors.accent} />
@@ -117,7 +117,7 @@ export function MomentsStrip({ moments, partnerOnly = false }: MomentsStripProps
           onPress={openTheirs}
           dimmed={theirRecent.length === 0}>
           {partnerLatest && momentHasVisual(partnerLatest) ? (
-            <Image source={{ uri: partnerLatest.media_url! }} style={styles.ringImage} contentFit="cover" />
+            <MomentThumbImage moment={partnerLatest} style={styles.ringImage} playMark={false} />
           ) : (
             <View style={[styles.ringPlaceholder, { backgroundColor: colors.surfaceElevated }, cardEdge(colors)]}>
               <Avatar name={partner.name} imageUrl={partner.avatar_url} size={INNER - 4} />

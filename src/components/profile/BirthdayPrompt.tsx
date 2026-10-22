@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { EditAnniversaryModal } from '@/components/profile/EditAnniversaryModal';
+import { StickerCake } from '@/components/home/StickerCake';
 import { Icon } from '@/components/ui/Icon';
 import { outlineColor } from '@/components/ui/primitives';
 import { useTheme } from '@/hooks/useTheme';
@@ -63,25 +64,26 @@ export function BirthdayPrompt() {
         accessibilityRole="button"
         style={({ pressed }) => [
           styles.card,
-          // Like every card on the You page: the theme's card surface and its outline.
-          {
-            backgroundColor: colors.surface,
-            borderColor: outlineColor(colors),
-            borderWidth: colors.boldBorder ? 2 : 1,
-          },
+          // Butter yellow (as on Home), with the theme's own card border.
+          { backgroundColor: '#FFE7A0', borderColor: outlineColor(colors), borderWidth: colors.boldBorder ? 2 : 1 },
           pressed && styles.pressed,
         ]}>
-        <View style={[styles.icon, { backgroundColor: colors.accentSoft }]}>
-          <Icon name="gift" size={22} color={colors.accent} />
+        <View style={[styles.icon, { backgroundColor: '#FFFFFF', borderWidth: colors.boldBorder ? 2 : 1, borderColor: outlineColor(colors) }]}>
+          <StickerCake size={30} />
         </View>
         <View style={styles.text}>
-          <Text style={[styles.title, { color: colors.text }]}>Add your birthday</Text>
-          <Text style={[styles.sub, { color: colors.textSecondary }]}>
+          <Text style={[styles.title, { color: '#1A1A1A' }]}>Add your birthday</Text>
+          <Text style={[styles.sub, { color: '#4A4036' }]}>
             So {them} never forgets. Only {them} sees it.
           </Text>
         </View>
-        <Pressable onPress={dismiss} hitSlop={10} accessibilityRole="button" accessibilityLabel="Not now">
-          <Icon name="close" size={18} color={colors.textTertiary} />
+        <Pressable
+          onPress={dismiss}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel="Not now"
+          style={({ pressed }) => [{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center' }, pressed && { opacity: 0.6 }]}>
+          <Icon name="close" size={24} color="#1A1A1A" />
         </Pressable>
       </Pressable>
 

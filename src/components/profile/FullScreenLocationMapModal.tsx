@@ -1,12 +1,5 @@
 import { useEffect, useState } from "react";
-import {
-  Dimensions,
-  Modal,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
+import { Modal, Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import {
   Gesture,
   GestureDetector,
@@ -33,7 +26,6 @@ import { useTheme } from "@/hooks/useTheme";
 import * as Haptics from "@/lib/haptics";
 import { openInMaps } from "@/lib/location";
 
-const SCREEN_W = Dimensions.get("window").width;
 
 interface Props {
   visible: boolean;
@@ -61,6 +53,8 @@ export function FullScreenLocationMapModal({
   onClose,
   inline = false,
 }: Props) {
+  // Read live, so a fold / unfold, split screen or rotation redraws at the new size.
+  const SCREEN_W = useWindowDimensions().width;
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const [focusedIndex, setFocusedIndex] = useState<number | null>(null);

@@ -44,3 +44,26 @@ export function birthdayShortLabel(iso: string | null | undefined): string {
   const born = parseBirthday(iso);
   return born ? format(born, 'd MMMM') : 'Not set';
 }
+
+/** Moments is for people 16 and over (Terms of Service). */
+export const MIN_AGE = 16;
+
+/** How old someone born on this date is today. */
+export function ageOn(iso: string | null | undefined, now = new Date()): number | null {
+  const born = parseBirthday(iso);
+  if (!born) return null;
+  const hadBirthday =
+    now.getMonth() > born.getMonth() || (now.getMonth() === born.getMonth() && now.getDate() >= born.getDate());
+  return now.getFullYear() - born.getFullYear() - (hadBirthday ? 0 : 1);
+}
+
+/** Old enough for Moments (16+). */
+export function isOldEnough(iso: string | null | undefined, now = new Date()): boolean {
+  const age = ageOn(iso, now);
+  return age != null && age >= MIN_AGE;
+}
+
+/** The latest year a 16-year-old could be born in: the birthday wheels stop there. */
+export function latestBirthYear(now = new Date()): number {
+  return now.getFullYear() - MIN_AGE;
+}

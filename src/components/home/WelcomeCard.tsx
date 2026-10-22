@@ -13,7 +13,7 @@ import { Spacing, type ThemeColors } from '@/constants/design-system';
 import { useTheme } from '@/hooks/useTheme';
 import { getFirstName } from '@/lib/avatar-initial';
 import { STREAK_COLORS } from '@/lib/streak-colors';
-import { buildStreakWeek, type StreakDayCell } from '@/lib/streak-days';
+import { buildStreakWeek, FROZEN_FILL, type StreakDayCell } from '@/lib/streak-days';
 import { isStreakVisuallyAtRisk } from '@/lib/streak-reminder-timing';
 import type { StreakStatus, UserProfile } from '@/types/database';
 
@@ -88,7 +88,10 @@ export function WelcomeCard({
   joinedAt,
   band = false,
   onPressPartner,
+  now,
 }: {
+  /** Settings › Developer: draw it as at this time (e.g. an evening with the streak at risk). */
+  now?: Date;
   user: UserProfile | null;
   partner: UserProfile | null;
   spaceName: string | null | undefined;
@@ -115,11 +118,11 @@ export function WelcomeCard({
   const initial = sticker ? PANEL_INK : undefined;
   const paired = !!partner;
 
-  const week = useMemo(() => (status ? buildStreakWeek(status, joinedAt) : []), [status, joinedAt]);
+  const week = useMemo(() => (status ? buildStreakWeek(status, joinedAt, now) : []), [status, joinedAt, now]);
   // Your streak (the big number) and your partner's (on their photo).
   const count = status?.current_streak ?? 0;
   const partnerStreak = partnerStreakCount(status);
-  const atRisk = !!status && count > 0 && isStreakVisuallyAtRisk(status);
+  const atRisk = !!status && count > 0 && isStreakVisuallyAtRisk(status, now);
 
   const openStreak = () => {
     void Haptics.selectionAsync();
@@ -187,9 +190,8 @@ export function WelcomeCard({
             <Text style={[styles.badgeCount, { color: ink }]} numberOfLines={1}>
               {count}
             </Text>
-            <View style={count > 0 ? undefined : styles.idleFlame}>
-              <StickerFlame size={40} face={count > 0} animated={count > 0} />
-            </View>
+            {/* No streak (lost, or not started): the flame gone out, solid grey at full size, not a faded orange one. */}
+            <StickerFlame size={40} face={count > 0} animated={count > 0} variant={count > 0 ? 'lit' : 'out'} />
           </Pressable>
         ) : null}
       </View>
@@ -234,6 +236,9 @@ export function WelcomeCard({
 function WeekDay({ day, ink, faint }: { day: StreakDayCell; ink: string; faint: string }) {
   const done = day.state === 'completed' || day.state === 'today-done';
   const risky = day.state === 'today-at-risk';
+  // A streak freeze kept this day (ice-blue flame); a missed day shows the flame gone out.
+  const frozen = day.state === 'frozen';
+  const missed = day.state === 'missed';
   const today = day.isToday;
   return (
     <View style={styles.weekDay}>
@@ -244,18 +249,26 @@ function WeekDay({ day, ink, faint }: { day: StreakDayCell; ink: string; faint: 
           // Lit days look like the milestone screen: yellow, bold ink outline, sticker flame.
           done
             ? { backgroundColor: STICKER_LIT, borderColor: '#000000', borderWidth: 2 }
-            : risky
-              ? { backgroundColor: CHIP_BG, borderColor: STREAK_COLORS.atRisk, borderWidth: 2 }
+            : frozen
+              ? { backgroundColor: FROZEN_FILL, borderColor: '#000000', borderWidth: 2 }
+              : missed
+                ? { backgroundColor: MISSED_FILL, borderColor: '#000000', borderWidth: 2 }
+                : risky
+                ? { backgroundColor: CHIP_BG, borderColor: STREAK_COLORS.atRisk, borderWidth: 2 }
               : today
                 ? { borderColor: ink }
                 : { borderColor: 'transparent' },
         ]}>
-        {!done && !risky && !today ? <DashedRing size={30} color={faint} /> : null}
+        {!done && !risky && !frozen && !missed && !today ? <DashedRing size={30} color={faint} /> : null}
         {/* Second ring on days you both checked in — off for now (it doubled the lit day's border):
         {done && day.together ? <View pointerEvents="none" style={[styles.togetherRing, { borderColor: TOGETHER_RING }]} /> : null}
         */}
         {done ? (
           <StickerFlame size={16} />
+        ) : frozen ? (
+          <StickerFlame size={16} variant="frozen" />
+        ) : missed ? (
+          <StickerFlame size={16} variant="out" />
         ) : risky ? (
           <StickerFlame size={14} />
         ) : today ? (
@@ -269,6 +282,8 @@ function WeekDay({ day, ink, faint }: { day: StreakDayCell; ink: string; faint: 
 /** Photo-less avatars are white with a coloured initial, so they stand out on the card (as in the first design). */
 const WHITE: [string, string] = ['#FFFFFF', '#FFFFFF'];
 
+/** A missed day: a light grey sticker with the flame gone out (as solid as the lit and frozen days). */
+const MISSED_FILL = '#ECEAE6';
 /** A lit day, as on the milestone celebration. */
 const STICKER_LIT = '#FFE7A0';
 /** Text on that white panel and on the white avatars. */

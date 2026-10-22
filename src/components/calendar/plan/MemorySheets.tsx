@@ -1,20 +1,11 @@
 import { format, formatDistanceToNowStrict, isToday, startOfDay } from 'date-fns';
 import * as Haptics from '@/lib/haptics';
 import { Image } from 'expo-image';
+import { mediaSource } from '@/lib/storage-cdn';
+import { PhotoViewerModal } from '@/components/ui/PhotoViewerModal';
 import * as ImagePicker from 'expo-image-picker';
 import { useMemo, useRef, useState, type ReactNode } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
-  Dimensions,
-  Platform,
-  Pressable,
-  ScrollView,
-  Share,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { ActivityIndicator, Alert, Platform, Pressable, ScrollView, Share, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { TextInput } from '@/components/ui/ThemedTextInput';
 import { ScrollView as GHScrollView } from 'react-native-gesture-handler';
 
@@ -29,18 +20,20 @@ import { cardEdge, colorWithAlpha, paperEdge, separatorColor, cardSurface, press
 import { ActionSheet, type SheetAction } from '@/components/moments/MomentAlbums';
 import { MonthCalendarPicker } from '@/components/ui/MonthCalendarPicker';
 import { downloadMultipleMomentMedia } from '@/lib/download-moment-media';
+import { useScrollWhenNeeded } from '@/hooks/useScrollWhenNeeded';
 import { useTheme } from '@/hooks/useTheme';
 import { getFirstName } from '@/lib/avatar-initial';
 import { captureViewAsImage, shareImageFile } from '@/lib/share-image';
 import { MEMORY_TYPES, memoryTone, memoryTypeMeta, parsePlanMeta, planIcon, type MemoryType } from '@/lib/plan-meta';
 import type { CalendarEvent, Moment, UserProfile } from '@/types/database';
 
-const SCREEN_W = Dimensions.get('window').width;
 const SERIF = Platform.select({ ios: 'Georgia', android: 'serif', default: 'Georgia' });
 /** Photo tiles on New memory (and How was it?): ~3 per row on a phone. */
 const PHOTO_TILE = 104;
 
 const MAX_PHOTOS = 8;
+/** Photos uploading side by side (more than this and a phone's connection doesn't go faster). */
+const UPLOAD_AT_ONCE = 3;
 export const RATINGS = [
   { emoji: '😕', label: 'Meh' },
   { emoji: '🙂', label: 'Nice' },
@@ -102,41 +95,58 @@ export function MemoryEditorSheet({
     .filter((m): m is Moment => !!m?.media_url);
   const photoCount = draft.momentIds.length + draft.photoUrls.length;
   const [uploadProgress, setUploadProgress] = useState<{ done: number; total: number } | null>(null);
+  // Photos still going up: shown straight away from the phone, with a spinner, until they land.
+  const [pending, setPending] = useState<{ id: string; uri: string }[]>([]);
 
   /** Pick several photos at once from the camera roll, then upload them one by one. */
+  /** Pick several photos at once; they show at once and upload three at a time. */
   const addFromGallery = async () => {
-    const room = MAX_PHOTOS - photoCount;
+    const room = MAX_PHOTOS - photoCount - pending.length;
     if (room <= 0) return;
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
-      quality: 0.85,
+      // Full quality from the picker: it's shrunk once, to screen size, before it goes up.
+      quality: 1,
       allowsMultipleSelection: true,
       selectionLimit: room,
       orderedSelection: true,
     });
     if (result.canceled || result.assets.length === 0) return;
-    const assets = result.assets.slice(0, room);
+    const batch = result.assets.slice(0, room).map((asset, i) => ({ id: `${Date.now()}-${i}`, uri: asset.uri }));
+    setPending((p) => [...p, ...batch]);
     setUploading(true);
-    setUploadProgress({ done: 0, total: assets.length });
+    setUploadProgress({ done: 0, total: batch.length });
+
+    let done = 0;
     let failed = 0;
     let lastError: string | null = null;
-    for (const [i, asset] of assets.entries()) {
-      try {
-        const url = await onUploadPhoto(asset.uri);
-        setDraft((d) => ({ ...d, photoUrls: [...d.photoUrls, url] }));
-      } catch (e) {
-        failed += 1;
-        lastError = e instanceof Error ? e.message : typeof e === 'object' && e && 'message' in e ? String(e.message) : String(e);
-        console.warn('[memory] photo upload failed', e);
+    const queue = [...batch];
+    const worker = async () => {
+      for (let next = queue.shift(); next; next = queue.shift()) {
+        const item = next;
+        try {
+          const url = await onUploadPhoto(item.uri);
+          setDraft((d) => ({ ...d, photoUrls: [...d.photoUrls, url] }));
+        } catch (e) {
+          failed += 1;
+          lastError = e instanceof Error ? e.message : typeof e === 'object' && e && 'message' in e ? String(e.message) : String(e);
+          console.warn('[memory] photo upload failed', e);
+        }
+        setPending((p) => p.filter((x) => x.id !== item.id));
+        done += 1;
+        setUploadProgress({ done, total: batch.length });
       }
-      setUploadProgress({ done: i + 1, total: assets.length });
-    }
+    };
+    await Promise.all(Array.from({ length: Math.min(UPLOAD_AT_ONCE, batch.length) }, worker));
+
     setUploading(false);
     setUploadProgress(null);
     if (failed > 0) {
       Alert.alert(
-        failed === assets.length ? (failed === 1 ? 'Could not add the photo' : 'Could not add the photos') : `${failed} of ${assets.length} photos could not be added`,
-        lastError ? `${lastError}\n\nCheck your connection and try again.` : 'Check your connection and try again.',
+        failed === batch.length ? (failed === 1 ? 'Could not add the photo' : 'Could not add the photos') : `${failed} of ${batch.length} photos could not be added`,
+        lastError ? `${lastError}
+
+Check your connection and try again.` : 'Check your connection and try again.',
       );
     }
   };
@@ -321,11 +331,20 @@ export function MemoryEditorSheet({
               }}
               accessibilityRole="button"
               accessibilityLabel="Remove photo">
-              <Image source={{ uri: photo.uri }} style={styles.photo} contentFit="cover" />
+              <Image source={mediaSource(photo.uri)} style={styles.photo} contentFit="cover" />
               <View style={[styles.check, { backgroundColor: 'rgba(0,0,0,0.6)' }]}>
                 <Icon name="close" size={13} color="#FFFFFF" />
               </View>
             </Pressable>
+          ))}
+          {/* Still uploading: the photo from the phone, dimmed, with a spinner. */}
+          {pending.map((photo) => (
+            <View key={photo.id} accessibilityLabel="Uploading photo">
+              <Image source={mediaSource(photo.uri)} style={[styles.photo, styles.photoPending]} contentFit="cover" />
+              <View style={styles.pendingSpinner} pointerEvents="none">
+                <ActivityIndicator color="#FFFFFF" />
+              </View>
+            </View>
           ))}
         </ScrollView>
 
@@ -351,7 +370,7 @@ function emptyDraft(): MemoryDraft {
 
 export function MemoryDetailSheet({
   entry: entryProp,
-  photos,
+  photos: photosProp,
   me,
   partner,
   onClose,
@@ -360,7 +379,8 @@ export function MemoryDetailSheet({
   editor,
 }: {
   entry: CalendarEvent | null;
-  photos: string[];
+  /** Null once it's closing: the last photos stay up while the page slides away. */
+  photos: string[] | null;
   me: UserProfile | null;
   partner: UserProfile | null;
   onClose: () => void;
@@ -369,11 +389,18 @@ export function MemoryDetailSheet({
   /** The memory editor, opened over this page (inside its Modal, so closing it comes back here). */
   editor?: ReactNode;
 }) {
+  // Read live, so a fold / unfold, split screen or rotation redraws at the new size.
+  const SCREEN_W = useWindowDimensions().width;
   const { colors } = useTheme();
   // Still the same memory while the page slides away.
   const entry = useKeptWhileClosing(entryProp);
+  // Kept too, or the page jumped to its no-photo look as it slid away (the "glitch" on closing).
+  const photos = useKeptWhileClosing(photosProp) ?? [];
+  const detailFit = useScrollWhenNeeded();
   const [page, setPage] = useState(0);
   const [menu, setMenu] = useState<'actions' | 'delete' | 'share' | null>(null);
+  // A photo tapped: it opens in full screen (inside this page, so closing comes back here).
+  const [viewing, setViewing] = useState<number | null>(null);
   const [sharing, setSharing] = useState(false);
   const shareCardRef = useRef<View>(null);
   const [savingPhotos, setSavingPhotos] = useState(false);
@@ -452,6 +479,8 @@ export function MemoryDetailSheet({
       visible={!!entryProp}
       title={type.label}
       onBack={onClose}
+      // Opened, not stepped into: a ✕ on the right (the ⋯ menu moves to the left).
+      closeOnRight
       right={
         <HeaderIconButton icon="more" onPress={() => setMenu('actions')} accessibilityLabel="Memory options" />
       }
@@ -464,7 +493,7 @@ export function MemoryDetailSheet({
               <SheetHeader title="Share this memory" hint="Send it as a picture, or just the words." onClose={() => setMenu(null)} />
               {/* What gets shared: the memory as a card in its colour. */}
               <View ref={shareCardRef} collapsable={false} style={[styles.shareCard, { backgroundColor: tone.fill }, edge]}>
-                {photos[0] ? <Image source={{ uri: photos[0] }} style={styles.shareCover} contentFit="cover" /> : null}
+                {photos[0] ? <Image source={mediaSource(photos[0])} style={styles.shareCover} contentFit="cover" /> : null}
                 <View style={styles.shareCopy}>
                   <View style={[styles.tag, { backgroundColor: colors.surface }, paperEdge(colors, 1.5)]}>
                     <Icon name={type.icon} size={13} color={tone.ink} />
@@ -531,7 +560,7 @@ export function MemoryDetailSheet({
         ) : null
       }>
       {entry && meta ? (
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.detailBody}>
+        <ScrollView {...detailFit} showsVerticalScrollIndicator={false} contentContainerStyle={styles.detailBody}>
           {photos.length > 0 ? (
             <View>
               <ScrollView
@@ -540,8 +569,10 @@ export function MemoryDetailSheet({
                 showsHorizontalScrollIndicator={false}
                 onMomentumScrollEnd={(e) => setPage(Math.round(e.nativeEvent.contentOffset.x / photoW))}
                 style={[styles.heroFrame, { width: photoW }, edge]}>
-                {photos.map((url) => (
-                  <Image key={url} source={{ uri: url }} style={[styles.hero, { width: photoW }]} contentFit="cover" />
+                {photos.map((url, i) => (
+                  <Pressable key={url} onPress={() => setViewing(i)} accessibilityRole="imagebutton" accessibilityLabel="Open photo in full screen">
+                    <Image source={mediaSource(url)} style={[styles.hero, { width: photoW }]} contentFit="cover" />
+                  </Pressable>
                 ))}
               </ScrollView>
               {photos.length > 1 ? (
@@ -635,6 +666,7 @@ export function MemoryDetailSheet({
         </ScrollView>
       ) : null}
       {editor}
+      <PhotoViewerModal photos={viewing != null ? photos : null} startIndex={viewing ?? 0} onClose={() => setViewing(null)} />
     </FullScreenPage>
   );
 }
@@ -743,7 +775,7 @@ export function HowWasItSheet({
                     onPress={() => setPicked((p) => (on ? p.filter((x) => x !== m.id) : [...p, m.id]))}
                     accessibilityState={{ selected: on }}>
                     <Image
-                      source={{ uri: m.media_url! }}
+                      source={mediaSource(m.media_url!)}
                       style={[styles.photo, on && { borderColor: colors.accent, borderWidth: 2.5 }]}
                       contentFit="cover"
                     />
@@ -827,6 +859,8 @@ const styles = StyleSheet.create({
   addTileIcon: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
   addTileText: { fontSize: 12, fontWeight: '700' },
   photo: { width: PHOTO_TILE, height: PHOTO_TILE, borderRadius: 22 },
+  photoPending: { opacity: 0.55 },
+  pendingSpinner: { ...StyleSheet.absoluteFill, alignItems: 'center', justifyContent: 'center' },
   check: {
     position: 'absolute',
     top: 8,

@@ -1,24 +1,13 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { format, isThisYear, isToday, isYesterday } from 'date-fns';
 import { Image } from 'expo-image';
+import { mediaSource } from '@/lib/storage-cdn';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import {
-  ActivityIndicator,
-  Dimensions,
-  FlatList,
-  Keyboard,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-  type NativeScrollEvent,
-  type NativeSyntheticEvent,
-} from 'react-native';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { ActivityIndicator, FlatList, Keyboard, Pressable, StyleSheet, Text, View, type NativeScrollEvent, type NativeSyntheticEvent, useWindowDimensions } from 'react-native';
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { TextInput } from '@/components/ui/ThemedTextInput';
 import { Gesture, GestureDetector, FlatList as PagerList } from 'react-native-gesture-handler';
 import Animated, {
@@ -38,7 +27,7 @@ import { Icon } from '@/components/ui/Icon';
 import { Avatar } from '@/components/ui/primitives';
 import { useSendMessage } from '@/hooks/queries';
 import { useTheme } from '@/hooks/useTheme';
-import { useVideoThumbnail } from '@/hooks/useVideoThumbnail';
+import { useVideoTileSource } from '@/hooks/useVideoThumbnail';
 import * as Haptics from '@/lib/haptics';
 import { momentToReplyContext } from '@/lib/moment-reply';
 import * as api from '@/services/api';
@@ -46,7 +35,12 @@ import { useAuthStore, useRelationshipStore, useUIStore } from '@/stores';
 import type { Moment } from '@/types/database';
 import { MOMENTS_BACK, useMomentsBack } from '@/lib/moments-back';
 
-const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
+/** The close button / reply bar height (the card fits between them). */
+const BAR_H = 46;
+/** The even gap between the card and the top bar / bottom controls. */
+const CARD_GAP = 16;
+/** At least this much page either side of the card. */
+const CARD_SIDE = 12;
 const THUMB = 44;
 const THUMB_GAP = 6;
 
@@ -65,6 +59,8 @@ function whenLabel(date: Date) {
  */
 export function MomentFocusViewer() {
   const insets = useSafeAreaInsets();
+  // Read live, so a fold / unfold, split screen or rotation redraws at the new size.
+  const { width: SCREEN_W, height: SCREEN_H } = useWindowDimensions();
   const router = useRouter();
   const { colors } = useTheme();
   const viewer = useUIStore((s) => s.momentViewer);
@@ -95,6 +91,13 @@ export function MomentFocusViewer() {
   const dismiss = useCallback(() => closeMomentViewer(), [closeMomentViewer]);
 
   useMomentsBack(MOMENTS_BACK.viewer, !!viewer, dismiss);
+
+  // Where the card goes: between the top bar (close, who, counter) and the bottom controls
+  // (strip and reply bar), with the same gap above and below.
+  const cardFrame = {
+    top: insets.top + 6 + BAR_H + CARD_GAP,
+    bottom: insets.bottom + 10 + BAR_H + (moments.length > 1 ? 14 + THUMB + 4 : 0) + CARD_GAP,
+  };
 
   // Partner's moments count as seen once opened.
   useEffect(() => {
@@ -218,8 +221,8 @@ export function MomentFocusViewer() {
             initialNumToRender={1}
             maxToRenderPerBatch={2}
             renderItem={({ item, index: i }) => (
-              <Pressable style={styles.page} onPress={() => setChromeShown((v) => !v)}>
-                <FocusMedia moment={item} active={i === index} />
+              <Pressable style={[styles.page, { width: SCREEN_W, height: SCREEN_H }]} onPress={() => setChromeShown((v) => !v)}>
+                <FocusMedia moment={item} active={i === index} frame={cardFrame} />
               </Pressable>
             )}
           />
@@ -229,7 +232,7 @@ export function MomentFocusViewer() {
       {chromeShown ? (
         <KeyboardAvoidingView
           style={StyleSheet.absoluteFill}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          behavior="padding"
           pointerEvents="box-none">
           <Animated.View entering={FadeIn.duration(160)} style={[styles.fill, chromeStyle]} pointerEvents="box-none">
             {/* Top: close, who and when, and where you are in the set. */}
@@ -330,37 +333,60 @@ export function MomentFocusViewer() {
 }
 
 /** One page: the photo at its full shape, or the video (playing only while it's the one on screen). */
-function FocusMedia({ moment, active }: { moment: Moment; active: boolean }) {
+/**
+ * The moment in its card, as on Home: big rounded corners, filling the space between the top bar
+ * and the bottom controls (an even gap each side), on the plain dark background.
+ */
+function FocusMedia({ moment, active, frame }: { moment: Moment; active: boolean; frame: { top: number; bottom: number } }) {
+  const { width: SCREEN_W, height: SCREEN_H } = useWindowDimensions();
   const isVideo = moment.type === 'video' && !!moment.media_url;
-  const thumb = useVideoThumbnail(isVideo && !active ? moment.media_url : null);
+  const still = useVideoTileSource(isVideo && !active ? moment.media_url : null);
+
+  // Portrait like Home's card (3:4), as big as the space allows.
+  const roomH = Math.max(160, SCREEN_H - frame.top - frame.bottom);
+  const cardW = Math.min(SCREEN_W - 2 * CARD_SIDE, Math.round(roomH * 0.75));
+  const cardH = Math.min(roomH, Math.round(cardW / 0.75));
+
+  let media: ReactNode;
   if (isVideo && moment.media_url) {
-    return active ? (
-      <MomentVideoPlayer uri={moment.media_url} fill autoPlay loop contentFit="contain" style={styles.media} />
-    ) : thumb ? (
-      <Image source={thumb} style={styles.media} contentFit="contain" />
+    media = active ? (
+      <MomentVideoPlayer uri={moment.media_url} fill autoPlay loop contentFit="cover" style={styles.cardVideo} />
+    ) : still.source ? (
+      <Image source={still.source} style={StyleSheet.absoluteFill} contentFit="cover" onError={still.onError} />
     ) : null;
+  } else if (moment.media_url) {
+    media = <Image source={mediaSource(moment.media_url)} style={StyleSheet.absoluteFill} contentFit="cover" transition={150} />;
+  } else {
+    media = (
+      <View style={[StyleSheet.absoluteFill, styles.center]}>
+        <Icon name="heart" size={48} color="rgba(255,255,255,0.4)" filled />
+      </View>
+    );
   }
-  if (moment.media_url) {
-    return <Image source={{ uri: moment.media_url }} style={styles.media} contentFit="contain" transition={150} />;
-  }
+
   return (
-    <View style={[styles.media, styles.center]}>
-      <Icon name="heart" size={48} color="rgba(255,255,255,0.4)" filled />
+    <View style={[styles.media, { width: SCREEN_W, height: SCREEN_H, paddingTop: frame.top, paddingBottom: frame.bottom }]}>
+      <View style={[styles.flex, styles.center]} pointerEvents="none">
+        <View style={[styles.card, { width: cardW, height: cardH }]}>{media}</View>
+      </View>
     </View>
   );
 }
 
 function StripThumb({ moment, active, onPress }: { moment: Moment; active: boolean; onPress: () => void }) {
   const isVideo = moment.type === 'video';
-  const thumb = useVideoThumbnail(isVideo ? moment.media_url : null, 160);
-  const source = isVideo ? thumb : moment.media_url ? { uri: moment.media_url } : null;
+  // Videos: the still saved with the video, or a real frame read from it (was often blank).
+  const video = useVideoTileSource(isVideo ? moment.media_url : null);
+  const source = isVideo ? video.source : moment.media_url ? { uri: moment.media_url } : null;
   return (
     <Pressable
       onPress={onPress}
       accessibilityRole="imagebutton"
       accessibilityState={{ selected: active }}
       style={[styles.thumb, active ? styles.thumbActive : styles.thumbIdle]}>
-      {source ? <Image source={source} style={StyleSheet.absoluteFill} contentFit="cover" /> : null}
+      {source ? (
+        <Image source={source} style={StyleSheet.absoluteFill} contentFit="cover" onError={isVideo ? video.onError : undefined} />
+      ) : null}
     </Pressable>
   );
 }
@@ -369,8 +395,19 @@ const styles = StyleSheet.create({
   fill: { flex: 1 },
   flex: { flex: 1 },
   black: { backgroundColor: '#000' },
-  page: { width: SCREEN_W, height: SCREEN_H, alignItems: 'center', justifyContent: 'center' },
-  media: { width: SCREEN_W, height: SCREEN_H },
+  page: { alignItems: 'center', justifyContent: 'center' },
+  media: {},
+  // Home's moment card: the same size, corners and shadow as the story viewer's.
+  card: {
+    borderRadius: 34,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.3,
+    shadowRadius: 22,
+    elevation: 12,
+  },
+  cardVideo: { backgroundColor: 'transparent' },
   center: { alignItems: 'center', justifyContent: 'center' },
   top: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 12, paddingBottom: 28 },
   closeBtn: {

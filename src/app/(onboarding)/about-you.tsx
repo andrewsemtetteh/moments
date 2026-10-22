@@ -1,5 +1,6 @@
 import { useAuth, useUser } from '@clerk/expo';
 import { Image } from 'expo-image';
+import { mediaSource } from '@/lib/storage-cdn';
 import * as ImagePicker from 'expo-image-picker';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
@@ -128,7 +129,7 @@ export default function AboutYouScreen() {
         accessibilityLabel="Add a profile photo"
         style={[styles.photo, { borderColor: colors.text, backgroundColor: colors.surfaceElevated }]}>
         {photo ? (
-          <Image source={{ uri: photo }} style={styles.photoImage} contentFit="cover" />
+          <Image source={mediaSource(photo)} style={styles.photoImage} contentFit="cover" />
         ) : (
           <Icon name="camera" size={34} color={colors.text} />
         )}

@@ -19,6 +19,8 @@ export const PROTECTED_COLUMNS = new Set([
   'billing_user_id',
   'billing_subscription_id',
   'billing_product_id',
+  'billing_issue_at',
+  'dev_plus',
   // Referrals: written by the server only, or anyone could give themselves Plus.
   'bonus_plus_until',
   'referral_code',
@@ -37,11 +39,14 @@ type RelationshipPlus = {
   subscription_owner_id: string | null;
   subscription_expires_at: string | null;
   subscription_period: string | null;
+  /** Developer "Pretend Plus is on" (allowlisted accounts only). */
+  dev_plus?: number | null;
 };
 
 export type PlusState = { plus: boolean; trial: boolean; expiresAt: string | null };
 
 export function plusStateOf(rel: RelationshipPlus | null | undefined): PlusState {
+  if (rel?.dev_plus) return { plus: true, trial: false, expiresAt: null };
   // Referral bonus days (bonus_plus_until) count as Plus, whatever the store says.
   const bonus = (rel as { bonus_plus_until?: string | null } | null | undefined)?.bonus_plus_until;
   const paid = rel?.subscription_tier === 'plus' && !!rel?.subscription_owner_id;
@@ -56,7 +61,7 @@ export function plusStateOf(rel: RelationshipPlus | null | undefined): PlusState
 
 export async function getPlusState(env: Env, relationshipId: string): Promise<PlusState> {
   const rel = await env.DB.prepare(
-    'SELECT subscription_tier, subscription_owner_id, subscription_expires_at, subscription_period, bonus_plus_until FROM relationships WHERE id = ?1',
+    'SELECT subscription_tier, subscription_owner_id, subscription_expires_at, subscription_period, bonus_plus_until, dev_plus FROM relationships WHERE id = ?1',
   )
     .bind(relationshipId)
     .first<RelationshipPlus>();
@@ -224,14 +229,28 @@ type SuperwallEventData = {
   bundleId?: string;
   /** Attributes set from the app; we set `clerkUserId`. */
   userAttributes?: Record<string, unknown> | null;
+  /** On expiration, why (e.g. BILLING_ERROR, UNSUBSCRIBE), when the store says. */
+  expirationReason?: string | null;
 };
+
+/**
+ * After a failed renewal, Plus stays on this long past the end of the paid period while
+ * the App Store / Google Play keep retrying the payment. A successful retry arrives as a
+ * renewal and carries on as normal; otherwise Plus ends when these days are up.
+ */
+export const BILLING_GRACE_DAYS = 3;
+
+/** The new end of Plus for a payment problem: the later of now and the period's end, plus the grace days. */
+export function graceUntil(expirationAt: number | null | undefined, now = Date.now()): string {
+  return new Date(Math.max(now, expirationAt ?? now) + BILLING_GRACE_DAYS * 86_400_000).toISOString();
+}
 
 type SuperwallEvent = { object?: string; type?: string; data?: SuperwallEventData };
 
 /** Events that mean "Plus is on, until expirationAt". */
 const ACTIVE_EVENTS = new Set(['initial_purchase', 'renewal', 'uncancellation', 'product_change', 'non_renewing_purchase']);
 /** Cancelling only stops the renewal: Plus stays until it expires, so nothing changes yet. */
-const NO_CHANGE_EVENTS = new Set(['cancellation', 'billing_issue', 'subscription_paused']);
+const NO_CHANGE_EVENTS = new Set(['cancellation', 'subscription_paused']);
 
 /** Our app's bundle / package; events for other apps in the same Superwall project are ignored. */
 const BUNDLE_IDS = new Set(['com.vasemti.moments']);
@@ -300,12 +319,31 @@ async function applyEvent(env: Env, type: string, data: SuperwallEventData): Pro
   const period = data.periodType === 'TRIAL' ? 'trial' : 'normal';
   const productId = (type === 'product_change' ? data.newProductId : null) ?? data.productId ?? null;
 
+  // A renewal failed: nothing switches off. The store retries; we remember when it started and
+  // tell the payer (once) so they can fix their payment.
+  if (type === 'billing_issue') {
+    const first = await env.DB.prepare(
+      'UPDATE users SET billing_issue_at = ?2 WHERE id = ?1 AND billing_issue_at IS NULL RETURNING id',
+    )
+      .bind(userId, new Date().toISOString())
+      .first();
+    if (first && relId) {
+      await createPartnerNotification(env, {
+        relationshipId: relId,
+        recipientId: userId,
+        type: 'plus_suggest',
+        content: `We couldn’t renew Moments Plus. Check your payment in your ${data.store === 'PLAY_STORE' ? 'Google Play' : 'App Store'} subscriptions; Plus stays on while it’s sorted.`,
+      }).catch(() => null);
+    }
+    return userId;
+  }
+
   if (ACTIVE_EVENTS.has(type)) {
     // A late delivery for a period that already ended must not switch Plus back on.
     if (expiresAt && Date.parse(expiresAt) <= Date.now()) return userId;
     await env.DB.prepare(
       `UPDATE users SET subscription_tier = 'plus', subscription_expires_at = ?2, billing_subscription_id = ?3,
-       billing_product_id = ?4 WHERE id = ?1`,
+       billing_product_id = ?4, billing_issue_at = NULL WHERE id = ?1`,
     )
       .bind(userId, expiresAt, data.originalTransactionId ?? null, productId)
       .run();
@@ -326,13 +364,32 @@ async function applyEvent(env: Env, type: string, data: SuperwallEventData): Pro
 
   if (type === 'expiration') {
     // Events can arrive out of order: an older period expiring doesn't end a newer, renewed one.
-    const user = await env.DB.prepare('SELECT subscription_expires_at FROM users WHERE id = ?1')
+    const user = await env.DB.prepare('SELECT subscription_expires_at, billing_issue_at FROM users WHERE id = ?1')
       .bind(userId)
-      .first<{ subscription_expires_at: string | null }>();
+      .first<{ subscription_expires_at: string | null; billing_issue_at: string | null }>();
     const current = user?.subscription_expires_at ? Date.parse(user.subscription_expires_at) : null;
     if (current && data.expirationAt && current > data.expirationAt + 60_000 && current > Date.now()) return userId;
 
-    await env.DB.prepare(`UPDATE users SET subscription_tier = 'free', subscription_expires_at = NULL WHERE id = ?1`)
+    // Ended because a payment failed (not because they cancelled): don't switch Plus off yet.
+    // Keep it for the grace period while the store retries; a renewal brings it back in full,
+    // and with no renewal it simply runs out at the new end date.
+    const paymentProblem = !!user?.billing_issue_at || /BILLING/i.test(data.expirationReason ?? '');
+    if (paymentProblem) {
+      const until = graceUntil(data.expirationAt);
+      await env.DB.prepare(`UPDATE users SET subscription_expires_at = ?2 WHERE id = ?1`).bind(userId, until).run();
+      const row = await env.DB.prepare(
+        `UPDATE relationships SET subscription_expires_at = ?2, subscription_period = 'grace'
+         WHERE subscription_owner_id = ?1 AND status != 'ended' RETURNING *`,
+      )
+        .bind(userId, until)
+        .first<Record<string, unknown>>();
+      if (row) await emitRow(env, 'relationships', 'UPDATE', row);
+      return userId;
+    }
+
+    await env.DB.prepare(
+      `UPDATE users SET subscription_tier = 'free', subscription_expires_at = NULL, billing_issue_at = NULL WHERE id = ?1`,
+    )
       .bind(userId)
       .run();
     // Only the payer's subscription ending turns the couple's Plus off.

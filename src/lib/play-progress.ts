@@ -561,6 +561,8 @@ export interface AwardInput {
   events?: Record<string, number>;
   /** Solo activity key — rewarded at most once per day. */
   soloId?: string;
+  /** Records kept as a best, not a running total (e.g. best sync score per game). */
+  maxStats?: Record<string, number>;
 }
 
 export interface AwardResult {
@@ -594,10 +596,13 @@ export function applyAward(prev: CoupleProgress, input: AwardInput, today: strin
 
   const soloDuplicate = input.soloId ? quests.soloIds.includes(input.soloId) : false;
   if (input.soloId && !soloDuplicate) quests.soloIds.push(input.soloId);
-  const effective = soloDuplicate ? { ...input, xp: 0, stats: undefined, events: undefined } : input;
+  const effective = soloDuplicate
+    ? { ...input, xp: 0, stats: undefined, events: undefined, maxStats: undefined }
+    : input;
 
   gained += Math.max(0, Math.round(effective.xp));
   for (const [key, n] of Object.entries(effective.stats ?? {})) stats[key] = (stats[key] ?? 0) + n;
+  for (const [key, n] of Object.entries(effective.maxStats ?? {})) stats[key] = Math.max(stats[key] ?? 0, n);
   for (const [event, n] of Object.entries(effective.events ?? {})) {
     quests.counts[event] = (quests.counts[event] ?? 0) + n;
   }

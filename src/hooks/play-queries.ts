@@ -1,7 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { backend } from '@/lib/backend';
+import { dayBefore, duelId, getDuel } from '@/lib/game-room/duel';
 import { getSession, listActiveSessions } from '@/lib/game-room/sessions';
+import { todayKey as localToday } from '@/lib/play-progress';
 import { useRelationshipStore } from '@/stores';
 
 export interface PackAnswer {
@@ -32,6 +34,31 @@ export function useGameSession(id: string | undefined) {
     queryFn: () => getSession(id!),
     enabled: !!id,
   });
+}
+
+/**
+ * Today's duel and yesterday's (still open until tonight), as they stand. Reading only: the duel is
+ * created when one of you opens it. Live updates arrive through the game_sessions subscription.
+ */
+export function useDailyDuel() {
+  const relationshipId = useRelationshipStore((s) => s.relationship?.id);
+  const todayKey = localToday();
+  const yesterdayKey = dayBefore(todayKey);
+  const todayId = relationshipId ? duelId(relationshipId, todayKey) : undefined;
+  const yesterdayId = relationshipId ? duelId(relationshipId, yesterdayKey) : undefined;
+  const today = useQuery({
+    queryKey: ['gameSession', todayId],
+    queryFn: () => getDuel(todayId!),
+    enabled: !!todayId,
+    staleTime: 15_000,
+  });
+  const yesterday = useQuery({
+    queryKey: ['gameSession', yesterdayId],
+    queryFn: () => getDuel(yesterdayId!),
+    enabled: !!yesterdayId,
+    staleTime: 60_000,
+  });
+  return { today: today.data ?? null, yesterday: yesterday.data ?? null, todayKey, yesterdayKey };
 }
 
 /** Every locked-in Handpicked answer for this couple (both partners). */

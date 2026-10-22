@@ -2,6 +2,7 @@ import { Redirect, Tabs } from 'expo-router';
 import { Platform } from 'react-native';
 
 import { StreakMilestoneSync } from '@/components/home/StreakMilestoneSync';
+import { BirthdaySync } from '@/components/home/BirthdayCelebration';
 import { TogetherMilestoneSync } from '@/components/home/TogetherMilestone';
 import { StreakReminderSync } from '@/components/home/StreakReminderSync';
 import { StreakSparkSync } from '@/components/home/StreakSparkSync';
@@ -65,6 +66,7 @@ export default function TabsLayout() {
       <StreakMilestoneSync />
       {/* Days in a row you both checked in: 7, 30, 100, 365. */}
       <TogetherMilestoneSync />
+      <BirthdaySync />
       <StreakSparkSync />
       <StreakReminderSync />
       <StoreReviewSync />

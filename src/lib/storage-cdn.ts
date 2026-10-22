@@ -24,6 +24,31 @@ export function isStorageImagePath(path: string): boolean {
   return IMAGE_EXTENSIONS.has(ext);
 }
 
+/**
+ * The small copy of a moment or chat photo (made at upload) for grids, albums and other small
+ * tiles: a fraction of the full photo's size. Older photos have none; the server then sends the
+ * full one, so this is always safe to use. Videos and other links are left as they are.
+ */
+export function thumbUrl(url: string): string;
+export function thumbUrl(url: string | null | undefined): string | null | undefined;
+export function thumbUrl(url: string | null | undefined) {
+  if (!url || !/\/media\/(moments|chat)\//.test(url)) return url;
+  if (!/\.(jpe?g|png|webp|heic)(\?|$)/i.test(url) || /[?&]t=1\b/.test(url)) return url;
+  return `${url}${url.includes('?') ? '&' : '?'}t=1`;
+}
+
+/**
+ * A video moment's still (made at upload). Older videos have none: the server answers 404, so
+ * the tile can fall back to grabbing a frame on the phone.
+ */
+export function videoPosterUrl(url: string | null | undefined): string | null {
+  if (!url || !/\/media\/(moments|chat)\//.test(url)) return null;
+  return `${url}${url.includes('?') ? '&' : '?'}t=1`;
+}
+
+// The weekly-signature-free cache keys live on their own (pure, testable).
+export { mediaCacheKey, mediaSource } from '@/lib/media-cache-key';
+
 /** Extract object path after `/{bucket}/` in a storage URL. */
 export function extractStoragePath(
   url: string | null | undefined,

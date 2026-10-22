@@ -54,6 +54,15 @@ export function isStreakRestoreAvailable(status: StreakStatus, now = new Date())
   return isStreakRestoreWindowOpen(status.restorable_lost_at, status.last_active_date, now);
 }
 
+/** How long is left to restore the lost streak (0 once the window has closed). */
+export function streakRestoreMsLeft(status: StreakStatus, now = new Date()): number {
+  const lostAt = resolveRestorableLostAt(status.restorable_lost_at, status.last_active_date, now);
+  if (!lostAt) return 0;
+  const lost = parseLostAt(lostAt).getTime();
+  if (Number.isNaN(lost)) return 0;
+  return Math.max(0, STREAK_RESTORE_WINDOW_MS - (now.getTime() - lost));
+}
+
 export function withEffectiveStreakRestore(status: StreakStatus, now = new Date()): StreakStatus {
   if (isStreakRestoreAvailable(status, now)) return status;
   return { ...status, can_restore_streak: false };

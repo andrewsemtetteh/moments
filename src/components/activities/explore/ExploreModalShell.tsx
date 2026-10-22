@@ -1,6 +1,7 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import type { ReactNode } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
+import { KeyboardFormScrollView } from '@/components/layout/KeyboardFormScrollView';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { FullScreenPage } from '@/components/layout/FullScreenPage';
@@ -27,14 +28,21 @@ export function ExploreModalShell({ visible, meta, onClose, children }: ExploreM
   const insets = useSafeAreaInsets();
 
   return (
-    <FullScreenPage visible={visible} title="" onBack={onClose} avoidKeyboard={false} dismissKeyboardOnTap={false}>
-      <ScrollView
+    <FullScreenPage visible={visible} title="" onBack={onClose} avoidKeyboard={false}>
+      <KeyboardFormScrollView
+        // The field you tap comes above the keyboard, and the page scrolls on to its last button.
+        endGap={-insets.bottom}
+        // No pull past the top (it showed an empty gap above the page).
+        bounces={false}
+        overScrollMode="never"
         contentContainerStyle={[styles.body, { paddingBottom: insets.bottom + 32 }]}
         showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-        automaticallyAdjustKeyboardInsets>
+        keyboardShouldPersistTaps="handled">
         <LinearGradient colors={colors.gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.hero}>
-          <View style={[styles.heroGlow, { backgroundColor: colorWithAlpha(colors.onAccent, 0.12) }]} pointerEvents="none" />
+          <View
+            style={[styles.heroGlow, { backgroundColor: colorWithAlpha(colors.onAccent, 0.12) }]}
+            pointerEvents="none"
+          />
           <Text style={styles.heroEmoji}>{meta.emoji}</Text>
           <View style={styles.heroCopy}>
             <View style={[styles.heroIcon, { backgroundColor: colorWithAlpha(colors.onAccent, 0.2) }]}>
@@ -49,7 +57,7 @@ export function ExploreModalShell({ visible, meta, onClose, children }: ExploreM
         </LinearGradient>
 
         {children}
-      </ScrollView>
+      </KeyboardFormScrollView>
     </FullScreenPage>
   );
 }

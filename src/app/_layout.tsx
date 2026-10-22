@@ -2,27 +2,40 @@ import { ClerkProvider } from '@clerk/expo';
 import { tokenCache } from '@clerk/expo/token-cache';
 import Constants from 'expo-constants';
 import * as SplashScreen from 'expo-splash-screen';
-import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
+import { DarkTheme, DefaultTheme, Stack, ThemeProvider, useNavigationContainerRef, usePathname } from 'expo-router';
+import { useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { StyleSheet } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { KeyboardProvider } from 'react-native-keyboard-controller';
 
 import { AppErrorScreen } from '@/components/layout/AppErrorScreen';
 import { AppModals } from '@/components/layout/AppModals';
 import { SubscriptionSync } from '@/components/layout/SubscriptionSync';
+import { DevPreviewExit } from '@/components/layout/DevPreviewExit';
 import { DynamicIslandHost } from '@/components/layout/DynamicIslandHost';
+import { KeyboardDismissRoot } from '@/components/layout/KeyboardDismissRoot';
 import { PermissionSheetHost } from '@/components/layout/PermissionSheetHost';
 import { ReferralClaimSync } from '@/components/layout/ReferralClaimSync';
 import { resolveThemeColors } from '@/constants/design-system';
-import { identifyUser, initMonitoring, Sentry } from '@/lib/monitoring';
+import { identifyUser, initMonitoring, navigationIntegration, Sentry } from '@/lib/monitoring';
+import { clearSessionUi } from '@/lib/session-cleanup';
+import { CONTENT_MAX_WIDTH } from '@/lib/layout';
+import { identifyAnalyticsUser, initProductAnalytics, trackScreen } from '@/lib/product-analytics';
 import { AppProviders } from '@/providers/AppProviders';
 import { useAuthStore, useUIStore } from '@/stores';
 
-// Crash reporting first, so even start-up errors are caught.
+// Crash reporting first, so even start-up errors are caught; then product analytics.
 initMonitoring();
+initProductAnalytics();
 // Reports carry the account id (nothing else), set and cleared with sign-in.
 useAuthStore.subscribe((state, prev) => {
-  if (state.user?.id !== prev.user?.id) identifyUser(state.user?.id ?? null);
+  if (state.user?.id !== prev.user?.id) {
+    identifyUser(state.user?.id ?? null);
+    identifyAnalyticsUser(state.user?.id ?? null);
+  }
+  // Signed out, by any route: end any call and close every overlay of that account.
+  if (prev.user && !state.user) clearSessionUi();
 });
 
 const publishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY ?? '';
@@ -41,18 +54,48 @@ if (Constants.appOwnership !== 'expo') {
   SplashScreen.setOptions({ fade: true, duration: 400 });
 }
 
+function navTheme(dark: boolean, background: string) {
+  const base = dark ? DarkTheme : DefaultTheme;
+  return { ...base, colors: { ...base.colors, background } };
+}
+
+/** Screen views for product analytics (the route's path). */
+function ScreenTracker() {
+  const pathname = usePathname();
+  useEffect(() => {
+    if (pathname) trackScreen(pathname);
+  }, [pathname]);
+  return null;
+}
+
+/** Sentry follows the screens (names its reports after them). */
+function SentryNavigation() {
+  const ref = useNavigationContainerRef();
+  useEffect(() => {
+    if (ref) navigationIntegration.registerNavigationContainer(ref);
+  }, [ref]);
+  return null;
+}
+
 function RootStack() {
   const theme = useUIStore((s) => s.theme);
   const colors = resolveThemeColors(theme);
 
   return (
-    <ThemeProvider value={colors.isDark ? DarkTheme : DefaultTheme}>
+    // The navigation's own background is the theme's, so the space beside the page column
+    // on tablets / unfolded phones matches the app instead of plain white or black.
+    <ThemeProvider value={navTheme(colors.isDark, colors.background)}>
       <StatusBar style={colors.isDark ? 'light' : 'dark'} />
+      <ScreenTracker />
+      <SentryNavigation />
       <DynamicIslandHost>
         <Stack
           screenOptions={{
             headerShown: false,
-            contentStyle: { backgroundColor: colors.background },
+            // On tablets and unfolded phones every page sits in a centred column (up to
+            // CONTENT_MAX_WIDTH) instead of stretching; phones are unaffected (they're narrower).
+            // Full-screen viewers (photos, calls, maps, Wrapped) open as their own layers, edge to edge.
+            contentStyle: { backgroundColor: colors.background, width: '100%', maxWidth: CONTENT_MAX_WIDTH, alignSelf: 'center' },
             animation: 'fade',
           }}>
           <Stack.Screen name="index" />
@@ -61,13 +104,22 @@ function RootStack() {
             otherwise reveal (the splash/index screen) if anything upstream
             ever reaches here via push instead of replace. */}
           {/* Leaving the launch screen is an instant switch (no fade), into any of these three. */}
-          <Stack.Screen name="(auth)" options={{ gestureEnabled: false, fullScreenGestureEnabled: false, animation: 'none' }} />
+          <Stack.Screen
+            name="(auth)"
+            options={{ gestureEnabled: false, fullScreenGestureEnabled: false, animation: 'none' }}
+          />
           {/* Onboarding can never be swiped away back to sign-up, however it was
               reached (email, Apple, Google, login). Steps still swipe between
               themselves inside the group's own stack. */}
-          <Stack.Screen name="(onboarding)" options={{ gestureEnabled: false, fullScreenGestureEnabled: false, animation: 'none' }} />
+          <Stack.Screen
+            name="(onboarding)"
+            options={{ gestureEnabled: false, fullScreenGestureEnabled: false, animation: 'none' }}
+          />
           {/* The app's root once you're in: never swiped (or backed) off to whatever's below. */}
-          <Stack.Screen name="(tabs)" options={{ animation: 'none', gestureEnabled: false, fullScreenGestureEnabled: false }} />
+          <Stack.Screen
+            name="(tabs)"
+            options={{ animation: 'none', gestureEnabled: false, fullScreenGestureEnabled: false }}
+          />
           {/* Chat, Notifications and Settings: the platform's own push
             (`default` = the real UIKit transition on iOS, not a JS/custom
             animator), closed by swiping right from anywhere on the screen —
@@ -135,6 +187,8 @@ function RootStack() {
             options={{ animation: 'default', gestureEnabled: true, fullScreenGestureEnabled: true }}
           />
         </Stack>
+        {/* Settings › Developer previews: one tap back to Settings from any screen. */}
+        <DevPreviewExit />
         <AppModals />
         <SubscriptionSync />
         <ReferralClaimSync />
@@ -152,9 +206,14 @@ function RootLayout() {
   return (
     <ClerkProvider publishableKey={publishableKey} tokenCache={tokenCache}>
       <GestureHandlerRootView style={styles.root}>
-        <AppProviders>
-          <RootStack />
-        </AppProviders>
+        {/* Keyboard-aware layouts (inputs stay above the keyboard) and tap-outside-to-close everywhere. */}
+        <KeyboardProvider>
+          <KeyboardDismissRoot>
+            <AppProviders>
+              <RootStack />
+            </AppProviders>
+          </KeyboardDismissRoot>
+        </KeyboardProvider>
       </GestureHandlerRootView>
     </ClerkProvider>
   );

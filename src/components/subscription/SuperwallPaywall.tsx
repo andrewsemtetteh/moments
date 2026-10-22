@@ -11,19 +11,23 @@ type Props = {
   params?: Record<string, string | number | boolean>;
   /** Called once: bought / restored, closed, or nothing could be shown (the caller shows ours). */
   onDone: (outcome: SuperwallPaywallOutcome) => void;
+  /** The paywall is on screen (e.g. to draw what comes next underneath it). */
+  onPresent?: () => void;
 };
 
 /**
  * Shows the paywall designed in the Superwall dashboard for a placement. Renders nothing itself.
  * Mount only where `superwall` is set (BILLING_AVAILABLE).
  */
-export function SuperwallPaywall({ placement, params, onDone }: Props) {
+export function SuperwallPaywall({ placement, params, onDone, onPresent }: Props) {
   const finished = useRef(false);
   const presented = useRef(false);
   const onDoneRef = useRef(onDone);
+  const onPresentRef = useRef(onPresent);
   useEffect(() => {
     onDoneRef.current = onDone;
-  }, [onDone]);
+    onPresentRef.current = onPresent;
+  }, [onDone, onPresent]);
 
   const finish = (outcome: SuperwallPaywallOutcome) => {
     if (finished.current) return;
@@ -34,6 +38,7 @@ export function SuperwallPaywall({ placement, params, onDone }: Props) {
   const { registerPlacement } = superwall!.usePlacement({
     onPresent: () => {
       presented.current = true;
+      onPresentRef.current?.();
     },
     onDismiss: (_info, result) => finish(result.type === 'declined' ? 'closed' : 'purchased'),
     // No campaign / audience for this placement, or a holdout: show ours.

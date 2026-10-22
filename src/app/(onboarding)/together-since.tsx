@@ -1,8 +1,9 @@
-import { differenceInCalendarDays, parseISO } from 'date-fns';
+import { differenceInCalendarDays, format, parseISO } from 'date-fns';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
+import { askChoice } from '@/components/ui/ChoiceSheet';
 import { paperEdge } from '@/components/ui/primitives';
 import { AnniversaryWheelPicker } from '@/components/onboarding/AnniversaryWheelPicker';
 import { CalendarCharacter } from '@/components/onboarding/Characters';
@@ -19,8 +20,8 @@ export default function TogetherSinceScreen() {
   const { colors } = useTheme();
   const userId = useAuthStore((s) => s.user?.id);
   const [date, setDate] = useState(formatAnniversaryForDb(new Date()));
-  // The wheels start on today: Continue waits until a date is actually picked (or loaded),
-  // so tapping straight through doesn't save today as your anniversary.
+  // The wheels start on today. Tapping straight through asks "Is it today?" first, so today
+  // isn't saved by accident, while couples who really did get together today can say yes.
   const [picked, setPicked] = useState(false);
   const choose = useCallback((value: string) => {
     setDate(value);
@@ -40,8 +41,18 @@ export default function TogetherSinceScreen() {
       title="When did you two get together?"
       subtitle="For your anniversary countdown and the milestones we’ll celebrate with you."
       primaryLabel="Continue"
-      onPrimary={() => void next(date)}
-      primaryDisabled={!picked}
+      onPrimary={() => {
+        if (picked) {
+          void next(date);
+          return;
+        }
+        askChoice({
+          title: `Did you get together on ${format(parseISO(date), 'd MMMM yyyy')}?`,
+          message: 'That’s the date on the wheels now.',
+          actions: [{ label: 'Yes, that’s our day', onPress: () => void next(date) }],
+          cancelLabel: 'Let me pick',
+        });
+      }}
       secondaryLabel="Skip for now"
       onSecondary={() => void next(null)}
       scroll={false}>

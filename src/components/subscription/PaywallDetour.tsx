@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { Dimensions, StyleSheet } from 'react-native';
+import { StyleSheet, useWindowDimensions } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
 
@@ -9,7 +9,6 @@ import { useTheme } from '@/hooks/useTheme';
 
 export type PaywallDetourPage = 'terms' | 'privacy' | 'refer';
 
-const SCREEN_W = Dimensions.get('window').width;
 const OPEN_SPRING = { damping: 30, stiffness: 280, mass: 0.9 };
 
 /**
@@ -18,6 +17,8 @@ const OPEN_SPRING = { damping: 30, stiffness: 280, mass: 0.9 };
  * slides them off and the paywall is right there, exactly as it was.
  */
 export function PaywallDetour({ page, onClose }: { page: PaywallDetourPage; onClose: () => void }) {
+  // Read live, so a fold / unfold, split screen or rotation redraws at the new size.
+  const SCREEN_W = useWindowDimensions().width;
   const { colors } = useTheme();
   const x = useSharedValue(SCREEN_W);
 

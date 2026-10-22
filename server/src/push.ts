@@ -1,7 +1,8 @@
 /**
  * Push delivery (Expo). A partner notification is pushed the moment the server
- * creates it, so nobody waits for an app to ask; `sendPendingPushes` is the
- * catch-up for anything that didn't go out (offline, Expo down).
+ * creates it, so nobody waits for an app to ask. One that fails goes on the push
+ * queue, which retries it with growing gaps; `sendPendingPushes` is the in-app
+ * catch-up for anything still left.
  */
 
 export function pushTitle(type: string): string {
@@ -13,6 +14,8 @@ export function pushTitle(type: string): string {
     case 'mood':
     case 'mood_update':
       return 'Mood update';
+    case 'mood_checkin':
+      return 'How are you feeling?';
     case 'streak':
       return 'Streak update';
     case 'challenge':
@@ -32,6 +35,8 @@ export function pushTitle(type: string): string {
       return 'Plans';
     case 'partner_joined':
       return 'You’re connected';
+    case 'birthday':
+      return 'Birthday tomorrow';
     case 'referral_credit':
       return 'You earned Plus';
     case 'plus_unlocked':
@@ -49,6 +54,7 @@ export const PUSH_CATEGORY: Record<string, string> = {
   moment: 'moments',
   mood: 'moods',
   mood_update: 'moods',
+  mood_checkin: 'moods',
   challenge: 'dailyQuestion',
   streak: 'streaks',
   game_invite: 'games',
@@ -80,7 +86,7 @@ const PUSH_MAX_AGE_MS = 48 * 3600_000;
  * off stay marked sent (they're in the in-app list); rows that failed to send are
  * released for the catch-up.
  */
-async function deliver(env: Env, rows: PushRow[]): Promise<{ sent: number; skipped: number }> {
+async function deliver(env: Env, rows: PushRow[]): Promise<{ sent: number; skipped: number; failed?: boolean }> {
   if (rows.length === 0) return { sent: 0, skipped: 0 };
   const ids = [...new Set(rows.map((r) => r.user_id))];
   const { results: users } = await env.DB.prepare(
@@ -92,6 +98,7 @@ async function deliver(env: Env, rows: PushRow[]): Promise<{ sent: number; skipp
   const prefs = new Map(users.map((u) => [u.id, u.notification_prefs]));
 
   const messages: Record<string, unknown>[] = [];
+  const recipients: string[] = [];
   let skipped = 0;
   for (const row of rows) {
     const token = tokens.get(row.user_id);
@@ -99,6 +106,7 @@ async function deliver(env: Env, rows: PushRow[]): Promise<{ sent: number; skipp
       skipped += 1;
       continue;
     }
+    recipients.push(row.user_id);
     messages.push({
       to: token,
       title: pushTitle(row.type),
@@ -121,25 +129,71 @@ async function deliver(env: Env, rows: PushRow[]): Promise<{ sent: number; skipp
       await env.DB.prepare(`UPDATE notifications SET push_dispatched = 0 WHERE id IN (${list.map((_, i) => `?${i + 1}`).join(', ')})`)
         .bind(...list)
         .run();
-      return { sent: 0, skipped };
+      return { sent: 0, skipped, failed: true };
     }
+    await forgetDeadTokens(env, res, recipients);
   }
   return { sent: messages.length, skipped };
 }
 
-/** Push one notification right after it's created (claims it first, so it's never sent twice). */
-export async function pushNotificationNow(env: Env, notificationId: string) {
+/**
+ * Expo answers one ticket per message, in order. "DeviceNotRegistered" means the app was
+ * removed from that phone: clear the token so we stop sending to it.
+ */
+async function forgetDeadTokens(env: Env, res: Response, recipients: string[]) {
+  const json = (await res.json().catch(() => null)) as { data?: { status?: string; details?: { error?: string } }[] } | null;
+  const dead = new Set<string>();
+  (json?.data ?? []).forEach((ticket, i) => {
+    if (ticket?.status === 'error' && ticket.details?.error === 'DeviceNotRegistered' && recipients[i]) dead.add(recipients[i]);
+  });
+  if (dead.size === 0) return;
+  const list = [...dead];
+  await env.DB.prepare(`UPDATE users SET expo_push_token = NULL WHERE id IN (${list.map((_, i) => `?${i + 1}`).join(', ')})`)
+    .bind(...list)
+    .run()
+    .catch(() => undefined);
+}
+
+/** A failed push waiting on the queue for another try. */
+export type PushRetry = { id: string };
+
+/** Gap before the next try: 30s, 1m, 2m, 4m… up to 30 minutes. */
+export function pushRetryDelay(attempts: number): number {
+  return Math.min(1800, 30 * 2 ** Math.max(0, attempts - 1));
+}
+
+/**
+ * Push one notification (claims it first, so it's never sent twice). Returns false when
+ * it couldn't go out; a first try that fails is handed to the push queue to retry.
+ */
+export async function pushNotificationNow(env: Env, notificationId: string, opts: { retrying?: boolean } = {}) {
+  const since = new Date(Date.now() - PUSH_MAX_AGE_MS).toISOString();
   const { results } = await env.DB.prepare(
-    `UPDATE notifications SET push_dispatched = 1 WHERE id = ?1 AND push_dispatched = 0
+    `UPDATE notifications SET push_dispatched = 1 WHERE id = ?1 AND push_dispatched = 0 AND read = 0 AND created_at >= ?2
      RETURNING id, user_id, type, content, relationship_id`,
   )
-    .bind(notificationId)
+    .bind(notificationId, since)
     .all<PushRow>();
+  let ok = true;
   try {
-    await deliver(env, results);
+    ok = !(await deliver(env, results)).failed;
   } catch {
-    // The catch-up sends it later.
+    ok = false;
     await env.DB.prepare('UPDATE notifications SET push_dispatched = 0 WHERE id = ?1').bind(notificationId).run();
+  }
+  if (!ok && !opts.retrying && env.PUSH_QUEUE) {
+    // Expo down or the network blipped: try again shortly rather than waiting for an app to open.
+    await env.PUSH_QUEUE.send({ id: notificationId } satisfies PushRetry, { delaySeconds: pushRetryDelay(1) }).catch(() => undefined);
+  }
+  return ok;
+}
+
+/** The push queue's consumer: another try for each failed push, with a longer gap each time. */
+export async function retryPushes(batch: MessageBatch<PushRetry>, env: Env) {
+  for (const msg of batch.messages) {
+    const ok = await pushNotificationNow(env, msg.body.id, { retrying: true }).catch(() => false);
+    if (ok) msg.ack();
+    else msg.retry({ delaySeconds: pushRetryDelay(msg.attempts + 1) });
   }
 }
 

@@ -3,7 +3,6 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import {
   ActivityIndicator,
   Keyboard,
-  KeyboardAvoidingView,
   Platform,
   Pressable,
   ScrollView,
@@ -11,6 +10,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { FadeInDown, FadeOut, LinearTransition, runOnJS } from 'react-native-reanimated';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -52,13 +52,17 @@ export function OnboardingStepScreen({
   primaryDisabled = false,
   busy = false,
   secondaryLabel,
+  secondaryAction,
   onSecondary,
   footerNote,
   onBack,
   scroll = true,
   fill = false,
+  scrollHint,
   children,
 }: {
+  /** A floating "more below" pill (e.g. "Scroll for more themes") while there's more to see. */
+  scrollHint?: string;
   /** Off for screens with their own scroller (the date wheel), so the two don't fight. */
   scroll?: boolean;
   /** One screen, no scrolling: the content stretches to fill what's left above the buttons. */
@@ -75,6 +79,8 @@ export function OnboardingStepScreen({
   primaryDisabled?: boolean;
   busy?: boolean;
   secondaryLabel?: string;
+  /** The tappable word(s) after the label, as on Welcome: "I already have an account **Sign in**". */
+  secondaryAction?: string;
   onSecondary?: () => void;
   footerNote?: string;
   /** Defaults to going back a screen; pass null to hide the arrow. */
@@ -99,6 +105,13 @@ export function OnboardingStepScreen({
   const progress = step ? stepProgress(step) : null;
   const keyboardOpen = useKeyboardOpen();
   const scrollRef = useRef<ScrollView>(null);
+  // The "more below" pill: shown while the content runs past the screen, gone once they scroll.
+  const [viewH, setViewH] = useState(0);
+  const [contentH, setContentH] = useState(0);
+  const [scrolled, setScrolled] = useState(false);
+  // Still when everything fits; scrolls once it doesn't (or the keyboard takes the room).
+  const needsScroll = viewH === 0 || contentH === 0 || contentH > viewH + 1;
+  const showHint = !!scrollHint && !scrolled && !keyboardOpen && contentH > viewH + 24 && viewH > 0;
 
   // When the keyboard opens, bring the fields (they sit at the end) into view.
   useEffect(() => {
@@ -121,9 +134,12 @@ export function OnboardingStepScreen({
   return (
     <GestureDetector gesture={swipeBack}>
     <SafeAreaView style={[styles.root, { backgroundColor: colors.background }]} edges={['top', 'left', 'right']}>
-      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <KeyboardAvoidingView style={styles.flex} behavior="padding">
           <View style={styles.flex}>
-            {/* No back arrow (first step): the bar spans evenly instead. */}
+            {/* No back arrow (first step): the bar spans evenly instead. With nothing to show
+                (no arrow, no progress), there's no bar at all: an empty one read as a header
+                the page slid under. */}
+            {back || progress != null ? (
             <Pressable onPress={Keyboard.dismiss} accessible={false} style={[styles.top, !back && styles.topNoBack]}>
               {back ? (
                 <Pressable onPress={back} hitSlop={10} accessibilityRole="button" accessibilityLabel="Back" style={styles.back}>
@@ -136,11 +152,24 @@ export function OnboardingStepScreen({
                 </View>
               ) : null}
             </Pressable>
+            ) : (
+              <View style={styles.topSpacer} />
+            )}
 
+            <View style={styles.flex}>
             <ScrollView
               ref={scrollRef}
               style={styles.flex}
-              scrollEnabled={scroll && !fill}
+              onLayout={(e) => setViewH(e.nativeEvent.layout.height)}
+              onContentSizeChange={(_, h) => setContentH(h)}
+              onScroll={(e) => {
+                if (!scrolled && e.nativeEvent.contentOffset.y > 40) setScrolled(true);
+              }}
+              scrollEventThrottle={64}
+              scrollEnabled={scroll && !fill && needsScroll}
+              bounces={needsScroll}
+              alwaysBounceVertical={false}
+              overScrollMode={needsScroll ? 'auto' : 'never'}
               // Taps on empty space close the keyboard; fields and buttons still work.
               keyboardDismissMode="interactive"
               // While typing, everything moves up under the header (centring
@@ -175,6 +204,26 @@ export function OnboardingStepScreen({
                 {children}
               </Animated.View>
             </ScrollView>
+              {showHint ? (
+                <Animated.View
+                  entering={FadeInDown.delay(700).duration(360)}
+                  exiting={FadeOut.duration(180)}
+                  pointerEvents="box-none"
+                  style={styles.hintWrap}>
+                  <Pressable
+                    onPress={() => scrollRef.current?.scrollToEnd({ animated: true })}
+                    accessibilityRole="button"
+                    style={({ pressed }) => [
+                      styles.hint,
+                      { backgroundColor: colors.text },
+                      pressed && { opacity: 0.85 },
+                    ]}>
+                    <Text style={[styles.hintText, { color: colors.background }]}>{scrollHint}</Text>
+                    <Icon name="chevronDown" size={16} color={colors.background} />
+                  </Pressable>
+                </Animated.View>
+              ) : null}
+            </View>
 
             <View style={[styles.footer, { paddingBottom: keyboardOpen ? FOOTER_GAP : insets.bottom + FOOTER_GAP }]}>
               <Pressable
@@ -193,7 +242,15 @@ export function OnboardingStepScreen({
               </Pressable>
               {secondaryLabel && onSecondary && !keyboardOpen ? (
                 <Pressable onPress={onSecondary} disabled={busy} hitSlop={6} accessibilityRole="button" style={styles.secondary}>
-                  <Text style={[styles.secondaryText, { color: colors.textSecondary }]}>{secondaryLabel}</Text>
+                  <Text style={[styles.secondaryText, { color: colors.textSecondary }]}>
+                    {secondaryLabel}
+                    {secondaryAction ? (
+                      <>
+                        {' '}
+                        <Text style={[styles.secondaryAction, { color: colors.text }]}>{secondaryAction}</Text>
+                      </>
+                    ) : null}
+                  </Text>
                 </Pressable>
               ) : null}
               {footerNote && !keyboardOpen ? <Text style={[styles.note, { color: colors.textTertiary }]}>{footerNote}</Text> : null}
@@ -211,6 +268,7 @@ const styles = StyleSheet.create({
   top: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, paddingTop: 6, paddingBottom: 8 },
   back: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   topNoBack: { paddingHorizontal: 24, minHeight: 58 },
+  topSpacer: { height: 8 },
   trackNoBack: { marginRight: 0 },
   track: { flex: 1, height: 6, borderRadius: 3, overflow: 'hidden', marginRight: 10 },
   fill: { height: '100%', borderRadius: 3 },
@@ -218,6 +276,21 @@ const styles = StyleSheet.create({
   bodyCentered: { flexGrow: 1, justifyContent: 'center' },
   bodyFill: { flexGrow: 1 },
   art: { alignItems: 'center', marginBottom: 6 },
+  hintWrap: { position: 'absolute', left: 0, right: 0, bottom: 10, alignItems: 'center' },
+  hint: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    height: 36,
+    paddingHorizontal: 16,
+    borderRadius: 18,
+    shadowColor: '#000',
+    shadowOpacity: 0.18,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 4,
+  },
+  hintText: { fontSize: 14, fontWeight: '800' },
   title: { fontSize: 30, fontWeight: '900', letterSpacing: -0.7, lineHeight: 34 },
   subtitle: { fontSize: 16, lineHeight: 22 },
   textCenter: { textAlign: 'center' },
@@ -226,6 +299,8 @@ const styles = StyleSheet.create({
   primary: { height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center' },
   primaryText: { fontSize: 17, fontWeight: '800' },
   secondary: { height: 40, alignItems: 'center', justifyContent: 'center' },
-  secondaryText: { fontSize: 15, fontWeight: '700' },
+  secondaryText: { fontSize: 15, fontWeight: '600' },
+  // The same link as on Welcome and Create account.
+  secondaryAction: { fontWeight: '800', textDecorationLine: 'underline' },
   note: { fontSize: 12, textAlign: 'center', lineHeight: 17 },
 });

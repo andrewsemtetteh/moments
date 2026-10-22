@@ -1,8 +1,9 @@
-const { getDefaultConfig } = require('expo/metro-config');
+// Sentry's Expo config: adds debug ids to the bundle, so crash reports show our real code.
+const { getSentryExpoConfig } = require('@sentry/react-native/metro');
 const { resolve } = require('metro-resolver');
 
 /** @type {import('expo/metro-config').MetroConfig} */
-const config = getDefaultConfig(__dirname);
+const config = getSentryExpoConfig(__dirname);
 
 // react-native-webrtc imports `event-target-shim/index`, but v6 only exports `.`
 config.resolver.resolveRequest = (context, moduleName, platform) => {

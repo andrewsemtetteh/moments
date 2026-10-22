@@ -101,6 +101,32 @@ function turnFor(state: RoomState, round: number) {
   return state.players[round % state.players.length]?.id ?? null;
 }
 
+/** "Unlimited" in the round pickers: `rounds: 0`. */
+export const UNLIMITED_ROUNDS = 0;
+/** Custom round counts go up to this. */
+export const MAX_ROUNDS = 50;
+/** Stand-in total while unlimited (the game only ends when one of you ends it). */
+const ENDLESS_TOTAL = 9999;
+/** Unlimited: fetch more questions once this few are left. */
+const TOP_UP_WHEN_LEFT = 3;
+
+/** The question for a round. Unlimited games loop round the ones loaded until more arrive. */
+export function itemIndex(state: Pick<RoomState, 'round' | 'items' | 'endless'>): number {
+  return state.endless && state.items.length ? state.round % state.items.length : state.round;
+}
+
+/** What a question says (so a top-up never repeats one already in the game). */
+function itemKey(item: GameItem): string {
+  return item.kind === 'choice' ? `${item.a}|${item.b}` : item.kind === 'quiz' ? item.question : item.text;
+}
+
+/** Unlimited and running low on fresh questions: time to load more (games with a question list). */
+export function needsMoreItems(state: RoomState): boolean {
+  if (!state.endless || state.phase !== 'playing') return false;
+  if (state.game === 'truthDare' || state.game === 'twoTruths') return false;
+  return state.items.length - state.round <= TOP_UP_WHEN_LEFT;
+}
+
 function startRound(state: RoomState, round: number, now: number): RoomState {
   const base = { ...state, ...BLANK_ROUND, round };
   switch (state.game) {
@@ -121,8 +147,13 @@ function startRound(state: RoomState, round: number, now: number): RoomState {
   }
 }
 
+/** The comeback round: the quiz's last round, when they chose it, scores double. */
+export function isDoubleRound(state: Pick<RoomState, 'game' | 'doubleFinal' | 'round' | 'totalRounds'>): boolean {
+  return state.game === 'quiz' && !!state.doubleFinal && state.round === state.totalRounds - 1;
+}
+
 function currentItem(state: RoomState): GameItem | undefined {
-  return state.items[state.round];
+  return state.items[itemIndex(state)];
 }
 
 function validAnswer(state: RoomState, value: string): boolean {
@@ -159,8 +190,11 @@ function revealSimultaneous(state: RoomState, now: number): RoomState {
         const ans = state.answers[p.id];
         if (item.correctIndex !== undefined) {
           if (ans !== undefined && Number(ans) === item.correctIndex) {
-            const remaining = Math.max(0, (state.deadline ?? now) - (state.answerAt[p.id] ?? now));
-            points[p.id] = 10 + Math.round((5 * remaining) / QUIZ_ANSWER_MS);
+            // Up to 5 bonus for speed, live only (own time has no clock to beat).
+            const remaining = state.deadline
+              ? Math.min(QUIZ_ANSWER_MS, Math.max(0, state.deadline - (state.answerAt[p.id] ?? now)))
+              : 0;
+            points[p.id] = (10 + Math.round((5 * remaining) / QUIZ_ANSWER_MS)) * (isDoubleRound(state) ? 2 : 1);
             correctCount += 1;
           }
         } else if (a1 !== undefined && a1 === a2 && a1 !== '-1') {
@@ -219,13 +253,17 @@ function finish(state: RoomState): RoomState {
 
   if (def.team) {
     const matches = state.tally.sync_matches ?? 0;
-    const played = Math.max(1, Math.min(state.totalRounds, state.items.length || state.totalRounds));
+    // Unlimited: the rounds actually played (it ended when you stopped).
+    const played = state.endless
+      ? Math.max(1, state.round + (state.step === 'reveal' ? 1 : 0))
+      : Math.max(1, Math.min(state.totalRounds, state.items.length || state.totalRounds));
     const pct = Math.round((matches / played) * 100);
     highlights.push(`${matches}/${played} rounds in sync (${pct}%)`);
     if (state.bestStreak >= 2) highlights.push(`Best streak: ${state.bestStreak} in a row`);
     result = {
       winnerId: null,
       teamGame: true,
+      syncPct: pct,
       headline:
         pct >= 80 ? 'Basically one brain 🧠' : pct >= 50 ? 'Nicely in tune 💞' : 'Opposites attract 🧲',
       highlights,
@@ -249,6 +287,12 @@ function finish(state: RoomState): RoomState {
   return bump(state, { ...BLANK_ROUND, phase: 'finished', result, tally: tally(state, 'finished') });
 }
 
+/** The same answer, give or take capitals, spaces and punctuation. */
+function sameAnswer(a: string, b: string): boolean {
+  const norm = (s: string) => s.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+  return !!norm(a) && norm(a) === norm(b);
+}
+
 function ensurePool(state: RoomState, kind: 'truth' | 'dare'): string {
   const list = state.pool?.[kind] ?? [];
   if (list.length === 0) return kind === 'truth' ? 'Tell your partner something you never told them.' : 'Give your partner a 20 second compliment.';
@@ -269,18 +313,23 @@ export function reduceRoom(
     case 'configure': {
       if (!isHost || state.phase !== 'lobby') return state;
       const def = getGameDefinition(action.game);
-      const rounds = Math.max(1, Math.min(20, Math.round(action.rounds || def.defaultRounds)));
+      const endless = action.rounds === UNLIMITED_ROUNDS;
+      const rounds = endless
+        ? ENDLESS_TOTAL
+        : Math.max(1, Math.min(MAX_ROUNDS, Math.round(action.rounds || def.defaultRounds)));
       return bump(state, {
         game: action.game,
         vibe: action.vibe,
         totalRounds: rounds,
+        endless,
         topic: (action.topic ?? state.topic).slice(0, 80),
+        doubleFinal: action.game === 'quiz' ? (action.doubleFinal ?? state.doubleFinal ?? false) : false,
       });
     }
 
     case 'begin':
       if (!isHost || state.phase !== 'lobby' || state.players.length < 2) return state;
-      return bump(state, { phase: 'loading', message: null });
+      return bump(state, { phase: 'loading', message: null, picker: null });
 
     case 'loaded': {
       if (!isHost || state.phase !== 'loading') return state;
@@ -295,6 +344,14 @@ export function reduceRoom(
         result: null,
       });
       return startRound(filled, 0, now);
+    }
+
+    case 'more': {
+      // Unlimited: fresh questions on the end of the list (whoever's phone fetched them).
+      if (!state.endless || state.phase !== 'playing' || action.items.length === 0) return state;
+      const have = new Set(state.items.map(itemKey));
+      const fresh = action.items.filter((i) => !have.has(itemKey(i)));
+      return fresh.length ? bump(state, { items: [...state.items, ...fresh] }) : state;
     }
 
     case 'loadFailed':
@@ -377,7 +434,10 @@ export function reduceRoom(
       if (state.game === 'guessAnswer') {
         const value = action.value.trim().slice(0, 140);
         if (!value) return state;
-        return bump(state, { answers: { ...state.answers, [from]: value }, step: 'judge' });
+        const guessed = bump(state, { answers: { ...state.answers, [from]: value }, step: 'judge' });
+        return sameAnswer(value, state.secret?.text ?? '') && state.turnId
+          ? reduceRoom(guessed, { t: 'judge', verdict: 'yes' }, state.turnId, now)
+          : guessed;
       }
       if (state.game === 'twoTruths') {
         const idx = Number(action.value);
@@ -398,12 +458,7 @@ export function reduceRoom(
       if (state.game !== 'guessAnswer' || state.step !== 'judge' || from !== state.turnId) return state;
       const guesser = otherPlayer(state, from)?.id;
       if (!guesser) return state;
-      const points =
-        action.verdict === 'yes'
-          ? { [guesser]: 2, [from]: 1 }
-          : action.verdict === 'close'
-            ? { [guesser]: 1 }
-            : { [from]: 1 };
+      const points = action.verdict === 'yes' ? { [guesser]: 2 } : action.verdict === 'close' ? { [guesser]: 1 } : {};
       return bump(state, {
         ...addPoints(state, points),
         verdict: action.verdict,
@@ -431,6 +486,17 @@ export function reduceRoom(
 
     case 'suggest': {
       if (state.phase !== 'lobby') return state;
+      // The loser's pick after a game is the next game, no vote needed.
+      if (state.picker === from) {
+        return bump(state, {
+          suggestions: {},
+          picker: null,
+          game: action.game,
+          totalRounds: getGameDefinition(action.game).defaultRounds,
+          endless: false,
+          doubleFinal: action.game === 'quiz' ? state.doubleFinal : false,
+        });
+      }
       const suggestions = { ...state.suggestions, [from]: action.game };
       const agreed = state.players.every((p) => suggestions[p.id] === action.game);
       if (!agreed) return bump(state, { suggestions });
@@ -438,6 +504,7 @@ export function reduceRoom(
         suggestions: {},
         game: action.game,
         totalRounds: getGameDefinition(action.game).defaultRounds,
+        endless: false,
       });
     }
 
@@ -445,11 +512,16 @@ export function reduceRoom(
       if ((!isHost && state.mode !== 'async') || state.phase === 'lobby') return state;
       return finish(state);
 
-    case 'rematch':
-      if (!isHost || state.phase !== 'finished') return state;
+    case 'rematch': {
+      // Either of you can ask for another game; the host's phone loads it.
+      if (state.phase !== 'finished') return state;
+      const winner = state.result?.winnerId ?? null;
+      const loser = winner ? (otherPlayer(state, winner)?.id ?? null) : null;
       return bump(state, {
         ...BLANK_ROUND,
-        phase: 'lobby',
+        phase: action.again ? 'loading' : 'lobby',
+        picker: action.again ? null : loser,
+        suggestions: {},
         round: 0,
         items: [],
         pool: null,
@@ -460,6 +532,7 @@ export function reduceRoom(
         bestStreak: 0,
         scores: Object.fromEntries(state.players.map((p) => [p.id, 0])),
       });
+    }
 
     default:
       return state;

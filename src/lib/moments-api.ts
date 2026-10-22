@@ -97,6 +97,11 @@ export async function deleteMyAccount(token: string): Promise<void> {
 }
 
 /** Copies the verified primary email from the sign-in onto the profile (the server reads it from Clerk). */
+/** Developer: "Pretend Plus is on" for real (the server unlocks Plus too). Allowlisted accounts only. */
+export async function setDevPlus(token: string, on: boolean): Promise<{ ok: boolean; dev_plus: boolean }> {
+  return apiFetch('/dev/plus', token, { method: 'POST', body: { on } });
+}
+
 export async function syncMyEmail(token: string): Promise<UserProfile> {
   return apiFetch<UserProfile>('/me/email-sync', token, { method: 'POST' });
 }

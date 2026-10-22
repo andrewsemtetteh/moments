@@ -1,6 +1,5 @@
 import { useQueryClient, type InfiniteData } from "@tanstack/react-query";
 import { router, useFocusEffect } from "expo-router";
-import { setStatusBarStyle } from "expo-status-bar";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { Platform, RefreshControl, StyleSheet, Text, View } from "react-native";
 
@@ -9,8 +8,9 @@ import {
   InviteCard,
   NextUpCard,
   OnThisDayCard,
-  useOnThisDay, PartnerBirthdayCard } from "@/components/home/HomeCards";
+  useOnThisDay, PartnerBirthdayCard, MyBirthdayCard } from "@/components/home/HomeCards";
 import { MoodSnapshot } from "@/components/home/MoodSnapshot";
+import { StreakAtRiskBanner } from "@/components/home/StreakAtRiskBanner";
 import { StreakRestoreBanner } from "@/components/home/StreakRestoreBanner";
 import { ActivitiesIntroSection } from "@/components/activities/ActivitiesIntroSection";
 import { introBand, WelcomeCard } from "@/components/home/WelcomeCard";
@@ -33,6 +33,7 @@ import {
 } from "@/hooks/queries";
 import { useOpenPartnerProfile } from "@/hooks/useOpenPartnerProfile";
 // import { useSubscription } from '@/hooks/useSubscription';
+import { useStatusBarStyle } from "@/hooks/useLightStatusBar";
 import { useTheme } from "@/hooks/useTheme";
 import { isHiddenFrom } from "@/lib/plan-day";
 import {
@@ -148,13 +149,7 @@ export default function HomeScreen() {
   const [cardHeight, setCardHeight] = useState(0);
   const [pastBand, setPastBand] = useState(false);
   const onBand = !pastBand;
-  useFocusEffect(
-    useCallback(() => {
-      const light = onBand ? band.isDark : colors.isDark;
-      setStatusBarStyle(light ? "light" : "dark", true);
-      return () => setStatusBarStyle(colors.isDark ? "light" : "dark", true);
-    }, [onBand, band.isDark, colors.isDark]),
-  );
+  useStatusBarStyle((onBand ? band.isDark : colors.isDark) ? "light" : "dark");
 
   const [now, setNow] = useState(() => Date.now());
   useFocusEffect(
@@ -293,6 +288,8 @@ export default function HomeScreen() {
             </TourTarget>
           </View>
 
+          {/* Evening, not checked in yet: your streak ends at midnight. */}
+          {streak ? <StreakAtRiskBanner status={streak} /> : null}
           {restoreStatus ? (
             <StreakRestoreBanner status={restoreStatus} />
           ) : null}
@@ -345,6 +342,7 @@ export default function HomeScreen() {
             ) : null}
 
             {/* Their birthday, from two weeks out. */}
+            {user ? <MyBirthdayCard user={user} /> : null}
             {partner ? <PartnerBirthdayCard partner={partner} /> : null}
 
             {nextUp ? <NextUpCard event={nextUp} viewerId={user?.id} /> : null}

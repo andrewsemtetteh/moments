@@ -5,7 +5,7 @@ import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
 import { useRef, useMemo, useState, type ReactNode, type RefObject } from 'react';
-import { Dimensions, Modal, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Modal, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import Animated, {
   LayoutAnimationConfig,
@@ -37,7 +37,6 @@ import * as api from '@/services/api';
 import { useAuthStore, useRelationshipStore, useUIStore } from '@/stores';
 import { usePlayProgressStore } from '@/stores/play-progress-store';
 
-const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 /** Sticker style, like the streak and anniversary designs: black ink on bright pastel. */
 const INK = '#000000';
 const SOFT = 'rgba(0,0,0,0.68)';
@@ -84,6 +83,8 @@ function formatHour(h: number) {
 
 function WrappedStory({ onClose }: { onClose: () => void }) {
   const insets = useSafeAreaInsets();
+  // Read live, so a fold / unfold, split screen or rotation redraws at the new size.
+  const { height: SCREEN_H } = useWindowDimensions();
   const relationship = useRelationshipStore((s) => s.relationship);
   const partner = useRelationshipStore((s) => s.partner);
   const user = useAuthStore((s) => s.user);
@@ -1091,8 +1092,12 @@ function Bars({ values, labels, highlight }: { values: number[]; labels: string[
   );
 }
 
-/** Inner width of a sticker card (the card is the screen width less a margin, less its padding). */
-const CONTENT_W = Math.min(SCREEN_W - 32 - 40, 340);
+/**
+ * Inner width of a sticker card: the card's own width (it follows the screen live, for
+ * folds and tablets), up to 340.
+ */
+const CONTENT_W = '100%' as const;
+const CONTENT_MAX = 340;
 
 const styles = StyleSheet.create({
   whyPill: {
@@ -1141,7 +1146,8 @@ const styles = StyleSheet.create({
   fitBox: { flex: 1, alignSelf: 'stretch', alignItems: 'center', justifyContent: 'center' },
   fitInner: { width: '100%', alignItems: 'center', gap: 12 },
   sticker: {
-    width: SCREEN_W - 32,
+    // 16pt from each side of the screen, whatever its size (percent, so it follows folds and rotation).
+    width: '92%',
     maxWidth: 400,
     alignSelf: 'center',
     alignItems: 'center',
@@ -1171,10 +1177,11 @@ const styles = StyleSheet.create({
   big: { color: INK, fontSize: 108, fontWeight: '900', letterSpacing: -4, lineHeight: 114, textAlign: 'center' },
   title: { color: INK, fontSize: 34, fontWeight: '900', letterSpacing: -0.8, lineHeight: 40, textAlign: 'center' },
   titleSmall: { fontSize: 26, lineHeight: 32 },
-  body: { color: SOFT, fontSize: 18, fontWeight: '600', lineHeight: 25, textAlign: 'center', maxWidth: CONTENT_W },
+  body: { color: SOFT, fontSize: 18, fontWeight: '600', lineHeight: 25, textAlign: 'center', maxWidth: CONTENT_MAX },
   hint: { color: 'rgba(0,0,0,0.5)', fontSize: 14, fontWeight: '700', marginTop: 28 },
 
-  split: { width: CONTENT_W, gap: 8, marginTop: 8 },
+  split: { width: CONTENT_W,
+    maxWidth: CONTENT_MAX, gap: 8, marginTop: 8 },
   splitTrack: {
     height: 16,
     borderRadius: 8,
@@ -1190,6 +1197,7 @@ const styles = StyleSheet.create({
 
   collage: {
     width: CONTENT_W,
+    maxWidth: CONTENT_MAX,
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'center',
@@ -1206,14 +1214,16 @@ const styles = StyleSheet.create({
     backgroundColor: PAPER,
   },
 
-  chart: { width: CONTENT_W, height: 150, flexDirection: 'row', alignItems: 'flex-end', gap: 6, marginTop: 18 },
+  chart: { width: CONTENT_W,
+    maxWidth: CONTENT_MAX, height: 150, flexDirection: 'row', alignItems: 'flex-end', gap: 6, marginTop: 18 },
   chartCol: { flex: 1, height: '100%', alignItems: 'center', gap: 6 },
   chartTrack: { flex: 1, width: '100%', justifyContent: 'flex-end' },
   chartBar: { width: '100%', borderRadius: 6, borderWidth: 2, borderColor: INK },
   chartLabel: { color: SOFT, fontSize: 12, fontWeight: '700' },
   chartLabelOn: { color: INK, fontWeight: '900' },
 
-  typeList: { width: CONTENT_W, gap: 10, marginTop: 8 },
+  typeList: { width: CONTENT_W,
+    maxWidth: CONTENT_MAX, gap: 10, marginTop: 8 },
   typeRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1272,7 +1282,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: 4,
   },
-  moodPair: { flexDirection: 'row', gap: 12, width: CONTENT_W, marginTop: 8 },
+  moodPair: { flexDirection: 'row', gap: 12, width: CONTENT_W,
+    maxWidth: CONTENT_MAX, marginTop: 8 },
   moodCard: {
     flex: 1,
     borderRadius: 22,
@@ -1288,6 +1299,7 @@ const styles = StyleSheet.create({
   moodName: { color: INK, fontSize: 18, fontWeight: '900' },
   badgeGrid: {
     width: CONTENT_W,
+    maxWidth: CONTENT_MAX,
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'center',

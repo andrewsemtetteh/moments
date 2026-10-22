@@ -27,10 +27,11 @@ export default function OnboardingLayout() {
         fullScreenGestureEnabled: false,
       }}>
       {/* The flow (lib/onboarding-v2): about-you → together-since →
-          relationship-kind → space-name → goals → your-plan → theme-picker →
+          relationship-kind → space-name → goals → your-plan → birthday → theme-picker →
           widget-prompt → invite → notification-prompt → tracking → /pro.
           Android skips widget-prompt and tracking. */}
       <Stack.Screen name="about-you" />
+      <Stack.Screen name="birthday" />
       <Stack.Screen name="together-since" />
       <Stack.Screen name="relationship-kind" />
       <Stack.Screen name="space-name" />

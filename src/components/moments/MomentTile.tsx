@@ -1,5 +1,6 @@
 import { format } from 'date-fns';
 import { Image } from 'expo-image';
+import { mediaSource, thumbUrl } from '@/lib/storage-cdn';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
@@ -8,7 +9,7 @@ import { Icon } from '@/components/ui/Icon';
 import { Avatar } from '@/components/ui/primitives';
 import { MOOD_COLORS, MOOD_EMOJI } from '@/constants/design-system';
 import { useTheme } from '@/hooks/useTheme';
-import { useVideoThumbnail } from '@/hooks/useVideoThumbnail';
+import { useVideoTileSource } from '@/hooks/useVideoThumbnail';
 import { momentChrome } from '@/lib/moment-theme';
 import type { Moment } from '@/types/database';
 
@@ -49,8 +50,9 @@ export function MomentTile({
   const [loaded, setLoaded] = useState(false);
   const tint = useMemo(() => tintFor(moment.id), [moment.id]);
   const isVideo = moment.type === 'video' && !!moment.media_url;
-  const thumb = useVideoThumbnail(isVideo ? moment.media_url : null);
-  const source = isVideo ? thumb : moment.media_url ? { uri: moment.media_url } : null;
+  const video = useVideoTileSource(isVideo ? moment.media_url : null);
+  // Photos load their small copy, videos their still: a tile never needs the full file.
+  const source = isVideo ? video.source : moment.media_url ? mediaSource(thumbUrl(moment.media_url)) : null;
   const when = format(new Date(moment.created_at), 'h:mm a');
 
   return (
@@ -74,8 +76,10 @@ export function MomentTile({
             style={StyleSheet.absoluteFill}
             contentFit="cover"
             transition={200}
+            cachePolicy="memory-disk"
             recyclingKey={moment.id}
             onLoad={() => setLoaded(true)}
+            onError={isVideo ? video.onError : undefined}
           />
         ) : (
           <Fallback moment={moment} chrome={chrome} size={Math.min(width, height)} />
@@ -131,6 +135,8 @@ function Fallback({ moment, chrome, size }: { moment: Moment; chrome: ReturnType
       </View>
     );
   }
+  // A video's frame on its way: just the tile's soft colour (never a stand-in icon).
+  if (moment.type === 'video') return null;
   const icon = moment.type === 'voice' ? 'mic' : moment.type === 'location' ? 'location' : 'heart';
   return (
     <View style={[StyleSheet.absoluteFill, styles.center, { backgroundColor: chrome.accentSoft }]}>

@@ -70,7 +70,6 @@ import { useCoupleDoc } from '@/lib/couple-doc';
 import { groupMomentsIntoPlaces, useMomentPlaces } from '@/lib/moment-places';
 import {
   displayTitle,
-  freeTogetherWindow,
   matchesOwnerFilter,
   type OwnerFilter,
 } from '@/lib/plan-day';
@@ -121,13 +120,6 @@ const COMING_UP_LIMIT = 3;
 
 const dismissedKey = (relationshipId: string) => `memory-suggestions-dismissed:${relationshipId}`;
 
-/**
- * Each sheet here is its own native Modal, and on iPhone a Modal opened while
- * another is still sliding away never appears. Going from one sheet straight
- * to another waits for the first to finish closing.
- */
-const SHEET_SWAP_MS = 380;
-const afterSheetCloses = (fn: () => void) => setTimeout(fn, SHEET_SWAP_MS);
 const NO_LISTS: PlanList[] = [];
 
 export default function CalendarScreen() {
@@ -245,7 +237,8 @@ export default function CalendarScreen() {
   const [editorInitial, setEditorInitial] = useState<MemoryDraft | null>(null);
   const [editingMemory, setEditingMemory] = useState<CalendarEvent | null>(null);
   const [openMemory, setOpenMemory] = useState<CalendarEvent | null>(null);
-  const [savingMemory, setSavingMemory] = useState(false);
+  // Memory saves run behind the closed editor (see saveMemoryDraft), so it never waits.
+  const savingMemory = false;
   const [dismissedSuggestions, setDismissedSuggestions] = useState<Set<string>>(new Set());
 
   useEffect(() => {
@@ -263,10 +256,6 @@ export default function CalendarScreen() {
   const dayEvents = useMemo(
     () => eventsForDay(planEvents, selectedDate),
     [planEvents, selectedDate],
-  );
-  const allDayEvents = useMemo(
-    () => eventsForDay(rawPlanEvents, selectedDate),
-    [rawPlanEvents, selectedDate],
   );
 
   // Captured once per open — Plan is a stack screen that remounts every time
@@ -300,12 +289,6 @@ export default function CalendarScreen() {
         return { title: 'Nothing planned', body: 'Plans for this day will show here.' };
     }
   })();
-
-  const freeLabel = useMemo(() => {
-    if (!partner) return null;
-    if (startOfDay(selectedDate).getTime() < startOfDay(openedAt).getTime()) return null;
-    return freeTogetherWindow(allDayEvents, selectedDate, new Date(openedAt))?.label ?? null;
-  }, [partner, allDayEvents, selectedDate, openedAt]);
 
   const activeList = useMemo(
     () => lists.find((l) => l.id === activeListId) ?? null,
@@ -369,40 +352,71 @@ export default function CalendarScreen() {
     setCreateOpen(true);
   };
 
+  /** Takes a not-yet-saved plan or memory off the screen (its save failed). */
+  const removeEventFromCaches = useCallback(
+    (id: string) => {
+      if (!relationship) return;
+      for (const prefix of ['calendarPlan', 'calendar', 'calendarUpcoming']) {
+        queryClient.setQueriesData<CalendarEvent[]>({ queryKey: [prefix, relationship.id] }, (old) =>
+          Array.isArray(old) ? old.filter((e) => e.id !== id) : old,
+        );
+      }
+    },
+    [queryClient, relationship],
+  );
+
+  /**
+   * New plan: it closes and shows on the calendar straight away, and is saved in one request
+   * behind it (the shared list is made first, so its link goes in with the plan). If the save
+   * fails, the plan comes off the calendar and says so.
+   */
   const createEvent = async (payload: CreatePlanPayload) => {
     if (!relationship) {
       Alert.alert('Connect first', 'Invite your partner or join a space to save plans.');
       return;
     }
-    setSaving(true);
+    const tempId = `temp-${Date.now()}`;
+    const newList = payload.createSharedList
+      ? createListFromPlan({
+          planTitle: payload.title,
+          kind: payload.kind,
+          eventId: tempId,
+          checklist: payload.checklist,
+        })
+      : null;
+    const description = newList
+      ? serializePlanMeta({ ...parsePlanMeta(payload.description), linkedListId: newList.id, v: 1 })
+      : payload.description;
+
+    const optimistic: CalendarEvent = {
+      id: tempId,
+      relationship_id: relationship.id,
+      title: payload.title,
+      date_time: payload.dateTime.toISOString(),
+      type: payload.type,
+      source: 'manual',
+      description,
+      created_at: new Date().toISOString(),
+    };
+    writeEventToCaches(optimistic);
+    setCreateOpen(false);
+    selectDay(payload.dateTime);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
     try {
-      let description = payload.description;
-      let created = await api.createCalendarEvent(relationship.id, {
+      const created = await api.createCalendarEvent(relationship.id, {
         title: payload.title,
-        date_time: payload.dateTime.toISOString(),
+        date_time: optimistic.date_time,
         type: payload.type,
         source: 'manual',
         description,
       });
-
-      let newList: PlanList | null = null;
-
-      if (payload.createSharedList) {
-        const list = createListFromPlan({
-          planTitle: payload.title,
-          kind: payload.kind,
-          eventId: created.id,
-          checklist: payload.checklist,
-        });
-        const meta = parsePlanMeta(payload.description);
-        description = serializePlanMeta({ ...meta, linkedListId: list.id, v: 1 });
-        created = await api.updateCalendarEvent(created.id, { description });
-        newList = list;
-      }
+      removeEventFromCaches(tempId);
+      writeEventToCaches(created);
 
       if (newList || payload.attachedListIds.length) {
         const planId = created.id;
-        const added = newList;
+        const added = newList ? { ...newList, eventId: planId } : null;
         updateLists((current) => {
           let next = added ? [added, ...current.filter((l) => l.id !== added.id)] : current;
           if (payload.attachedListIds.length) {
@@ -411,15 +425,10 @@ export default function CalendarScreen() {
           return next;
         });
       }
-
-      writeEventToCaches(created);
-      setCreateOpen(false);
-      selectDay(payload.dateTime);
       void invalidate();
     } catch (e) {
-      Alert.alert('Could not save', getErrorMessage(e) ?? 'Please try again.');
-    } finally {
-      setSaving(false);
+      removeEventFromCaches(tempId);
+      Alert.alert('Could not save the plan', getErrorMessage(e) ?? 'Please check your connection and try again.');
     }
   };
 
@@ -484,65 +493,108 @@ export default function CalendarScreen() {
       ids.map((id) => [id, momentsById.get(id)?.media_url]).filter(([, u]) => !!u),
     ) as Record<string, string>;
 
+  const memoryDescription = (draft: MemoryDraft, extra: Partial<PlanMeta> = {}) =>
+    serializePlanMeta({
+      v: 1,
+      entry: 'memory',
+      memoryType: draft.memoryType,
+      momentIds: draft.momentIds,
+      momentPhotoUrls: momentPhotoUrlsFor(draft.momentIds),
+      photoUrls: draft.photoUrls,
+      placeName: draft.placeName || undefined,
+      notes: draft.note || undefined,
+      createdBy: me?.id,
+      ...extra,
+    });
+
+  /** A memory goes on the timeline straight away and is saved behind it. */
   const createMemory = async (draft: MemoryDraft, extra: Partial<PlanMeta> = {}) => {
     if (!relationship || !me) return;
     const at = new Date(draft.date);
     at.setHours(12, 0, 0, 0);
-    await api.createCalendarEvent(relationship.id, {
+    const description = memoryDescription(draft, extra);
+    const tempId = `temp-${Date.now()}`;
+    const memoriesKey = ['calendar', relationship.id, 'memories'];
+    queryClient.setQueryData<CalendarEvent[]>(memoriesKey, (old) => [
+      {
+        id: tempId,
+        relationship_id: relationship.id,
+        title: draft.title,
+        date_time: at.toISOString(),
+        type: 'custom',
+        source: 'manual',
+        description,
+        created_at: new Date().toISOString(),
+      },
+      ...(old ?? []),
+    ]);
+    try {
+      const created = await api.createCalendarEvent(relationship.id, {
+        title: draft.title,
+        date_time: at.toISOString(),
+        type: 'custom',
+        source: 'manual',
+        description,
+      });
+      queryClient.setQueryData<CalendarEvent[]>(memoriesKey, (old) =>
+        (old ?? []).map((e) => (e.id === tempId ? created : e)),
+      );
+      void invalidate();
+    } catch (e) {
+      queryClient.setQueryData<CalendarEvent[]>(memoriesKey, (old) => (old ?? []).filter((m) => m.id !== tempId));
+      throw e;
+    }
+  };
+
+  /**
+   * Save from the editor: it closes at once and the change shows straight away (on the memory's
+   * page, or the timeline for a new one) while it's saved behind; a failed save is undone and said.
+   */
+  const saveMemoryDraft = async (draft: MemoryDraft) => {
+    const editing = editingMemory;
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    setEditorOpen(false);
+    setEditingMemory(null);
+
+    if (!editing) {
+      try {
+        await createMemory(draft);
+      } catch (e) {
+        Alert.alert('Could not save memory', getErrorMessage(e) ?? 'Please check your connection and try again.');
+      }
+      return;
+    }
+
+    const at = new Date(draft.date);
+    at.setHours(12, 0, 0, 0);
+    const meta = parsePlanMeta(editing.description);
+    const patch = {
       title: draft.title,
       date_time: at.toISOString(),
-      type: 'custom',
-      source: 'manual',
       description: serializePlanMeta({
+        ...meta,
         v: 1,
-        entry: 'memory',
         memoryType: draft.memoryType,
         momentIds: draft.momentIds,
-        momentPhotoUrls: momentPhotoUrlsFor(draft.momentIds),
+        momentPhotoUrls: { ...meta.momentPhotoUrls, ...momentPhotoUrlsFor(draft.momentIds) },
         photoUrls: draft.photoUrls,
         placeName: draft.placeName || undefined,
         notes: draft.note || undefined,
-        createdBy: me.id,
-        ...extra,
       }),
-    });
-    void invalidate();
-  };
-
-  const saveMemoryDraft = async (draft: MemoryDraft) => {
-    setSavingMemory(true);
+    };
+    const memoriesKey = ['calendar', relationship?.id, 'memories'];
+    const swap = (row: CalendarEvent) => {
+      queryClient.setQueryData<CalendarEvent[]>(memoriesKey, (old) => (old ?? []).map((e) => (e.id === row.id ? row : e)));
+      // The memory's page is still open under the editor: it shows this version.
+      setOpenMemory((open) => (open?.id === row.id ? row : open));
+    };
+    swap({ ...editing, ...patch });
     try {
-      if (editingMemory) {
-        const at = new Date(draft.date);
-        at.setHours(12, 0, 0, 0);
-        const meta = parsePlanMeta(editingMemory.description);
-        const updated = await api.updateCalendarEvent(editingMemory.id, {
-          title: draft.title,
-          date_time: at.toISOString(),
-          description: serializePlanMeta({
-            ...meta,
-            v: 1,
-            memoryType: draft.memoryType,
-            momentIds: draft.momentIds,
-            momentPhotoUrls: { ...meta.momentPhotoUrls, ...momentPhotoUrlsFor(draft.momentIds) },
-            photoUrls: draft.photoUrls,
-            placeName: draft.placeName || undefined,
-            notes: draft.note || undefined,
-          }),
-        });
-        // The memory's page is still open under the editor: show the saved version there.
-        setOpenMemory(updated);
-        void invalidate();
-      } else {
-        await createMemory(draft);
-      }
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      setEditorOpen(false);
-      setEditingMemory(null);
+      swap(await api.updateCalendarEvent(editing.id, patch));
+      void invalidate();
     } catch (e) {
-      Alert.alert('Could not save memory', getErrorMessage(e) ?? 'Please try again.');
-    } finally {
-      setSavingMemory(false);
+      swap(editing);
+      Alert.alert('Could not save memory', getErrorMessage(e) ?? 'Please check your connection and try again.');
     }
   };
 
@@ -604,6 +656,27 @@ export default function CalendarScreen() {
   };
 
 
+  const openMemoryPhotos = useMemo(
+    () => (openMemory ? memoryPhotos(openMemory, momentsById) : null),
+    [openMemory, momentsById],
+  );
+
+  const listSheet = (
+    <PlanListSheet
+      list={activeList}
+      visible={!!activeList}
+      linkedPlanTitle={
+        activeList?.eventId
+          ? planEvents.find((e) => e.id === activeList.eventId)?.title ?? null
+          : null
+      }
+      onClose={() => setActiveListId(null)}
+      onChange={(next) => {
+        updateLists((current) => current.map((l) => (l.id === next.id ? next : l)));
+      }}
+    />
+  );
+
   const memoryEditor = (
     <MemoryEditorSheet
       key={editorKey}
@@ -613,7 +686,7 @@ export default function CalendarScreen() {
       placeNames={placeNames}
       saving={savingMemory}
       onUploadPhoto={(uri) =>
-        api.uploadMomentMedia(`${relationship?.id}/${me?.id}/memory-${Date.now()}.jpg`, uri, 'image/jpeg')
+        api.uploadMomentMedia(`${relationship?.id}/${me?.id}/memory-${Date.now()}.jpg`, uri, 'image/jpeg', { maxSide: 1600 })
       }
       onClose={() => {
         setEditorOpen(false);
@@ -795,7 +868,6 @@ export default function CalendarScreen() {
               events={dayEvents}
               me={me ?? null}
               partner={partner}
-              freeLabel={freeLabel}
               onPressEvent={(event) => setDetailEvent(event)}
               onPlanFree={() => openCreate(undefined, false)}
               emptyTitle={emptyCopy.title}
@@ -813,7 +885,8 @@ export default function CalendarScreen() {
           )}
         </Animated.View>
 
-        {comingUp.length > 0 ? (
+        {/* Only on today: on another day the page is about that day. */}
+        {isToday(selectedDate) && comingUp.length > 0 ? (
           <Animated.View layout={LinearTransition.duration(260)} style={styles.section}>
             <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>Coming up</Text>
             <View style={[styles.upcomingCard, cardSurface(colors)]}>
@@ -898,7 +971,7 @@ export default function CalendarScreen() {
 
       <MemoryDetailSheet
         entry={openMemory}
-        photos={openMemory ? memoryPhotos(openMemory, momentsById) : []}
+        photos={openMemoryPhotos}
         me={me ?? null}
         partner={partner}
         onClose={() => setOpenMemory(null)}
@@ -947,10 +1020,8 @@ export default function CalendarScreen() {
               l.id === parsePlanMeta(detailEvent.description).linkedListId ||
               l.eventId === detailEvent.id,
           );
-          if (list) {
-            setDetailEvent(null);
-            afterSheetCloses(() => setActiveListId(list.id));
-          }
+          // Over the plan's page (it stays open underneath; closing the list comes back to it).
+          if (list) setActiveListId(list.id);
         }}
         onCreateLinkedList={() => {
           if (!detailEvent || !relationship) return;
@@ -968,30 +1039,20 @@ export default function CalendarScreen() {
               description: serializePlanMeta({ ...meta, linkedListId: list.id, v: 1 }),
             })
             .then((updated) => {
-              // The details sheet is closed by now (the list is showing): don't reopen it.
               writeEventToCaches(updated);
+              // The plan's page is still open: keep its copy current (its saves build on it).
+              setDetailEvent((prev) => (prev?.id === updated.id ? updated : prev));
               void invalidate();
             })
             .catch(() => undefined);
-          setDetailEvent(null);
-          afterSheetCloses(() => setActiveListId(list.id));
+          setActiveListId(list.id);
         }}
         saving={saving}
+        listSheet={detailEvent ? listSheet : null}
       />
 
-      <PlanListSheet
-        list={activeList}
-        visible={!!activeList}
-        linkedPlanTitle={
-          activeList?.eventId
-            ? planEvents.find((e) => e.id === activeList.eventId)?.title ?? null
-            : null
-        }
-        onClose={() => setActiveListId(null)}
-        onChange={(next) => {
-          updateLists((current) => current.map((l) => (l.id === next.id ? next : l)));
-        }}
-      />
+      {/* Opened from a plan's page it lives inside that page (see EventDetailsSheet `listSheet`). */}
+      {detailEvent ? null : listSheet}
     </View>
   );
 }

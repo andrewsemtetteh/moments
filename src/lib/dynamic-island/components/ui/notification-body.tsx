@@ -8,7 +8,14 @@ import { useTheme } from "@/hooks/useTheme";
 import { useDynamicNotifications } from "../../hooks/use-dynamic-notifications";
 import type { INotificationBody } from "../../interfaces/notification-content.interface";
 
-/** Default card: avatar, title (in the accent colour), one line of message, and an icon on the right. */
+/**
+ * Default card: avatar (or icon), who or what in bold, then the whole message (up to
+ * three lines; the card grows to fit), and the kind of notification on the right.
+ */
+/** A message shows in full up to this many lines (the host sizes the card to match). */
+export const ISLAND_MAX_LINES = 3;
+export const ISLAND_LINE_HEIGHT = 18;
+
 const NotificationBody = memo<INotificationBody>(({ notification }: INotificationBody) => {
   const context = useDynamicNotifications();
   const { colors } = useTheme();
@@ -25,18 +32,20 @@ const NotificationBody = memo<INotificationBody>(({ notification }: INotificatio
       )}
 
       <View style={styles.copy}>
-        <Text numberOfLines={1} style={[styles.title, { color: accent }]}>
+        <Text numberOfLines={1} style={[styles.title, { color: colors.text }]}>
           {notification.title}
         </Text>
         {notification.message ? (
-          <Text numberOfLines={1} style={[styles.message, { color: colors.textSecondary }]}>
+          <Text numberOfLines={ISLAND_MAX_LINES} style={[styles.message, { color: colors.textSecondary }]}>
             {notification.message}
           </Text>
         ) : null}
       </View>
 
       {notification.icon && (notification.avatar || notification.avatarName) ? (
-        <Icon name={notification.icon} size={20} color={accent} />
+        <View style={[styles.kind, { backgroundColor: colors.accentSoft }]}>
+          <Icon name={notification.icon} size={16} color={accent} />
+        </View>
       ) : null}
     </View>
   );
@@ -48,9 +57,17 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
-    paddingLeft: 11,
-    paddingRight: 18,
-    gap: 10,
+    paddingLeft: 12,
+    paddingRight: 14,
+    paddingVertical: 10,
+    gap: 11,
+  },
+  kind: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    alignItems: "center",
+    justifyContent: "center",
   },
   iconBubble: {
     width: 38,
@@ -64,14 +81,15 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 15,
-    fontWeight: "700",
+    fontWeight: "800",
     letterSpacing: -0.25,
   },
   message: {
     marginTop: 1,
-    fontSize: 13,
+    fontSize: 13.5,
+    lineHeight: ISLAND_LINE_HEIGHT,
     fontWeight: "500",
-    letterSpacing: -0.2,
+    letterSpacing: -0.15,
   },
 });
 

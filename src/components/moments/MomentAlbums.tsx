@@ -1,6 +1,7 @@
 import * as Haptics from '@/lib/haptics';
 import { useState } from 'react';
-import { Keyboard, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Keyboard, Platform, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { TextInput } from '@/components/ui/ThemedTextInput';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
@@ -13,10 +14,11 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
+import { thumbUrl, mediaSource } from '@/lib/storage-cdn';
 
 import { DraggableSheet } from '@/components/ui/DraggableSheet';
 import { HeaderIconButton } from '@/components/ui/HeaderIconButton';
-import { colorWithAlpha, separatorColor, insetCardStyle, pressedRowColor, cardSurface } from '@/components/ui/primitives';
+import { colorWithAlpha, separatorColor, insetCardStyle, pressedRowColor, cardSurface, cardEdge } from '@/components/ui/primitives';
 import { Icon, type IconName } from '@/components/ui/Icon';
 import { useTheme } from '@/hooks/useTheme';
 import { ALBUM_UPLOAD_MAX, pickAlbumMedia, type PickedMedia } from '@/lib/album-upload';
@@ -25,6 +27,10 @@ import { albumCoverId, type MomentAlbum } from '@/lib/moment-albums';
 import { momentChrome } from '@/lib/moment-theme';
 import { sheetListStyle } from '@/components/ui/SheetHeader';
 import type { Moment } from '@/types/database';
+import { MomentTile } from '@/components/moments/MomentTile';
+
+/** The moments picker's grid: three across the page's width (20pt either side). */
+const PICK_GAP = 6;
 
 /** Album folder on the shelf. */
 const FOLDER_W = 132;
@@ -138,8 +144,8 @@ function AlbumFolder({
       accessibilityLabel={`${album.name}, ${count} moment${count === 1 ? '' : 's'}`}
       style={({ pressed }) => [styles.folderCard, pressed && styles.pressed]}>
       <View style={styles.folder}>
-        <View style={[styles.folderTab, { backgroundColor: colorWithAlpha(chrome.accent, 0.28) }]} />
-        <View style={[styles.folderBack, { backgroundColor: colorWithAlpha(chrome.accent, 0.28) }]} />
+        <View style={[styles.folderTab, { backgroundColor: colorWithAlpha(chrome.accent, 0.28) }, cardEdge(colors)]} />
+        <View style={[styles.folderBack, { backgroundColor: colorWithAlpha(chrome.accent, 0.28) }, cardEdge(colors)]} />
         {peeks.length > 0 ? (
           peeks.map((m, i) => (
             <View
@@ -148,7 +154,7 @@ function AlbumFolder({
                 styles.peek,
                 { left: slots[i].left, top: slots[i].top, zIndex: slots[i].z, transform: [{ rotate: slots[i].rotate }] },
               ]}>
-              <Image source={{ uri: m.media_url! }} style={styles.peekImage} contentFit="cover" transition={150} />
+              <Image source={mediaSource(thumbUrl(m.media_url!))} style={styles.peekImage} contentFit="cover" cachePolicy="memory-disk" transition={150} />
             </View>
           ))
         ) : (
@@ -156,7 +162,7 @@ function AlbumFolder({
             <Icon name={icon} size={30} color={chrome.accent} filled />
           </View>
         )}
-        <View style={[styles.folderFront, { backgroundColor: chrome.accent }]}>
+        <View style={[styles.folderFront, { backgroundColor: chrome.accent }, cardEdge(colors)]}>
           <Icon name={icon} size={18} color={chrome.onAccent} filled />
           <Text style={[styles.folderCount, { color: chrome.onAccent }]}>{count}</Text>
         </View>
@@ -169,6 +175,50 @@ function AlbumFolder({
         {count} moment{count === 1 ? '' : 's'}
       </Text> */}
     </Pressable>
+  );
+}
+
+/** Pick moments you've already shared to add to an album: a grid, tap to tick, ✓ to add. */
+function MomentPickPage({
+  moments,
+  initial,
+  onDone,
+  onBack,
+}: {
+  moments: Moment[];
+  initial: string[];
+  onDone: (ids: string[]) => void;
+  onBack: () => void;
+}) {
+  // Read live, so a fold / unfold, split screen or rotation redraws at the new size.
+  const PICK_ROW_W = useWindowDimensions().width - 40;
+  const [picked, setPicked] = useState<string[]>(initial);
+  const tile = Math.floor((PICK_ROW_W - PICK_GAP * 2) / 3);
+  return (
+    <Page
+      title={picked.length ? `${picked.length} selected` : 'Your moments'}
+      onBack={onBack}
+      right={<HeaderIconButton icon="check" onPress={() => onDone(picked)} accessibilityLabel="Add these" />}>
+      <View style={styles.pickGrid}>
+        {moments.map((m) => {
+          const on = picked.includes(m.id);
+          return (
+            <MomentTile
+              key={m.id}
+              moment={m}
+              width={tile}
+              height={tile}
+              selecting
+              selected={on}
+              onPress={() => {
+                void Haptics.selectionAsync();
+                setPicked((ids) => (on ? ids.filter((id) => id !== m.id) : [...ids, m.id]));
+              }}
+            />
+          );
+        })}
+      </View>
+    </Page>
   );
 }
 
@@ -283,6 +333,7 @@ export function AlbumEditSheet({
   withMedia = false,
   mediaLimit,
   freeDailyMoments,
+  moments = [],
   onSubmit,
   onClose,
 }: {
@@ -299,7 +350,9 @@ export function AlbumEditSheet({
   mediaLimit?: number;
   /** The free plan's moments a day, for the hint. */
   freeDailyMoments?: number;
-  onSubmit: (value: { name: string; emoji: string; media?: PickedMedia[] }) => void;
+  /** New album: moments already shared, to add straight in (newest first). */
+  moments?: Moment[];
+  onSubmit: (value: { name: string; emoji: string; media?: PickedMedia[]; momentIds?: string[] }) => void;
   onClose: () => void;
 }) {
   const { colors } = useTheme();
@@ -307,6 +360,19 @@ export function AlbumEditSheet({
   const [name, setName] = useState(initialName);
   const [media, setMedia] = useState<PickedMedia[]>([]);
   const maxMedia = Math.min(ALBUM_UPLOAD_MAX, mediaLimit ?? ALBUM_UPLOAD_MAX);
+  // Moments already shared, picked to go in too (they don't count as uploads).
+  const [pickedIds, setPickedIds] = useState<string[]>([]);
+  const [adding, setAdding] = useState<'menu' | 'moments' | null>(null);
+  const pickable = moments.filter((m) => m.media_url && (m.type === 'photo' || m.type === 'video'));
+  const pickedMoments = pickedIds
+    .map((id) => pickable.find((m) => m.id === id))
+    .filter((m): m is Moment => !!m);
+  /** The add tile: from your moments first, then the phone's gallery. */
+  const openAdd = () => {
+    Keyboard.dismiss();
+    if (pickable.length === 0) void addMedia();
+    else setAdding('menu');
+  };
   const addMedia = async () => {
     Keyboard.dismiss();
     const picked = await pickAlbumMedia(maxMedia - media.length);
@@ -324,10 +390,16 @@ export function AlbumEditSheet({
     if (!canSubmit) return;
     void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     // Stored in the `emoji` field, which now holds an icon name.
-    onSubmit({ name: name.trim(), emoji: icon, media: withMedia && media.length ? media : undefined });
+    onSubmit({
+      name: name.trim(),
+      emoji: icon,
+      media: withMedia && media.length ? media : undefined,
+      momentIds: withMedia && pickedIds.length ? pickedIds : undefined,
+    });
   };
 
   return (
+    <>
     <Page
       title={title}
       onBack={onClose}
@@ -367,7 +439,7 @@ export function AlbumEditSheet({
               }}
               style={({ pressed }) => [
                 styles.iconChip,
-                { backgroundColor: on ? chrome.accent : chrome.surfaceSoft },
+                on ? { backgroundColor: chrome.accent, borderWidth: cardEdge(colors).borderWidth, borderColor: chrome.accent } : cardSurface(colors),
                 pressed && styles.pressed,
               ]}
               accessibilityRole="radio"
@@ -382,33 +454,46 @@ export function AlbumEditSheet({
       {withMedia ? (
         <>
           <View style={styles.mediaHead}>
-            <Text style={[styles.fieldLabel, { color: chrome.textSecondary }]}>Photos & videos</Text>
-            {media.length ? (
+            <Text style={[styles.fieldLabel, { color: chrome.textSecondary }]}>Add to album</Text>
+            {media.length + pickedIds.length ? (
               <Text style={[styles.mediaCount, { color: chrome.textTertiary }]}>
-                {media.length} of {maxMedia}
+                {media.length + pickedIds.length} added
               </Text>
             ) : null}
           </View>
           <View style={styles.mediaGrid}>
-            {media.length < maxMedia ? (
-              <Pressable
-                onPress={() => void addMedia()}
-                accessibilityRole="button"
-                accessibilityLabel="Add photos or videos"
-                style={({ pressed }) => [
-                  styles.mediaTile,
-                  styles.mediaAdd,
-                  cardSurface(colors),
-                  pressed && styles.pressed,
-                ]}>
-                <Icon name="image" size={26} color={chrome.accent} />
-                <Text style={[styles.mediaAddText, { color: chrome.accent }]}>Add</Text>
-              </Pressable>
-            ) : null}
+            {/* As on New memory: a dashed tile with a round plus. */}
+            <Pressable
+              onPress={openAdd}
+              accessibilityRole="button"
+              accessibilityLabel="Add to album"
+              style={({ pressed }) => [
+                styles.mediaTile,
+                styles.mediaAdd,
+                { backgroundColor: colors.surface, borderColor: colors.textSecondary },
+                pressed && styles.pressed,
+              ]}>
+              <View style={[styles.mediaAddIcon, { backgroundColor: colors.text }]}>
+                <Icon name="plus" size={20} color={colors.background} />
+              </View>
+            </Pressable>
+            {pickedMoments.map((m) => (
+              <View key={m.id} style={[styles.mediaTile, cardSurface(colors)]}>
+                <MomentTile moment={m} width={76} height={76} />
+                <Pressable
+                  onPress={() => setPickedIds((ids) => ids.filter((id) => id !== m.id))}
+                  hitSlop={8}
+                  accessibilityRole="button"
+                  accessibilityLabel="Remove"
+                  style={styles.mediaRemove}>
+                  <Icon name="close" size={12} color="#FFFFFF" />
+                </Pressable>
+              </View>
+            ))}
             {media.map((item) => (
               <View key={item.uri} style={[styles.mediaTile, cardSurface(colors)]}>
                 {item.type === 'photo' ? (
-                  <Image source={{ uri: item.uri }} style={StyleSheet.absoluteFill} contentFit="cover" />
+                  <Image source={mediaSource(item.uri)} style={StyleSheet.absoluteFill} contentFit="cover" />
                 ) : (
                   <View style={[StyleSheet.absoluteFill, styles.mediaVideo]}>
                     <Icon name="play" size={24} color="#FFFFFF" filled />
@@ -435,6 +520,35 @@ export function AlbumEditSheet({
         </>
       ) : null}
     </Page>
+    {adding === 'menu' ? (
+      <ActionSheet
+        title="Add to album"
+        actions={[
+          { label: 'Add from your moments', icon: 'albums', onPress: () => setAdding('moments') },
+          {
+            label: 'Upload from gallery',
+            icon: 'image',
+            onPress: () => {
+              setAdding(null);
+              if (media.length < maxMedia) void addMedia();
+            },
+          },
+        ]}
+        onClose={() => setAdding(null)}
+      />
+    ) : null}
+    {adding === 'moments' ? (
+      <MomentPickPage
+        moments={pickable}
+        initial={pickedIds}
+        onDone={(ids) => {
+          setPickedIds(ids);
+          setAdding(null);
+        }}
+        onBack={() => setAdding(null)}
+      />
+    ) : null}
+    </>
   );
 }
 
@@ -733,6 +847,8 @@ const styles = StyleSheet.create({
   mediaTile: { width: 76, height: 76, borderRadius: 14, overflow: 'hidden' },
   mediaAdd: { borderWidth: 1.5, borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center', gap: 2 },
   mediaAddText: { fontSize: 12, fontWeight: '800' },
+  mediaAddIcon: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+  pickGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: PICK_GAP },
   mediaVideo: { backgroundColor: '#1F1F24', alignItems: 'center', justifyContent: 'center' },
   mediaRemove: {
     position: 'absolute',

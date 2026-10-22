@@ -1,8 +1,9 @@
-import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { paperEdge, trackColor } from '@/components/ui/primitives';
 import { listProgress, type PlanList } from '@/lib/plan-local';
 import { useTheme } from '@/hooks/useTheme';
+import { askChoice } from '@/components/ui/ChoiceSheet';
 
 export function PlanSharedLists({
   lists,
@@ -29,13 +30,12 @@ export function PlanSharedLists({
   const preview = lists.slice(0, 3);
 
   const quickActions = (list: PlanList) => {
-    Alert.alert(list.title, undefined, [
-      { text: 'Rename', onPress: () => onRename?.(list) },
-      { text: 'Duplicate', onPress: () => onDuplicate?.(list) },
-      { text: 'Archive', onPress: () => onArchive?.(list) },
-      { text: 'Delete', style: 'destructive', onPress: () => onDelete?.(list) },
-      { text: 'Cancel', style: 'cancel' },
-    ]);
+    askChoice({ title: list.title, actions: [
+{ label: 'Rename', onPress: () => onRename?.(list) },
+{ label: 'Duplicate', onPress: () => onDuplicate?.(list) },
+{ label: 'Archive', onPress: () => onArchive?.(list) },
+{ label: 'Delete', destructive: true, onPress: () => onDelete?.(list) },
+] });
   };
 
   return (

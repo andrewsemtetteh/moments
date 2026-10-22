@@ -1,4 +1,5 @@
 import { Image } from 'expo-image';
+import { mediaSource } from '@/lib/storage-cdn';
 import { LinearGradient } from 'expo-linear-gradient';
 import { ReactNode } from 'react';
 import {
@@ -181,7 +182,7 @@ export function Avatar({
 
   const content = resolvedImageUrl ? (
     <Image
-      source={{ uri: resolvedImageUrl }}
+      source={mediaSource(resolvedImageUrl)}
       style={avatarStyle}
       contentFit="cover"
     />

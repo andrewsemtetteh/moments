@@ -2,6 +2,7 @@ import * as Haptics from '@/lib/haptics';
 import { useEffect, useState } from 'react';
 import { Alert, AppState, StyleSheet, Text, View } from 'react-native';
 
+import { askChoice } from '@/components/ui/ChoiceSheet';
 import { Icon } from '@/components/ui/Icon';
 import { useLocationSharing } from '@/hooks/useLocationSharing';
 import { useTheme } from '@/hooks/useTheme';
@@ -11,13 +12,14 @@ import { AppSwitch } from '@/components/ui/AppSwitch';
 function showLocationError(message: string, reason?: string) {
   // "Not now" on the permission sheet: they already chose, no alert needed.
   if (!message) return;
-  const buttons: { text: string; onPress?: () => void; style?: 'cancel' | 'default' }[] = [
-    { text: 'OK', style: 'cancel' },
-  ];
-  if (reason === 'permission_denied' || reason === 'services_disabled') {
-    buttons.unshift({ text: 'Open Settings', onPress: openAppSettings });
-  }
-  Alert.alert('Location unavailable', message, buttons);
+  // The app's choices drawer, like the other Settings options.
+  const canFix = reason === 'permission_denied' || reason === 'services_disabled';
+  askChoice({
+    title: 'Location unavailable',
+    message,
+    actions: canFix ? [{ label: 'Open Settings', onPress: openAppSettings }] : [],
+    cancelLabel: 'OK',
+  });
 }
 
 export function LocationSharingSettings() {
@@ -87,6 +89,9 @@ export function LocationSharingSettings() {
       try {
         await setSharingEnabled(true, result.place);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      } catch {
+        // Offline or the server said no: the switch goes back to how it was.
+        Alert.alert('Couldn’t turn on location sharing', 'Check your connection and try again.');
       } finally {
         setPendingEnabled(null);
       }
@@ -95,6 +100,8 @@ export function LocationSharingSettings() {
 
     try {
       await setSharingEnabled(false);
+    } catch {
+      Alert.alert('Couldn’t turn off location sharing', 'Check your connection and try again.');
     } finally {
       setPendingEnabled(null);
     }

@@ -25,5 +25,13 @@ declare global {
     TURN_KEY_API_TOKEN?: string;
     /** Optional: signs private media links (moments, chat). Defaults to one derived from CLERK_SECRET_KEY. */
     MEDIA_SIGNING_SECRET?: string;
+    /** Developer tools (e.g. "Pretend Plus is on"): the Clerk user ids allowed, comma-separated. */
+    DEV_TOOLS_USER_IDS?: string;
+    /** Cloudflare's in-memory rate limiters (wrangler.jsonc › ratelimits): N calls a minute. */
+    RL_30_PER_MIN?: RateLimit;
+    RL_60_PER_MIN?: RateLimit;
+    RL_120_PER_MIN?: RateLimit;
+    /** Failed pushes, retried with growing gaps (see push.ts). Optional: without it, the in-app catch-up still sends them. */
+    PUSH_QUEUE?: Queue<import('./push').PushRetry>;
   }
 }

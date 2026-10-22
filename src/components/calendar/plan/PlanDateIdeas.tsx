@@ -1,4 +1,5 @@
 import { Image } from 'expo-image';
+import { mediaSource } from '@/lib/storage-cdn';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
@@ -14,7 +15,7 @@ export function PlanDateIdeas({ onAdd }: { onAdd: (idea: DateIdea) => void }) {
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
         {DATE_IDEAS.map((idea) => (
           <View key={idea.id} style={[styles.card, { shadowColor: colors.shadow }]}>
-            <Image source={{ uri: idea.image }} style={styles.image} contentFit="cover" transition={200} />
+            <Image source={mediaSource(idea.image)} style={styles.image} contentFit="cover" transition={200} />
             <LinearGradient colors={['transparent', 'rgba(0,0,0,0.75)']} style={StyleSheet.absoluteFill} />
             <View style={styles.body}>
               <Text style={styles.title}>{idea.title}</Text>

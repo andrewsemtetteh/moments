@@ -9,7 +9,7 @@ import { useTheme } from '@/hooks/useTheme';
 import type { HandpickedFormat } from '@/lib/handpicked';
 
 import { BrowseArt, type BrowseArtId } from './BrowseArt';
-import { openLiveSession } from './LiveStrip';
+import { goLive } from './LiveStrip';
 
 type BrowseItem = { id: BrowseArtId; label: string; tone: PlayToneId; format?: HandpickedFormat | 'games' | 'all' };
 
@@ -32,7 +32,7 @@ export function BrowseRow() {
   const open = (item: BrowseItem) => {
     void Haptics.selectionAsync();
     if (item.format) router.push({ pathname: '/play/format/[id]', params: { id: item.format } });
-    else if (item.id === 'live') openLiveSession();
+    else if (item.id === 'live') goLive();
   };
 
   return (

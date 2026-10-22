@@ -16,6 +16,8 @@ import { STREAK_COLORS, streakToneFromStatus, streakWellColors } from '@/lib/str
 import {
   buildStreakMonth,
   buildStreakWeek,
+  FROZEN_FILL,
+  FROZEN_ICE,
   streakMonthNavBounds,
   type StreakDayCell,
   type StreakView,
@@ -335,6 +337,10 @@ function DayCell({
     ) : (
       <Text style={[calStyles.num, calStyles.numActive, { color: dark ? amber : colors.text }]}>{number}</Text>
     );
+  } else if (day.state === 'frozen') {
+    // A streak freeze kept this day: an ice-blue flame (as on Duolingo).
+    circle = { backgroundColor: FROZEN_FILL, borderWidth: 1.5, borderColor: FROZEN_ICE };
+    content = <StickerFlame size={iconSize} variant="frozen" />;
   } else if (day.state === 'missed') {
     // The original missed look: soft red circle with a red rim, the date, and a small ✕ badge.
     circle = {

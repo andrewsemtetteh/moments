@@ -63,8 +63,19 @@ export default ({ config: base }: ConfigContext): ExpoConfig => {
       infoPlist: {
         ...base.ios?.infoPlist,
         LSApplicationQueriesSchemes: [...new Set([...existing, ...STREAMING_SCHEMES])],
+        // Calls keep going when you leave the app (audio) and can be woken for (voip).
+        UIBackgroundModes: [
+          ...new Set([...((base.ios?.infoPlist?.UIBackgroundModes as string[] | undefined) ?? []), 'audio', 'voip']),
+        ],
       },
     },
+    // Sentry: the org and project its plugin uploads source maps to at build time (with
+    // SENTRY_AUTH_TOKEN as an EAS secret), so crash reports show our real code.
+    plugins: (base.plugins ?? []).map((p) =>
+      p === '@sentry/react-native' && process.env.SENTRY_ORG && process.env.SENTRY_PROJECT
+        ? ['@sentry/react-native', { organization: process.env.SENTRY_ORG, project: process.env.SENTRY_PROJECT }]
+        : p,
+    ),
     extra: {
       ...base.extra,
       eas: {

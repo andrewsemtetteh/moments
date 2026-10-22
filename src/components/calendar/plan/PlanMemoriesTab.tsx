@@ -9,11 +9,13 @@ import {
   subDays,
 } from 'date-fns';
 import { Image } from 'expo-image';
+import { thumbUrl, mediaSource } from '@/lib/storage-cdn';
 import { useMemo, useState } from 'react';
 import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { TextInput } from '@/components/ui/ThemedTextInput';
 
 import { memoryPhotos } from '@/components/calendar/plan/MemorySheets';
+import { PlanEmptyState } from '@/components/calendar/plan/PlanAgendaList';
 import { Icon, type IconName } from '@/components/ui/Icon';
 import { Avatar, cardEdge, colorWithAlpha, paperEdge, separatorColor, trackColor, outlineColor, cardSurface } from '@/components/ui/primitives';
 import { getFirstName } from '@/lib/avatar-initial';
@@ -176,7 +178,7 @@ export function PlanMemoriesTab({
                 styles.chip,
                 on ? { backgroundColor: colors.accent, borderColor: colors.accent, borderWidth: cardSurface(colors).borderWidth } : cardSurface(colors),
               ]}>
-              <Icon name={f.icon} size={18} color={on ? colors.onAccent : colors.text} filled />
+              <Icon name={f.icon} size={18} color={on ? colors.onAccent : colors.text} />
               <Text style={[styles.chipText, { color: on ? colors.onAccent : colors.text }]}>{f.label}</Text>
             </Pressable>
           );
@@ -184,18 +186,25 @@ export function PlanMemoriesTab({
       </ScrollView>
 
       {items.length === 0 ? (
+        // The Plan tab's empty state (a theme card, centred), so both tabs match.
         <View style={styles.empty}>
-          <View style={[styles.emptyIcon, cardSurface(colors)]}>
-            <Icon name={q ? 'search' : filter === 'photos' ? 'image' : filter === 'all' ? 'heart' : memoryTypeMeta(filter).icon} size={30} color={colors.text} />
-          </View>
-          <Text style={[styles.emptyTitle, { color: colors.text }]}>{q ? 'No memories found' : filter === 'all' ? 'No memories yet' : `No ${FILTERS.find((f) => f.key === filter)?.label.toLowerCase()} memories yet`}</Text>
-          <Text style={[styles.emptyBody, { color: colors.textSecondary }]}>
-            {q
-              ? 'Try a place, a month, or a word from a note.'
-              : filter === 'all'
-                ? 'Add your first date, the day it became official, or a trip you loved.'
-                : 'Tap + to add one, or pick another filter.'}
-          </Text>
+          <PlanEmptyState
+            icon={q ? 'search' : filter === 'photos' ? 'image' : filter === 'all' ? 'heart' : memoryTypeMeta(filter).icon}
+            title={
+              q
+                ? 'No memories found'
+                : filter === 'all'
+                  ? 'No memories yet'
+                  : `No ${FILTERS.find((f) => f.key === filter)?.label.toLowerCase()} memories yet`
+            }
+            body={
+              q
+                ? 'Try a place, a month, or a word from a note.'
+                : filter === 'all'
+                  ? 'Add your first date, the day it became official, or a trip you loved.'
+                  : 'Tap + to add one, or pick another filter.'
+            }
+          />
         </View>
       ) : (
         <View style={styles.timeline}>
@@ -399,7 +408,7 @@ function TimelineRow({
           </View>
           <View style={styles.thumbs}>
             {thumbs.map((m) => (
-              <Image key={m.id} source={{ uri: m.media_url! }} style={styles.thumb} contentFit="cover" />
+              <Image key={m.id} source={mediaSource(thumbUrl(m.media_url!))} style={styles.thumb} contentFit="cover" cachePolicy="memory-disk" />
             ))}
             {extra > 0 ? (
               <View style={[styles.thumb, styles.more, { backgroundColor: colors.surfaceElevated, borderColor: outlineColor(colors) }]}>
@@ -458,7 +467,7 @@ function TimelineRow({
         // With photos: the cover big on top (count and kind over it), the words on the memory's colour.
         <View style={[styles.card, styles.photoCard, { backgroundColor: tone.fill }]}>
           <View>
-            <Image source={{ uri: cover }} style={isMilestone ? styles.photoCoverTall : styles.photoCover} contentFit="cover" />
+            <Image source={mediaSource(cover)} style={isMilestone ? styles.photoCoverTall : styles.photoCover} contentFit="cover" />
             <View style={styles.photoBadges}>
               {typeBadge}
               {item.photos.length > 1 ? (
@@ -667,7 +676,7 @@ const styles = StyleSheet.create({
   // Pinned to the foot of the card, so short memories keep their tags at the bottom.
   storyTags: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 'auto', paddingTop: 4 },
   // Fills the space under the filters, and sits in the middle of it.
-  empty: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 8, paddingHorizontal: 32, minHeight: 320 },
+  empty: { flex: 1, justifyContent: 'center', minHeight: 320 },
   emptyIcon: { width: 72, height: 72, borderRadius: 36, alignItems: 'center', justifyContent: 'center', marginBottom: 6 },
   emptyTitle: { fontSize: 18, fontWeight: '800', textAlign: 'center' },
   emptyBody: { fontSize: 14, lineHeight: 20, textAlign: 'center', maxWidth: 280 },

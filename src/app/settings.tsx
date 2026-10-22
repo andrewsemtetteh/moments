@@ -6,12 +6,14 @@ import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { useState, type ReactNode } from 'react';
-import { ActivityIndicator, Alert, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ChangePasswordModal, MIN_PASSWORD_LENGTH } from '@/components/profile/ChangePasswordModal';
 import { EditAnniversaryModal } from '@/components/profile/EditAnniversaryModal';
 import { EditFieldModal } from '@/components/profile/EditFieldModal';
+import { AppSwitch } from '@/components/ui/AppSwitch';
+import { DesignPreviewModal, type DesignPreviewKind } from '@/components/dev/DesignPreviewModal';
 import { EditGenderModal } from '@/components/profile/EditGenderModal';
 import { EditRelationshipTypeModal } from '@/components/profile/EditRelationshipTypeModal';
 import { LocationSharingSettings } from '@/components/profile/LocationSharingSettings';
@@ -19,7 +21,6 @@ import { OnlineStatusSettings } from '@/components/profile/OnlineStatusSettings'
 import { SettingsToggleDivider, SettingsToggleRow } from '@/components/profile/SettingsToggleRow';
 import { VerifyEmailCodeModal } from '@/components/profile/VerifyEmailCodeModal';
 import { ScreenHeader } from '@/components/layout/ScreenHeader';
-import { rateFromSettings } from '@/lib/store-review';
 import { Icon, type IconName } from '@/components/ui/Icon';
 import { Avatar, colorWithAlpha, separatorColor } from '@/components/ui/primitives';
 import { SOCIAL_LINKS, SUPPORT_EMAIL } from '@/constants/social';
@@ -31,21 +32,24 @@ import { useTheme } from '@/hooks/useTheme';
 import { getRelationshipAnniversaryIso, isValidAnniversaryIso } from '@/lib/anniversary';
 import { formatAuthError } from '@/lib/auth-errors';
 import { signOutUser } from '@/lib/auth-session';
-import { deleteMyAccount, syncMyEmail } from '@/lib/moments-api';
-import { openSubscriptionManagement } from '@/lib/purchases';
+import { setDevPlus as setDevPlus_, deleteMyAccount, syncMyEmail } from '@/lib/moments-api';
+import { openSubscriptionManagement, usePurchasesStore } from '@/lib/purchases';
+import { notifyIsland } from '@/lib/in-app-notify';
+import { loadExpoNotifications } from '@/lib/expo-notifications-safe';
 import { getFirstName } from '@/lib/avatar-initial';
 import { markRelationshipOnboardingDone } from '@/lib/onboarding-storage';
 import { profileGender, profileGenderLabel } from '@/lib/profile-gender';
-import { birthdayShortLabel } from '@/lib/birthday';
+import { birthdayShortLabel, isOldEnough, latestBirthYear, MIN_AGE } from '@/lib/birthday';
 import { relationshipTypeLabel } from '@/lib/relationship-type';
 import { closeStackScreen } from '@/lib/router';
 import { toUserFacingNetworkError } from '@/lib/network-error';
 import { formatSubscriptionExpiry } from '@/lib/subscription';
 import * as api from '@/services/api';
-import { useAuthStore, useRelationshipStore, useUIStore } from '@/stores';
+import { useAuthStore, useCallStore, useRelationshipStore, useUIStore } from '@/stores';
 import type { ProfileGender, RelationshipType } from '@/types/database';
 import { ensurePermission } from '@/lib/permissions';
 import { useHapticsPref } from '@/lib/haptics';
+import { askChoice } from '@/components/ui/ChoiceSheet';
 
 type PendingEmailAddress = Awaited<
   ReturnType<NonNullable<ReturnType<typeof useUser>['user']>['createEmailAddress']>
@@ -79,12 +83,34 @@ export default function SettingsScreen() {
   const [savingEdit, setSavingEdit] = useState(false);
   const [avatarSaving, setAvatarSaving] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
-  // Gender (optional): Male, Female, Genderqueer or non-binary, Other.
+  // Gender (optional): Male, Female, Non-binary, Other, Prefer not to say.
   const [showGenderModal, setShowGenderModal] = useState(false);
   const [genderDraft, setGenderDraft] = useState<ProfileGender | null>(profileGender(user));
   const [savingGender, setSavingGender] = useState(false);
   // Birthday (optional): your partner gets a countdown and reminders.
   const [birthdayOpen, setBirthdayOpen] = useState(false);
+  // Developer: pretend this phone has Plus (unlocks Endless and live games, every limit).
+  const devPlus = usePurchasesStore((s) => s.entitlement.active) || !!relationship?.dev_plus;
+  // On the server too (so restoring a streak, AI games and every limit really unlock), for
+  // accounts in the server's DEV_TOOLS_USER_IDS; otherwise only this phone pretends.
+  const setDevPlus = (on: boolean) => {
+    usePurchasesStore.setState((s) => ({ entitlement: { ...s.entitlement, active: on, trial: false } }));
+    void (async () => {
+      try {
+        const token = await getToken();
+        if (!token) return;
+        await setDevPlus_(token, on);
+        if (relationship) setRelationship({ ...relationship, dev_plus: on ? 1 : 0 });
+      } catch (e) {
+        Alert.alert(
+          'Only on this phone',
+          `${e instanceof Error ? e.message : 'The server didn’t switch Plus on.'}
+
+Until then, Plus features the server checks (restoring a streak, AI games, the moment limit) stay locked.`,
+        );
+      }
+    })();
+  };
   const [savingBirthday, setSavingBirthday] = useState(false);
   const [showRelationshipTypeModal, setShowRelationshipTypeModal] = useState(false);
   const [relationshipTypeDraft, setRelationshipTypeDraft] = useState<RelationshipType | null>(
@@ -100,22 +126,37 @@ export default function SettingsScreen() {
   const [verifyingEmailCode, setVerifyingEmailCode] = useState(false);
 
   const [anniversaryOpen, setAnniversaryOpen] = useState(false);
+  // Developer: one feature on its own (the Home header, streak alerts).
+  const [designPreview, setDesignPreview] = useState<DesignPreviewKind | null>(null);
+  /**
+   * Developer: a call screen with no real call (a "preview-…" id), ringing or already
+   * connected. Minimise it, leave the app (the "Ongoing call" notification) or end it.
+   */
+  const previewCall = (mode: 'audio' | 'video', connected: boolean) => {
+    const calls = useCallStore.getState();
+    calls.reset();
+    calls.setIncoming({
+      callId: `preview-${mode}`,
+      mode,
+      partnerName: getFirstName(partner?.name) ?? 'Your person',
+    });
+    if (connected) calls.setPhase('active');
+  };
   const hapticsOn = useHapticsPref((s) => s.enabled);
   const setHapticsOn = useHapticsPref((s) => s.setEnabled);
 
   const openAccountOptions = () => {
     const hasSpace = !!relationship && relationship.status !== 'ended';
-    Alert.alert('Account options', undefined, [
-      ...(hasSpace ? [{ text: 'End shared space', onPress: handleLeaveRelationship }] : []),
-      { text: 'Delete account', style: 'destructive' as const, onPress: handleDeleteAccount },
-      { text: 'Cancel', style: 'cancel' as const },
-    ]);
+    askChoice({ title: 'Account options', actions: [
+...(hasSpace ? [{ label: 'End shared space', onPress: handleLeaveRelationship }] : []),
+{ label: 'Delete account', destructive: true, onPress: handleDeleteAccount },
+] });
   };
 
   const showWidgetHelp = () => {
     Alert.alert(
       'Add a Moments widget',
-      'Touch and hold an empty spot on your Home Screen, tap +, then search for Moments and pick a widget.',
+      'Touch and hold an empty spot on your Home Screen until the apps jiggle, tap Edit, then Add Widget, and search for Moments.',
     );
   };
 
@@ -165,15 +206,10 @@ export default function SettingsScreen() {
     // Paying for Plus: deleting the account can't cancel an App Store / Google Play
     // subscription, and it would keep charging. Say so first, with a way to cancel.
     if (isPlus && isOwner) {
-      Alert.alert(
-        'Cancel your subscription first',
-        'You pay for Moments Plus. Deleting your account doesn’t cancel it, so you’d keep being charged. Cancel it in your subscriptions first.',
-        [
-          { text: 'Not now', style: 'cancel' },
-          { text: 'Manage subscription', onPress: () => void openSubscriptionManagement().catch(() => undefined) },
-          { text: 'Delete anyway', style: 'destructive', onPress: confirmDeleteAccount },
-        ],
-      );
+      askChoice({ title: 'Cancel your subscription first', message: 'You pay for Moments Plus. Deleting your account doesn’t cancel it, so you’d keep being charged. Cancel it in your subscriptions first.', cancelLabel: 'Not now', actions: [
+{ label: 'Manage subscription', onPress: () => void openSubscriptionManagement().catch(() => undefined) },
+{ label: 'Delete anyway', destructive: true, onPress: confirmDeleteAccount },
+] });
       return;
     }
     confirmDeleteAccount();
@@ -183,15 +219,8 @@ export default function SettingsScreen() {
     const space = relationship
       ? ' Your shared space closes for both of you, with its moments, chats and memories.'
       : '';
-    Alert.alert(
-      'Delete your account?',
-      `This permanently deletes your account, photos and messages.${space} This can’t be undone.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete forever',
-          style: 'destructive',
-          onPress: async () => {
+    askChoice({ title: 'Delete your account?', message: `This permanently deletes your account, photos and messages.${space} This can’t be undone.`, actions: [
+{ label: 'Delete forever', destructive: true, onPress: async () => {
             try {
               const token = await getToken();
               if (!token) throw new Error('Please sign in again, then try.');
@@ -203,10 +232,8 @@ export default function SettingsScreen() {
             // The account is gone; signing out can fail on a dead session, which is fine.
             await signOutUser().catch(() => undefined);
             router.replace('/(auth)/welcome');
-          },
-        },
-      ],
-    );
+          } },
+] });
   };
 
   const handleLeaveRelationship = () => {
@@ -228,12 +255,8 @@ export default function SettingsScreen() {
       }
     }
 
-    Alert.alert('End your shared space?', message, [
-      { text: 'Stay', style: 'cancel' },
-      {
-        text: 'End space',
-        style: 'destructive',
-        onPress: async () => {
+    askChoice({ title: 'End your shared space?', message: message, cancelLabel: 'Stay', actions: [
+{ label: 'End space', destructive: true, onPress: async () => {
           try {
             await api.leaveRelationship(user.id, relationship.id);
             await markRelationshipOnboardingDone(user.id);
@@ -246,9 +269,8 @@ export default function SettingsScreen() {
           } catch (e) {
             Alert.alert('Could not end the space', e instanceof Error ? e.message : 'Please try again.');
           }
-        },
-      },
-    ]);
+        } },
+] });
   };
 
   const openEdit = (field: 'name' | 'space' | 'email', current: string) => {
@@ -422,6 +444,10 @@ export default function SettingsScreen() {
 
   const saveBirthday = async (isoDate: string) => {
     if (!user) return;
+    if (!isOldEnough(isoDate)) {
+      Alert.alert(`Moments is for ${MIN_AGE} and over`, 'Check the date and try again.');
+      return;
+    }
     setSavingBirthday(true);
     try {
       const updated = await api.updateProfile(user.id, { birthday: isoDate });
@@ -555,8 +581,14 @@ export default function SettingsScreen() {
 
         <Section title="Preferences">
           <Group>
-            <Row icon="bell" label="Notifications" onPress={() => router.push('/notification-settings')} />
-            <Row icon="phone" label="Widget" onPress={showWidgetHelp} last />
+            <Row
+              icon="bell"
+              label="Notifications"
+              onPress={() => router.push('/notification-settings')}
+              last={Platform.OS !== 'ios'}
+            />
+            {/* Moments widgets are iPhone only for now. */}
+            {Platform.OS === 'ios' ? <Row icon="phone" label="Widget" onPress={showWidgetHelp} last /> : null}
             <SettingsToggleDivider />
             <SettingsToggleRow
               icon="haptics"
@@ -587,7 +619,15 @@ export default function SettingsScreen() {
             <Row
               icon="diamond"
               label="Your plan"
-              value={isPlus ? (isOwner ? 'Plus' : `Plus · via ${getFirstName(partner?.name) ?? 'partner'}`) : 'Free'}
+              value={
+                isPlus
+                  ? relationship?.subscription_period === 'grace' && isOwner
+                    ? 'Plus · payment issue'
+                    : isOwner
+                      ? 'Plus'
+                      : `Plus · via ${getFirstName(partner?.name) ?? 'partner'}`
+                  : 'Free'
+              }
               onPress={openPlan}
             />
             <Row
@@ -609,7 +649,7 @@ export default function SettingsScreen() {
           <Group>
             <Row icon="help" label="Contact support" onPress={() => contactSupport('Help with Moments')} />
             <Row icon="flag" label="Report a problem" onPress={() => contactSupport('Problem report')} />
-            <Row icon="star" label="Rate Moments" onPress={() => void rateFromSettings()} />
+            <Row icon="star" label="Rate Moments" onPress={() => useUIStore.setState({ showRatingPage: true })} />
             <Row icon="mail" label="Send feedback" onPress={() => contactSupport('Feedback')} />
             <Row icon="lock" label="Privacy policy" onPress={() => router.push('/legal/privacy')} />
             <Row icon="document" label="Terms of service" onPress={() => router.push('/legal/terms')} last />
@@ -636,7 +676,10 @@ export default function SettingsScreen() {
               <Row
                 icon="play"
                 label="Walk through onboarding"
-                onPress={() => router.push({ pathname: '/(onboarding)/about-you', params: { preview: '1' } })}
+                onPress={() => {
+                  useUIStore.setState({ devPreview: true });
+                  router.push({ pathname: '/(onboarding)/about-you', params: { preview: '1' } });
+                }}
               />
               <Row
                 icon="lock"
@@ -656,6 +699,116 @@ export default function SettingsScreen() {
                 }}
               />
               <Row
+                icon="star"
+                label="Preview rating page"
+                onPress={() => useUIStore.setState({ showRatingPage: true })}
+              />
+              <Row
+                icon="bell"
+                label="Preview Dynamic Island"
+                onPress={() =>
+                  notifyIsland({
+                    title: getFirstName(partner?.name) ?? 'Your person',
+                    // Short and to the point, like the real ones.
+                    message: 'Sent you a moment from your coffee spot',
+                    icon: 'camera',
+                    avatar: partner?.avatar_url ?? null,
+                    avatarName: partner?.name ?? 'Partner',
+                  })
+                }
+              />
+              <Row
+                icon="bell"
+                label="Send a test notification (in 5s)"
+                onPress={() => void sendTestNotification(getFirstName(partner?.name) ?? 'Your person')}
+              />
+              <Row
+                icon="home"
+                label="Preview widgets"
+                onPress={() => {
+                  useUIStore.setState({ devPreview: true });
+                  router.push({ pathname: '/(onboarding)/widget-prompt', params: { preview: '1' } });
+                }}
+              />
+              <Row
+                icon="call"
+                label="Preview voice call"
+                onPress={() =>
+                  useCallStore.getState().setIncoming({
+                    callId: 'preview-voice',
+                    mode: 'audio',
+                    partnerName: getFirstName(partner?.name) ?? 'Your person',
+                  })
+                }
+              />
+              <Row
+                icon="videocam"
+                label="Preview video call"
+                onPress={() =>
+                  useCallStore.getState().setIncoming({
+                    callId: 'preview-video',
+                    mode: 'video',
+                    partnerName: getFirstName(partner?.name) ?? 'Your person',
+                  })
+                }
+              />
+              <Row
+                icon="call"
+                label="Preview voice call (in call)"
+                onPress={() => previewCall('audio', true)}
+              />
+              <Row
+                icon="videocam"
+                label="Preview video call (in call)"
+                onPress={() => previewCall('video', true)}
+              />
+              <Row
+                icon="call"
+                label="Preview calling them (ringing)"
+                onPress={() => {
+                  // As when you start a call: ringing, then they pick up.
+                  const calls = useCallStore.getState();
+                  calls.reset();
+                  calls.setMode('audio');
+                  useCallStore.setState({
+                    callId: 'preview-audio',
+                    partnerName: getFirstName(partner?.name) ?? 'Your person',
+                  });
+                  calls.setPhase('outgoing');
+                  setTimeout(() => {
+                    if (useCallStore.getState().phase === 'outgoing') useCallStore.getState().setPhase('active');
+                  }, 3500);
+                }}
+              />
+              <Row
+                icon="videocam"
+                label="Preview: they turn on their camera"
+                onPress={() => {
+                  // In a voice call preview: what you see when your partner turns theirs on.
+                  previewCall('audio', true);
+                  setTimeout(() => useCallStore.getState().setPartnerCamera(true), 1500);
+                }}
+              />
+              <Row
+                icon="chevronDown"
+                label="Preview minimised call"
+                onPress={() => {
+                  previewCall('audio', true);
+                  useCallStore.getState().setMinimized(true);
+                }}
+              />
+              <Row
+                icon="unlock"
+                label="Pretend Plus is on"
+                onPress={() => setDevPlus(!devPlus)}
+                right={<AppSwitch value={devPlus} onValueChange={setDevPlus} />}
+              />
+              <Row
+                icon="gamepad"
+                label="Open Endless games"
+                onPress={() => router.navigate({ pathname: '/(tabs)/activities', params: { tab: 'endless' } })}
+              />
+              <Row
                 icon="fire"
                 label="Preview streak celebration"
                 onPress={() => useUIStore.getState().openStreakSpark(42, 41)}
@@ -664,6 +817,46 @@ export default function SettingsScreen() {
                 icon="star"
                 label="Preview milestone celebration"
                 onPress={() => useUIStore.getState().openStreakMilestone(50)}
+              />
+              <Row
+                icon="gift"
+                label="Preview partner's birthday"
+                onPress={() =>
+                  useUIStore.setState({ birthdayCelebration: { kind: 'today', whose: 'partner', preview: true } })
+                }
+              />
+              <Row
+                icon="gift"
+                label="Preview your birthday"
+                onPress={() => useUIStore.setState({ birthdayCelebration: { kind: 'today', whose: 'me', preview: true } })}
+              />
+              <Row
+                icon="calendar"
+                label="Preview birthday reminder (day before)"
+                onPress={() =>
+                  useUIStore.setState({ birthdayCelebration: { kind: 'eve', whose: 'partner', preview: true } })
+                }
+              />
+              <Row
+                icon="bell"
+                label="Preview birthday notification (in 5s)"
+                onPress={() => void sendTestNotification(getFirstName(partner?.name) ?? 'Your person', 'birthday')}
+              />
+              <Row icon="sunny" label="Preview Home header (day and night)" onPress={() => setDesignPreview('header')} />
+              <Row icon="fire" label="Preview streak at risk and restore" onPress={() => setDesignPreview('streak')} />
+              <Row icon="gift" label="Preview birthday cards on Home" onPress={() => setDesignPreview('birthday')} />
+              <Row
+                icon="bell"
+                label="Send the streak alerts (5s, 10s, 15s)"
+                onPress={() => void sendTestNotification(getFirstName(partner?.name) ?? 'Your person', 'streak')}
+              />
+              <Row
+                icon="calendar"
+                label="Preview onboarding birthday step"
+                onPress={() => {
+                  useUIStore.setState({ devPreview: true });
+                  router.push({ pathname: '/(onboarding)/birthday', params: { preview: '1' } });
+                }}
                 last
               />
             </Group>
@@ -684,6 +877,8 @@ export default function SettingsScreen() {
 
       </ScrollView>
 
+      <DesignPreviewModal kind={designPreview} onClose={() => setDesignPreview(null)} />
+
       <EditFieldModal
         visible={editField !== null}
         title={editModalTitle}
@@ -692,6 +887,8 @@ export default function SettingsScreen() {
         placeholder={editField === 'email' ? 'you@example.com' : editField === 'space' ? 'Our little world' : 'Your name'}
         keyboardType={editField === 'email' ? 'email-address' : 'default'}
         autoCapitalize={editField === 'email' ? 'none' : 'words'}
+        // The same limits as onboarding (name) and the space-name step.
+        maxLength={editField === 'email' ? 254 : 32}
         saving={savingEdit}
         onChange={setEditDraft}
         onClose={closeEdit}
@@ -732,13 +929,14 @@ export default function SettingsScreen() {
 
       <EditAnniversaryModal
         visible={birthdayOpen}
-        value={user?.birthday ?? '1998-01-01'}
+        value={user?.birthday ?? '2000-01-01'}
         saving={savingBirthday}
         onClose={() => setBirthdayOpen(false)}
         onSave={(iso) => void saveBirthday(iso)}
         title="Birthday"
         hint="Only your person sees it. They get a countdown and a reminder so they never forget."
         minYear={1920}
+        maxYear={latestBirthYear()}
       />
 
       <EditRelationshipTypeModal
@@ -760,6 +958,63 @@ export default function SettingsScreen() {
       ) : null}
     </View>
   );
+}
+
+/**
+ * Developer: a real system notification a few seconds from now, so you can leave the
+ * app and see it on the lock screen / as a banner. Tapping it opens the moment flow.
+ */
+async function sendTestNotification(partnerName: string, kind: 'moment' | 'birthday' | 'streak' = 'moment') {
+  const Notifications = loadExpoNotifications();
+  if (!Notifications) {
+    Alert.alert('Not available here', 'System notifications need a development build (not Expo Go).');
+    return;
+  }
+  try {
+    let { granted } = await Notifications.getPermissionsAsync();
+    if (!granted) granted = (await Notifications.requestPermissionsAsync()).granted;
+    if (!granted) {
+      Alert.alert('Notifications are off', 'Turn them on for Moments in your phone’s Settings, then try again.');
+      return;
+    }
+    if (kind === 'streak') {
+      // The three streak alerts, with the same words as lib/streak-reminders (on a 12-day streak).
+      const alerts = [
+        { title: 'Streak at risk', body: 'Your 12 day streak ends in 3 hours. Check in to keep it going.', kind: 'warn' },
+        { title: 'Last chance', body: 'Your 12 day streak ends in 1 hour. Check in before midnight.', kind: 'nudge' },
+        { title: 'Streak ended', body: 'Your 12 day streak ended. Check in today to start a new one.', kind: 'ended' },
+      ];
+      for (const [i, a] of alerts.entries()) {
+        await Notifications.scheduleNotificationAsync({
+          content: { title: a.title, body: a.body, data: { type: 'streak', kind: a.kind }, sound: true },
+          trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: 5 * (i + 1) },
+        });
+      }
+      Alert.alert('Sending 3 alerts', 'At 5, 10 and 15 seconds. Leave the app (or lock your phone) to see them.');
+      return;
+    }
+    await Notifications.scheduleNotificationAsync({
+      // The same words the server sends (see the birthday heads-up in server/src/birthdays.ts).
+      content:
+        kind === 'birthday'
+          ? {
+              title: 'Birthday tomorrow',
+              body: `${partnerName}’s birthday is tomorrow 🎂 Plan something special.`,
+              data: { type: 'birthday' },
+              sound: true,
+            }
+          : {
+              title: `${partnerName} sent you a moment`,
+              body: 'Tap to see it before it’s gone.',
+              data: { type: 'moment' },
+              sound: true,
+            },
+      trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: 5 },
+    });
+    Alert.alert('Sent in 5 seconds', 'Leave the app (or lock your phone) to see it arrive.');
+  } catch (e) {
+    Alert.alert('Couldn’t schedule it', e instanceof Error ? e.message : 'Please try again.');
+  }
 }
 
 function Section({ title, children }: { title: string; children: ReactNode }) {

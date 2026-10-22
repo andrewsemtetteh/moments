@@ -1,4 +1,5 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import type { ComponentProps } from 'react';
 
 export type IconName =
@@ -34,6 +35,7 @@ export type IconName =
   | 'compass'
   | 'globe'
   | 'star'
+  | 'snow'
   | 'gift'
   | 'image'
   | 'logout'
@@ -97,11 +99,18 @@ export type IconName =
   | 'phone'
   | 'haptics'
   | 'palette'
-  | 'unlock';
+  | 'unlock'
+  /** Two crossed swords (head to head, the daily duel). Not in Ionicons: drawn from Material Community. */
+  | 'swords';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
 
-const ICON_MAP: Record<IconName, { outline: IoniconName; filled: IoniconName }> = {
+/** Icons Ionicons doesn't have, from Material Community Icons (same package). */
+const MATERIAL_ICONS: Partial<Record<IconName, ComponentProps<typeof MaterialCommunityIcons>['name']>> = {
+  swords: 'sword-cross',
+};
+
+const ICON_MAP: Record<Exclude<IconName, 'swords'>, { outline: IoniconName; filled: IoniconName }> = {
   home: { outline: 'home-outline', filled: 'home' },
   spark: { outline: 'sparkles-outline', filled: 'sparkles' },
   plus: { outline: 'add', filled: 'add' },
@@ -135,6 +144,7 @@ const ICON_MAP: Record<IconName, { outline: IoniconName; filled: IoniconName }> 
   compass: { outline: 'compass-outline', filled: 'compass' },
   globe: { outline: 'globe-outline', filled: 'globe' },
   star: { outline: 'star-outline', filled: 'star' },
+  snow: { outline: 'snow-outline', filled: 'snow' },
   gift: { outline: 'gift-outline', filled: 'gift' },
   image: { outline: 'image-outline', filled: 'image' },
   logout: { outline: 'log-out-outline', filled: 'log-out' },
@@ -217,7 +227,9 @@ interface IconProps {
 
 /** Ionicons-backed icon set used across the app. */
 export function Icon({ name, size = 24, color = '#000', filled = false }: IconProps) {
-  const mapped = ICON_MAP[name];
+  const material = MATERIAL_ICONS[name];
+  if (material) return <MaterialCommunityIcons name={material} size={size} color={color} />;
+  const mapped = ICON_MAP[name as Exclude<IconName, 'swords'>];
   const ionName = filled ? mapped.filled : mapped.outline;
   return <Ionicons name={ionName} size={size} color={color} />;
 }

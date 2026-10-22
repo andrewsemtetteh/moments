@@ -63,6 +63,22 @@ export async function openStoreReview(): Promise<boolean> {
   return false;
 }
 
+/**
+ * The stars sheet inside Moments (Apple's / Google's own in-app review), so nobody has
+ * to leave the app. The system decides whether it actually shows (Apple caps it at 3 a
+ * year; it never shows in TestFlight or Expo Go), so the page keeps a store link too.
+ * Returns false when this phone can't show it at all.
+ */
+export async function requestInAppReview(): Promise<boolean> {
+  if (!(await StoreReview.isAvailableAsync().catch(() => false))) return false;
+  try {
+    await StoreReview.requestReview();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** Settings › Rate Moments: they chose to rate, so straight to the store. */
 export async function rateFromSettings(): Promise<void> {
   if (await openStoreReview()) await markStoreReviewCompleted();

@@ -1,4 +1,5 @@
 import { Image } from 'expo-image';
+import { mediaSource } from '@/lib/storage-cdn';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
@@ -44,7 +45,7 @@ export function PlanHeroCard({
     <Pressable onPress={() => onPressEvent?.(event)} style={[styles.hero, { shadowColor: colors.shadow }]}>
       <LinearGradient colors={gradient} style={StyleSheet.absoluteFill} start={{ x: 0.1, y: 0 }} end={{ x: 1, y: 1 }} />
       <Image
-        source={{ uri: heroImageFor(event) }}
+        source={mediaSource(heroImageFor(event))}
         style={styles.image}
         contentFit="cover"
         transition={200}

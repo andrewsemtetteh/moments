@@ -1,6 +1,5 @@
-import { useFocusEffect, useRouter } from 'expo-router';
-import { setStatusBarStyle } from 'expo-status-bar';
-import { useCallback, useMemo, useState } from 'react';
+import { useRouter } from 'expo-router';
+import { useMemo, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -13,6 +12,7 @@ import { Icon, type IconName } from '@/components/ui/Icon';
 import { Avatar, colorWithAlpha, paperEdge, separatorColor, trackColor } from '@/components/ui/primitives';
 import { ringColor } from '@/constants/design-system';
 import { useStreak } from '@/hooks/queries';
+import { useStatusBarStyle } from '@/hooks/useLightStatusBar';
 import { useTheme } from '@/hooks/useTheme';
 import { getFirstName } from '@/lib/avatar-initial';
 import { closeStackScreen } from '@/lib/router';
@@ -65,13 +65,7 @@ export default function StreakScreen() {
   // While the band is behind the status bar its icons follow the band, then the theme.
   const [bandHeight, setBandHeight] = useState(0);
   const [pastBand, setPastBand] = useState(false);
-  useFocusEffect(
-    useCallback(() => {
-      const light = pastBand ? colors.isDark : bandIsDark;
-      setStatusBarStyle(light ? 'light' : 'dark', true);
-      return () => setStatusBarStyle(colors.isDark ? 'light' : 'dark', true);
-    }, [pastBand, bandIsDark, colors.isDark]),
-  );
+  useStatusBarStyle((pastBand ? colors.isDark : bandIsDark) ? 'light' : 'dark');
   // Default: every card is a sticker (ink outline).
   const outline = colors.boldBorder && colors.hero ? { borderWidth: 2, borderColor: colors.border } : null;
   const count = status.current_streak;
@@ -106,7 +100,7 @@ export default function StreakScreen() {
   const explain = () =>
     Alert.alert(
       'How streaks work',
-      'Each of you has your own streak. It grows every day you check in: send a moment, share your mood, answer today’s question or play a game together. Miss a day and it starts over (with Plus you can restore it within 24 hours).\n\nDays you both check in count towards your together streak.',
+      'Each of you has your own streak. It grows every day you check in: send a moment, share your mood, answer today’s question or play a game together. Every 7 days in a row earns a streak freeze (you can hold 2): if you miss a day, one is used automatically and your streak is kept. Miss a day with no freeze and it starts over (with Plus you can restore it within 24 hours).\n\nDays you both check in count towards your together streak.',
     );
 
   return (
@@ -135,8 +129,9 @@ export default function StreakScreen() {
           </View>
           <View style={styles.countRow}>
             {/* The milestone screen's flame character. */}
-            <View style={count === 0 ? styles.idleFlame : undefined}>
-              <StickerFlame size={64} face animated={count > 0} />
+            {/* No streak: the flame gone out, solid and full size (not a faded orange one). */}
+            <View>
+              <StickerFlame size={64} face animated={count > 0} variant={count > 0 ? 'lit' : 'out'} />
             </View>
             <Text style={[styles.count, { color: ink }]}>{count}</Text>
           </View>
@@ -148,11 +143,22 @@ export default function StreakScreen() {
               ? `You’ve shown up ${count} day${count === 1 ? '' : 's'} in a row.`
               : 'Check in today to start day 1.'}
           </Text>
-          {best > 0 ? (
-            <View style={[styles.bestPill, { borderColor: ink }]}>
-              <Text style={[styles.bestText, { color: ink }]}>Best · {best} days</Text>
-            </View>
-          ) : null}
+          <View style={styles.pills}>
+            {best > 0 ? (
+              <View style={[styles.bestPill, { borderColor: ink }]}>
+                <Text style={[styles.bestText, { color: ink }]}>Best · {best} days</Text>
+              </View>
+            ) : null}
+            {/* Streak freezes you hold: one saves a missed day. */}
+            {(status.streak_freezes ?? 0) > 0 ? (
+              <View style={[styles.bestPill, styles.freezePill, { borderColor: ink }]}>
+                <StickerFlame size={12} variant="frozen" />
+                <Text style={[styles.bestText, { color: ink }]}>
+                  {status.streak_freezes} {status.streak_freezes === 1 ? 'freeze' : 'freezes'}
+                </Text>
+              </View>
+            ) : null}
+          </View>
         </View>
 
         {isStreakRestoreAvailable(status) ? <StreakRestoreBanner status={status} /> : null}
@@ -173,8 +179,8 @@ export default function StreakScreen() {
               </View>
               <View style={styles.personCount}>
                 <Text style={[styles.personNum, { color: colors.text }]}>{count}</Text>
-                <View style={[styles.personIcon, count > 0 ? undefined : styles.idleFlame]}>
-                  <StickerFlame size={28} />
+                <View style={styles.personIcon}>
+                  <StickerFlame size={28} variant={count > 0 ? 'lit' : 'out'} />
                 </View>
               </View>
             </View>
@@ -196,8 +202,8 @@ export default function StreakScreen() {
                 </View>
                 <View style={styles.personCount}>
                   <Text style={[styles.personNum, { color: colors.text }]}>{theirCount}</Text>
-                  <View style={[styles.personIcon, theirCount > 0 ? undefined : styles.idleFlame]}>
-                    <StickerFlame size={28} />
+                  <View style={styles.personIcon}>
+                    <StickerFlame size={28} variant={theirCount > 0 ? 'lit' : 'out'} />
                   </View>
                 </View>
               </View>
@@ -434,6 +440,8 @@ const styles = StyleSheet.create({
   count: { fontSize: 60, fontWeight: '900', letterSpacing: -2, lineHeight: 66 },
   countUnit: { fontSize: 17, fontWeight: '800' },
   heroSub: { fontSize: 14, fontWeight: '600', opacity: 0.85, textAlign: 'center', marginTop: 2 },
+  pills: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 8 },
+  freezePill: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   bestPill: { marginTop: 8, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999, borderWidth: 1.5 },
   bestText: { fontSize: 13, fontWeight: '800' },
   card: { borderRadius: 22 },

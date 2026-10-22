@@ -8,7 +8,7 @@ import type { IconName } from '@/components/ui/Icon';
 export const NOTIFICATION_CATEGORIES: { key: string; label: string; detail: string; icon: IconName; types: string[] }[] = [
   { key: 'messages', label: 'Messages', detail: 'When your partner sends you a message', icon: 'chat', types: ['message', 'message_new'] },
   { key: 'moments', label: 'New moments', detail: 'When they share a photo or video', icon: 'camera', types: ['moment'] },
-  { key: 'moods', label: 'Mood updates', detail: 'When they log how they’re feeling', icon: 'happy', types: ['mood', 'mood_update'] },
+  { key: 'moods', label: 'Mood updates', detail: 'When they log how they’re feeling', icon: 'happy', types: ['mood', 'mood_update', 'mood_checkin'] },
   { key: 'dailyQuestion', label: 'Daily question', detail: 'When they answer today’s question', icon: 'question', types: ['challenge'] },
   { key: 'streaks', label: 'Streak reminders', detail: 'Before your streak runs out', icon: 'fire', types: ['streak'] },
   { key: 'games', label: 'Game invites', detail: 'When they start a game or it’s your turn', icon: 'gamepad', types: ['game_invite', 'game_turn'] },

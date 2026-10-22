@@ -1,6 +1,6 @@
 import { useIsFocused } from 'expo-router';
 import { forwardRef, useEffect, useImperativeHandle, type ReactNode } from 'react';
-import { Dimensions, StyleProp, ViewStyle } from 'react-native';
+import { StyleProp, ViewStyle, useWindowDimensions } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   runOnJS,
@@ -11,7 +11,6 @@ import Animated, {
 
 import { useTheme } from '@/hooks/useTheme';
 
-const SCREEN_WIDTH = Dimensions.get('window').width;
 const DISMISS_THRESHOLD = 56;
 const DISMISS_VELOCITY = 650;
 /** Carries release velocity through so a fast flick keeps its momentum instead of snapping at a fixed rate. */
@@ -54,6 +53,8 @@ export const SwipeDismissView = forwardRef<SwipeDismissViewHandle, Props>(
   ) {
     const { colors } = useTheme();
     const isFocused = useIsFocused();
+    // Read live, so a fold / unfold, split screen or rotation redraws at the new size.
+    const SCREEN_WIDTH = useWindowDimensions().width;
     const closedPosition = edge === 'start' ? SCREEN_WIDTH : -SCREEN_WIDTH;
     const translateX = useSharedValue(animateEntrance && isFocused ? closedPosition : 0);
 

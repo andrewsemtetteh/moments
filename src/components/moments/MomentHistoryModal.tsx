@@ -1,21 +1,11 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { Image } from 'expo-image';
+import { mediaSource } from '@/lib/storage-cdn';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from '@/lib/haptics';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
-  Dimensions,
-  FlatList,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-  type NativeScrollEvent,
-  type NativeSyntheticEvent,
-} from 'react-native';
+import { ActivityIndicator, Alert, FlatList, Pressable, StyleSheet, Text, View, type NativeScrollEvent, type NativeSyntheticEvent, useWindowDimensions } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   Easing,
@@ -39,7 +29,7 @@ import { OurMapCard, OurMapView, placeTitle } from '@/components/moments/MomentP
 import { MomentTile } from '@/components/moments/MomentTile';
 import { HeaderIconButton } from '@/components/ui/HeaderIconButton';
 import { Icon, type IconName } from '@/components/ui/Icon';
-import { colorWithAlpha, cardSurface } from '@/components/ui/primitives';
+import { colorWithAlpha, cardSurface, cardEdge } from '@/components/ui/primitives';
 import { ThemedStatusBar } from '@/components/ui/ThemedStatusBar';
 import { introBand } from '@/components/home/WelcomeCard';
 import { useDeleteMoments, useMoments } from '@/hooks/queries';
@@ -69,14 +59,20 @@ import { toUserFacingNetworkError } from '@/lib/network-error';
 import { useAuthStore, useRelationshipStore, useUIStore } from '@/stores';
 import type { Moment } from '@/types/database';
 import { MOMENTS_BACK, useMomentsBack } from '@/lib/moments-back';
+import { askChoice } from '@/components/ui/ChoiceSheet';
 
-const SCREEN_W = Dimensions.get('window').width;
 const GRID_PAD = 14;
 const GRID_GAP = 6;
-const COLS = 3;
-const TILE = Math.floor((SCREEN_W - GRID_PAD * 2 - GRID_GAP * (COLS - 1)) / COLS);
-/** Portrait, like the photos themselves. */
-const TILE_H = Math.round(TILE * (4 / 3));
+
+/**
+ * The grid for this screen width (read live: folds, tablets, rotation): 3 across on a
+ * phone, 5 on a tablet or an unfolded phone, tiles portrait like the photos themselves.
+ */
+function gridFor(width: number) {
+  const cols = width >= 700 ? 5 : 3;
+  const tile = Math.floor((width - GRID_PAD * 2 - GRID_GAP * (cols - 1)) / cols);
+  return { cols, tile, tileH: Math.round(tile * (4 / 3)) };
+}
 /** The album cover band's height below the status bar. */
 const ALBUM_HERO_H = 250;
 const DISMISS_DISTANCE = 72;
@@ -114,17 +110,17 @@ type SheetState =
     }
   | null;
 
-function toRows(key: string, label: string, moments: Moment[], withHeader: boolean): HistoryRow[] {
+function toRows(key: string, label: string, moments: Moment[], withHeader: boolean, cols: number): HistoryRow[] {
   const out: HistoryRow[] = [];
   if (withHeader) out.push({ kind: 'header', key: `h-${key}`, label, count: moments.length });
-  for (let i = 0; i < moments.length; i += COLS) {
+  for (let i = 0; i < moments.length; i += cols) {
     out.push({
       kind: 'tiles',
       key: `r-${key}-${i}`,
-      moments: moments.slice(i, i + COLS),
+      moments: moments.slice(i, i + cols),
       sectionMoments: moments,
       sectionLabel: label,
-      lastInSection: i + COLS >= moments.length,
+      lastInSection: i + cols >= moments.length,
     });
   }
   return out;
@@ -132,6 +128,8 @@ function toRows(key: string, label: string, moments: Moment[], withHeader: boole
 
 export function MomentHistoryModal() {
   const insets = useSafeAreaInsets();
+  const { width: SCREEN_W } = useWindowDimensions();
+  const { cols: COLS, tile: TILE, tileH: TILE_H } = gridFor(SCREEN_W);
   const { colors } = useTheme();
   const chrome = momentChrome(colors);
   const visible = useUIStore((s) => s.showMomentHistory);
@@ -213,13 +211,13 @@ export function MomentHistoryModal() {
   const rows = useMemo(
     () =>
       groupMomentsForHistory(displayMoments).flatMap((section) =>
-        toRows(section.key, section.label, section.moments, true),
+        toRows(section.key, section.label, section.moments, true, COLS),
       ),
-    [displayMoments],
+    [displayMoments, COLS],
   );
   const albumRows = useMemo(
-    () => (openAlbum ? toRows(openAlbum.id, openAlbum.name, albumMoments, false) : []),
-    [openAlbum, albumMoments],
+    () => (openAlbum ? toRows(openAlbum.id, openAlbum.name, albumMoments, false, COLS) : []),
+    [openAlbum, albumMoments, COLS],
   );
 
   // Free accounts still page in until they've loaded enough to fill their
@@ -501,19 +499,31 @@ export function MomentHistoryModal() {
     if (media.length) uploadInto(album, media);
   };
 
-  const onCreateAlbum = ({ name, emoji, media }: { name: string; emoji: string; media?: PickedMedia[] }) => {
+  const onCreateAlbum = ({
+    name,
+    emoji,
+    media,
+    momentIds,
+  }: {
+    name: string;
+    emoji: string;
+    media?: PickedMedia[];
+    /** Moments picked on the New album page ("Add from your moments"). */
+    momentIds?: string[];
+  }) => {
     const pending = sheet?.kind === 'create' ? sheet.pendingIds : null;
     setSheet(null);
     if (pending?.length) {
       // From select mode: the album is born with the picked moments.
-      const album = createAlbum({ name, emoji, momentIds: pending });
+      const album = createAlbum({ name, emoji, momentIds: [...new Set([...pending, ...(momentIds ?? [])])] });
       exitSelection();
       backToAlbum(album.id);
       if (media?.length) uploadInto(album, media);
       return;
     }
-    // From "New album": create it and open it; anything picked from the phone uploads into it.
-    const album = createAlbum({ name, emoji });
+    // From "New album": create it (with any moments picked) and open it; anything picked from
+    // the phone uploads into it.
+    const album = createAlbum({ name, emoji, momentIds: momentIds?.length ? momentIds : undefined });
     backToAlbum(album.id);
     if (media?.length) uploadInto(album, media);
   };
@@ -645,12 +655,8 @@ export function MomentHistoryModal() {
         ? `Remove ${ownedSelectedIds.length} moment${ownedSelectedIds.length === 1 ? '' : 's'} you sent? ${skipped} from your partner will stay in your history.`
         : `Remove ${ownedSelectedIds.length} moment${ownedSelectedIds.length === 1 ? '' : 's'}? This removes them for both of you and cannot be undone.`;
 
-    Alert.alert('Delete moments?', message, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: () => {
+    askChoice({ title: 'Delete moments?', message: message, actions: [
+{ label: 'Delete', destructive: true, onPress: () => {
           void (async () => {
             setDeleting(true);
             try {
@@ -664,9 +670,8 @@ export function MomentHistoryModal() {
               setDeleting(false);
             }
           })();
-        },
-      },
-    ]);
+        } },
+] });
   };
 
   // Swipe right anywhere: back out of an album / the map, otherwise close History.
@@ -690,6 +695,8 @@ export function MomentHistoryModal() {
       levelX.set(SCREEN_W);
       levelX.set(withTiming(0, { duration: 280, easing: Easing.out(Easing.cubic) }));
     }
+    // Slides in when an album / the map opens (not again when the screen size changes).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [onLevel, subLevel, levelX]);
 
   const closeLevel = () => {
@@ -781,7 +788,7 @@ export function MomentHistoryModal() {
     return (
       <View style={[styles.grid, item.lastInSection && styles.gridSectionEnd]}>
         {item.moments.map((moment) => (
-          <View key={moment.id} style={styles.cell}>
+          <View key={moment.id} style={{ width: TILE }}>
             <MomentTile
               moment={moment}
               width={TILE}
@@ -870,7 +877,7 @@ export function MomentHistoryModal() {
       />
       <View style={[styles.albumHero, { backgroundColor: heroBg }]}>
         {coverPhoto ? (
-          <Image source={{ uri: coverPhoto }} style={StyleSheet.absoluteFill} contentFit="cover" transition={200} />
+          <Image source={mediaSource(coverPhoto)} style={StyleSheet.absoluteFill} contentFit="cover" transition={200} />
         ) : null}
         {/* Over a photo: darkens the top for the status bar and buttons, and the bottom for the name. */}
         {coverPhoto ? (
@@ -905,21 +912,22 @@ export function MomentHistoryModal() {
     setSheet({
       kind: 'actions',
       title: `Add to ${openAlbum.name}`,
+      // Moments you've shared first (what an album is mostly made of), then new ones from the phone.
       actions: [
-        {
-          label: 'Upload photos & videos',
-          icon: 'image',
-          onPress: () => {
-            setSheet(null);
-            void uploadFromLibrary(openAlbum);
-          },
-        },
         {
           label: 'Add from your moments',
           icon: 'albums',
           onPress: () => {
             setSheet(null);
             startAddingToOpenAlbum();
+          },
+        },
+        {
+          label: 'Upload photos & videos',
+          icon: 'image',
+          onPress: () => {
+            setSheet(null);
+            void uploadFromLibrary(openAlbum);
           },
         },
       ],
@@ -1206,6 +1214,7 @@ export function MomentHistoryModal() {
             withMedia
             mediaLimit={Number.isFinite(uploadsLeft) ? uploadsLeft : undefined}
             freeDailyMoments={limits.dailyMoments}
+            moments={allMoments}
             onSubmit={onCreateAlbum}
             onClose={() => setSheet(sheet.back ?? null)}
           />
@@ -1282,6 +1291,7 @@ function FloatingButton({
         style={({ pressed }) => [
           styles.floatingBtn,
           { backgroundColor: chrome.accent, opacity: disabled ? 0.45 : pressed ? 0.9 : 1 },
+          cardEdge(colors),
         ]}>
         <Icon name={icon} size={20} color={chrome.onAccent} />
         <Text style={[styles.floatingText, { color: chrome.onAccent }]}>{label}</Text>
@@ -1401,7 +1411,6 @@ const styles = StyleSheet.create({
   // Three portrait cards a row, a small even gap all round.
   grid: { flexDirection: 'row', gap: GRID_GAP, marginBottom: GRID_GAP },
   gridSectionEnd: { marginBottom: 26 },
-  cell: { width: TILE },
   loadMore: { alignItems: 'center', paddingVertical: 16 },
   unlockBanner: {
     flexDirection: 'row',

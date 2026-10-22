@@ -44,6 +44,9 @@ const Root: React.FC<IDynamicNotifications> &
     | null => {
     const { width } = useWindowDimensions();
     const insets = useSafeAreaInsets();
+    const timeline = useNotificationTimeline({ onDismiss, duration });
+    // A longer message gets a taller card (the notification says how tall).
+    const bodyHeight = timeline.notification?.cardHeight ?? cardHeight;
 
     const layout = useMemo(
       () =>
@@ -54,7 +57,7 @@ const Root: React.FC<IDynamicNotifications> &
           islandHeight,
           islandTop,
           cardWidth,
-          cardHeight,
+          cardHeight: bodyHeight,
           cardRadius,
           gap,
         }),
@@ -65,7 +68,7 @@ const Root: React.FC<IDynamicNotifications> &
         islandHeight,
         islandTop,
         cardWidth,
-        cardHeight,
+        bodyHeight,
         cardRadius,
         gap,
       ],
@@ -75,8 +78,6 @@ const Root: React.FC<IDynamicNotifications> &
       () => blur ?? mix(clamp(strength, 0, 1), GOO_BLUR_MIN, GOO_BLUR_MAX),
       [blur, strength],
     );
-
-    const timeline = useNotificationTimeline({ onDismiss, duration });
 
     const value = useMemo(
       () => ({

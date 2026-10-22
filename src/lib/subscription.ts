@@ -19,6 +19,8 @@ export function hasActiveUserSubscription(profile: SubscriptionFields | null | u
 
 /** The couple's Plus (one subscription covers both partners), honouring its expiry. */
 export function isRelationshipPlusActive(relationship: Relationship | null | undefined): boolean {
+  // Developer "Pretend Plus is on" (Settings › Developer), mirrored by the server.
+  if (relationship?.dev_plus) return true;
   // Referral bonus days count as Plus, separate from any paid subscription.
   if (relationship?.bonus_plus_until && new Date(relationship.bonus_plus_until) > new Date()) return true;
   if (!relationship || normalizeTier(relationship.subscription_tier) !== 'plus' || !relationship.subscription_owner_id) {

@@ -1,4 +1,4 @@
-import { format, formatDistanceToNowStrict, isYesterday, parseISO, startOfDay } from 'date-fns';
+import { format, formatDistanceToNowStrict, isYesterday, parseISO, startOfDay, isThisYear } from 'date-fns';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -28,6 +28,16 @@ function historyDateLabel(dateStr: string): string {
     return formatDistanceToNowStrict(date, { addSuffix: true });
   } catch {
     return dateStr;
+  }
+}
+
+/** The question's date: "Mon 12 Oct", with the year once it's not this year. */
+function historyExactDate(dateStr: string): string {
+  try {
+    const date = parseISO(dateStr);
+    return format(date, isThisYear(date) ? 'EEE d MMM' : 'd MMM yyyy');
+  } catch {
+    return '';
   }
 }
 
@@ -77,7 +87,11 @@ export function PromptHistoryScreen() {
                     opacity: complete ? (pressed ? 0.9 : 1) : 0.65,
                   },
                 ]}>
-                <Text style={[styles.date, { color: colors.textTertiary }]}>{historyDateLabel(entry.challenge_date)}</Text>
+                {/* When: how long ago on the left, the date itself on the right. */}
+                <View style={styles.dateRow}>
+                  <Text style={[styles.date, { color: colors.textTertiary }]}>{historyDateLabel(entry.challenge_date)}</Text>
+                  <Text style={[styles.dateExact, { color: colors.textSecondary }]}>{historyExactDate(entry.challenge_date)}</Text>
+                </View>
                 <Text style={[styles.prompt, { color: complete ? colors.text : colors.textSecondary }]} numberOfLines={2}>
                   {entry.prompt}
                 </Text>
@@ -189,7 +203,9 @@ const styles = StyleSheet.create({
   emptyText: { fontSize: 15, fontWeight: '500', lineHeight: 21, textAlign: 'center' },
   scroll: { paddingHorizontal: 16, paddingTop: 8, gap: 12 },
   row: { borderRadius: 18, borderWidth: StyleSheet.hairlineWidth, padding: 16, gap: 6 },
+  dateRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
   date: { fontSize: 13, fontWeight: '600' },
+  dateExact: { fontSize: 13, fontWeight: '700' },
   prompt: { fontSize: 17, fontWeight: '800', lineHeight: 24, letterSpacing: -0.2 },
   badge: { fontSize: 13, fontWeight: '600', marginTop: 2 },
   detailPrompt: {

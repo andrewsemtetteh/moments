@@ -402,13 +402,14 @@ export async function createMoment(
   if (partnerId && partnerId !== userId) {
     const label = options?.senderName?.split(' ')[0] ?? 'Your partner';
     const created = data as Moment;
-    await sendPartnerNotification(
+    // Not awaited: the moment is in; telling them can finish on its own.
+    void sendPartnerNotification(
       relationshipId,
       partnerId,
       'moment',
       `${label} sent you a new moment`,
       { mediaUrl: created.media_url ?? moment.media_url, relatedId: created.id },
-    );
+    ).catch(() => undefined);
   }
 
   return data as Moment;
@@ -1452,21 +1453,53 @@ export function unguessablePath(path: string): string {
   return dot > slash ? `${path.slice(0, dot)}-${token}${path.slice(dot)}` : `${path}-${token}`;
 }
 
+/** A still from a video (a moment in, past any black first frame), shrunk like a photo's small copy. */
+async function videoPoster(uri: string): Promise<string> {
+  const { getThumbnailAsync } = await import('expo-video-thumbnails');
+  const frame = await getThumbnailAsync(uri, { time: 400, quality: 0.8 });
+  return (await prepareImageForUpload(frame.uri, { maxSide: THUMB_SIDE, quality: 0.72 })).uri;
+}
+
+/** The small copy's longest side: sharp on a grid tile (about a third of a phone screen). */
+const THUMB_SIDE = 600;
+
 export async function uploadMedia(
   bucket: string,
   rawPath: string,
   uri: string,
   contentType: string,
+  options?: { maxSide?: number },
 ) {
   const path = unguessablePath(rawPath);
-  const file = await readForUpload(uri, contentType);
+  // Photos become JPEGs at a phone-screen size first; the file then goes up straight from disk.
+  const file = isConvertiblePhoto(contentType)
+    ? await prepareImageForUpload(uri, { maxSide: options?.maxSide })
+    : { uri, contentType };
 
-  const { data, error } = await backend.storage.from(bucket).upload(path, file.body, {
-    contentType: file.contentType,
-    upsert: true,
-  });
-  if (error) throw error;
+  const store = backend.storage.from(bucket);
+  // Moment / chat photos also get a small copy (`<path>.t.jpg`) that grids and albums load
+  // instead of the full photo; made and sent alongside it, and never holds the upload up.
+  // Videos get a still from early in the clip as theirs, so grids show a picture, not an icon.
+  const privateMedia = bucket === 'moments' || bucket === 'chat';
+  const thumb = !privateMedia
+    ? null
+    : isConvertiblePhoto(file.contentType)
+      ? prepareImageForUpload(file.uri, { maxSide: THUMB_SIDE, quality: 0.72 })
+          .then((t) => store.uploadFile(`${path}.t.jpg`, t.uri, { contentType: 'image/jpeg' }))
+          .catch(() => undefined)
+      : file.contentType.startsWith('video/')
+        ? videoPoster(file.uri)
+            .then((poster) => store.uploadFile(`${path}.t.jpg`, poster, { contentType: 'image/jpeg' }))
+            .catch(() => undefined)
+        : null;
+  const [{ data, error }] = await Promise.all([
+    store.uploadFile(path, file.uri, { contentType: file.contentType }),
+    thumb,
+  ]);
+  if (error || !data) throw error ?? new Error('Upload failed');
 
+  // The server signs the new file in its answer; older servers didn't, so ask then.
+  if (data.signedUrl) return data.signedUrl;
   return createStorageSignedUrl(bucket, data.path, {
     size: bucket === 'profiles' ? 'thumb' : 'full',
   });
@@ -1487,22 +1520,19 @@ export async function discardMomentUpload(mediaUrl: string | null | undefined): 
 }
 
 /** Upload moment media to the private `moments` bucket; returns a long-lived signed URL. */
-export async function uploadMomentMedia(path: string, uri: string, contentType: string) {
-  return uploadMedia('moments', path, uri, contentType);
+export async function uploadMomentMedia(
+  path: string,
+  uri: string,
+  contentType: string,
+  options?: { maxSide?: number },
+) {
+  return uploadMedia('moments', path, uri, contentType, options);
 }
 
 /** Upload chat media to the private `chat` bucket; returns a long-lived signed URL. */
 export async function uploadChatMedia(rawPath: string, uri: string, contentType: string) {
-  const path = unguessablePath(rawPath);
-  const file = await readForUpload(uri, contentType);
-
-  const { data, error } = await backend.storage.from('chat').upload(path, file.body, {
-    contentType: file.contentType,
-    upsert: true,
-  });
-  if (error) throw error;
-
-  return createStorageSignedUrl('chat', data.path, { size: 'full' });
+  // The same fast path as moments: straight from disk, signed in the answer, photos with a small copy.
+  return uploadMedia('chat', rawPath, uri, contentType);
 }
 
 /** Upload avatar to private profiles bucket; returns a long-lived signed URL. */

@@ -2,7 +2,7 @@ import * as Haptics from '@/lib/haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Dimensions, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import Animated, {
   interpolate,
   runOnJS,
@@ -40,7 +40,6 @@ import { AnalyticsEvents, trackForCouple } from '@/services/analytics';
 import { claimNotificationKey, sendPartnerNotification } from '@/services/api';
 import { useAuthStore, useRelationshipStore } from '@/stores';
 
-const SCREEN_H = Dimensions.get('window').height;
 const INK = '#1A1A1A';
 
 /** True for light colours like #FFFFFF (so text on the banner is light). */
@@ -63,28 +62,28 @@ const PERKS_SHOWN = 3;
 const PERKS: { icon: IconName; title: string; free: string; tint: string }[] = [
   {
     icon: 'cards',
-    title: 'Unlimited games and conversations',
+    title: 'Unlimited games and conversations made for you two',
     free: 'New ones made just for you two, every time',
     tint: '#E3DDFF',
   },
-  { icon: 'camera', title: 'Unlimited moments', free: `Free: ${FREE_DAILY_MOMENTS} a day`, tint: '#FFD9CC' },
-  { icon: 'fire', title: 'Save a broken streak', free: 'Bring it back within 24 hours', tint: '#FFD6DC' },
+  { icon: 'camera', title: 'Share unlimited moments every day', free: `Free: ${FREE_DAILY_MOMENTS} a day`, tint: '#FFD9CC' },
+  { icon: 'fire', title: 'Restore a broken streak within 24 hours', free: 'Bring it back within 24 hours', tint: '#FFD6DC' },
   {
     icon: 'volumeHigh',
-    title: 'Live game nights with voice',
+    title: 'Live game nights with voice chat',
     free: 'Play together in real time, wherever you are',
     tint: '#DCEBFF',
   },
   {
     icon: 'time',
-    title: 'Your whole history',
+    title: 'See your whole history of moments',
     free: `Free: your last ${FREE_TIMELINE_MOMENTS} moments`,
     tint: '#D7F2E3',
   },
-  { icon: 'albums', title: 'Unlimited albums', free: `Free: ${FREE_ALBUM_LIMIT} albums`, tint: '#FFE7A0' },
+  { icon: 'albums', title: 'Create as many albums as you like', free: `Free: ${FREE_ALBUM_LIMIT} albums`, tint: '#FFE7A0' },
   {
     icon: 'people',
-    title: 'One plan, both of you',
+    title: 'One plan covers both of you',
     free: 'Your person gets everything too, at no extra cost',
     tint: '#D7F2E3',
   },
@@ -140,6 +139,8 @@ export function PaywallScreen({
   showRefer = true,
   showLegal = true,
 }: Props) {
+  // Read live, so a fold / unfold, split screen or rotation redraws at the new size.
+  const SCREEN_H = useWindowDimensions().height;
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const winbackPrice = usePurchasesStore((s) => s.winbackPrice);
@@ -410,7 +411,9 @@ export function PaywallScreen({
                   </View>
                   <View style={styles.flex}>
                     <Text style={[styles.perkTitle, { color: colors.text }]}>{p.title}</Text>
+                    {/* The descriptions are off for now: each title says it in full.
                     <Text style={[styles.perkFree, { color: colors.textSecondary }]}>{p.free}</Text>
+                    */}
                   </View>
                   <Icon name="check" size={18} color={colors.success} />
                 </View>

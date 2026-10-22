@@ -21,6 +21,8 @@ export const ONBOARDING_STEPS = [
   'space-name',
   'goals',
   'your-plan',
+  // After they've seen their plan (invested by then), and before the lighter steps.
+  'birthday',
   'theme-picker',
   'widget-prompt',
   'invite',

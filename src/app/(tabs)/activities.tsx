@@ -16,6 +16,7 @@ import { GameGroups, GameRail, OwnTimeGames } from '@/components/play/GameList';
 import { FeaturedPackCard, HandpickedRail } from '@/components/play/HandpickedRail';
 import { LiveStrip } from '@/components/play/LiveStrip';
 import { PlayTabs, type PlayTab } from '@/components/play/PlayTabs';
+import { DailyDuelCard, RivalryCard } from '@/components/play/Versus';
 import { Spacing } from '@/constants/design-system';
 import { useDailyChallenge, useRealtimeSubscription } from '@/hooks/queries';
 import { useTheme } from '@/hooks/useTheme';
@@ -78,6 +79,11 @@ export default function ActivitiesScreen() {
 
           {tab === 'all' ? (
             <View style={styles.stack}>
+              {/* The daily habit first: three questions, and the scoreboard it feeds. */}
+              <Section title="Daily duel">
+                <DailyDuelCard />
+                <RivalryCard onPress={() => router.push('/play/progress')} />
+              </Section>
               <Section title="Today’s pack">
                 <FeaturedPackCard />
               </Section>
@@ -119,6 +125,7 @@ export default function ActivitiesScreen() {
 
           {tab === 'endless' ? (
             <View style={styles.stack}>
+              <DailyDuelCard />
               <LiveStrip />
               <OwnTimeGames />
               <GameGroups />

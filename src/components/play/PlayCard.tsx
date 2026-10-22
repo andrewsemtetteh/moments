@@ -4,6 +4,7 @@ import { Pressable, StyleSheet, Text, View, type DimensionValue } from 'react-na
 import { ActivityArt, type ActivityArtId } from '@/components/activities/explore/ActivityArt';
 import type { PlayTone } from '@/components/activities/explore/explore-catalog';
 import { shade } from '@/components/games/room-ui';
+import { Crown } from '@/components/ui/Crown';
 
 interface PlayCardProps {
   tone: PlayTone;
@@ -17,10 +18,23 @@ interface PlayCardProps {
   /** `wide`: full width or rail card. `tile`: compact card for the two-column area grid. */
   layout?: 'wide' | 'tile';
   width?: DimensionValue;
+  /** Premium, not unlocked: a crown and PLUS in the corner (what a tap does is up to `onPress`). */
+  locked?: boolean;
 }
 
 /** Bold gradient card in the tone's colour, with a soft glow, white type and a chunky white button. */
-export function PlayCard({ tone, title, badge, sub, cta, art, onPress, layout = 'wide', width }: PlayCardProps) {
+export function PlayCard({
+  tone,
+  title,
+  badge,
+  sub,
+  cta,
+  art,
+  onPress,
+  layout = 'wide',
+  width,
+  locked,
+}: PlayCardProps) {
   const tile = layout === 'tile';
   const ink = shade(tone.accent, -0.5);
 
@@ -28,7 +42,7 @@ export function PlayCard({ tone, title, badge, sub, cta, art, onPress, layout = 
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel={cta ? `${cta} ${title}` : title}
+      accessibilityLabel={`${cta ? `${cta} ${title}` : title}${locked ? ', Plus only' : ''}`}
       style={({ pressed }) => [{ width }, pressed && styles.pressed]}>
       <LinearGradient
         colors={[shade(tone.accent, -0.05), shade(tone.accent, -0.35)]}
@@ -36,6 +50,12 @@ export function PlayCard({ tone, title, badge, sub, cta, art, onPress, layout = 
         end={{ x: 1, y: 1 }}
         style={tile ? styles.tile : styles.wide}>
         <View style={tile ? styles.tileGlow : styles.wideGlow} pointerEvents="none" />
+        {locked ? (
+          <View style={styles.lock} pointerEvents="none">
+            <Crown size={15} color={PLUS_INK} />
+            <Text style={styles.lockText}>PLUS</Text>
+          </View>
+        ) : null}
 
         <View style={tile ? styles.tileBody : styles.wideBody}>
           {badge ? (
@@ -70,6 +90,8 @@ export function PlayCard({ tone, title, badge, sub, cta, art, onPress, layout = 
   );
 }
 
+const PLUS_INK = '#3A2A00';
+
 const styles = StyleSheet.create({
   pressed: { transform: [{ scale: 0.985 }] },
   wide: {
@@ -90,12 +112,7 @@ const styles = StyleSheet.create({
     top: -80,
   },
   wideBody: { flex: 1, gap: 8, minWidth: 0 },
-  tile: {
-    minHeight: 168,
-    borderRadius: 26,
-    padding: 16,
-    overflow: 'hidden',
-  },
+  tile: { minHeight: 168, borderRadius: 26, padding: 16, overflow: 'hidden' },
   tileGlow: {
     position: 'absolute',
     width: 150,
@@ -130,4 +147,18 @@ const styles = StyleSheet.create({
   ctaTile: { paddingHorizontal: 16, paddingVertical: 9, marginTop: 0 },
   ctaText: { fontSize: 15, fontWeight: '900' },
   art: { width: 108, height: 108, alignItems: 'center', justifyContent: 'center', marginLeft: 4 },
+  lock: {
+    position: 'absolute',
+    top: 14,
+    right: 14,
+    zIndex: 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#FFD54A',
+    borderRadius: 999,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+  },
+  lockText: { color: PLUS_INK, fontSize: 11, fontWeight: '900', letterSpacing: 0.8 },
 });

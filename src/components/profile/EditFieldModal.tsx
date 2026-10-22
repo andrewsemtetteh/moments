@@ -11,6 +11,7 @@ type Props = {
   saving?: boolean;
   keyboardType?: KeyboardTypeOptions;
   autoCapitalize?: TextInputProps['autoCapitalize'];
+  maxLength?: number;
   onChange: (value: string) => void;
   onClose: () => void;
   onSave: () => void;
@@ -26,6 +27,7 @@ export function EditFieldModal({
   saving = false,
   keyboardType,
   autoCapitalize = 'sentences',
+  maxLength,
   onChange,
   onClose,
   onSave,
@@ -47,6 +49,7 @@ export function EditFieldModal({
         placeholder={placeholder}
         keyboardType={keyboardType}
         autoCapitalize={autoCapitalize}
+        maxLength={maxLength}
         autoCorrect={false}
         returnKeyType="done"
         onSubmitEditing={() => {

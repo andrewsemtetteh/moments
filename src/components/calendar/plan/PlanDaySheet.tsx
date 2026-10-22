@@ -64,6 +64,7 @@ export function PlanDaySheet({
 
   return (
     <DraggableSheet
+      avoidKeyboard
       visible={visible}
       onClose={() => {
         void persistNotes();
@@ -71,133 +72,126 @@ export function PlanDaySheet({
       }}
       style={styles.sheet}>
       <>
-          <View style={styles.header}>
-            <Text style={[styles.title, { color: colors.text }]}>{format(day, 'EEEE, MMMM d')}</Text>
-            <Pressable
-              onPress={() => {
-                void persistNotes();
-                onClose();
-              }}
-              hitSlop={8}
-              style={[styles.iconBtn, { backgroundColor: colors.surfaceElevated }, paperEdge(colors)]}>
-              <Icon name="close" size={18} color={colors.textSecondary} />
-            </Pressable>
-          </View>
+        <View style={styles.header}>
+          <Text style={[styles.title, { color: colors.text }]}>{format(day, 'EEEE, MMMM d')}</Text>
+          <Pressable
+            onPress={() => {
+              void persistNotes();
+              onClose();
+            }}
+            hitSlop={8}
+            style={[styles.iconBtn, { backgroundColor: colors.surfaceElevated }, paperEdge(colors)]}>
+            <Icon name="close" size={18} color={colors.textSecondary} />
+          </Pressable>
+        </View>
 
-          <ScrollView
-            showsVerticalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled"
-            contentContainerStyle={styles.scroll}>
-            {dayEvents.length === 0 ? (
-              <Text style={[styles.empty, { color: colors.textSecondary }]}>
-                No plans yet for this day.
-              </Text>
-            ) : (
-              <View style={styles.list}>
-                {dayEvents.map((event, index) => {
-                  const meta = parsePlanMeta(event.description);
-                  const done = isPlanCompleted(event);
-                  const isLast = index === dayEvents.length - 1;
-                  const showRail = dayEvents.length > 1;
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={styles.scroll}>
+          {dayEvents.length === 0 ? (
+            <Text style={[styles.empty, { color: colors.textSecondary }]}>No plans yet for this day.</Text>
+          ) : (
+            <View style={styles.list}>
+              {dayEvents.map((event, index) => {
+                const meta = parsePlanMeta(event.description);
+                const done = isPlanCompleted(event);
+                const isLast = index === dayEvents.length - 1;
+                const showRail = dayEvents.length > 1;
 
-                  return (
-                    <View key={event.id} style={styles.row}>
-                      {showRail ? (
-                        <View style={styles.rail}>
-                          <View
-                            style={[
-                              styles.node,
-                              {
-                                backgroundColor: done ? colors.accent : colors.surface,
-                                borderColor: done ? colors.accent : colors.borderStrong,
-                              },
-                            ]}>
-                            {done ? <Icon name="check" size={10} color={colors.onAccent} /> : null}
-                          </View>
-                          {!isLast ? (
-                            <View
-                              style={[
-                                styles.railLine,
-                                { backgroundColor: done ? colors.accent : colors.border },
-                              ]}
-                            />
-                          ) : null}
+                return (
+                  <View key={event.id} style={styles.row}>
+                    {showRail ? (
+                      <View style={styles.rail}>
+                        <View
+                          style={[
+                            styles.node,
+                            {
+                              backgroundColor: done ? colors.accent : colors.surface,
+                              borderColor: done ? colors.accent : colors.borderStrong,
+                            },
+                          ]}>
+                          {done ? <Icon name="check" size={10} color={colors.onAccent} /> : null}
                         </View>
-                      ) : null}
+                        {!isLast ? (
+                          <View style={[styles.railLine, { backgroundColor: done ? colors.accent : colors.border }]} />
+                        ) : null}
+                      </View>
+                    ) : null}
 
-                      <Pressable
-                        onPress={() => {
-                          Haptics.selectionAsync();
-                          onPressEvent(event);
-                        }}
-                        style={({ pressed }) => [
-                          styles.card,
-                          {
-                            backgroundColor: colors.surface,
-                            opacity: pressed ? 0.92 : done ? 0.78 : 1,
-                            flex: 1,
-                          },
-                          paperEdge(colors),
-                        ]}>
-                        <View style={styles.cardBody}>
-                          <Text style={[styles.time, { color: colors.textSecondary }]}>
-                            {format(new Date(event.date_time), 'h:mm a')}
+                    <Pressable
+                      onPress={() => {
+                        Haptics.selectionAsync();
+                        onPressEvent(event);
+                      }}
+                      style={({ pressed }) => [
+                        styles.card,
+                        {
+                          backgroundColor: colors.surface,
+                          opacity: pressed ? 0.92 : done ? 0.78 : 1,
+                          flex: 1,
+                        },
+                        paperEdge(colors),
+                      ]}>
+                      <View style={styles.cardBody}>
+                        <Text style={[styles.time, { color: colors.textSecondary }]}>
+                          {format(new Date(event.date_time), 'h:mm a')}
+                        </Text>
+                        <Text
+                          style={[
+                            styles.cardTitle,
+                            {
+                              color: colors.text,
+                              textDecorationLine: done ? 'line-through' : 'none',
+                            },
+                          ]}
+                          numberOfLines={1}>
+                          {event.title}
+                        </Text>
+                        {meta.location ? (
+                          <Text style={[styles.location, { color: colors.textTertiary }]} numberOfLines={1}>
+                            {meta.location}
                           </Text>
-                          <Text
-                            style={[
-                              styles.cardTitle,
-                              {
-                                color: colors.text,
-                                textDecorationLine: done ? 'line-through' : 'none',
-                              },
-                            ]}
-                            numberOfLines={1}>
-                            {event.title}
-                          </Text>
-                          {meta.location ? (
-                            <Text style={[styles.location, { color: colors.textTertiary }]} numberOfLines={1}>
-                              {meta.location}
-                            </Text>
-                          ) : null}
-                        </View>
-                        <View style={[styles.thumb, { backgroundColor: colors.accentSoft }]}>
-                          <Icon name={planIcon(event)} size={18} color={colors.accent} />
-                        </View>
-                      </Pressable>
-                    </View>
-                  );
-                })}
-              </View>
-            )}
-
-            <Pressable
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                onAddPlan();
-              }}
-              style={[styles.addBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-              <Text style={[styles.addLabel, { color: colors.accent }]}>+ Add another plan</Text>
-            </Pressable>
-
-            <View style={styles.notesHeader}>
-              <Text style={[styles.notesTitle, { color: colors.text }]}>Notes for the day</Text>
+                        ) : null}
+                      </View>
+                      <View style={[styles.thumb, { backgroundColor: colors.accentSoft }]}>
+                        <Icon name={planIcon(event)} size={18} color={colors.accent} />
+                      </View>
+                    </Pressable>
+                  </View>
+                );
+              })}
             </View>
-            <TextInput
-              value={notes}
-              onChangeText={(t) => {
-                setNotes(t);
-                setNotesDirty(true);
-              }}
-              onBlur={() => void persistNotes()}
-              placeholder="Add a note for this day…"
-              placeholderTextColor={colors.textTertiary}
-              multiline
-              style={[
-                styles.notesInput,
-                { color: colors.text, backgroundColor: colors.surface, borderColor: colors.border },
-              ]}
-            />
-          </ScrollView>
+          )}
+
+          <Pressable
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              onAddPlan();
+            }}
+            style={[styles.addBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <Text style={[styles.addLabel, { color: colors.accent }]}>+ Add another plan</Text>
+          </Pressable>
+
+          <View style={styles.notesHeader}>
+            <Text style={[styles.notesTitle, { color: colors.text }]}>Notes for the day</Text>
+          </View>
+          <TextInput
+            value={notes}
+            onChangeText={(t) => {
+              setNotes(t);
+              setNotesDirty(true);
+            }}
+            onBlur={() => void persistNotes()}
+            placeholder="Add a note for this day…"
+            placeholderTextColor={colors.textTertiary}
+            multiline
+            style={[
+              styles.notesInput,
+              { color: colors.text, backgroundColor: colors.surface, borderColor: colors.border },
+            ]}
+          />
+        </ScrollView>
       </>
     </DraggableSheet>
   );

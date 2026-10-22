@@ -16,6 +16,7 @@ type Props = {
   title?: string;
   hint?: string;
   minYear?: number;
+  maxYear?: number;
 };
 
 /** Same layout as the other Settings sheets (relationship type etc.): title, hint, the control, then Save. */
@@ -28,6 +29,7 @@ export function EditAnniversaryModal({
   title = 'Anniversary',
   hint = 'Used for your countdown and how long you’ve been together.',
   minYear,
+  maxYear,
 }: Props) {
   const { colors } = useTheme();
   const [draft, setDraft] = useState(value);
@@ -50,7 +52,7 @@ export function EditAnniversaryModal({
           styles.picker,
           insetCardStyle(colors, 'sheet'),
         ]}>
-        <AnniversaryWheelPicker value={draft} onChange={setDraft} surfaceColor={colors.background} minYear={minYear} />
+        <AnniversaryWheelPicker value={draft} onChange={setDraft} surfaceColor={colors.background} minYear={minYear} maxYear={maxYear} />
       </View>
 
       <PrimaryButton

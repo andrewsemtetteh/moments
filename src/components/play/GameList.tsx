@@ -6,7 +6,9 @@ import { PLAY_TONES } from '@/components/activities/explore/explore-catalog';
 import { firstName } from '@/components/games/room-ui';
 import { Spacing } from '@/constants/design-system';
 import { useActiveGameSessions } from '@/hooks/play-queries';
+import { useIsPlus } from '@/hooks/useIsPlus';
 import { useTheme } from '@/hooks/useTheme';
+import { requirePlusNow } from '@/lib/plus';
 import { isWaitingOn } from '@/lib/game-room/sessions';
 import { LIVE_GAMES, getGameDefinition, type GameDefinition, type LiveGameKind } from '@/lib/game-room/types';
 import { useAuthStore, useRelationshipStore } from '@/stores';
@@ -24,8 +26,10 @@ export const GAME_ART: Record<LiveGameKind, ActivityArtId> = {
   quiz: 'quizLive',
 };
 
-function GameCard({ game, width }: { game: GameDefinition; width?: number }) {
+function GameCard({ game, width, live }: { game: GameDefinition; width?: number; live?: boolean }) {
   const router = useRouter();
+  // Endless games are written by AI: Plus (or its free trial) unlocks them.
+  const locked = !useIsPlus();
   return (
     <PlayCard
       width={width}
@@ -35,23 +39,31 @@ function GameCard({ game, width }: { game: GameDefinition; width?: number }) {
       title={game.title}
       sub={game.tagline}
       cta="Play"
-      onPress={() => router.push({ pathname: '/play/game/[kind]', params: { kind: game.kind } })}
+      locked={locked}
+      // The game's page (from Go live, set to a live session); while locked, the Plus page.
+      onPress={() => {
+        if (!requirePlusNow(game.title)) return;
+        router.push({
+          pathname: '/play/game/[kind]',
+          params: live ? { kind: game.kind, mode: 'live' } : { kind: game.kind },
+        });
+      }}
     />
   );
 }
 
-/** Endless games grouped by how you play them. */
-export function GameGroups() {
+/** Endless games grouped by how you play them. `live`: each opens its page set to a live session. */
+export function GameGroups({ live }: { live?: boolean } = {}) {
   const { colors } = useTheme();
   return (
     <View style={styles.groups}>
       <Text style={[styles.groupLabel, { color: colors.text }]}>Team up</Text>
       {LIVE_GAMES.filter((g) => g.team).map((g) => (
-        <GameCard key={g.kind} game={g} />
+        <GameCard key={g.kind} game={g} live={live} />
       ))}
       <Text style={[styles.groupLabel, { color: colors.text }]}>Go head to head</Text>
       {LIVE_GAMES.filter((g) => !g.team).map((g) => (
-        <GameCard key={g.kind} game={g} />
+        <GameCard key={g.kind} game={g} live={live} />
       ))}
     </View>
   );

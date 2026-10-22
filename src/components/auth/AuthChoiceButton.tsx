@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { cardSurface } from '@/components/ui/primitives';
 import { useTheme } from '@/hooks/useTheme';
 
 type Props = {
@@ -26,7 +27,8 @@ export function AuthChoiceButton({ label, icon, onPress, variant = 'outline', lo
       accessibilityLabel={label}
       style={({ pressed }) => [
         styles.btn,
-        filled ? { backgroundColor: colors.text } : { backgroundColor: colors.background, borderWidth: 2, borderColor: colors.text },
+        // Filled: the ink pill (Apple's own look). Outline: the main app's card look, in the theme.
+        filled ? { backgroundColor: colors.text } : cardSurface(colors),
         { opacity: disabled && !loading ? 0.5 : pressed ? 0.85 : 1 },
       ]}>
       {loading ? (

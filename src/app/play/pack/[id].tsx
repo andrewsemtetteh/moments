@@ -3,25 +3,19 @@ import { useQueryClient } from '@tanstack/react-query';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Redirect, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import {
-  Alert,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { KeyboardFormScrollView } from '@/components/layout/KeyboardFormScrollView';
 import { TextInput } from '@/components/ui/ThemedTextInput';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { PLAY_TONES, type PlayTone } from '@/components/activities/explore/explore-catalog';
-import { firstName, shade } from '@/components/games/room-ui';
+import { ChunkyButton, firstName, shade } from '@/components/games/room-ui';
 import { PlayHeader } from '@/components/play/PlayHeader';
+import { PLAY_GUTTER, PlayHero, PlayPill, playCardStyle, playEdge } from '@/components/play/PlayKit';
 import { Icon } from '@/components/ui/Icon';
 import { Avatar } from '@/components/ui/primitives';
 import { useLockPackAnswer, usePackAnswers, type PackAnswer } from '@/hooks/play-queries';
+import { useLightStatusBar } from '@/hooks/useLightStatusBar';
 import { useTheme } from '@/hooks/useTheme';
 import { encodeAttachment, type ChatAttachment } from '@/lib/chat-attachments';
 import { DEPTHS, getArea, getPack, type HandpickedFormat, type PackQuestion } from '@/lib/handpicked';
@@ -43,7 +37,10 @@ function answerText(a: PackAnswer | undefined) {
 type Entry = { mine?: PackAnswer; theirs?: PackAnswer };
 
 /** Words that change with how the set plays (questions, quiz, cards or things to do). */
-const COPY: Record<HandpickedFormat, { item: string; intro: (n: number) => string; lock: string; write: string; pickNote: string }> = {
+const COPY: Record<
+  HandpickedFormat,
+  { item: string; intro: (n: number) => string; lock: string; write: string; pickNote: string }
+> = {
   questions: {
     item: 'QUESTION',
     intro: (n) => `${n} questions. Answer on your own, then see each other’s answers.`,
@@ -86,6 +83,8 @@ export default function PackScreen() {
   const area = pack ? getArea(pack.area) : undefined;
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
+  // Coloured header with white text: light clock and battery while this page shows.
+  useLightStatusBar();
   const user = useAuthStore((s) => s.user);
   const partner = useRelationshipStore((s) => s.partner);
   const relationshipId = useRelationshipStore((s) => s.relationship?.id);
@@ -147,31 +146,28 @@ export default function PackScreen() {
     if (!canLock) return;
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     lock.mutate(
-      {
-        packId: pack.id,
-        questionId: question.id,
-        choice: pick,
-        note: note.trim() || null,
-      },
+      { packId: pack.id, questionId: question.id, choice: pick, note: note.trim() || null },
       {
         onSuccess: () => {
           const finishedMine = pack.questions.every((qq) => qq.id === question.id || !!byQuestion.get(qq.id)?.mine);
           const matched = format === 'quizzes' && !!pick && pick === entry.theirs?.choice;
           if (relationshipId) {
-            void usePlayProgressStore.getState().award(
-              relationshipId,
-              {
-                xp: 8 + (finishedMine ? 40 : 0) + (matched ? 5 : 0),
-                stats: {
-                  pack_answers: 1,
-                  ...(finishedMine ? { packs_completed: 1 } : {}),
-                  ...(format === 'activities' ? { together_done: 1 } : {}),
-                  ...(matched ? { sync_matches: 1 } : {}),
+            void usePlayProgressStore
+              .getState()
+              .award(
+                relationshipId,
+                {
+                  xp: 8 + (finishedMine ? 40 : 0) + (matched ? 5 : 0),
+                  stats: {
+                    pack_answers: 1,
+                    ...(finishedMine ? { packs_completed: 1 } : {}),
+                    ...(format === 'activities' ? { together_done: 1 } : {}),
+                    ...(matched ? { sync_matches: 1 } : {}),
+                  },
+                  events: { pack_answered: 1, ...(matched ? { sync_match: 1 } : {}) },
                 },
-                events: { pack_answered: 1, ...(matched ? { sync_match: 1 } : {}) },
-              },
-              'Pack answer',
-            );
+                'Pack answer',
+              );
           }
           // This answer finished the pack for both of you: drop the results card in chat.
           const allDone = pack.questions.every((qq) => {
@@ -180,11 +176,26 @@ export default function PackScreen() {
           });
           if (allDone && !resultsPosted.has(pack.id)) {
             resultsPosted.add(pack.id);
-            postToChat({ type: 'play_result', packId: pack.id, title: pack.title, area: area.title, count: total }).catch(
-              () => resultsPosted.delete(pack.id),
-            );
+            postToChat({
+              type: 'play_result',
+              packId: pack.id,
+              title: pack.title,
+              area: area.title,
+              count: total,
+            }).catch(() => resultsPosted.delete(pack.id));
+            // And tell them: the pack is done for you both (in the app and on their phone).
+            if (partner && relationshipId && user) {
+              void sendPartnerNotification(
+                relationshipId,
+                partner.id,
+                'activity',
+                `You and ${firstName(user.name)} finished “${pack.title}”. See all your answers.`,
+                { relatedId: pack.id },
+              ).catch(() => undefined);
+            }
+            return;
           }
-          if (entry.theirs || !partner || !relationshipId || !user) return;
+          if (!partner || !relationshipId || !user) return;
           const now = Date.now();
           if (now - (lastNudge.get(pack.id) ?? 0) < NUDGE_EVERY_MS) return;
           lastNudge.set(pack.id, now);
@@ -192,7 +203,10 @@ export default function PackScreen() {
             relationshipId,
             partner.id,
             'activity',
-            `${firstName(user.name)} answered “${pack.title}”. Answer to see theirs.`,
+            // They'd answered this one first: now both answers can be seen.
+            entry.theirs
+              ? `${firstName(user.name)} answered too in “${pack.title}”. See both answers.`
+              : `${firstName(user.name)} answered “${pack.title}”. Answer to see theirs.`,
             { relatedId: pack.id },
           ).catch(() => undefined);
         },
@@ -202,10 +216,15 @@ export default function PackScreen() {
   };
 
   return (
-    <KeyboardAvoidingView
-      style={[styles.root, { backgroundColor: colors.background }]}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <ScrollView
+    <View style={[styles.root, { backgroundColor: colors.background }]}>
+      <KeyboardFormScrollView
+        // The field you tap comes above the keyboard, and the page scrolls on to its last button.
+        // The home-indicator padding at the end isn't needed above the keyboard.
+        endGap={-insets.bottom}
+        topInset={insets.top + 72}
+        // No pull past the top (it showed an empty gap above the page).
+        bounces={false}
+        overScrollMode="never"
         contentContainerStyle={{ paddingBottom: insets.bottom + 12 }}
         stickyHeaderIndices={[0]}
         keyboardShouldPersistTaps="handled"
@@ -213,15 +232,7 @@ export default function PackScreen() {
         <View style={{ backgroundColor: tone.accent }}>
           <PlayHeader title={pack.title} onColor="#FFFFFF" />
         </View>
-        <View style={[styles.header, { backgroundColor: tone.accent }]}>
-          <View style={styles.intro}>
-            <View style={styles.pill}>
-              <Text style={styles.pillText}>
-                {area.title.toUpperCase()} · {depthLabel.toUpperCase()}
-              </Text>
-            </View>
-            <Text style={styles.introText}>{copy.intro(total)}</Text>
-          </View>
+        <PlayHero color={tone.accent} pill={`${area.title} · ${depthLabel}`} blurb={copy.intro(total)}>
           <View style={styles.steps}>
             {pack.questions.map((qq, idx) => {
               const mine = !!byQuestion.get(qq.id)?.mine;
@@ -244,7 +255,7 @@ export default function PackScreen() {
               );
             })}
           </View>
-        </View>
+        </PlayHero>
 
         <View style={styles.body}>
           {finished ? (
@@ -264,11 +275,7 @@ export default function PackScreen() {
                 end={{ x: 1, y: 1 }}
                 style={styles.questionCard}>
                 <View style={styles.glow} pointerEvents="none" />
-                <View style={styles.pill}>
-                  <Text style={styles.pillText}>
-                    {copy.item} {i + 1} OF {total}
-                  </Text>
-                </View>
+                <PlayPill label={`${copy.item} ${i + 1} of ${total}`} />
                 <Text style={styles.question}>{question.text}</Text>
               </LinearGradient>
 
@@ -293,9 +300,13 @@ export default function PackScreen() {
                         <View
                           style={[
                             styles.matchPill,
-                            { backgroundColor: isMatch(entry) ? tone.accent : colors.surfaceElevated, borderColor: colors.border },
+                            {
+                              backgroundColor: isMatch(entry) ? tone.accent : colors.surfaceElevated,
+                              borderColor: colors.border,
+                            },
                           ]}>
-                          <Text style={[styles.matchText, { color: isMatch(entry) ? '#FFFFFF' : colors.textSecondary }]}>
+                          <Text
+                            style={[styles.matchText, { color: isMatch(entry) ? '#FFFFFF' : colors.textSecondary }]}>
                             {isMatch(entry) ? 'It’s a match! 🎉' : 'Different picks. Ask why!'}
                           </Text>
                         </View>
@@ -323,10 +334,7 @@ export default function PackScreen() {
                     <View
                       style={[
                         styles.statusBox,
-                        {
-                          backgroundColor: colors.surfaceElevated,
-                          borderColor: colors.border,
-                        },
+                        playCardStyle(colors),
                       ]}>
                       <Avatar name={partner?.name} imageUrl={partner?.avatar_url} size={32} />
                       <Text style={[styles.statusText, { color: colors.textSecondary }]}>
@@ -385,18 +393,13 @@ export default function PackScreen() {
                         color: colors.text,
                         backgroundColor: colors.surfaceElevated,
                         borderColor: colors.border,
+                        borderWidth: playEdge(colors),
                       },
                     ]}
                   />
 
                   <View
-                    style={[
-                      styles.statusBox,
-                      {
-                        backgroundColor: colors.surfaceElevated,
-                        borderColor: colors.border,
-                      },
-                    ]}>
+                    style={[styles.statusBox, playCardStyle(colors)]}>
                     <Avatar name={partner?.name} imageUrl={partner?.avatar_url} size={32} />
                     <Text style={[styles.statusText, { color: colors.textSecondary }]}>
                       {entry.theirs
@@ -418,8 +421,8 @@ export default function PackScreen() {
             </>
           )}
         </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+      </KeyboardFormScrollView>
+    </View>
   );
 }
 
@@ -457,7 +460,7 @@ function RespondRow({
   };
 
   return (
-    <View style={[styles.respond, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
+    <View style={[styles.respond, playCardStyle(colors)]}>
       <View style={styles.respondHead}>
         <Text style={[styles.respondTitle, { color: colors.text }]}>
           {sent ? 'Sent to your chat' : `What do you think of ${partnerName}’s answer?`}
@@ -535,49 +538,19 @@ function ActionBar({
           accessibilityLabel="Previous question"
           style={({ pressed }) => [
             styles.backSquare,
-            { backgroundColor: colors.surfaceElevated, borderColor: colors.border, opacity: pressed ? 0.85 : 1 },
+            playCardStyle(colors),
+            { opacity: pressed ? 0.85 : 1 },
           ]}>
           <Icon name="chevronLeft" size={24} color={colors.text} />
         </Pressable>
       ) : null}
       <View style={styles.actionGrow}>
-        <ChunkyAction label={label} color={color} onPress={onPress} disabled={disabled} />
+        <ChunkyButton label={label} color={color} onPress={onPress} disabled={disabled} />
       </View>
     </View>
   );
 }
 
-function ChunkyAction({
-  label,
-  color,
-  onPress,
-  disabled,
-}: {
-  label: string;
-  color: string;
-  onPress: () => void;
-  disabled?: boolean;
-}) {
-  return (
-    <Pressable
-      onPress={onPress}
-      disabled={disabled}
-      accessibilityRole="button"
-      accessibilityState={{ disabled: !!disabled }}
-      style={({ pressed }) => [
-        styles.action,
-        {
-          backgroundColor: color,
-          borderBottomColor: shade(color, -0.3),
-          borderBottomWidth: pressed ? 1 : 5,
-          marginTop: pressed ? 4 : 0,
-          opacity: disabled ? 0.45 : 1,
-        },
-      ]}>
-      <Text style={styles.actionText}>{label}</Text>
-    </Pressable>
-  );
-}
 
 function AnswerCard({
   label,
@@ -594,14 +567,7 @@ function AnswerCard({
 }) {
   const { colors } = useTheme();
   return (
-    <View
-      style={[
-        styles.answer,
-        {
-          backgroundColor: tint ?? colors.surfaceElevated,
-          borderColor: colors.border,
-        },
-      ]}>
+    <View style={[styles.answer, playCardStyle(colors), tint ? { backgroundColor: tint } : null]}>
       <View style={styles.answerHead}>
         <Avatar name={avatarName} imageUrl={avatarUrl} size={28} />
         <Text style={[styles.answerName, { color: colors.textSecondary }]}>{label}</Text>
@@ -631,7 +597,11 @@ function Summary({
   const matches = questions.filter((qq) => isMatch(byQuestion.get(qq.id) ?? {})).length;
   const allDone = both === questions.length;
   const verdict =
-    matches === questions.length ? 'Perfectly in sync!' : matches >= questions.length / 2 ? 'Nicely in sync.' : 'Plenty to talk about!';
+    matches === questions.length
+      ? 'Perfectly in sync!'
+      : matches >= questions.length / 2
+        ? 'Nicely in sync.'
+        : 'Plenty to talk about!';
   const headline =
     format === 'quizzes' && allDone
       ? `You matched ${matches} of ${questions.length}. ${verdict}`
@@ -648,14 +618,8 @@ function Summary({
         end={{ x: 1, y: 1 }}
         style={styles.questionCard}>
         <View style={styles.glow} pointerEvents="none" />
-        <View style={styles.pill}>
-          <Text style={styles.pillText}>
-            {both} OF {questions.length} UNLOCKED
-          </Text>
-        </View>
-        <Text style={styles.question}>
-          {headline}
-        </Text>
+        <PlayPill label={`${both} of ${questions.length} unlocked`} />
+        <Text style={styles.question}>{headline}</Text>
       </LinearGradient>
 
       {questions.map((qq, idx) => {
@@ -666,13 +630,7 @@ function Summary({
             key={qq.id}
             onPress={() => onOpen(idx)}
             accessibilityRole="button"
-            style={[
-              styles.summaryRow,
-              {
-                backgroundColor: colors.surfaceElevated,
-                borderColor: colors.border,
-              },
-            ]}>
+            style={[styles.summaryRow, playCardStyle(colors)]}>
             <Text style={[styles.summaryQ, { color: colors.text }]}>{qq.text}</Text>
             <Text style={[styles.summaryA, { color: colors.textSecondary }]}>
               You: {e.mine ? answerText(e.mine) : 'not answered'}
@@ -689,22 +647,9 @@ function Summary({
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  header: {
-    paddingBottom: 22,
-    borderBottomLeftRadius: 32,
-    borderBottomRightRadius: 32,
-  },
-  intro: { paddingHorizontal: 24, paddingTop: 10, paddingBottom: 22, gap: 14 },
-  introText: {
-    color: '#FFFFFF',
-    fontSize: 20,
-    fontWeight: '700',
-    lineHeight: 27,
-    letterSpacing: -0.3,
-  },
-  steps: { flexDirection: 'row', gap: 6, paddingHorizontal: 24 },
+  steps: { flexDirection: 'row', gap: 6 },
   step: { flex: 1, height: 6, borderRadius: 3 },
-  body: { padding: 16, paddingTop: 18, gap: 14 },
+  body: { padding: PLAY_GUTTER, paddingTop: 18, gap: 14 },
   questionCard: {
     borderRadius: 28,
     padding: 22,
@@ -722,26 +667,7 @@ const styles = StyleSheet.create({
     right: -70,
     top: -80,
   },
-  pill: {
-    alignSelf: 'flex-start',
-    backgroundColor: 'rgba(0,0,0,0.25)',
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-  },
-  pillText: {
-    color: '#FFFFFF',
-    fontSize: 11,
-    fontWeight: '900',
-    letterSpacing: 1.1,
-  },
-  question: {
-    color: '#FFFFFF',
-    fontSize: 23,
-    fontWeight: '900',
-    lineHeight: 29,
-    letterSpacing: -0.4,
-  },
+  question: { color: '#FFFFFF', fontSize: 23, fontWeight: '900', lineHeight: 29, letterSpacing: -0.4 },
   picks: { gap: 8 },
   pick: {
     minHeight: 52,
@@ -757,7 +683,6 @@ const styles = StyleSheet.create({
   pickText: { flex: 1, fontSize: 16, fontWeight: '700' },
   input: {
     borderRadius: 16,
-    borderWidth: StyleSheet.hairlineWidth,
     padding: 14,
     fontSize: 16,
     lineHeight: 22,
@@ -768,44 +693,23 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    borderRadius: 16,
-    borderWidth: StyleSheet.hairlineWidth,
     padding: 12,
   },
   statusText: { flex: 1, fontSize: 14, fontWeight: '600', lineHeight: 20 },
-  action: {
-    height: 56,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  actionText: { color: '#FFFFFF', fontSize: 17, fontWeight: '900' },
   reveal: { gap: 12 },
   actionBar: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
   actionGrow: { flex: 1 },
   backSquare: {
     width: 56,
     height: 56,
-    borderRadius: 18,
-    borderWidth: StyleSheet.hairlineWidth,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  answer: {
-    borderRadius: 18,
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: 16,
-    gap: 10,
-  },
+  answer: { padding: 16, gap: 10 },
   answerHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   answerName: { fontSize: 13, fontWeight: '800' },
   answerText: { fontSize: 17, fontWeight: '600', lineHeight: 24 },
-  respond: {
-    borderRadius: 18,
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: 14,
-    gap: 12,
-  },
+  respond: { padding: 14, gap: 12 },
   respondHead: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   respondTitle: { flex: 1, fontSize: 14, fontWeight: '800' },
   reactions: { flexDirection: 'row', justifyContent: 'space-between' },
@@ -839,12 +743,7 @@ const styles = StyleSheet.create({
   },
   matchText: { fontSize: 14, fontWeight: '800' },
   summary: { gap: 12 },
-  summaryRow: {
-    borderRadius: 18,
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: 16,
-    gap: 6,
-  },
+  summaryRow: { padding: 16, gap: 6 },
   summaryQ: { fontSize: 16, fontWeight: '800', lineHeight: 22 },
   summaryA: { fontSize: 14, fontWeight: '600', lineHeight: 20 },
 });

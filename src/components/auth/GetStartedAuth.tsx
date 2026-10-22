@@ -11,6 +11,9 @@ import { AuthLegalLinks } from '@/components/auth/AuthLegalLinks';
 import { AppleIcon, GoogleIcon } from '@/components/auth/OAuthBrandIcon';
 import { useSocialSignIn, type SocialProvider } from '@/components/auth/useSocialSignIn';
 import { Icon } from '@/components/ui/Icon';
+import { LogoMark } from '@/components/ui/Logo';
+import { separatorColor } from '@/components/ui/primitives';
+import { useScrollWhenNeeded } from '@/hooks/useScrollWhenNeeded';
 import { useTheme } from '@/hooks/useTheme';
 import { markIntroCompleted } from '@/lib/intro-storage';
 import { designPass } from '@/lib/onboarding-v2';
@@ -22,15 +25,16 @@ type Props = {
 
 /**
  * Create your account, in the onboarding style: back arrow, a centred
- * title, then Apple (the ink pill), Google and email (outlined), a privacy note and
- * the terms. Apple/Google go straight on to the name step; email goes to the
+ * logo and title, then Apple (the ink pill), Google and email (outlined), and the terms. Apple/Google go straight on to the name step; email goes to the
  * email + password page.
  */
-export function GetStartedAuth({ showBack = true }: Props) {
+export function GetStartedAuth({ showBack = false }: Props) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const showApple = Platform.OS === 'ios' || Platform.OS === 'android';
+  // Still when everything fits.
+  const fit = useScrollWhenNeeded();
   const social = useSocialSignIn({ onSuccess: () => router.replace('/'), beforeStart: markIntroCompleted });
 
   const startSocial = (provider: SocialProvider) => {
@@ -70,7 +74,8 @@ export function GetStartedAuth({ showBack = true }: Props) {
     <GestureDetector gesture={swipeBack}>
       <SafeAreaView style={[styles.root, { backgroundColor: colors.background }]} edges={['top', 'left', 'right']}>
         <StatusBar style={colors.isDark ? 'light' : 'dark'} />
-        <View style={styles.top}>
+        {/* Back arrow off (as on Sign in); with no arrow there's no bar either. */}
+        <View style={showBack ? styles.top : styles.topSpacer}>
           {showBack ? (
             <Pressable onPress={back} hitSlop={10} accessibilityRole="button" accessibilityLabel="Back" style={styles.back}>
               <Icon name="chevronLeft" size={28} color={colors.text} />
@@ -79,13 +84,16 @@ export function GetStartedAuth({ showBack = true }: Props) {
         </View>
 
         <ScrollView
+          {...fit}
           style={styles.flex}
           contentContainerStyle={[styles.body, { paddingBottom: insets.bottom + 20 }]}
           showsVerticalScrollIndicator={false}
-          bounces={false}>
+          >
           {/* Equal space above and below: the logo, title and buttons sit centred. */}
           <View style={styles.flex} />
           <Animated.View entering={FadeInDown.duration(380)} style={styles.head}>
+            {/* The Moments mark, above the title. */}
+            <LogoMark size={72} />
             <Text style={[styles.title, { color: colors.text }]} numberOfLines={1} adjustsFontSizeToFit>
               Create your account
             </Text>
@@ -111,9 +119,9 @@ export function GetStartedAuth({ showBack = true }: Props) {
               disabled={social.busy}
             />
             <View style={styles.orRow}>
-              <View style={[styles.orLine, { backgroundColor: colors.border }]} />
+              <View style={[styles.orLine, { backgroundColor: separatorColor(colors) }]} />
               <Text style={[styles.orText, { color: colors.textTertiary }]}>or</Text>
-              <View style={[styles.orLine, { backgroundColor: colors.border }]} />
+              <View style={[styles.orLine, { backgroundColor: separatorColor(colors) }]} />
             </View>
             <AuthChoiceButton
               label="Continue with email"
@@ -123,20 +131,14 @@ export function GetStartedAuth({ showBack = true }: Props) {
             />
             <Pressable onPress={() => void goSignIn()} hitSlop={8} accessibilityRole="link" style={styles.switchRow}>
               <Text style={[styles.switchText, { color: colors.textSecondary }]}>
-                Already have an account? <Text style={[styles.switchLink, { color: colors.text }]}>Sign in</Text>
+                I already have an account <Text style={[styles.switchLink, { color: colors.text }]}>Sign in</Text>
               </Text>
             </Pressable>
           </Animated.View>
 
           <View style={styles.flex} />
 
-          <View style={[styles.privacy, { borderColor: colors.text }]}>
-            <Icon name="lock" size={22} color={colors.text} />
-            <Text style={[styles.privacyText, { color: colors.textSecondary }]}>
-              Private by design. Only the two of you ever see what you share.
-            </Text>
-          </View>
-          <AuthLegalLinks prefix="By continuing you agree to our" style={styles.legal} />
+          <AuthLegalLinks style={styles.legal} />
         </ScrollView>
       </SafeAreaView>
     </GestureDetector>
@@ -148,18 +150,17 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   top: { minHeight: 56, paddingHorizontal: 14, paddingTop: 6, justifyContent: 'center' },
   back: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  topSpacer: { height: 8 },
   body: { flexGrow: 1, paddingHorizontal: 24, paddingTop: 6, gap: 22 },
   head: { gap: 10, alignItems: 'center' },
   title: { fontSize: 30, fontWeight: '900', letterSpacing: -0.7, lineHeight: 34, marginTop: 6, textAlign: 'center' },
   subtitle: { fontSize: 16, lineHeight: 22, textAlign: 'center' },
   actions: { gap: 12, marginTop: 4 },
   orRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  orLine: { flex: 1, height: StyleSheet.hairlineWidth },
+  orLine: { flex: 1, height: 1 },
   orText: { fontSize: 13, fontWeight: '800' },
   switchRow: { alignItems: 'center', paddingVertical: 6 },
-  switchText: { fontSize: 15 },
+  switchText: { fontSize: 15, fontWeight: '600' },
   switchLink: { fontWeight: '800', textDecorationLine: 'underline' },
-  privacy: { borderWidth: 2, borderRadius: 20, padding: 14, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10 },
-  privacyText: { flex: 1, fontSize: 14, lineHeight: 20, textAlign: 'center' },
   legal: { marginTop: -6 },
 });

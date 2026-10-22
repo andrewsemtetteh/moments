@@ -11,6 +11,7 @@ import { AppleIcon, GoogleIcon } from '@/components/auth/OAuthBrandIcon';
 import { PasswordInput } from '@/components/auth/PasswordInput';
 import { useSocialSignIn } from '@/components/auth/useSocialSignIn';
 import { OnboardingStepScreen } from '@/components/onboarding/OnboardingStepScreen';
+import { separatorColor } from '@/components/ui/primitives';
 import { useTheme } from '@/hooks/useTheme';
 import { formatAuthError } from '@/lib/auth-errors';
 import {
@@ -18,7 +19,7 @@ import {
   setRememberedEmail,
 } from '@/lib/remember-me-storage';
 
-import { goBackOrReplace } from '@/lib/router';
+// import { goBackOrReplace } from '@/lib/router'; // with the back arrow, below
 import { sanitizeEmailInput, sanitizePasswordInput } from '@/lib/sanitize-input';
 
 /** The second step a sign-in can need (two-step verification on the account). */
@@ -198,9 +199,12 @@ export default function LoginScreen() {
       primaryDisabled={!email || !password || !prefsLoaded || social.busy}
       busy={loading}
       // Swap rather than stack, so switching between the two never piles up screens.
-      secondaryLabel="New here? Create an account"
+      secondaryLabel="New here?"
+      secondaryAction="Create an account"
       onSecondary={() => router.replace('/(auth)/get-started')}
-      onBack={() => goBackOrReplace(router, '/(auth)/welcome')}>
+      // No back arrow here (swipe or the link below instead).
+      // onBack={() => goBackOrReplace(router, '/(auth)/welcome')}
+      onBack={null}>
       <View style={styles.social}>
         {showApple ? (
           <AuthChoiceButton
@@ -222,9 +226,9 @@ export default function LoginScreen() {
       </View>
 
       <View style={styles.orRow}>
-        <View style={[styles.orLine, { backgroundColor: colors.border }]} />
+        <View style={[styles.orLine, { backgroundColor: separatorColor(colors) }]} />
         <Text style={[styles.orText, { color: colors.textTertiary }]}>or with email</Text>
-        <View style={[styles.orLine, { backgroundColor: colors.border }]} />
+        <View style={[styles.orLine, { backgroundColor: separatorColor(colors) }]} />
       </View>
 
       <AuthTextField
@@ -269,7 +273,7 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   social: { gap: 12 },
   orRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginVertical: 2 },
-  orLine: { flex: 1, height: StyleSheet.hairlineWidth },
+  orLine: { flex: 1, height: 1 },
   orText: { fontSize: 13, fontWeight: '800' },
   fieldError: { fontSize: 13, marginTop: -6 },
   // Just "Forgot password?" now, on the right (no "Remember me": you stay signed in).

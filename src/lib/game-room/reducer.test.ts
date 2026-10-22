@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { createRoom, reduceRoom, statsFromRoom } from './reducer';
+import { createRoom, itemIndex, MAX_ROUNDS, needsMoreItems, reduceRoom, statsFromRoom, UNLIMITED_ROUNDS } from './reducer';
 import type { GameItem, LiveGameKind, RoomState } from './types';
 
 const A = { id: 'a', name: 'Ada' };
@@ -16,6 +16,81 @@ function startedRoom(game: LiveGameKind, items: GameItem[], rounds = 3, pool = n
 
 const choice = (a: string, b: string): GameItem => ({ kind: 'choice', a, b });
 
+describe('fair scoring', () => {
+  it('gives no speed bonus on your own time, however long apart you answer', () => {
+    let s = createRoom({ id: 'p', hostId: A.id, players: [A, B], game: 'quiz', mode: 'async' });
+    s = reduceRoom(s, { t: 'configure', game: 'quiz', vibe: 'playful', rounds: 1 }, A.id, 0);
+    s = reduceRoom(s, { t: 'begin' }, A.id, 0);
+    s = reduceRoom(s, { t: 'loaded', items: [{ kind: 'quiz', question: 'q', options: ['x', 'y'], correctIndex: 0 }] }, A.id, 0);
+    s = reduceRoom(s, { t: 'answer', value: '0' }, A.id, 0);
+    s = reduceRoom(s, { t: 'answer', value: '0' }, B.id, 3_600_000);
+    expect(s.scores).toEqual({ a: 10, b: 10 });
+  });
+
+  it('never rewards the judge in Guess My Answer, and accepts an exact match by itself', () => {
+    const prompt: GameItem = { kind: 'prompt', text: 'Favourite food?' };
+    let s = startedRoom('guessAnswer', [prompt, prompt], 2);
+    const writer = s.turnId!;
+    const guesser = writer === A.id ? B.id : A.id;
+    s = reduceRoom(s, { t: 'write', text: 'Pizza!' }, writer);
+    const judged = reduceRoom(reduceRoom(s, { t: 'guess', value: 'sushi' }, guesser), { t: 'judge', verdict: 'no' }, writer);
+    expect(judged.scores[writer]).toBe(0);
+    const exact = reduceRoom(s, { t: 'guess', value: ' pizza ' }, guesser);
+    expect(exact.step).toBe('reveal');
+    expect(exact.verdict).toBe('yes');
+    expect(exact.scores[guesser]).toBe(2);
+  });
+});
+
+describe('versus extras', () => {
+  const quiz = (correctIndex: number): GameItem => ({ kind: 'quiz', question: 'q', options: ['w', 'x', 'y', 'z'], correctIndex });
+
+  function quizRoom(doubleFinal: boolean) {
+    let s = createRoom({ id: 'q', hostId: A.id, players: [A, B], game: 'quiz' });
+    s = reduceRoom(s, { t: 'configure', game: 'quiz', vibe: 'playful', rounds: 2, doubleFinal }, A.id, 0);
+    s = reduceRoom(s, { t: 'begin' }, A.id, 0);
+    return reduceRoom(s, { t: 'loaded', items: [quiz(0), quiz(1)] }, A.id, 1_000);
+  }
+
+  it('scores the comeback round double only when chosen', () => {
+    for (const doubleFinal of [false, true]) {
+      let s = quizRoom(doubleFinal);
+      s = reduceRoom(s, { t: 'answer', value: '0' }, A.id, 1_000);
+      s = reduceRoom(s, { t: 'answer', value: '3' }, B.id, 1_000);
+      const first = s.scores.a;
+      s = reduceRoom(s, { t: 'next' }, A.id, 2_000);
+      s = reduceRoom(s, { t: 'answer', value: '1' }, A.id, 2_000);
+      s = reduceRoom(s, { t: 'answer', value: '1' }, B.id, 2_000);
+      expect(s.roundPoints.a).toBe(doubleFinal ? first * 2 : first);
+    }
+  });
+
+  it('only the quiz keeps the comeback round', () => {
+    const s = createRoom({ id: 'x', hostId: A.id, players: [A, B] });
+    expect(reduceRoom(s, { t: 'configure', game: 'thisOrThat', vibe: 'sweet', rounds: 5, doubleFinal: true }, A.id).doubleFinal).toBe(false);
+  });
+
+  it('lets the loser pick the next game, and a rematch go straight back in', () => {
+    let s = quizRoom(false);
+    s = reduceRoom(s, { t: 'answer', value: '0' }, A.id, 1_000);
+    s = reduceRoom(s, { t: 'answer', value: '3' }, B.id, 1_000);
+    s = reduceRoom(s, { t: 'end' }, A.id, 1_500);
+    expect(s.result?.winnerId).toBe('a');
+
+    const lobby = reduceRoom(s, { t: 'rematch' }, B.id);
+    expect(lobby.phase).toBe('lobby');
+    expect(lobby.picker).toBe('b');
+    expect(reduceRoom(lobby, { t: 'suggest', game: 'twoTruths' }, A.id).game).toBe('quiz');
+    const picked = reduceRoom(lobby, { t: 'suggest', game: 'twoTruths' }, B.id);
+    expect(picked.game).toBe('twoTruths');
+    expect(picked.picker).toBeNull();
+
+    const again = reduceRoom(s, { t: 'rematch', again: true }, A.id);
+    expect(again.phase).toBe('loading');
+    expect(again.game).toBe('quiz');
+  });
+});
+
 describe('game room reducer', () => {
   it('only the host can configure and begin', () => {
     const s = createRoom({ id: 'r', hostId: A.id, players: [A, B] });
@@ -23,7 +98,42 @@ describe('game room reducer', () => {
     expect(reduceRoom(s, { t: 'begin' }, A.id).phase).toBe('loading');
     const cfg = reduceRoom(s, { t: 'configure', game: 'quiz', vibe: 'deep', rounds: 99 }, A.id);
     expect(cfg.game).toBe('quiz');
-    expect(cfg.totalRounds).toBe(20);
+    // Custom counts go up to MAX_ROUNDS.
+    expect(cfg.totalRounds).toBe(MAX_ROUNDS);
+  });
+
+  it('runs unlimited rounds: keeps going past the loaded questions, tops up, and ends when stopped', () => {
+    let s = startedRoom('thisOrThat', [choice('1', '2'), choice('3', '4')], UNLIMITED_ROUNDS);
+    expect(s.endless).toBe(true);
+    // Two loaded, two or fewer left: time to fetch more.
+    expect(needsMoreItems(s)).toBe(true);
+    for (let i = 0; i < 3; i++) {
+      s = reduceRoom(s, { t: 'answer', value: 'a' }, A.id, 2_000);
+      s = reduceRoom(s, { t: 'answer', value: 'a' }, B.id, 2_000);
+      s = reduceRoom(s, { t: 'next' }, A.id, 2_000);
+    }
+    // Past the last loaded question it's still playing, looping round them.
+    expect(s.phase).toBe('playing');
+    expect(s.round).toBe(3);
+    expect(itemIndex(s)).toBe(1);
+    // A top-up adds only new questions.
+    s = reduceRoom(s, { t: 'more', items: [choice('1', '2'), choice('9', '10')] }, A.id, 2_000);
+    expect(s.items).toHaveLength(3);
+    // Stopping finishes it, counting the rounds actually played.
+    s = reduceRoom(s, { t: 'end' }, A.id, 2_000);
+    expect(s.phase).toBe('finished');
+    expect(s.result?.highlights?.[0]).toContain('/3 rounds');
+  });
+
+  it('keeps Unlimited off for a game picked afterwards', () => {
+    let s = startedRoom('thisOrThat', [choice('1', '2')], UNLIMITED_ROUNDS);
+    s = reduceRoom(s, { t: 'end' }, A.id, 2_000);
+    s = reduceRoom(s, { t: 'rematch' }, A.id, 2_000);
+    // Both pick the next game (a team game has no loser to choose it).
+    s = reduceRoom(s, { t: 'suggest', game: 'quiz' }, A.id, 2_000);
+    s = reduceRoom(s, { t: 'suggest', game: 'quiz' }, B.id, 2_000);
+    expect(s.game).toBe('quiz');
+    expect(s.endless).toBe(false);
   });
 
   it('ignores actions from strangers', () => {
@@ -116,7 +226,7 @@ describe('game room reducer', () => {
     s = reduceRoom(s, { t: 'guess', value: 'popcorn' }, B.id);
     expect(s.step).toBe('judge');
     s = reduceRoom(s, { t: 'judge', verdict: 'yes' }, A.id);
-    expect(s.scores).toEqual({ a: 1, b: 2 });
+    expect(s.scores).toEqual({ a: 0, b: 2 }); // only the guesser scores
     expect(s.tally.guesses_correct).toBe(1);
   });
 
@@ -140,7 +250,8 @@ describe('game room reducer', () => {
     s = reduceRoom(s, { t: 'end' }, A.id);
     expect(s.phase).toBe('finished');
     expect(s.result?.winnerId).toBe(A.id);
-    expect(reduceRoom(s, { t: 'rematch' }, B.id).phase).toBe('finished');
+    // Either player can ask for another game (the loser then picks).
+    expect(reduceRoom(s, { t: 'rematch' }, B.id).phase).toBe('lobby');
     const again = reduceRoom(s, { t: 'rematch' }, A.id);
     expect(again.phase).toBe('lobby');
     expect(again.scores).toEqual({ a: 0, b: 0 });

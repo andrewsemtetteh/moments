@@ -1,13 +1,6 @@
 import type { ReactNode } from 'react';
-import {
-  ActivityIndicator,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-  type TextInputProps,
-} from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View, type TextInputProps } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { TextInput } from '@/components/ui/ThemedTextInput';
 import * as Haptics from '@/lib/haptics';
 
@@ -15,6 +8,7 @@ import { FullScreenPage, PageFooter } from '@/components/layout/FullScreenPage';
 import { DraggableSheet } from '@/components/ui/DraggableSheet';
 import { Icon } from '@/components/ui/Icon';
 import { PrimaryButton, insetCardStyle, pressedRowColor, separatorColor } from '@/components/ui/primitives';
+import { useScrollWhenNeeded } from '@/hooks/useScrollWhenNeeded';
 import { useTheme } from '@/hooks/useTheme';
 
 /**
@@ -44,16 +38,20 @@ export function SettingsEditPage({
   children: ReactNode;
 }) {
   const { colors } = useTheme();
+  const fit = useScrollWhenNeeded();
   return (
     <FullScreenPage visible={visible} title={title} onBack={onClose} dismissKeyboardOnTap>
-      <ScrollView
+      <KeyboardAwareScrollView
+        // Scrolls the focused field just above the keyboard (iPhone and Android).
+        bottomOffset={24}
+        {...fit}
         style={styles.flex}
         contentContainerStyle={styles.body}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}>
         {hint ? <Text style={[styles.hint, { color: colors.textSecondary }]}>{hint}</Text> : null}
         {children}
-      </ScrollView>
+      </KeyboardAwareScrollView>
       <PageFooter>
         <PrimaryButton
           label={saving ? 'Saving…' : buttonLabel}
@@ -75,11 +73,7 @@ export function SettingsField({ label, ...input }: TextInputProps & { label: str
       <TextInput
         placeholderTextColor={colors.textTertiary}
         {...input}
-        style={[
-          styles.input,
-          { color: colors.text },
-          insetCardStyle(colors, 'page'),
-        ]}
+        style={[styles.input, { color: colors.text }, insetCardStyle(colors, 'page')]}
       />
     </View>
   );
@@ -114,8 +108,7 @@ export function SettingsChoiceSheet<T extends string>({
     <DraggableSheet visible={visible} onClose={onClose} dragAnywhere>
       <Text style={[styles.sheetTitle, { color: colors.text }]}>{title}</Text>
       {hint ? <Text style={[styles.sheetHint, { color: colors.textSecondary }]}>{hint}</Text> : null}
-      <View
-        style={[styles.list, insetCardStyle(colors, 'sheet')]}>
+      <View style={[styles.list, insetCardStyle(colors, 'sheet')]}>
         {options.map((option, i) => {
           const selected = option.value === value;
           const busy = option.value === savingValue;
@@ -164,7 +157,13 @@ const styles = StyleSheet.create({
   sheetTitle: { fontSize: 20, fontWeight: '800', letterSpacing: -0.3 },
   sheetHint: { fontSize: 14, lineHeight: 20, marginTop: 4 },
   list: { marginTop: 16, borderRadius: 18, overflow: 'hidden' },
-  option: { minHeight: 54, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  option: {
+    minHeight: 54,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
   optionLabel: { fontSize: 16, fontWeight: '600' },
   optionLabelOn: { fontWeight: '800' },
 });

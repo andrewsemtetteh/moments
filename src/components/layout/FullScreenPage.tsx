@@ -1,24 +1,25 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import {
-  Dimensions,
-  Keyboard,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  StyleSheet,
-  TouchableWithoutFeedback,
-  View,
-} from 'react-native';
+import { Keyboard, Modal, Platform, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
+
+import { KeyboardDismissRoot } from '@/components/layout/KeyboardDismissRoot';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
-import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
+import Animated, {
+  runOnJS,
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+  withTiming,
+  type SharedValue,
+} from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ScreenHeader } from '@/components/layout/ScreenHeader';
 import { HeaderIconButton } from '@/components/ui/HeaderIconButton';
 import { useTheme } from '@/hooks/useTheme';
 import { ThemedStatusBar } from '@/components/ui/ThemedStatusBar';
+import { ChoiceSheetHost } from '@/components/ui/ChoiceSheet';
 
-const SCREEN_W = Dimensions.get('window').width;
 const OPEN_SPRING = { damping: 30, stiffness: 280, mass: 0.9 };
 
 /**
@@ -34,6 +35,9 @@ export function FullScreenPage({
   avoidKeyboard = true,
   dismissKeyboardOnTap = false,
   overlay,
+  swipeDownToClose = false,
+  atTop,
+  closeOnRight = false,
   floatingBack = false,
   headerTint,
   children,
@@ -65,17 +69,30 @@ export function FullScreenPage({
   dismissKeyboardOnTap?: boolean;
   /** Drawn over the whole page (header included), outside its swipe-back: e.g. the full map. */
   overlay?: ReactNode;
+  /** Also close with a swipe down (like an opened moment), when the page is scrolled to the top. */
+  swipeDownToClose?: boolean;
+  /** Whether the page's scroll is at the top (a swipe down there closes; elsewhere it scrolls). */
+  atTop?: SharedValue<boolean>;
+  /** A ✕ on the right instead of the back arrow; `right` then sits on the left. */
+  closeOnRight?: boolean;
   children: ReactNode;
 }) {
+  // Read live, so a fold / unfold, split screen or rotation redraws at the new size.
+  const { width: SCREEN_W, height: SCREEN_H } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const [mounted, setMounted] = useState(visible);
   const translateX = useSharedValue(SCREEN_W);
+  // Swipe down to close (swipeDownToClose): how far it's been pulled, and where the touch began.
+  const dragY = useSharedValue(0);
+  const touchX = useSharedValue(0);
+  const touchY = useSharedValue(0);
   // Opening mounts straight away (while rendering); closing waits for the slide-out below.
   if (visible && !mounted) setMounted(true);
 
   useEffect(() => {
     if (visible) {
+      dragY.value = 0;
       translateX.value = SCREEN_W;
       translateX.value = withSpring(0, OPEN_SPRING);
     } else if (mounted) {
@@ -103,46 +120,83 @@ export function FullScreenPage({
       translateX.set(withSpring(0, OPEN_SPRING));
     });
 
-  const pageStyle = useAnimatedStyle(() => ({ transform: [{ translateX: translateX.value }] }));
+  // Swipe down to close, as on an opened moment: only a clearly downward drag from the top of the
+  // page claims it, so scrolling up and down and swiping sideways still work as before.
+  const swipeDown = Gesture.Pan()
+    .enabled(swipeDownToClose)
+    .manualActivation(true)
+    .onTouchesDown((e) => {
+      const t = e.allTouches[0];
+      if (!t) return;
+      touchX.value = t.absoluteX;
+      touchY.value = t.absoluteY;
+    })
+    .onTouchesMove((e, state) => {
+      const t = e.allTouches[0];
+      if (!t) return;
+      const dx = t.absoluteX - touchX.value;
+      const dy = t.absoluteY - touchY.value;
+      if (dy < -8 || (Math.abs(dx) > 12 && Math.abs(dx) > dy)) {
+        state.fail();
+        return;
+      }
+      if (dy > 14 && (atTop ? atTop.value : true)) state.activate();
+    })
+    .onUpdate((e) => {
+      dragY.set(Math.max(0, e.translationY));
+    })
+    .onEnd((e) => {
+      if (e.translationY > SCREEN_H * 0.18 || e.velocityY > 900) {
+        // Off the bottom, then closed: it's already out of sight, so nothing blank shows after.
+        dragY.set(
+          withTiming(SCREEN_H, { duration: 200 }, (done) => {
+            if (done) runOnJS(onBack)();
+          }),
+        );
+        return;
+      }
+      dragY.set(withSpring(0, OPEN_SPRING));
+    });
+  const pageGesture = Gesture.Race(swipeBack, swipeDown);
 
-  // iPhone: pad up (or leave it to a scroll view that lifts the focused field itself).
-  // Android: this is a pop-up window the system doesn't resize for the keyboard, so
-  // always shrink to the space above it, or fields near the bottom end up hidden.
-  const keyboardBehavior = Platform.OS === 'android' ? 'height' : avoidKeyboard ? 'padding' : undefined;
+  const pageStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: translateX.value }, { translateY: dragY.value }],
+    borderRadius: dragY.value > 0 ? 28 : 0,
+  }));
+
+  // Pad the page above the keyboard; or (avoidKeyboard={false}) leave it to a keyboard-aware scroll
+  // view inside, which brings the focused field into view itself. Same on iPhone and Android (the
+  // keyboard library sees the keyboard here because the modal is edge to edge).
+  const keyboardBehavior = avoidKeyboard ? 'padding' : undefined;
 
   if (!mounted) return null;
 
-  const header = floatingBack ? null : <ScreenHeader title={title} onBack={onBack} right={right} />;
+  const header = floatingBack ? null : closeOnRight ? (
+    <ScreenHeader title={title} onClose={onBack} closeIcon left={right} />
+  ) : (
+    <ScreenHeader title={title} onBack={onBack} right={right} />
+  );
 
   return (
-    <Modal visible transparent animationType="none" statusBarTranslucent onRequestClose={onBack}>
+    <Modal
+      visible
+      transparent
+      animationType="none"
+      statusBarTranslucent
+      navigationBarTranslucent
+      onRequestClose={onBack}>
       <ThemedStatusBar style={headerTint ? (isLightColor(headerTint) ? 'light' : 'dark') : undefined} />
       <GestureHandlerRootView style={styles.flex}>
-        <GestureDetector gesture={swipeBack}>
+        <GestureDetector gesture={pageGesture}>
           <Animated.View style={[styles.flex, { backgroundColor: colors.background }, pageStyle]}>
-            {/* Tapping anywhere that isn't a field or a button — header included —
-                closes the keyboard. */}
-            {dismissKeyboardOnTap ? (
-              <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
-                <View style={styles.flex}>
-                  {header}
-                  <KeyboardAvoidingView
-                    style={styles.flex}
-                    behavior={keyboardBehavior}>
-                    {children}
-                  </KeyboardAvoidingView>
-                </View>
-              </TouchableWithoutFeedback>
-            ) : (
-              <View style={styles.flex}>
-                {header}
-                <KeyboardAvoidingView
-                  style={styles.flex}
-                  behavior={keyboardBehavior}>
-                  {children}
-                </KeyboardAvoidingView>
-              </View>
-            )}
+            {/* Tapping anywhere that isn't a field or a button (header included) closes the
+                keyboard. A modal is its own window, so the app-wide handler can't reach in here. */}
+            <KeyboardDismissRoot enabled={dismissKeyboardOnTap !== false}>
+              {header}
+              <KeyboardAvoidingView style={styles.flex} behavior={keyboardBehavior}>
+                {children}
+              </KeyboardAvoidingView>
+            </KeyboardDismissRoot>
             {floatingBack ? (
               <View pointerEvents="box-none" style={[styles.floatingBack, { top: insets.top + 6 }]}>
                 <HeaderIconButton icon="chevronLeft" onPress={onBack} accessibilityLabel="Go back" chip />
@@ -151,6 +205,8 @@ export function FullScreenPage({
           </Animated.View>
         </GestureDetector>
         {overlay}
+        {/* Choices asked from this page ("Delete plan?") show over it. */}
+        <ChoiceSheetHost inline />
       </GestureHandlerRootView>
     </Modal>
   );

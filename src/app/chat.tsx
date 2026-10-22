@@ -9,6 +9,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import { getInfoAsync } from 'expo-file-system/legacy';
 import * as Haptics from '@/lib/haptics';
 import { Image } from 'expo-image';
+import { mediaSource } from '@/lib/storage-cdn';
 import * as ImagePicker from 'expo-image-picker';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -65,6 +66,7 @@ import * as api from '@/services/api';
 import { useAuthStore, useOfflineStore, useRelationshipStore, useUIStore } from '@/stores';
 import type { Message } from '@/types/database';
 import { ensurePermission } from '@/lib/permissions';
+import { askChoice } from '@/components/ui/ChoiceSheet';
 
 /** Voice notes: high quality with live levels for the recording waveform. */
 const VOICE_PRESET = { ...RecordingPresets.HIGH_QUALITY, isMeteringEnabled: true };
@@ -155,7 +157,9 @@ export default function ChatScreen() {
   const { messages, isFetching, isPending, isError, fetchNextPage, hasNextPage, isFetchingNextPage, refetch } =
     useInfiniteMessages();
   const { unreadBannerIds, unreadBannerCount, onComposerActivity, onViewableItemsChanged, viewabilityConfig } =
-    useChatUnreadBanner(messages);
+    // Settled = the thread's fresh copy is in (not just the one kept from last time), so the
+    // unread divider is worked out from what's really unread.
+    useChatUnreadBanner(messages, !isPending && !isFetching);
   const {
     isOnline: partnerOnline,
     lastSeenAt: partnerLastSeenAt,
@@ -511,21 +515,13 @@ export default function ChatScreen() {
       return;
     }
     const oldest = pinned[pinned.length - 1];
-    Alert.alert(
-      `You can pin up to ${MAX_PINNED} messages`,
-      'Replace the oldest pinned message with this one?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Replace',
-          onPress: () => {
+    askChoice({ title: `You can pin up to ${MAX_PINNED} messages`, message: 'Replace the oldest pinned message with this one?', actions: [
+{ label: 'Replace', onPress: () => {
             pin.mutate({ messageId: oldest.id, isPinned: false });
             pin.mutate({ messageId, isPinned: true });
             setPinCursor(0);
-          },
-        },
-      ],
-    );
+          } },
+] });
   };
   const listItems = useMemo(() => {
     if (!user) return [];
@@ -1111,7 +1107,11 @@ export default function ChatScreen() {
               onPress={openPartnerProfileView}
               accessibilityRole="button"
               accessibilityLabel="View partner info">
-              <Text style={[styles.headerName, { color: colors.text }]} numberOfLines={1}>
+              <Text
+                style={[styles.headerName, { color: colors.text }]}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.8}>
                 {partner?.name ?? 'Partner'}
               </Text>
               <PartnerStatusLine
@@ -1257,7 +1257,7 @@ export default function ChatScreen() {
           {chatMomentReply && (
             <View style={[styles.momentReplyBar, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
               {chatMomentReply.mediaUrl ? (
-                <Image source={{ uri: chatMomentReply.mediaUrl }} style={styles.momentReplyThumb} contentFit="cover" />
+                <Image source={mediaSource(chatMomentReply.mediaUrl)} style={styles.momentReplyThumb} contentFit="cover" />
               ) : (
                 <View style={[styles.momentReplyThumb, { backgroundColor: colors.surfaceElevated }]} />
               )}

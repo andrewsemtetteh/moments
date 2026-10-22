@@ -1,6 +1,6 @@
 import * as Haptics from '@/lib/haptics';
 import { useCallback, useEffect, useState } from 'react';
-import { Dimensions, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Modal, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import Animated, { FadeIn, FadeInDown, FadeInUp, ZoomIn } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Defs, Mask, Path, Rect } from 'react-native-svg';
@@ -11,7 +11,6 @@ import { useTheme } from '@/hooks/useTheme';
 import { consumeTourPending } from '@/lib/onboarding-v2';
 import { useAuthStore, useUIStore } from '@/stores';
 
-const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 /** Room around the spotlighted thing, and its corner rounding. */
 const PAD = 8;
 const RADIUS = 22;
@@ -35,6 +34,8 @@ type Step = {
  * in the middle without a spotlight.
  */
 export function OnboardingTour() {
+  // Read live, so a fold / unfold, split screen or rotation redraws at the new size.
+  const { width: SCREEN_W, height: SCREEN_H } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const userId = useAuthStore((s) => s.user?.id);

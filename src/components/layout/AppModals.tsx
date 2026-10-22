@@ -8,10 +8,17 @@ import { PartnerProfileModal } from '@/components/profile/PartnerProfileModal';
 import { TrophyViewHost } from '@/components/games/TrophyViewHost';
 import { PaywallModal } from '@/components/subscription/PaywallModal';
 import { StreakMilestoneModal } from '@/components/home/StreakMilestoneModal';
+import { BirthdayCelebrationModal } from '@/components/home/BirthdayCelebration';
 import { TogetherMilestoneModal } from '@/components/home/TogetherMilestone';
 import { StreakSparkModal } from '@/components/home/StreakSparkModal';
 import { WrappedModal } from '@/components/wrapped/WrappedModal';
 import { useUIStore } from '@/stores';
+import { startLayerStatusBarSync } from '@/lib/layer-status-bar';
+import { ChoiceSheetHost } from '@/components/ui/ChoiceSheet';
+import { RatingPageHost } from '@/components/layout/StoreReviewSync';
+
+// Full-screen layers open with the theme's status bar colours (see layer-status-bar).
+startLayerStatusBarSync();
 
 /**
  * Full-screen shared-location viewer, opened from the partner profile sheet. The profile
@@ -65,8 +72,14 @@ export function AppModals() {
       <PaywallModal />
       {/* A trophy opened from its chat card or notification. */}
       <TrophyViewHost />
+      {/* The app's choices drawer ("Delete this?", "Account options"…), at the root. */}
+      <ChoiceSheetHost />
+      {/* The rating page (Settings › Rate Moments, or once after a week of use). */}
+      <RatingPageHost />
       <StreakMilestoneModal />
       <TogetherMilestoneModal />
+      {/* Birthdays: on the day (yours or theirs) and the day before theirs. */}
+      <BirthdayCelebrationModal />
       <StreakSparkModal />
       <GameRoomBridge />
     </>

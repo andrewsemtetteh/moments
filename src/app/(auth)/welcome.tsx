@@ -2,6 +2,7 @@ import * as Haptics from '@/lib/haptics';
 import { useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { CONTENT_MAX_WIDTH } from '@/lib/layout';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { Easing, runOnJS, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { StatusBar } from 'expo-status-bar';
@@ -79,7 +80,9 @@ function StoryBars({ count, active, color }: { count: number; active: number; co
 export default function AuthWelcomeScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { width, height } = useWindowDimensions();
+  // The page column's width (capped on tablets / unfolded phones), live.
+  const { width: screenW, height } = useWindowDimensions();
+  const width = Math.min(screenW, CONTENT_MAX_WIDTH);
   // Device-level appearance (AsyncStorage), loaded before sign-in too — so this
   // follows whatever the person already picked, not a theme locked to one option.
   const { colors } = useTheme();

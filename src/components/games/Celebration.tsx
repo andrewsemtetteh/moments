@@ -1,6 +1,6 @@
 import * as Haptics from '@/lib/haptics';
 import { memo, useEffect, useMemo, useState } from 'react';
-import { Dimensions, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, {
   Easing,
   FadeInUp,
@@ -30,7 +30,6 @@ import { usePlayProgressStore, type Celebration } from '@/stores/play-progress-s
 type BadgeCelebration = Extract<Celebration, { kind: 'badge' }>;
 type QuestCelebration = Extract<Celebration, { kind: 'quest' }>;
 
-const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 const CONFETTI_COLORS = ['#FF6B8A', '#FFD54A', '#5B8DEF', '#3DBE7A', '#B48CFF', '#FF9F5A'];
 
 /** A fixed 0–1 "random" per piece and property: scattered like Math.random, but pure. */
@@ -342,7 +341,8 @@ export function CelebrationHost({ surface }: { surface: 'root' | 'room' }) {
 
 const styles = StyleSheet.create({
   confettiRoot: { ...StyleSheet.absoluteFill, alignItems: 'center', justifyContent: 'center' },
-  piece: { position: 'absolute', top: SCREEN_H * 0.34, left: SCREEN_W / 2 },
+  // Percentages of the screen, so the burst stays centred at any size.
+  piece: { position: 'absolute', top: '34%', left: '50%' },
   toastStack: { position: 'absolute', top: 64, left: 16, right: 16, gap: 8 },
   toast: {
     flexDirection: 'row',
@@ -368,7 +368,8 @@ const styles = StyleSheet.create({
   levelNumber: { fontSize: 72, fontWeight: '900', lineHeight: 80 },
   levelTitle: { fontSize: 16, fontWeight: '800' },
   trophyCard: {
-    width: Math.min(340, SCREEN_W - 48),
+    width: '88%',
+    maxWidth: 340,
     borderRadius: 32,
     borderWidth: 2,
     paddingVertical: 26,

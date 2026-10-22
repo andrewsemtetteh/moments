@@ -28,7 +28,15 @@ export type MoodType =
 export type ActivityStatus = 'pending' | 'in_progress' | 'completed';
 export type EventType = 'date' | 'anniversary' | 'reminder' | 'experience' | 'custom';
 export type SubscriptionTier = 'free' | 'plus';
-export type ProfileGender = 'male' | 'female' | 'non_binary' | 'other';
+export type ProfileGender =
+  | 'male'
+  | 'female'
+  | 'non_binary'
+  | 'genderqueer'
+  | 'genderfluid'
+  | 'agender'
+  | 'other'
+  | 'prefer_not_to_say';
 export type RelationshipType = 'dating' | 'long_distance' | 'engaged' | 'married' | 'other';
 
 export interface UserProfile {
@@ -79,10 +87,13 @@ export interface Relationship {
   /** When the couple's Plus (or its free trial) ends. Written by the Superwall webhook. */
   subscription_expires_at?: string | null;
   /** 'trial' during the free trial, 'normal' once paying. */
-  subscription_period?: 'trial' | 'normal' | null;
+  /** 'grace': a renewal failed and the store is retrying; Plus stays on meanwhile. */
+  subscription_period?: 'trial' | 'normal' | 'grace' | null;
   subscription_product?: string | null;
   /** Free Plus from referrals, until this time. Written by the server only. */
   bonus_plus_until?: string | null;
+  /** Developer "Pretend Plus is on" (server side too). */
+  dev_plus?: number | boolean | null;
   anniversary_date?: string | null;
   relationship_type?: RelationshipType | null;
   created_at: string;
@@ -238,6 +249,10 @@ export interface StreakStatus {
   restorable_lost_at: string | null;
   /** Days (YYYY-MM-DD) you checked in. */
   active_days?: string[];
+  /** Streak freezes you hold (0–2): one is used automatically on a missed day. */
+  streak_freezes?: number;
+  /** Days (YYYY-MM-DD) a freeze covered: the streak carried on, drawn frozen. */
+  frozen_days?: string[];
   /** Older servers: days with any couple activity. */
   activity_days?: string[];
   /** Your partner's streak. */

@@ -2,17 +2,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { CameraView, useCameraPermissions, useMicrophonePermissions } from 'expo-camera';
 import * as Haptics from '@/lib/haptics';
 import { Image } from 'expo-image';
+import { mediaSource } from '@/lib/storage-cdn';
 import * as ImagePicker from 'expo-image-picker';
 import { useEffect, useRef, useState } from 'react';
-import {
-    ActivityIndicator,
-    Alert,
-    Dimensions,
-    Pressable,
-    StyleSheet,
-    Text,
-    View,
-} from 'react-native';
+import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { FadeInUp, FadeOut, runOnJS, useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -20,7 +13,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MomentVideoPlayer } from '@/components/moments/MomentVideoPlayer';
 import { HEADER_ICON_SIZE } from '@/components/ui/HeaderIconButton';
 import { Icon } from '@/components/ui/Icon';
-import { Avatar } from '@/components/ui/primitives';
+import { Avatar, cardSurface } from '@/components/ui/primitives';
 import { useCreateMoment } from '@/hooks/queries';
 import { usePlusGate } from '@/hooks/usePlusGate';
 import { useSubscription } from '@/hooks/useSubscription';
@@ -42,7 +35,6 @@ import { ensurePermission } from '@/lib/permissions';
 const VIEWFINDER_RADIUS = 28;
 const MAX_VIDEO_SEC = 30;
 const SHUTTER_HOLD_MS = 280;
-const SCREEN_H = Dimensions.get('window').height;
 const SETTLE_SPRING = { damping: 30, stiffness: 260, mass: 0.9 };
 /** Remembers the "Add location" choice between moments. Off until turned on. */
 const ADD_LOCATION_PREF = 'moments:add-location';
@@ -53,6 +45,8 @@ function shortPlace(label: string) {
 }
 
 export function MomentCreatorModal() {
+  // Read live, so a fold / unfold, split screen or rotation redraws at the new size.
+  const SCREEN_H = useWindowDimensions().height;
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const chrome = momentChrome(colors);
@@ -80,13 +74,17 @@ export function MomentCreatorModal() {
   // itself starts, which is after the (often multi-second) media upload — a second tap during
   // the upload window would race past a state-based check and send the moment twice.
   const sendLockRef = useRef(false);
-  const [sending, setSending] = useState(false);
+  // Sends run in the background now (see handleSend): the buttons never wait on one.
+  const sending = false;
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
   const [micPermission, requestMicPermission] = useMicrophonePermissions();
   const [facing, setFacing] = useState<'front' | 'back'>('front');
   const [flash, setFlash] = useState<'off' | 'on'>('off');
   const [previewUri, setPreviewUri] = useState<string | null>(null);
   const [previewIsVideo, setPreviewIsVideo] = useState(false);
+  // The picked / taken media's own shape (width ÷ height), so its frame fits it exactly.
+  const [previewAspect, setPreviewAspect] = useState<number | null>(null);
+  const [previewArea, setPreviewArea] = useState<{ w: number; h: number } | null>(null);
   const [recording, setRecording] = useState(false);
   const [cameraReady, setCameraReady] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -162,6 +160,7 @@ export function MomentCreatorModal() {
   }
 
   const resetPreview = () => {
+    setPreviewAspect(null);
     setPreviewUri(null);
     setPreviewIsVideo(false);
     setDraft({ mediaUri: null, type: 'photo' });
@@ -169,6 +168,8 @@ export function MomentCreatorModal() {
 
   // "Sent to Alex" for a moment after sending (the camera stays open).
   const [sentNotice, setSentNotice] = useState(false);
+  // Moments still going up in the background (shows "Sending to Alex…").
+  const [backgroundSends, setBackgroundSends] = useState(0);
   useEffect(() => {
     if (!sentNotice) return;
     const t = setTimeout(() => setSentNotice(false), 2400);
@@ -223,6 +224,7 @@ export function MomentCreatorModal() {
     try {
       const photo = await cameraRef.current?.takePictureAsync({ quality: 0.85 });
       if (photo?.uri) {
+        setPreviewAspect(photo.width && photo.height ? photo.width / photo.height : null);
         setPreviewUri(photo.uri);
         setPreviewIsVideo(false);
         setDraft({ type: 'photo', mediaUri: photo.uri });
@@ -239,6 +241,8 @@ export function MomentCreatorModal() {
     try {
       const video = await cameraRef.current?.recordAsync({ maxDuration: MAX_VIDEO_SEC });
       if (video?.uri) {
+        // Recorded here: the camera's own shape (the frame fills its space).
+        setPreviewAspect(null);
         setPreviewUri(video.uri);
         setPreviewIsVideo(true);
         setDraft({ type: 'video', mediaUri: video.uri });
@@ -265,11 +269,16 @@ export function MomentCreatorModal() {
     if (result.canceled || !result.assets[0]) return;
     const asset = result.assets[0];
     const isVideo = asset.type === 'video';
+    setPreviewAspect(asset.width && asset.height ? asset.width / asset.height : null);
     setPreviewUri(asset.uri);
     setPreviewIsVideo(isVideo);
     setDraft({ type: isVideo ? 'video' : 'photo', mediaUri: asset.uri });
   };
 
+  /**
+   * Send: the camera is ready for the next shot straight away ("Sending to Alex…"), and the
+   * moment finishes going up in the background. If it fails, the photo comes back to try again.
+   */
   const handleSend = async () => {
     if (sendLockRef.current) return;
     const type = draft.type ?? (previewIsVideo ? 'video' : 'photo');
@@ -278,14 +287,19 @@ export function MomentCreatorModal() {
     if (atDailyLimit && !requirePlus('Unlimited daily moments')) return;
 
     sendLockRef.current = true;
-    setSending(true);
+    const pin = addLocation && pinnedPlace ? pinnedPlace : null;
+    const aspect = previewAspect;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    resetPreview();
+    setBackgroundSends((n) => n + 1);
+    sendLockRef.current = false;
+
     try {
       const ext = type === 'video' ? 'mp4' : 'jpg';
       const contentType = type === 'video' ? 'video/mp4' : 'image/jpeg';
       const path = `${relationship.id}/${user.id}/${Date.now()}.${ext}`;
       const mediaUrl = await api.uploadMomentMedia(path, mediaUri, contentType);
 
-      const pin = addLocation && pinnedPlace ? pinnedPlace : null;
       try {
         await createMoment.mutateAsync({
           type,
@@ -299,29 +313,38 @@ export function MomentCreatorModal() {
         throw e;
       }
       if (pin) void rememberPlaceSuggestion(relationship.id, pin.latitude, pin.longitude, pin.label);
-      await api.trackEvent(relationship.id, user.id, 'moment_created', { type });
+      void api.trackEvent(relationship.id, user.id, 'moment_created', { type }).catch(() => undefined);
       void usePlayProgressStore.getState().award(
         relationship.id,
         { xp: 10, stats: { moments_sent: 1 }, events: { moment_sent: 1 }, soloId: `moment-${todayKey()}` },
         'Moment sent',
       );
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      // Stay in Moments: back to the camera, ready for the next one.
-      resetPreview();
       setSentNotice(true);
     } catch (error) {
+      // Put the photo back so it can be sent again (or saved).
+      const restore = () => {
+        setPreviewAspect(aspect);
+        setPreviewUri(mediaUri);
+        setPreviewIsVideo(type === 'video');
+        setDraft({ mediaUri, type });
+      };
       // Over the free plan's moments today (the server checks too): offer Plus, not an error.
       if ((error as { code?: string } | null)?.code === 'PLUS_REQUIRED') {
+        restore();
         requirePlus('Unlimited daily moments');
         return;
       }
       Alert.alert(
         'Could not send moment',
         toUserFacingNetworkError(error, 'Please check your connection and try again.').message,
+        [
+          { text: 'Not now', style: 'cancel' },
+          { text: 'Try again', onPress: restore },
+        ],
       );
     } finally {
-      sendLockRef.current = false;
-      setSending(false);
+      setBackgroundSends((n) => Math.max(0, n - 1));
     }
   };
 
@@ -437,12 +460,22 @@ export function MomentCreatorModal() {
               </Pressable>
             </View>
 
-            <View style={[styles.previewMedia, { backgroundColor: chrome.mediaBackdrop }]}>
-              {previewIsVideo ? (
-                <MomentVideoPlayer uri={previewUri} fill autoPlay contentFit="contain" style={styles.previewVideo} />
-              ) : (
-                <Image source={{ uri: previewUri }} style={StyleSheet.absoluteFill} contentFit="contain" />
-              )}
+            {/* The frame takes the media's own shape (no empty bars around it), as big as fits. */}
+            <View
+              style={styles.previewArea}
+              onLayout={(e) => setPreviewArea({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height })}>
+              <View
+                style={[
+                  styles.previewMedia,
+                  { backgroundColor: chrome.mediaBackdrop },
+                  fittedPreviewSize(previewAspect, previewArea),
+                ]}>
+                {previewIsVideo ? (
+                  <MomentVideoPlayer uri={previewUri} fill autoPlay contentFit="cover" style={styles.previewVideo} />
+                ) : (
+                  <Image source={mediaSource(previewUri)} style={StyleSheet.absoluteFill} contentFit="cover" />
+                )}
+              </View>
             </View>
 
             <Pressable
@@ -472,7 +505,7 @@ export function MomentCreatorModal() {
             </Pressable>
 
             <View style={styles.previewActions}>
-              <Pressable onPress={resetPreview} style={[styles.previewSecondaryBtn, { backgroundColor: chrome.surfaceSoft }]}>
+              <Pressable onPress={resetPreview} style={[styles.previewSecondaryBtn, cardSurface(colors)]}>
                 <Text style={[styles.previewSecondaryText, { color: chrome.text }]}>Retake</Text>
               </Pressable>
 
@@ -503,7 +536,7 @@ export function MomentCreatorModal() {
                 <Icon name="close" size={HEADER_ICON_SIZE} color={chrome.text} />
               </Pressable>
 
-              <View style={[styles.partnerPill, { backgroundColor: chrome.surface }]}>
+              <View style={[styles.partnerPill, cardSurface(colors)]}>
                 <Avatar name={partner?.name} imageUrl={partner?.avatar_url} size={22} />
                 <Text style={[styles.partnerPillText, { color: chrome.text }]} numberOfLines={1}>
                   Sending to {partnerName}
@@ -626,7 +659,16 @@ export function MomentCreatorModal() {
             </View>
           </>
         )}
-        {sentNotice ? (
+        {backgroundSends > 0 && !previewUri ? (
+          <Animated.View
+            entering={FadeInUp.duration(220)}
+            exiting={FadeOut.duration(200)}
+            pointerEvents="none"
+            style={[styles.sentToast, { top: insets.top + 64 }]}>
+            <ActivityIndicator size="small" color="#FFFFFF" />
+            <Text style={styles.sentToastText}>Sending to {partnerName}…</Text>
+          </Animated.View>
+        ) : sentNotice ? (
           <Animated.View
             entering={FadeInUp.duration(220)}
             exiting={FadeOut.duration(200)}
@@ -640,6 +682,14 @@ export function MomentCreatorModal() {
       </Animated.View>
     </GestureDetector>
   );
+}
+
+/** The biggest box of the media's shape that fits the space (the whole space when the shape is unknown). */
+function fittedPreviewSize(aspect: number | null, area: { w: number; h: number } | null) {
+  if (!aspect || !area || area.w <= 0 || area.h <= 0) return null;
+  return area.w / area.h > aspect
+    ? { width: Math.round(area.h * aspect), height: area.h }
+    : { width: area.w, height: Math.round(area.w / aspect) };
 }
 
 const styles = StyleSheet.create({
@@ -744,10 +794,10 @@ const styles = StyleSheet.create({
   },
   previewTitle: { fontSize: 24, fontWeight: '800', letterSpacing: -0.5 },
   // Framed like the live viewfinder, with clear space above the buttons.
+  previewArea: { flex: 1, marginHorizontal: 16, marginBottom: 16, alignItems: 'center', justifyContent: 'center' },
   previewMedia: {
-    flex: 1,
-    marginHorizontal: 16,
-    marginBottom: 16,
+    width: '100%',
+    height: '100%',
     borderRadius: VIEWFINDER_RADIUS,
     overflow: 'hidden',
   },

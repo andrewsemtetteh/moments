@@ -10,9 +10,12 @@ import { DraggableSheet } from '@/components/ui/DraggableSheet';
 import { SheetHeader, sheetListStyle } from '@/components/ui/SheetHeader';
 import { pressedRowColor, separatorColor } from '@/components/ui/primitives';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { ChunkyButton } from '@/components/games/room-ui';
 import { PlayHeader } from '@/components/play/PlayHeader';
+import { PLAY_GUTTER, PlayChip, PlayHero, PlayType, playCardStyle } from '@/components/play/PlayKit';
 import { Icon } from '@/components/ui/Icon';
 import { usePackAnswers } from '@/hooks/play-queries';
+import { useLightStatusBar } from '@/hooks/useLightStatusBar';
 import { useTheme } from '@/hooks/useTheme';
 import { getGameDefinition, type LiveGameKind } from '@/lib/game-room/types';
 import {
@@ -58,6 +61,8 @@ export default function AreaScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
+  // Coloured header with white text: light clock and battery while this page shows.
+  useLightStatusBar();
   const userId = useAuthStore((s) => s.user?.id);
   const { data: answers } = usePackAnswers();
   const [format, setFormat] = useState<HandpickedFormat | 'all'>('all');
@@ -110,27 +115,27 @@ export default function AreaScreen() {
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
       <ScrollView
+        // No pull past the top (it showed an empty gap above the page).
+        bounces={false}
+        overScrollMode="never"
         contentContainerStyle={{ paddingBottom: insets.bottom + 12 }}
         stickyHeaderIndices={[0]}
         showsVerticalScrollIndicator={false}>
         <View style={{ backgroundColor: tone.accent }}>
           <PlayHeader title={area.title} onColor="#FFFFFF" />
         </View>
-        <View style={[styles.hero, { backgroundColor: tone.accent }]}>
-          <View style={styles.heroBody}>
-            <Text style={styles.heroBlurb}>{area.blurb}</Text>
-            {packs.length ? (
-              <View style={styles.progressRow}>
-                <View style={styles.track}>
-                  <View style={[styles.fill, { width: `${Math.round((donePacks / packs.length) * 100)}%` }]} />
-                </View>
-                <Text style={styles.progressText}>
-                  {donePacks} of {packs.length} packs done
-                </Text>
+        <PlayHero color={tone.accent} blurb={area.blurb} minHeight={150}>
+          {packs.length ? (
+            <View style={styles.progressRow}>
+              <View style={styles.track}>
+                <View style={[styles.fill, { width: `${Math.round((donePacks / packs.length) * 100)}%` }]} />
               </View>
-            ) : null}
-          </View>
-        </View>
+              <Text style={styles.progressText}>
+                {donePacks} of {packs.length} packs done
+              </Text>
+            </View>
+          ) : null}
+        </PlayHero>
 
         <View style={styles.body}>
           <View style={styles.filterBar}>
@@ -149,9 +154,9 @@ export default function AreaScreen() {
               {activeFilters ? <Text style={[styles.filterCount, { color: colors.onAccent }]}>{activeFilters}</Text> : null}
             </Pressable>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips} style={styles.chipScroll}>
-              <Chip label="All" selected={format === 'all'} onPress={() => setFormat('all')} />
+              <PlayChip label="All" selected={format === 'all'} onPress={() => setFormat('all')} />
               {formatsHere.map((f) => (
-                <Chip key={f.id} label={f.label} selected={format === f.id} onPress={() => setFormat(f.id)} />
+                <PlayChip key={f.id} label={f.label} selected={format === f.id} onPress={() => setFormat(f.id)} />
               ))}
             </ScrollView>
           </View>
@@ -209,10 +214,10 @@ export default function AreaScreen() {
           <Pressable
             onPress={() => router.push({ pathname: '/play/game/[kind]', params: { kind: game.kind } })}
             accessibilityRole="button"
-            style={[styles.gameLink, { borderColor: colors.border }]}>
+            style={[styles.gameLink, playCardStyle(colors)]}>
             <View style={{ flex: 1, gap: 2 }}>
-              <Text style={[styles.gameEyebrow, { color: colors.accent }]}>GAME FOR THIS AREA</Text>
-              <Text style={[styles.rowTitle, { color: colors.text }]}>
+              <Text style={[PlayType.eyebrow, { color: colors.accent }]}>GAME FOR THIS AREA</Text>
+              <Text style={[PlayType.title, { color: colors.text }]}>
                 {game.emoji} {game.title}
               </Text>
             </View>
@@ -249,12 +254,13 @@ export default function AreaScreen() {
             <Pressable onPress={resetFilters} accessibilityRole="button" style={styles.sheetReset}>
               <Text style={[styles.reset, { color: colors.textSecondary }]}>Reset</Text>
             </Pressable>
-            <Pressable
+            <ChunkyButton
+              label={`Show ${visible.length} results`}
+              color={colors.accent}
+              textColor={colors.onAccent}
               onPress={() => setFiltersOpen(false)}
-              accessibilityRole="button"
-              style={[styles.sheetDone, { backgroundColor: colors.accent }]}>
-              <Text style={[styles.sheetDoneText, { color: colors.onAccent }]}>Show {visible.length} results</Text>
-            </Pressable>
+              style={styles.sheetDone}
+            />
           </View>
         </View>
       </DraggableSheet>
@@ -297,39 +303,18 @@ function ChoiceList<T extends string>({
   );
 }
 
-function Chip({ label, selected, onPress }: { label: string; selected: boolean; onPress: () => void }) {
-  const { colors } = useTheme();
-  return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityState={{ selected }}
-      style={[
-        styles.chip,
-        {
-          backgroundColor: selected ? colors.accent : colors.surfaceElevated,
-          borderColor: selected ? colors.accent : colors.border,
-        },
-      ]}>
-      <Text style={[styles.chipText, { color: selected ? colors.onAccent : colors.text }]}>{label}</Text>
-    </Pressable>
-  );
-}
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
   choiceRow: { minHeight: 52, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   choiceLabel: { fontSize: 16, fontWeight: '600' },
   choiceLabelOn: { fontWeight: '800' },
-  hero: { borderBottomLeftRadius: 32, borderBottomRightRadius: 32, paddingTop: 10, paddingBottom: 30, minHeight: 150, justifyContent: 'flex-end' },
-  heroBody: { paddingHorizontal: 24, gap: 18 },
-  heroBlurb: { color: '#FFFFFF', fontSize: 20, fontWeight: '700', lineHeight: 27, letterSpacing: -0.3 },
-  progressRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 4 },
+  progressRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   track: { flex: 1, height: 8, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.3)', overflow: 'hidden' },
   fill: { height: 8, borderRadius: 4, backgroundColor: '#FFFFFF' },
   progressText: { color: '#FFFFFF', fontSize: 13, fontWeight: '800' },
-  body: { paddingHorizontal: 16, paddingTop: 16, gap: 12 },
-  filterBar: { flexDirection: 'row', alignItems: 'center', gap: 10, marginRight: -16 },
+  body: { paddingHorizontal: PLAY_GUTTER, paddingTop: 16, gap: 12 },
+  filterBar: { flexDirection: 'row', alignItems: 'center', gap: 10, marginRight: -PLAY_GUTTER },
   filterBtn: {
     height: 40,
     minWidth: 40,
@@ -343,7 +328,7 @@ const styles = StyleSheet.create({
   },
   filterCount: { fontSize: 13, fontWeight: '800' },
   chipScroll: { flex: 1 },
-  chips: { gap: 8, paddingRight: 16 },
+  chips: { gap: 8, paddingRight: PLAY_GUTTER },
   reset: { fontSize: 15, fontWeight: '700' },
   sheet: { gap: 12, paddingBottom: 8 },
   sheetTitle: { fontSize: 22, fontWeight: '800', letterSpacing: -0.3, marginBottom: 4 },
@@ -351,20 +336,13 @@ const styles = StyleSheet.create({
   sheetChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   sheetActions: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 14 },
   sheetReset: { height: 50, paddingHorizontal: 8, justifyContent: 'center' },
-  sheetDone: { flex: 1, height: 50, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
-  sheetDoneText: { fontSize: 16, fontWeight: '800' },
-  chip: { borderRadius: 999, borderWidth: StyleSheet.hairlineWidth, paddingHorizontal: 16, height: 40, justifyContent: 'center' },
-  chipText: { fontSize: 14, fontWeight: '700' },
+  sheetDone: { flex: 1 },
   list: { gap: 12 },
-  rowTitle: { fontSize: 15, fontWeight: '800' },
   gameLink: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    borderRadius: 20,
-    borderWidth: 1,
     padding: 14,
     marginTop: 6,
   },
-  gameEyebrow: { fontSize: 11, fontWeight: '900', letterSpacing: 0.8 },
 });

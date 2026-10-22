@@ -198,6 +198,8 @@ export function titleForType(type: string): string {
     case 'mood':
     case 'mood_update':
       return 'Mood update';
+    case 'mood_checkin':
+      return 'How are you feeling?';
     case 'streak':
       return 'Streak update';
     case 'game_invite':

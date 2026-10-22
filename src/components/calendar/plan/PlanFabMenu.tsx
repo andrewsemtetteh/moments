@@ -1,6 +1,6 @@
 import * as Haptics from '@/lib/haptics';
 import { useCallback, useEffect, useState } from 'react';
-import { Dimensions, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, {
   Easing,
   runOnJS,
@@ -15,7 +15,6 @@ import { useTheme } from '@/hooks/useTheme';
 import { FAB_ACTIONS, type PlanKindKey } from '@/lib/plan-meta';
 
 const RADIUS = 118;
-const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 
 export function PlanRadialFab({
   open,
@@ -123,8 +122,9 @@ const styles = StyleSheet.create({
   },
   stage: {
     position: 'absolute',
-    left: SCREEN_W / 2,
-    top: SCREEN_H * 0.42,
+    // Percentages of the screen, so it stays centred at any size (fold, tablet, split screen).
+    left: '50%',
+    top: '42%',
     width: 0,
     height: 0,
     alignItems: 'center',

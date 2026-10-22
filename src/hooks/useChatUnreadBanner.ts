@@ -8,7 +8,8 @@ import * as api from '@/services/api';
 import { useAuthStore, useRelationshipStore } from '@/stores';
 import type { Message } from '@/types/database';
 
-const BANNER_AUTO_DISMISS_MS = 3000;
+/** How long the divider stays once it's on screen (it waits for you to see it first). */
+const BANNER_AUTO_DISMISS_MS = 4000;
 const VIEWABILITY_CONFIG = { itemVisiblePercentThreshold: 10, minimumViewTime: 80 };
 
 /**
@@ -23,7 +24,11 @@ const VIEWABILITY_CONFIG = { itemVisiblePercentThreshold: 10, minimumViewTime: 8
  *   as read and the Chat badge doesn't count them. Ones that arrive while the app is
  *   in the background are read when you come back to it.
  */
-export function useChatUnreadBanner(messages: Message[] | undefined) {
+export function useChatUnreadBanner(
+  messages: Message[] | undefined,
+  /** The thread's messages are fresh from the server (or the fetch is over): safe to snapshot. */
+  settled = true,
+) {
   const queryClient = useQueryClient();
   const relationshipId = useRelationshipStore((s) => s.relationship?.id);
   const userId = useAuthStore((s) => s.user?.id);
@@ -97,8 +102,10 @@ export function useChatUnreadBanner(messages: Message[] | undefined) {
     markReadRef.current = markReadAndClearBadge;
   }, [dismissUnreadBanner, markReadAndClearBadge]);
 
-  // Snapshot unread messages once when the thread loads (taken while rendering)…
-  if (messages && userId && unreadBannerIds === null) {
+  // Snapshot unread messages once when the thread loads (taken while rendering)… but only from
+  // the fresh copy: the one kept from last time may not have the newest messages yet, and those
+  // were then taken for "just arrived while looking" and read at once, so no divider showed.
+  if (messages && userId && unreadBannerIds === null && settled) {
     const unread = new Set(messages.filter((m) => m.sender_id !== userId && !m.read_at).map((m) => m.id));
     setUnreadBannerIds(unread);
     setUnreadBannerCount(unread.size);
@@ -153,12 +160,15 @@ export function useChatUnreadBanner(messages: Message[] | undefined) {
     return () => clearTimeout(timer);
   }, [messages, userId, relationshipId, unreadBannerIds, focused, appActive, clearBadge, queryClient]);
 
-  // Auto-dismiss the "N UNREAD" label after a few seconds.
-  useEffect(() => {
-    if (!unreadBannerIds || unreadBannerIds.size === 0) return;
-    const timer = setTimeout(() => dismissRef.current(), BANNER_AUTO_DISMISS_MS);
-    return () => clearTimeout(timer);
-  }, [unreadBannerIds]);
+  // Auto-dismiss the "N UNREAD" label a few seconds after it has actually been seen (the
+  // timer starts in the visibility callback below, not when the thread opens).
+  const autoDismissRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (autoDismissRef.current) clearTimeout(autoDismissRef.current);
+    },
+    [],
+  );
 
   const onComposerActivity = useCallback(() => {
     if (unreadBannerIds && unreadBannerIds.size > 0) {
@@ -179,6 +189,9 @@ export function useChatUnreadBanner(messages: Message[] | undefined) {
       );
 
       if (dividerVisible) {
+        if (!bannerSeenRef.current) {
+          autoDismissRef.current = setTimeout(() => dismissRef.current(), BANNER_AUTO_DISMISS_MS);
+        }
         bannerSeenRef.current = true;
         // The unread messages have actually been seen on screen now — safe to mark read.
         markReadRef.current();

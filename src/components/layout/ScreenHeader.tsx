@@ -18,6 +18,8 @@ export function ScreenHeader({
   onBack,
   onClose,
   right,
+  left,
+  closeIcon = false,
   tint,
 }: {
   title: string;
@@ -29,6 +31,10 @@ export function ScreenHeader({
   onClose?: () => void;
   /** Icon on the right (tab roots, or pushed screens with an action). */
   right?: ReactNode;
+  /** An action on the left (when the right holds the close button). */
+  left?: ReactNode;
+  /** Close with a ✕ instead of the chevron (a page that's opened, not stepped into). */
+  closeIcon?: boolean;
 }) {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
@@ -40,6 +46,8 @@ export function ScreenHeader({
           <Text
             style={[styles.largeTitle, colors.sticker && styles.stickerTitle, { color: colors.text }]}
             numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.8}
             accessibilityRole="header">
             {title}
           </Text>
@@ -54,19 +62,23 @@ export function ScreenHeader({
       <View style={[styles.slot, styles.leftEdge]}>
         {onBack ? (
           <HeaderIconButton icon="chevronLeft" onPress={onBack} accessibilityLabel="Go back" chip={!!tint} />
-        ) : null}
+        ) : (
+          left
+        )}
       </View>
       <View style={styles.centerText}>
         <Text
           style={[styles.title, colors.sticker && styles.stickerTitle, { color: tint ?? colors.text }]}
           numberOfLines={1}
+          adjustsFontSizeToFit
+          minimumFontScale={0.8}
           accessibilityRole="header">
           {title}
         </Text>
       </View>
       <View style={[styles.slot, styles.rightEdge]}>
         {onClose ? (
-          <HeaderIconButton icon="chevronRight" onPress={onClose} accessibilityLabel="Close" chip={!!tint} />
+          <HeaderIconButton icon={closeIcon ? 'close' : 'chevronRight'} onPress={onClose} accessibilityLabel="Close" chip={!!tint} />
         ) : (
           right
         )}

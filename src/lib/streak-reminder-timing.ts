@@ -39,6 +39,7 @@ export function isStreakVisuallyAtRisk(
   return msUntilLocalMidnight(now) <= STREAK_WARN_HOURS_BEFORE_MIDNIGHT * 60 * 60 * 1000;
 }
 
+
 /** @deprecated Prefer isStreakVisuallyAtRisk */
 export const shouldShowStreakAtRiskCard = isStreakVisuallyAtRisk;
 
@@ -47,4 +48,25 @@ export function needsStreakReminders(
 ): boolean {
   // Your streak, your check-in: reminded only until you've checked in today.
   return status.at_risk && status.current_streak > 0 && !status.user_active_today;
+}
+
+/** Home's "streak at risk" card: from this many hours before midnight (with the first reminder). */
+export const STREAK_AT_RISK_CARD_HOURS = STREAK_WARN_HOURS_BEFORE_MIDNIGHT;
+
+/** Your streak ends tonight and you haven't checked in yet: Home shows the warning card. */
+export function showStreakEndsTonightCard(
+  status: Pick<StreakStatus, 'at_risk' | 'current_streak' | 'user_active_today'>,
+  now = new Date(),
+): boolean {
+  if (!status.at_risk || status.current_streak <= 0 || status.user_active_today) return false;
+  return msUntilLocalMidnight(now) <= STREAK_AT_RISK_CARD_HOURS * 3600_000;
+}
+
+/** "4h 12m", "35m", "under a minute". */
+export function formatTimeLeft(ms: number): string {
+  const mins = Math.floor(ms / 60_000);
+  if (mins < 1) return 'under a minute';
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return h ? `${h}h ${m}m` : `${m}m`;
 }

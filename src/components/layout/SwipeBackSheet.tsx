@@ -1,5 +1,5 @@
 import { type ReactNode } from 'react';
-import { Dimensions, StyleSheet, View } from 'react-native';
+import { StyleSheet, View, useWindowDimensions } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   Easing,
@@ -10,7 +10,6 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 
-const SCREEN_WIDTH = Dimensions.get('window').width;
 const DISMISS_THRESHOLD = 72;
 const DISMISS_VELOCITY = 850;
 const EDGE_WIDTH = 20;
@@ -25,6 +24,8 @@ interface Props {
  * Vertical scroll stays on the child ScrollView; swipe-right starts from the left edge.
  */
 export function SwipeBackSheet({ children, onDismiss }: Props) {
+  // Read live, so a fold / unfold, split screen or rotation redraws at the new size.
+  const SCREEN_WIDTH = useWindowDimensions().width;
   const translateX = useSharedValue(0);
 
   const pan = Gesture.Pan()

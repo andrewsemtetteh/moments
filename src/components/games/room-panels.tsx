@@ -13,10 +13,12 @@ import Animated, {
 import type { PlayTone } from '@/components/activities/explore/explore-catalog';
 import { Avatar, trackColor } from '@/components/ui/primitives';
 import { useTheme } from '@/hooks/useTheme';
+import { isDoubleRound, itemIndex } from '@/lib/game-room/reducer';
 import { QUIZ_ANSWER_MS, type ChoiceItem, type PromptItem, type QuizItem, type RoomState } from '@/lib/game-room/types';
 import { BOOL_TILE_COLORS, QUIZ_TILE_COLORS } from '@/lib/quiz-live';
 import { useGameRoomStore } from '@/stores/game-room-store';
 
+import { AnswerShape } from './AnswerShape';
 import { ChunkyButton, RoundEnter, firstName, shade, useRoomDispatch, useRoomPlayers } from './room-ui';
 
 interface PanelProps {
@@ -24,7 +26,7 @@ interface PanelProps {
   tone: PlayTone;
 }
 
-const CHOICE_COLORS = ['#FF6B8A', '#5B8DEF'] as const;
+const CHOICE_COLORS = BOOL_TILE_COLORS;
 
 function useMe(state: RoomState) {
   const { meId, me, partner } = useRoomPlayers();
@@ -55,7 +57,7 @@ function Waiting({ text }: { text: string }) {
   );
 }
 
-function PromptCard({ tone, eyebrow, children }: { tone: PlayTone; eyebrow?: string; children: ReactNode }) {
+export function PromptCard({ tone, eyebrow, children }: { tone: PlayTone; eyebrow?: string; children: ReactNode }) {
   return (
     <LinearGradient
       colors={[tone.accent, shade(tone.accent, -0.28)]}
@@ -72,7 +74,7 @@ function RevealFooter({ state, tone }: PanelProps) {
   const dispatch = useRoomDispatch();
   const { colors } = useTheme();
   const { meId, partner } = useRoomPlayers();
-  const last = state.round + 1 >= state.totalRounds;
+  const last = !state.endless && state.round + 1 >= state.totalRounds;
   const waitingOnPartner = state.mode === 'async' && !!state.ready?.[meId];
   return (
     <RoundEnter delay={150}>
@@ -93,11 +95,10 @@ function RevealFooter({ state, tone }: PanelProps) {
 }
 
 function Picker({ name, avatar }: { name: string; avatar: string | null }) {
-  const { colors } = useTheme();
   return (
     <View style={styles.picker}>
       <Avatar name={name} imageUrl={avatar} size={26} />
-      <Text style={[styles.pickerName, { color: colors.text }]} numberOfLines={1}>
+      <Text style={styles.pickerName} numberOfLines={1}>
         {firstName(name)}
       </Text>
     </View>
@@ -142,7 +143,7 @@ export function ChoicePanel({ state, tone }: PanelProps) {
   const dispatch = useRoomDispatch();
   const { colors } = useTheme();
   const { meId, me, partner, partnerId, myAnswer, partnerAnswered } = useMe(state);
-  const item = state.items[state.round] as ChoiceItem | undefined;
+  const item = state.items[itemIndex(state)] as ChoiceItem | undefined;
   if (!item) return null;
   const revealed = state.step === 'reveal';
   const options = [
@@ -185,7 +186,7 @@ export function ChoicePanel({ state, tone }: PanelProps) {
                     borderWidth: matched ? 3 : 0,
                   },
                 ]}>
-                <Text style={[styles.choiceLetter]}>{opt.key.toUpperCase()}</Text>
+                <AnswerShape index={i} count={2} size={isThisOrThat ? 30 : 24} />
                 <Text style={[styles.choiceText, isThisOrThat && { fontSize: 22, textAlign: 'center' }]}>{opt.text}</Text>
                 {mine && !revealed ? <Text style={styles.lockedTag}>Your pick ✓</Text> : null}
                 {revealed ? (
@@ -218,7 +219,7 @@ export function LikelyPanel({ state, tone }: PanelProps) {
   const dispatch = useRoomDispatch();
   const { colors } = useTheme();
   const { meId, me, partner, partnerId, myAnswer, partnerAnswered } = useMe(state);
-  const item = state.items[state.round] as PromptItem | undefined;
+  const item = state.items[itemIndex(state)] as PromptItem | undefined;
   if (!item) return null;
   const revealed = state.step === 'reveal';
   const nameFor = (id: string | undefined) =>
@@ -362,7 +363,7 @@ export function GuessPanel({ state, tone }: PanelProps) {
   const { colors } = useTheme();
   const { partner, meId, isMyTurn, turnName } = useMe(state);
   const [text, setText] = useState('');
-  const item = state.items[state.round] as PromptItem | undefined;
+  const item = state.items[itemIndex(state)] as PromptItem | undefined;
 
   // A new round or step starts with an empty box (while rendering).
   const stepKey = `${state.round}|${state.step}`;
@@ -592,7 +593,7 @@ export function QuizPanel({ state, tone }: PanelProps) {
   const dispatch = useRoomDispatch();
   const { colors } = useTheme();
   const { meId, me, partner, partnerId, myAnswer } = useMe(state);
-  const item = state.items[state.round] as QuizItem | undefined;
+  const item = state.items[itemIndex(state)] as QuizItem | undefined;
   const remaining = useCountdown(state.step === 'answer' ? state.deadline : null);
   if (!item) return null;
   const revealed = state.step === 'reveal';
@@ -610,6 +611,13 @@ export function QuizPanel({ state, tone }: PanelProps) {
         </View>
       ) : null}
 
+      {isDoubleRound(state) ? (
+        <RoundEnter>
+          <View style={[styles.turnBanner, { backgroundColor: '#FFD54A' }]}>
+            <Text style={[styles.turnText, { color: '#3A2A00' }]}>🔥 FINAL ROUND · DOUBLE POINTS</Text>
+          </View>
+        </RoundEnter>
+      ) : null}
       <RoundEnter>
         <PromptCard tone={tone} eyebrow={item.correctIndex === undefined ? 'MATCH YOUR PARTNER' : 'QUESTION'}>
           <Text style={styles.promptText}>{item.question}</Text>
@@ -624,8 +632,8 @@ export function QuizPanel({ state, tone }: PanelProps) {
           const isCorrect = item.correctIndex === i;
           const faded = revealed ? item.correctIndex !== undefined && !isCorrect : myAnswer !== undefined && !mine;
           return (
-            <RoundEnter key={i} delay={i * 60}>
-              <Pressable
+            <Pressable
+                key={i}
                 disabled={myAnswer !== undefined || revealed}
                 onPress={() => dispatch({ t: 'answer', value: String(i) })}
                 accessibilityRole="button"
@@ -641,6 +649,7 @@ export function QuizPanel({ state, tone }: PanelProps) {
                     borderWidth: revealed && isCorrect ? 3 : 0,
                   },
                 ]}>
+                <AnswerShape index={i} count={item.options.length} />
                 <Text style={styles.quizTileText}>{opt}</Text>
                 {revealed ? (
                   <View style={styles.pickers}>
@@ -651,7 +660,6 @@ export function QuizPanel({ state, tone }: PanelProps) {
                   <Text style={styles.lockedTag}>Locked ✓</Text>
                 ) : null}
               </Pressable>
-            </RoundEnter>
           );
         })}
       </View>
@@ -699,7 +707,6 @@ const styles = StyleSheet.create({
   choiceRow: { flexDirection: 'row', gap: 12 },
   choice: { borderRadius: 24, padding: 22, minHeight: 116, justifyContent: 'center', gap: 6 },
   choiceHalf: { flex: 1, minHeight: 170, alignItems: 'center' },
-  choiceLetter: { color: 'rgba(255,255,255,0.7)', fontSize: 12, fontWeight: '900', letterSpacing: 1.5 },
   choiceText: { color: '#fff', fontSize: 20, fontWeight: '800', lineHeight: 26 },
   lockedTag: { color: 'rgba(255,255,255,0.9)', fontSize: 12, fontWeight: '800', marginTop: 4 },
   pointRow: { flexDirection: 'row', gap: 12 },
@@ -745,8 +752,19 @@ const styles = StyleSheet.create({
   timerTrack: { height: 26, borderRadius: 13, overflow: 'hidden', justifyContent: 'center' },
   timerFill: { position: 'absolute', left: 0, top: 0, bottom: 0, borderRadius: 13 },
   timerText: { textAlign: 'center', fontSize: 13, fontWeight: '900' },
-  quizGrid: { gap: 12 },
-  quizTile: { borderRadius: 20, paddingVertical: 20, paddingHorizontal: 18, minHeight: 68, justifyContent: 'center' },
-  quizTileText: { color: '#fff', fontSize: 18, fontWeight: '800' },
+  // Two columns like Kahoot: four answers in two rows.
+  quizGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  quizTile: {
+    flexBasis: '47%',
+    flexGrow: 1,
+    borderRadius: 20,
+    paddingVertical: 16,
+    paddingHorizontal: 12,
+    minHeight: 112,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  quizTileText: { color: '#fff', fontSize: 17, fontWeight: '800', textAlign: 'center' },
 });
 

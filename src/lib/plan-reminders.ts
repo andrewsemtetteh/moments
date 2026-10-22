@@ -1,3 +1,4 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { format } from 'date-fns';
 import { Platform } from 'react-native';
 
@@ -20,6 +21,25 @@ function leadLabel(mins: number): string {
   }
   const d = Math.round(mins / (24 * 60));
   return d === 1 ? 'tomorrow' : `in ${d} days`;
+}
+
+/** Missed reminders already sent late on this phone, so each goes out once only. */
+const CAUGHT_UP_KEY = 'plan-reminders:caught-up';
+async function loadCaughtUp(): Promise<Set<string>> {
+  try {
+    const raw = await AsyncStorage.getItem(CAUGHT_UP_KEY);
+    return new Set(raw ? (JSON.parse(raw) as string[]) : []);
+  } catch {
+    return new Set();
+  }
+}
+async function saveCaughtUp(keys: Set<string>) {
+  try {
+    // Only the latest 200 (old plans are long gone).
+    await AsyncStorage.setItem(CAUGHT_UP_KEY, JSON.stringify([...keys].slice(-200)));
+  } catch {
+    // ignore
+  }
 }
 
 /** Whose phone a plan reminds: plans together remind both; your own plan only you. */
@@ -48,23 +68,41 @@ export async function syncPlanReminders(events: CalendarEvent[], myId: string): 
     }
 
     const now = Date.now();
+    const caughtUp = await loadCaughtUp();
+    let caughtUpChanged = false;
     const wanted = new Map<string, { at: Date; title: string; body: string }>();
     for (const event of events) {
       if (!remindsMe(event, myId)) continue;
       const meta = parsePlanMeta(event.description);
+      // Done already: nothing to remind about.
+      if (meta.completed) continue;
       const mins = meta.reminderMins;
       if (mins === null || mins === undefined) continue;
       const start = new Date(event.date_time);
-      const at = new Date(start.getTime() - mins * 60_000);
-      if (at.getTime() <= now + 30_000) continue;
+      let at = new Date(start.getTime() - mins * 60_000);
+      let lead = mins;
+      if (at.getTime() <= now + 30_000) {
+        // The reminder's time has passed but the plan hasn't started: this phone never had it
+        // scheduled (e.g. the app wasn't opened since the plan was made). Remind now, once,
+        // with the time that's really left — unless the plan was only just made (you know).
+        const key = `${event.id}@${event.date_time}@${mins}`;
+        const minsLeft = Math.round((start.getTime() - now) / 60_000);
+        const madeBeforeReminder = new Date(event.created_at).getTime() < at.getTime();
+        if (minsLeft < 2 || !madeBeforeReminder || caughtUp.has(key)) continue;
+        caughtUp.add(key);
+        caughtUpChanged = true;
+        at = new Date(now + 5_000);
+        lead = minsLeft;
+      }
       wanted.set(`${ID_PREFIX}${event.id}`, {
         at,
         title: event.title,
-        body: `${leadLabel(mins) === 'now' ? 'Starting now' : `Starts ${leadLabel(mins)}`} · ${format(start, 'EEE d MMM, h:mm a')}${
+        body: `${leadLabel(lead) === 'now' ? 'Starting now' : `Starts ${leadLabel(lead)}`} · ${format(start, 'EEE d MMM, h:mm a')}${
           meta.location ? ` · ${meta.location}` : ''
         }`,
       });
     }
+    if (caughtUpChanged) void saveCaughtUp(caughtUp);
     // Soonest first, within iOS's limit.
     const keep = [...wanted.entries()].sort((a, b) => a[1].at.getTime() - b[1].at.getTime()).slice(0, MAX_SCHEDULED);
     const keepIds = new Set(keep.map(([id]) => id));

@@ -14,6 +14,8 @@ interface IDynamicNotification {
   icon?: IconName;
   accent?: string;
   duration?: number | null;
+  /** This card's height (taller for a longer message); the host's cardHeight otherwise. */
+  cardHeight?: number;
   onPress?: () => void;
   render?: (notification: IDynamicNotification) => ReactNode;
 }

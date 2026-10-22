@@ -14,6 +14,7 @@ import { getMessagePreviewText } from '@/lib/message-preview';
 import { MESSAGE_EDIT_WINDOW_MS } from '@/services/api';
 import { useAuthStore, useRelationshipStore } from '@/stores';
 import type { Message } from '@/types/database';
+import { askChoice } from '@/components/ui/ChoiceSheet';
 
 interface Props {
   message: Message | null;
@@ -118,13 +119,12 @@ export function ChatMessageActionSheet({
 
   const remove = () => {
     close();
-    Alert.alert('Delete message?', isSelf ? 'Delete it just for you, or for both of you.' : undefined, [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete for me', onPress: () => onDeleteForMe(message.id) },
-      ...(isSelf && !deleted
-        ? [{ text: 'Delete for everyone', style: 'destructive' as const, onPress: () => onDeleteForAll(message.id) }]
-        : []),
-    ]);
+    // Once this menu has closed (its own Modal), so the question isn't hidden behind it.
+    setTimeout(() => askChoice({ title: 'Delete message?', message: isSelf ? 'Delete it just for you, or for both of you.' : undefined, actions: [
+{ label: 'Delete for me', onPress: () => onDeleteForMe(message.id) },
+...(isSelf && !deleted
+        ? [{ label: 'Delete for everyone', destructive: true, onPress: () => onDeleteForAll(message.id) }] : []),
+] }), 350);
   };
 
   type Action = { key: string; icon: IconName; label: string; onPress: () => void; danger?: boolean };

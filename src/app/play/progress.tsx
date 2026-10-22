@@ -7,8 +7,13 @@ import { LevelRing } from '@/components/games/PlayHub';
 import { StickerFlame } from '@/components/home/StickerFlame';
 import { useStreak } from '@/hooks/queries';
 import { PlayHeader } from '@/components/play/PlayHeader';
+import { PlayType } from '@/components/play/PlayKit';
+import { RivalryCard, SeasonHistory, SyncBests, useRivalry } from '@/components/play/Versus';
 import { ShareCardModal } from '@/components/share/ShareCardModal';
 import { TitleShareCard } from '@/components/share/TitleShareCard';
+import { RivalryShareCard } from '@/components/share/RivalryShareCard';
+import { leadLine, seasonName } from '@/lib/game-room/rivalry';
+import { getFirstName as firstNameOf } from '@/lib/avatar-initial';
 import { Icon, type IconName } from '@/components/ui/Icon';
 import { Avatar, colorWithAlpha, outlineColor, separatorColor, trackColor } from '@/components/ui/primitives';
 import { Spacing } from '@/constants/design-system';
@@ -55,6 +60,7 @@ export default function ProgressScreen() {
   const user = useAuthStore((s) => s.user);
   const partner = useRelationshipStore((s) => s.partner);
   const stored = usePlayProgressStore((s) => s.progress);
+  const rivalry = useRivalry();
   const progress = stored ?? emptyProgress(todayKey());
   const info = useMemo(() => levelInfo(progress.xp), [progress.xp]);
   // Your streak (the one on Home, You and the streak page), not the separate play count.
@@ -64,6 +70,7 @@ export default function ProgressScreen() {
   const chase = useMemo(() => nextBadges(progress, 4), [progress]);
   // A title from The road being shared.
   const [sharing, setSharing] = useState<{ title: string; line: string } | null>(null);
+  const [shareRivalry, setShareRivalry] = useState(false);
   const currentTier = Math.floor((info.level - 1) / LEVELS_PER_TIER);
   const card = {
     backgroundColor: colors.isDark ? colors.surface : colors.surfaceElevated,
@@ -73,6 +80,9 @@ export default function ProgressScreen() {
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
       <ScrollView
+        // No pull past the top (it showed an empty gap above the page).
+        bounces={false}
+        overScrollMode="never"
         stickyHeaderIndices={[0]}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: insets.bottom + 32 }}>
@@ -138,10 +148,25 @@ export default function ProgressScreen() {
             </View>
           </View>
 
+          {/* You two, head to head: all time, this season, past champions; and your best sync scores. */}
+          <View style={styles.section}>
+            <Text style={[PlayType.section, { color: colors.text }]}>Versus</Text>
+            {/* Tap it to share your head to head, like a trophy. */}
+            <RivalryCard shareable onPress={() => setShareRivalry(true)} />
+            {rivalry.champions.length > 0 ? (
+              <>
+                <Text style={[styles.subTitle, { color: colors.textSecondary }]}>Past seasons</Text>
+                <SeasonHistory style={[styles.list, card]} />
+              </>
+            ) : null}
+            <Text style={[styles.subTitle, { color: colors.textSecondary }]}>Best sync scores</Text>
+            <SyncBests style={[styles.list, card]} />
+          </View>
+
           {/* Closest trophies: what to do next. */}
           {chase.length > 0 ? (
             <View style={styles.section}>
-              <Text style={[styles.sectionTitle, { color: colors.text }]}>Almost there</Text>
+              <Text style={[PlayType.section, { color: colors.text }]}>Almost there</Text>
               <View style={[styles.list, card]}>
                 {chase.map(({ badge, value }, i) => (
                   <View
@@ -182,7 +207,7 @@ export default function ProgressScreen() {
 
           {/* Everything you two have done. */}
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>Your numbers</Text>
+            <Text style={[PlayType.section, { color: colors.text }]}>Your numbers</Text>
             <View style={styles.grid}>
               {STATS.map((s) => (
                 <View key={s.key} style={[styles.stat, card]}>
@@ -200,7 +225,7 @@ export default function ProgressScreen() {
 
           {/* Every title on the road: reached, where you are, and what's ahead. */}
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>The road</Text>
+            <Text style={[PlayType.section, { color: colors.text }]}>The road</Text>
             <View style={[styles.list, card]}>
               {TITLE_TIERS.map((title, i) => {
                 const startLevel = i * LEVELS_PER_TIER + 1;
@@ -265,6 +290,16 @@ export default function ProgressScreen() {
       <ShareCardModal visible={!!sharing} onClose={() => setSharing(null)} title="Share your couple title">
         {sharing ? <TitleShareCard title={sharing.title} line={sharing.line} /> : null}
       </ShareCardModal>
+      <ShareCardModal visible={shareRivalry} onClose={() => setShareRivalry(false)} title="Share your head to head">
+        <RivalryShareCard
+          meName={firstNameOf(user?.name) ?? 'Me'}
+          themName={rivalry.themName}
+          meWins={rivalry.allTime.me}
+          themWins={rivalry.allTime.them}
+          ties={rivalry.allTime.ties}
+          seasonLine={`${seasonName(rivalry.season.key)} season: ${leadLine(rivalry.season, rivalry.themName)}`}
+        />
+      </ShareCardModal>
     </View>
   );
 }
@@ -290,7 +325,7 @@ const styles = StyleSheet.create({
   trioValue: { fontSize: 22, fontWeight: '900', letterSpacing: -0.5 },
   trioLabel: { fontSize: 11, fontWeight: '700', textAlign: 'center' },
   section: { gap: 10 },
-  sectionTitle: { fontSize: 20, fontWeight: '900', letterSpacing: -0.3 },
+  subTitle: { fontSize: 14, fontWeight: '800', marginTop: 4 },
   list: { borderRadius: 22, borderWidth: 1.5, overflow: 'hidden' },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14 },
   rowTile: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },

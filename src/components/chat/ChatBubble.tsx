@@ -1,4 +1,5 @@
 import { Image } from 'expo-image';
+import { mediaSource } from '@/lib/storage-cdn';
 import { format } from 'date-fns';
 import * as Haptics from '@/lib/haptics';
 import { useEffect } from 'react';
@@ -177,7 +178,7 @@ export function ChatBubble({
                 {isMomentReplyMessage(message) && <MomentReplyCard message={message} isSelf={isSelf} />}
 
                 {message.media_url && message.media_type === 'image' && !message.moment_id && (
-                  <Image source={{ uri: message.media_url }} style={styles.media} contentFit="cover" />
+                  <Image source={mediaSource(message.media_url)} style={styles.media} contentFit="cover" />
                 )}
 
                 {message.media_url && message.media_type === 'video' && !message.moment_id && (

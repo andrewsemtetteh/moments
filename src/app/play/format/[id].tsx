@@ -1,6 +1,6 @@
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { PLAY_TONES, type ExploreModalKey } from '@/components/activities/explore/explore-catalog';
@@ -9,6 +9,7 @@ import { LiveStrip } from '@/components/play/LiveStrip';
 import { GameGroups, OwnTimeGames } from '@/components/play/GameList';
 import { PlayCard } from '@/components/play/PlayCard';
 import { PlayHeader } from '@/components/play/PlayHeader';
+import { PLAY_GUTTER, PlayChip, PlayType } from '@/components/play/PlayKit';
 import { usePackAnswers } from '@/hooks/play-queries';
 import { useTheme } from '@/hooks/useTheme';
 import {
@@ -86,6 +87,9 @@ export default function FormatScreen() {
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
       <ScrollView
+        // No pull past the top (it showed an empty gap above the page).
+        bounces={false}
+        overScrollMode="never"
         contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
         stickyHeaderIndices={[0]}
         showsVerticalScrollIndicator={false}>
@@ -100,25 +104,9 @@ export default function FormatScreen() {
               showsHorizontalScrollIndicator={false}
               style={styles.chipBleed}
               contentContainerStyle={styles.chips}>
-              {KINDS.map((k) => {
-                const selected = kind === k.id;
-                return (
-                  <Pressable
-                    key={k.id}
-                    onPress={() => setKind(k.id)}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected }}
-                    style={[
-                      styles.chip,
-                      {
-                        backgroundColor: selected ? colors.accent : colors.surfaceElevated,
-                        borderColor: selected ? colors.accent : colors.border,
-                      },
-                    ]}>
-                    <Text style={[styles.chipText, { color: selected ? colors.onAccent : colors.text }]}>{k.label}</Text>
-                  </Pressable>
-                );
-              })}
+              {KINDS.map((k) => (
+                <PlayChip key={k.id} label={k.label} selected={kind === k.id} onPress={() => setKind(k.id)} />
+              ))}
             </ScrollView>
           ) : null}
           {/* Games: the Endless games, live or on your own time. */}
@@ -133,7 +121,7 @@ export default function FormatScreen() {
             const tone = PLAY_TONES[area.tone];
             return (
               <View key={area.id} style={styles.group}>
-                <Text style={[styles.groupTitle, { color: colors.text }]}>{area.title}</Text>
+                <Text style={[PlayType.section, { color: colors.text }]}>{area.title}</Text>
                 {items.map((item) => {
                   const progress =
                     item.kind === 'pack' ? packProgress(item.pack, myAnswered.get(item.id) ?? new Set()) : null;
@@ -169,11 +157,8 @@ export default function FormatScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  body: { paddingHorizontal: 16, paddingTop: 12, gap: 32 },
+  body: { paddingHorizontal: PLAY_GUTTER, paddingTop: 12, gap: 32 },
   group: { gap: 12 },
-  groupTitle: { fontSize: 20, fontWeight: '900', letterSpacing: -0.3 },
-  chipBleed: { marginHorizontal: -16, marginBottom: -16 },
-  chips: { gap: 8, paddingHorizontal: 16 },
-  chip: { borderRadius: 999, borderWidth: StyleSheet.hairlineWidth, paddingHorizontal: 16, height: 40, justifyContent: 'center' },
-  chipText: { fontSize: 14, fontWeight: '700' },
+  chipBleed: { marginHorizontal: -PLAY_GUTTER, marginBottom: -16 },
+  chips: { gap: 8, paddingHorizontal: PLAY_GUTTER },
 });

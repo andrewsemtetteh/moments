@@ -12,7 +12,7 @@ import Animated, {
   withSpring,
   withTiming,
 } from 'react-native-reanimated';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { StickerFlame } from '@/components/home/StickerFlame';
 import { ShareCardModal } from '@/components/share/ShareCardModal';
@@ -100,11 +100,13 @@ export function StreakCelebration({ count, fromCount, headline, message, onClose
   };
   const enter = (delay: number) => (reduceMotion ? undefined : FadeInUp.delay(delay).duration(400));
 
+  const insets = useSafeAreaInsets();
   return (
     <Modal visible animationType="fade" onRequestClose={close} statusBarTranslucent presentationStyle="fullScreen">
       <ThemedStatusBar />
       <View style={[styles.screen, { backgroundColor: colors.background }]}>
-        <SafeAreaView style={styles.content} edges={['top', 'bottom']}>
+        {/* Clear of the status bar and home bar: measured padding (a SafeAreaView inside a full-screen Modal can read 0 and put the ✕ on the status bar). */}
+        <View style={[styles.content, { paddingTop: insets.top + 8, paddingBottom: insets.bottom + 8 }]}>
           <View style={styles.main}>
             {/* On top of everything while it ignites, so nothing covers it. */}
             <View style={styles.flame}>
@@ -175,7 +177,7 @@ export function StreakCelebration({ count, fromCount, headline, message, onClose
               </Pressable>
             </Animated.View>
           </View>
-        </SafeAreaView>
+        </View>
 
         {/* Inside this popup, so it sits on top of the celebration. */}
         <ShareCardModal visible={sharing} onClose={() => setSharing(false)} title="Share your streak" inline>

@@ -1,5 +1,7 @@
 import { signMediaInText } from './media-sign';
+import { daysToFreeze, FREEZE_EVERY_DAYS, MAX_STREAK_FREEZES } from './streak-freeze';
 import { pushNotificationNow } from './push';
+import { afterResponse } from './request-context';
 import type { HubEvent } from './hub';
 import { generateId, nowIso, relationshipIdsForUser } from './db';
 import './env';
@@ -101,14 +103,19 @@ export class ApiError extends Error {
 // ---------------------------------------------------------------------------
 
 export async function emitToRelationship(env: Env, relationshipId: string, event: HubEvent) {
-  try {
-    const stub = env.HUB.get(env.HUB.idFromName(relationshipId));
-    // Media links in live updates are signed like everything else the server sends.
-    const body = await signMediaInText(env, JSON.stringify(event));
-    await stub.fetch('https://hub/notify', { method: 'POST', body });
-  } catch {
-    /* realtime is best-effort */
-  }
+  const send = async () => {
+    try {
+      const stub = env.HUB.get(env.HUB.idFromName(relationshipId));
+      // Media links in live updates are signed like everything else the server sends.
+      const body = await signMediaInText(env, JSON.stringify(event));
+      await stub.fetch('https://hub/notify', { method: 'POST', body });
+    } catch {
+      /* realtime is best-effort */
+    }
+  };
+  // Sent right after the answer, so whoever saved (a message, a plan, a moment) isn't kept
+  // waiting on the other phone's live update.
+  await afterResponse(send());
 }
 
 /** Emit a row change to whichever relationship rooms should see it. */
@@ -174,9 +181,13 @@ export async function createPartnerNotification(
   )
     .bind(id, args.relationshipId, args.recipientId, args.type, args.content, args.mediaUrl ?? null, args.relatedId ?? null)
     .first<Record<string, unknown>>();
-  if (row) await emitRow(env, 'notifications', 'INSERT', row);
-  // Straight to their phone, without waiting for an app to ask for pending pushes.
-  if (row) await pushNotificationNow(env, id);
+  // The in-app ping and the push to their phone go out right after the answer: the sender
+  // (sending a moment, a plan, a nudge…) doesn't wait on Expo's push service.
+  if (row) {
+    void afterResponse(
+      emitRow(env, 'notifications', 'INSERT', row).then(() => pushNotificationNow(env, id)),
+    );
+  }
   return id;
 }
 
@@ -249,6 +260,115 @@ async function localToday(env: Env, userId: string | null | undefined): Promise<
   }
 }
 
+/** The hour (0–23) it is now for this person, in their own timezone (UTC when unknown). */
+async function localHour(env: Env, userId: string): Promise<number> {
+  const row = await env.DB.prepare('SELECT timezone FROM users WHERE id = ?1').bind(userId).first<{ timezone: string | null }>();
+  const timeZone = row?.timezone?.trim() || 'UTC';
+  try {
+    const h = new Intl.DateTimeFormat('en-GB', { timeZone, hour: '2-digit', hourCycle: 'h23' }).format(new Date());
+    return Number(h) % 24;
+  } catch {
+    return new Date().getUTCHours();
+  }
+}
+
+/** "Streak at risk" goes out once this few hours (or fewer) are left before their midnight. */
+export const STREAK_RISK_NOTIFY_HOURS = 3;
+
+/**
+ * Your streak ends tonight (kept yesterday, not yet today) and it's the last few hours of your
+ * day: tell you once, in the app and on your phone. Not before — a warning at breakfast for
+ * something due at midnight just gets ignored.
+ */
+async function notifyStreakRiskIfDue(
+  env: Env,
+  relationshipId: string,
+  userId: string,
+  streak: number,
+  today: string,
+) {
+  if ((await localHour(env, userId)) < 24 - STREAK_RISK_NOTIFY_HOURS) return;
+  if (!(await tryNotificationDedup(env, relationshipId, `streak_risk:${userId}:${today}`))) return;
+  await createPartnerNotification(env, {
+    relationshipId,
+    recipientId: userId,
+    type: 'streak',
+    content: `Your ${streak}-day streak ends in less than ${STREAK_RISK_NOTIFY_HOURS} hours. Send a moment, share your mood, answer today’s question or play a game to keep it.`,
+  });
+}
+
+/** The mood ask goes out in the day only (their time), never at night. */
+const MOOD_CHECKIN_FROM_HOUR = 10;
+const MOOD_CHECKIN_UNTIL_HOUR = 21;
+
+/**
+ * Hourly (cron): anyone whose last mood is more than a day old is asked how they're feeling —
+ * in the app and on their phone — once a day, in the daytime their time. Only people who've
+ * shared a mood before (the ask is "share it again", not a first-time nudge).
+ */
+export async function sendMoodCheckins(env: Env): Promise<number> {
+  const dayAgo = new Date(Date.now() - 24 * 3600_000).toISOString();
+  const { results } = await env.DB.prepare(
+    `SELECT m.relationship_id, m.user_id, MAX(m.created_at) AS last_at
+       FROM mood_logs m JOIN relationships r ON r.id = m.relationship_id
+      WHERE r.status = 'active' AND (m.user_id = r.user_1_id OR m.user_id = r.user_2_id)
+      GROUP BY m.relationship_id, m.user_id
+     HAVING MAX(m.created_at) < ?1`,
+  )
+    .bind(dayAgo)
+    .all<{ relationship_id: string; user_id: string; last_at: string }>();
+  let sent = 0;
+  for (const row of results ?? []) {
+    const hour = await localHour(env, row.user_id);
+    if (hour < MOOD_CHECKIN_FROM_HOUR || hour >= MOOD_CHECKIN_UNTIL_HOUR) continue;
+    const today = await localToday(env, row.user_id);
+    if (!(await tryNotificationDedup(env, row.relationship_id, `mood_checkin:${row.user_id}:${today}`))) continue;
+    await createPartnerNotification(env, {
+      relationshipId: row.relationship_id,
+      recipientId: row.user_id,
+      type: 'mood_checkin',
+      content: 'It’s been a day since your last mood. How are you feeling? Share it so your partner knows.',
+    });
+    sent += 1;
+  }
+  return sent;
+}
+
+/**
+ * Hourly (cron): everyone in their last hours of the day whose streak ends tonight gets the
+ * warning, even if they haven't opened the app this evening.
+ */
+export async function sendStreakRiskReminders(env: Env): Promise<number> {
+  const { results } = await env.DB.prepare(
+    `SELECT r.id AS relationship_id, r.user_1_id, r.user_2_id,
+            s.user_1_streak, s.user_2_streak, s.user_1_last_active_date, s.user_2_last_active_date
+       FROM relationships r JOIN streaks s ON s.relationship_id = r.id
+      WHERE r.status = 'active' AND (s.user_1_streak > 0 OR s.user_2_streak > 0)`,
+  ).all<{
+    relationship_id: string;
+    user_1_id: string | null;
+    user_2_id: string | null;
+    user_1_streak: number;
+    user_2_streak: number;
+    user_1_last_active_date: string | null;
+    user_2_last_active_date: string | null;
+  }>();
+  let sent = 0;
+  for (const r of results ?? []) {
+    for (const side of ['user_1', 'user_2'] as const) {
+      const userId = r[`${side}_id`];
+      const streak = r[`${side}_streak`];
+      if (!userId || streak <= 0) continue;
+      const today = await localToday(env, userId);
+      // Kept yesterday, not yet today: it ends at their midnight.
+      if (r[`${side}_last_active_date`] !== shiftDay(today, -1)) continue;
+      await notifyStreakRiskIfDue(env, r.relationship_id, userId, streak, today);
+      sent += 1;
+    }
+  }
+  return sent;
+}
+
 function shiftDay(day: string, delta: number): string {
   const d = new Date(`${day}T00:00:00Z`);
   d.setUTCDate(d.getUTCDate() + delta);
@@ -273,7 +393,11 @@ type StreakRow = {
   user_2_longest: number;
   user_2_restorable: number | null;
   user_2_lost_at: string | null;
+  user_1_freezes: number;
+  user_2_freezes: number;
 };
+
+
 
 /** Which side of the row is this person (user_1 or user_2). */
 type Side = 'user_1' | 'user_2';
@@ -320,6 +444,34 @@ async function normalizeStreaksIfBroken(
     const last = row[`${side}_last_active_date`];
     const count = row[`${side}_streak`];
     if (count > 0 && (!last || last < shiftDay(today, -1))) {
+      // A freeze (or two) covers the missed days: the streak carries on, frozen on those days.
+      const frozen = daysToFreeze(last, today, row[`${side}_freezes`] ?? 0);
+      if (frozen && frozen.length) {
+        const yesterday = shiftDay(today, -1);
+        await env.DB.batch([
+          env.DB.prepare(
+            `UPDATE streaks SET ${side}_freezes = ${side}_freezes - ?1, ${side}_last_active_date = ?2, updated_at = ?3
+             WHERE relationship_id = ?4`,
+          ).bind(frozen.length, yesterday, nowIso(), relationshipId),
+          ...frozen.map((day) =>
+            env.DB.prepare(
+              'INSERT OR IGNORE INTO user_streak_frozen_days (relationship_id, user_id, frozen_date) VALUES (?1, ?2, ?3)',
+            ).bind(relationshipId, userId, day),
+          ),
+        ]);
+        row[`${side}_freezes`] -= frozen.length;
+        row[`${side}_last_active_date`] = yesterday;
+        changed = true;
+        if (await tryNotificationDedup(env, relationshipId, `streak_frozen:${userId}:${today}`)) {
+          await createPartnerNotification(env, {
+            relationshipId,
+            recipientId: userId,
+            type: 'streak',
+            content: `A streak freeze kept your ${count}-day streak safe. Check in today to keep it going.`,
+          });
+        }
+        continue;
+      }
       await env.DB.prepare(
         `UPDATE streaks SET ${side}_restorable = ?1, ${side}_lost_at = ?2, ${side}_streak = 0, updated_at = ?2
          WHERE relationship_id = ?3`,
@@ -389,6 +541,10 @@ export async function updateStreak(env: Env, relationshipId: string, userId: str
     const next = last === shiftDay(today, -1) ? row[`${side}_streak`] + 1 : 1;
     row[`${side}_streak`] = next;
     row[`${side}_longest`] = Math.max(row[`${side}_longest`], next);
+    // Every 7 days of streak earns a freeze (up to 2 held).
+    if (next % FREEZE_EVERY_DAYS === 0) {
+      row[`${side}_freezes`] = Math.min(MAX_STREAK_FREEZES, (row[`${side}_freezes`] ?? 0) + 1);
+    }
     row[`${side}_last_active_date`] = today;
     if (last !== shiftDay(today, -1)) {
       // A fresh start: the old streak can't be restored any more.
@@ -422,7 +578,7 @@ export async function updateStreak(env: Env, relationshipId: string, userId: str
          user_1_last_active_date = ?4, user_2_last_active_date = ?5,
          user_1_streak = ?6, user_1_longest = ?7, user_1_restorable = ?8, user_1_lost_at = ?9,
          user_2_streak = ?10, user_2_longest = ?11, user_2_restorable = ?12, user_2_lost_at = ?13,
-         updated_at = ?14
+         updated_at = ?14, user_1_freezes = ?16, user_2_freezes = ?17
        WHERE relationship_id = ?15`,
     ).bind(
       row.current_streak,
@@ -440,6 +596,8 @@ export async function updateStreak(env: Env, relationshipId: string, userId: str
       row.user_2_lost_at,
       nowIso(),
       relationshipId,
+      row.user_1_freezes ?? 0,
+      row.user_2_freezes ?? 0,
     ),
     env.DB.prepare('UPDATE relationships SET streak_count = ?1 WHERE id = ?2').bind(row.current_streak, relationshipId),
   ]);
@@ -475,16 +633,10 @@ export async function getStreakStatus(env: Env, relationshipId: string, userId: 
     !!myLostAt &&
     new Date(myLostAt).getTime() > Date.now() - RESTORE_WINDOW_MS;
 
-  if (atRisk && (await tryNotificationDedup(env, relationshipId, `streak_risk:${userId}:${today}`))) {
-    await createPartnerNotification(env, {
-      relationshipId,
-      recipientId: userId,
-      type: 'streak',
-      content: `Your ${myStreak}-day streak ends tonight. Send a moment, share your mood, answer today’s question or play a game to keep it.`,
-    });
-  }
+  // Only in the last few hours of their day (see notifyStreakRiskIfDue); the hourly job covers it too.
+  if (atRisk) await notifyStreakRiskIfDue(env, relationshipId, userId, myStreak, today);
 
-  const [myDays, togetherDays] = await Promise.all([
+  const [myDays, togetherDays, myFrozen] = await Promise.all([
     env.DB.prepare(
       'SELECT activity_date FROM user_streak_days WHERE relationship_id = ?1 AND user_id = ?2 ORDER BY activity_date ASC',
     )
@@ -493,6 +645,11 @@ export async function getStreakStatus(env: Env, relationshipId: string, userId: 
     env.DB.prepare('SELECT activity_date FROM streak_active_days WHERE relationship_id = ?1 ORDER BY activity_date ASC')
       .bind(relationshipId)
       .all<{ activity_date: string }>(),
+    env.DB.prepare(
+      'SELECT frozen_date FROM user_streak_frozen_days WHERE relationship_id = ?1 AND user_id = ?2 ORDER BY frozen_date ASC',
+    )
+      .bind(relationshipId, userId)
+      .all<{ frozen_date: string }>(),
   ]);
 
   return {
@@ -507,6 +664,9 @@ export async function getStreakStatus(env: Env, relationshipId: string, userId: 
     restorable_lost_at: canRestore ? myLostAt : null,
     active_days: myDays.results.map((r) => r.activity_date),
     user_active_today: mine === today,
+    // Streak freezes you hold, and the days one covered (drawn frozen on the calendar).
+    streak_freezes: row[`${mySide}_freezes`] ?? 0,
+    frozen_days: myFrozen.results.map((r) => r.frozen_date),
     // Your partner's.
     partner_streak: theirStreak,
     partner_longest_streak: row[`${theirSide}_longest`],
@@ -555,7 +715,22 @@ export async function restoreStreak(env: Env, relationshipId: string, userId: st
 // Rate limiting (replaces edge_rate_limits / consume_rate_limit)
 // ---------------------------------------------------------------------------
 
+/** The in-memory limiter for "N a minute", when there's one for that N (see wrangler.jsonc). */
+function fastLimiter(env: Env, maxHits: number, windowSeconds: number): RateLimit | undefined {
+  if (windowSeconds !== 60) return undefined;
+  return maxHits === 30 ? env.RL_30_PER_MIN : maxHits === 60 ? env.RL_60_PER_MIN : maxHits === 120 ? env.RL_120_PER_MIN : undefined;
+}
+
 export async function consumeRateLimit(env: Env, bucket: string, maxHits: number, windowSeconds: number) {
+  // Busy per-minute limits (uploads, messages, moments, shared docs, media links): Cloudflare's
+  // in-memory limiter — no database write on every call. The rare, exact ones (joining, account
+  // deletion, referrals…) stay counted in D1 below.
+  const fast = fastLimiter(env, maxHits, windowSeconds);
+  if (fast) {
+    const { success } = await fast.limit({ key: bucket });
+    if (!success) throw new ApiError('Too many requests. Please try again later.', 429);
+    return;
+  }
   const windowStart = Math.floor(Date.now() / 1000 / windowSeconds) * windowSeconds;
   const row = await env.DB.prepare(
     `INSERT INTO rate_limits (bucket_key, window_start, hits) VALUES (?1, ?2, 1)

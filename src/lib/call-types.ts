@@ -8,7 +8,9 @@ export type CallSignal =
   | { type: 'offer'; callId: string; fromUserId: string; sdp: RTCSessionDescriptionInit }
   | { type: 'answer'; callId: string; fromUserId: string; sdp: RTCSessionDescriptionInit }
   | { type: 'ice'; callId: string; fromUserId: string; candidate: RTCIceCandidateInit }
-  | { type: 'end'; callId: string; fromUserId: string };
+  | { type: 'end'; callId: string; fromUserId: string }
+  /** Mid-call: this person turned their own camera on or off (the other's stays as it is). */
+  | { type: 'camera'; callId: string; fromUserId: string; on: boolean };
 
 /** Used until (or if) the relay servers can't be fetched: direct connections only. */
 const STUN_FALLBACK: RTCIceServer[] = [{ urls: ['stun:stun.cloudflare.com:3478', 'stun:stun.l.google.com:19302'] }];

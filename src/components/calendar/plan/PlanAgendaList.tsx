@@ -2,7 +2,7 @@ import { format, isBefore, isSameDay, isToday, startOfDay } from 'date-fns';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 
-import { paperEdge, cardEdge, cardSurface } from '@/components/ui/primitives';
+import { paperEdge, cardSurface } from '@/components/ui/primitives';
 import { Icon, type IconName } from '@/components/ui/Icon';
 import { EVENT_TYPE_META, getEventTypeColors } from '@/constants/calendar-events';
 import { Radius } from '@/constants/design-system';
@@ -34,13 +34,16 @@ function groupEvents(events: CalendarEvent[]): AgendaGroup[] {
   }));
 }
 
-/** The empty state used across Plan: an icon, a title and a line, centred, nothing to tap. */
+/**
+ * The empty state used across Plan, like an empty album's: no card, a big soft-accent
+ * circle with the icon in the accent, then a title and a line, centred.
+ */
 export function PlanEmptyState({ icon, title, body }: { icon: IconName; title: string; body: string }) {
   const { colors } = useTheme();
   return (
-    <View style={[styles.empty, cardSurface(colors)]}>
-      <View style={[styles.emptyIcon, { backgroundColor: colors.background }, cardEdge(colors)]}>
-        <Icon name={icon} size={26} color={colors.text} />
+    <View style={styles.empty}>
+      <View style={[styles.emptyIcon, { backgroundColor: colors.accentSoft }]}>
+        <Icon name={icon} size={34} color={colors.accent} filled />
       </View>
       <Text style={[styles.emptyTitle, { color: colors.text }]}>{title}</Text>
       <Text style={[styles.emptyBody, { color: colors.textSecondary }]}>{body}</Text>
@@ -234,7 +237,7 @@ const styles = StyleSheet.create({
   },
   badgeEmoji: { fontSize: 19 },
   empty: { alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 36, paddingHorizontal: 24, borderRadius: 22, minHeight: 200 },
-  emptyIcon: { width: 60, height: 60, borderRadius: 30, alignItems: 'center', justifyContent: 'center', marginBottom: 6 },
+  emptyIcon: { width: 72, height: 72, borderRadius: 36, alignItems: 'center', justifyContent: 'center', marginBottom: 6 },
   emptyTitle: { fontSize: 18, fontWeight: '800', letterSpacing: -0.2, textAlign: 'center' },
   emptyBody: { fontSize: 14, textAlign: 'center', lineHeight: 20, maxWidth: 280 },
 });

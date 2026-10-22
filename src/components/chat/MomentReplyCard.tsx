@@ -1,4 +1,5 @@
 import { Image } from 'expo-image';
+import { mediaSource } from '@/lib/storage-cdn';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Icon } from '@/components/ui/Icon';
@@ -40,7 +41,7 @@ export function MomentReplyCard({ message, isSelf }: MomentReplyCardProps) {
       accessibilityLabel="Open moment">
       <View style={styles.thumbWrap}>
         {previewUrl ? (
-          <Image source={{ uri: previewUrl }} style={styles.thumb} contentFit="cover" />
+          <Image source={mediaSource(previewUrl)} style={styles.thumb} contentFit="cover" />
         ) : (
           <View style={[styles.thumb, styles.thumbPlaceholder, { backgroundColor: colors.surface }, paperEdge(colors)]}>
             <ActivityIndicator size="small" color={colors.textTertiary} />

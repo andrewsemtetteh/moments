@@ -62,6 +62,8 @@ export interface RoomResult {
   headline: string;
   highlights: string[];
   xp: number;
+  /** Team games: share of rounds you matched on (0–100). */
+  syncPct?: number;
 }
 
 export interface RoomState {
@@ -110,13 +112,21 @@ export interface RoomState {
   ready?: Record<string, boolean>;
   /** Lobby game votes; when both players suggest the same game it's selected. */
   suggestions?: Record<string, LiveGameKind>;
+  /** Quiz only, chosen before the game: the last round counts double, so whoever's behind can still win. */
+  doubleFinal?: boolean;
+  /** After a game, the one who lost picks the next game (their pick is set straight away). */
+  picker?: string | null;
+  /** Unlimited rounds: questions keep coming (topped up as you go) until one of you ends it. */
+  endless?: boolean;
 }
 
 export type RoomAction =
-  | { t: 'configure'; game: LiveGameKind; vibe: Vibe; rounds: number; topic?: string }
+  | { t: 'configure'; game: LiveGameKind; vibe: Vibe; rounds: number; topic?: string; doubleFinal?: boolean }
   | { t: 'begin' }
   | { t: 'loaded'; items: GameItem[]; pool?: TruthDarePool | null }
   | { t: 'loadFailed'; message: string }
+  /** Unlimited rounds: more questions, added as the loaded ones run low. */
+  | { t: 'more'; items: GameItem[] }
   | { t: 'answer'; value: string }
   | { t: 'next' }
   | { t: 'pickKind'; kind: 'truth' | 'dare' }
@@ -127,7 +137,8 @@ export type RoomAction =
   | { t: 'judge'; verdict: Verdict }
   | { t: 'timeout' }
   | { t: 'end' }
-  | { t: 'rematch' }
+  /** `again`: straight into the same game; otherwise back to the lobby, where the loser picks. */
+  | { t: 'rematch'; again?: boolean }
   | { t: 'suggest'; game: LiveGameKind };
 
 /** Wire protocol on the shared realtime channel. */

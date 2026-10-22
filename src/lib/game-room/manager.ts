@@ -8,7 +8,8 @@ import { useGameRoomStore } from '@/stores/game-room-store';
 import { usePlayProgressStore } from '@/stores/play-progress-store';
 
 import { RoomAudio } from './audio';
-import { createRoom, reduceRoom, statsFromRoom } from './reducer';
+import { createRoom, needsMoreItems, reduceRoom, statsFromRoom } from './reducer';
+import { rivalryAward } from './rivalry';
 import {
   getGameDefinition,
   type LiveGameKind,
@@ -195,6 +196,8 @@ class GameRoomManager {
     this.scheduleTimer(next);
 
     if (next.phase === 'loading' && prev?.phase !== 'loading') void this.loadContent(next);
+    // Unlimited rounds: the host's phone fetches more questions as the loaded ones run low.
+    if (next.hostId === this.me?.id && needsMoreItems(next)) void this.topUp(next);
     if (next.phase === 'finished' && prev?.phase !== 'finished') this.onFinished(next);
   }
 
@@ -224,6 +227,28 @@ class GameRoomManager {
     }, Math.max(0, state.deadline - Date.now()) + 400);
   }
 
+  /** Unlimited rounds: another batch of questions on the end (one fetch at a time). */
+  private toppingUp = false;
+  private async topUp(state: RoomState) {
+    if (this.toppingUp) return;
+    this.toppingUp = true;
+    try {
+      const content = await fetchGameContent({
+        relationshipId: this.relationshipId,
+        game: state.game,
+        vibe: state.vibe,
+        count: 10,
+        topic: state.topic,
+        names: state.players.map((p) => p.name),
+      });
+      if (content.items.length) this.applyAsHost({ t: 'more', items: content.items }, this.me?.id ?? '');
+    } catch {
+      // The game loops round the questions it has; the next round tries again.
+    } finally {
+      this.toppingUp = false;
+    }
+  }
+
   private async loadContent(state: RoomState) {
     const count = Math.max(state.totalRounds, 4);
     const content = await fetchGameContent({
@@ -251,9 +276,15 @@ class GameRoomManager {
     if (state.tally.sync_matches) events.sync_match = state.tally.sync_matches;
     if (state.tally.dares_done) events.dare_done = state.tally.dares_done;
     if (state.game === 'quiz' && state.result.winnerId) events.quiz_win = 1;
+    // Your head-to-head record and sync bests ride along with the game's award.
+    const rivalry = rivalryAward(state.game, state.result);
     void usePlayProgressStore
       .getState()
-      .award(this.relationshipId, { xp: state.result.xp, stats: statsFromRoom(state), events }, 'Live game finished');
+      .award(
+        this.relationshipId,
+        { xp: state.result.xp, stats: { ...statsFromRoom(state), ...rivalry.stats }, maxStats: rivalry.maxStats, events },
+        'Live game finished',
+      );
   }
 
   // ---- public API ---------------------------------------------------------

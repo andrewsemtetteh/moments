@@ -34,7 +34,7 @@ export function OtpCodeInput({ value, onChange, autoFocus = true }: Props) {
                 styles.box,
                 {
                   borderColor: focused || char ? colors.accent : colors.border,
-                  backgroundColor: colors.surface,
+                  backgroundColor: colors.background,
                 },
               ]}>
               <Text style={[styles.digitText, { color: colors.text }]}>{char}</Text>

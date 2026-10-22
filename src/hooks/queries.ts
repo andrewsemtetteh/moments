@@ -19,7 +19,7 @@ import { backend } from '@/lib/backend';
 import * as api from '@/services/api';
 import { useAuthStore, useRelationshipStore } from '@/stores';
 import { usePlayProgressStore } from '@/stores/play-progress-store';
-import type { Message, MoodLog, Notification } from '@/types/database';
+import type { Message, Moment, MoodLog, Notification } from '@/types/database';
 
 export function useProfile() {
   const user = useAuthStore((s) => s.user);
@@ -197,6 +197,72 @@ function patchNewMessage(
       return { ...old, pages: [[...firstPage, shaped], ...old.pages.slice(1)] };
     },
   );
+}
+
+/** An edit, reaction or hide: the message updated where it sits (no re-download of the thread). */
+function patchUpdatedMessage(
+  queryClient: QueryClient,
+  relationshipId: string,
+  userId: string,
+  row: Partial<Message> & { id: string },
+) {
+  queryClient.setQueryData<InfiniteData<Message[]>>(messagesQueryKey(relationshipId, userId), (old) => {
+    if (!old) return old;
+    let hit = false;
+    const pages = old.pages.map((page) =>
+      page.map((m) => {
+        if (m.id !== row.id) return m;
+        hit = true;
+        return { ...m, ...row } as Message;
+      }),
+    );
+    return hit ? { ...old, pages } : old;
+  });
+}
+
+/** A message removed for good: out of the thread. */
+function removeMessageFromCache(queryClient: QueryClient, relationshipId: string, userId: string, id: string) {
+  queryClient.setQueryData<InfiniteData<Message[]>>(messagesQueryKey(relationshipId, userId), (old) =>
+    old ? { ...old, pages: old.pages.map((page) => page.filter((m) => m.id !== id)) } : old,
+  );
+}
+
+/**
+ * A moment change from the live channel, applied to the loaded list (newest first) in place:
+ * a new one on top, a changed one where it sits, a deleted one taken out. Re-downloading every
+ * loaded page for each change was the cost before.
+ */
+function patchMomentsCache(
+  queryClient: QueryClient,
+  relationshipId: string,
+  eventType: string | undefined,
+  next: Partial<Moment> | undefined,
+  old: Partial<Moment> | undefined,
+): boolean {
+  const key = ['moments', relationshipId];
+  const data = queryClient.getQueryData<InfiniteData<Moment[]>>(key);
+  if (!data || data.pages.length === 0) return false;
+  if (eventType === 'INSERT' && next?.id) {
+    if (data.pages.some((p) => p.some((m) => m.id === next.id))) return true;
+    const [first, ...rest] = data.pages;
+    queryClient.setQueryData<InfiniteData<Moment[]>>(key, { ...data, pages: [[next as Moment, ...first], ...rest] });
+    return true;
+  }
+  if (eventType === 'UPDATE' && next?.id) {
+    queryClient.setQueryData<InfiniteData<Moment[]>>(key, {
+      ...data,
+      pages: data.pages.map((p) => p.map((m) => (m.id === next.id ? ({ ...m, ...next } as Moment) : m))),
+    });
+    return true;
+  }
+  if (eventType === 'DELETE' && old?.id) {
+    queryClient.setQueryData<InfiniteData<Moment[]>>(key, {
+      ...data,
+      pages: data.pages.map((p) => p.filter((m) => m.id !== old.id)),
+    });
+    return true;
+  }
+  return false;
 }
 
 /** Apply a single read receipt without touching created_at / Continue Chat preview time. */
@@ -486,8 +552,13 @@ export function useRestoreStreak() {
   return useMutation({
     mutationFn: () => api.restoreStreak(relationship!.id),
     onSuccess: (status) => {
-      queryClient.setQueryData(['streak', relationship?.id], status);
-      queryClient.invalidateQueries({ queryKey: ['streak', relationship?.id] });
+      queryClient.setQueryData(streakQueryKey(relationship?.id), status);
+      void queryClient.invalidateQueries({ queryKey: streakQueryKey(relationship?.id) });
+    },
+    // It used to fail silently: say why (no Plus on the server, the 24 hours passed, offline).
+    onError: (e) => {
+      Alert.alert('Couldn’t restore your streak', toUserFacingNetworkError(e, 'Please try again.').message);
+      void queryClient.invalidateQueries({ queryKey: streakQueryKey(relationship?.id) });
     },
   });
 }
@@ -730,7 +801,8 @@ function debouncedInvalidateMessageQueries(
   if (messageInvalidateTimer) clearTimeout(messageInvalidateTimer);
   messageInvalidateTimer = setTimeout(() => {
     messageInvalidateTimer = null;
-    queryClient.invalidateQueries({ queryKey: ['messages', relationshipId] });
+    // The thread itself is patched in place (see the live handler): only the badge and the
+    // "latest message" preview are asked for again.
     if (!userId) return;
 
     if (eventType === 'READ_RECEIPT') {
@@ -861,7 +933,10 @@ export function useRealtimeSubscription(
         },
         (payload) => {
           const qc = queryClientRef.current;
-          qc.invalidateQueries({ queryKey: [table === 'mood_logs' ? 'moods' : table.replace('_logs', ''), relationship.id] });
+          // Chat and moments are patched in place below; everything else is small enough to re-ask for.
+          if (table !== 'messages' && table !== 'moments') {
+            qc.invalidateQueries({ queryKey: [table === 'mood_logs' ? 'moods' : table.replace('_logs', ''), relationship.id] });
+          }
           if (table === 'messages') {
             const userId = useAuthStore.getState().user?.id;
             const eventType =
@@ -887,6 +962,11 @@ export function useRealtimeSubscription(
               }
             } else if (isReadReceipt && userId && row.id && row.read_at) {
               patchMessageReadReceipt(qc, relationship.id, userId, row.id, row.read_at);
+            } else if (eventType === 'UPDATE' && userId && row?.id) {
+              patchUpdatedMessage(qc, relationship.id, userId, row as Partial<Message> & { id: string });
+            } else if (eventType === 'DELETE' && userId) {
+              const gone = (payload as { old?: Partial<Message> } | null)?.old?.id;
+              if (gone) removeMessageFromCache(qc, relationship.id, userId, gone);
             }
 
             debouncedInvalidateMessageQueries(
@@ -905,7 +985,10 @@ export function useRealtimeSubscription(
             qc.invalidateQueries({ queryKey: ['packAnswers', relationship.id] });
           }
           if (table === 'moments') {
-            qc.invalidateQueries({ queryKey: ['moments', relationship.id] });
+            const p = payload as { eventType?: string; new?: Partial<Moment>; old?: Partial<Moment> } | null;
+            const patched = patchMomentsCache(qc, relationship.id, p?.eventType, p?.new, p?.old);
+            // Nothing loaded yet to patch: let it load fresh next time.
+            if (!patched) qc.invalidateQueries({ queryKey: ['moments', relationship.id], refetchType: 'none' });
             // The "Moments" count on You.
             qc.invalidateQueries({ queryKey: ['momentCount', relationship.id] });
           }

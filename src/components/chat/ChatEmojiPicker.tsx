@@ -1,16 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from '@/lib/haptics';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import {
-  Dimensions,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-  type NativeScrollEvent,
-  type NativeSyntheticEvent,
-} from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View, type NativeScrollEvent, type NativeSyntheticEvent, useWindowDimensions } from 'react-native';
 
 import { Icon } from '@/components/ui/Icon';
 import { useTheme } from '@/hooks/useTheme';
@@ -432,9 +423,10 @@ const CATEGORIES: { label: string; icon: string; emojis: string[] }[] = [
 ];
 
 const ROWS = 5;
-const SCREEN_W = Dimensions.get('window').width;
-/** About 8½ columns on screen, so the half column hints there's more to swipe to. */
-const CELL = Math.floor(SCREEN_W / 8.5);
+/** Emoji cells: 8½ to the screen's width (capped on tablets / unfolded, where they'd be huge). */
+function cellFor(width: number) {
+  return Math.floor(Math.min(width, 520) / 8.5);
+}
 const SECTION_GAP = 14;
 const RECENTS_KEY = 'chat-recent-emojis-v1';
 const MAX_RECENTS = 30;
@@ -475,6 +467,8 @@ function remember(next: Partial<typeof remembered>) {
 }
 
 export function ChatEmojiPicker({ onSelect, onBackspace }: Props) {
+  // Read live, so a fold / unfold, split screen or rotation redraws at the new size.
+  const CELL = cellFor(useWindowDimensions().width);
   const { colors } = useTheme();
   const scrollRef = useRef<ScrollView>(null);
   const [recents, setRecents] = useState<string[]>(CATEGORIES[0].emojis);
@@ -499,7 +493,7 @@ export function ChatEmojiPicker({ onSelect, onBackspace }: Props) {
         const prev = sections[i - 1];
         return [...acc, acc[i - 1] + Math.ceil(prev.emojis.length / ROWS) * CELL + SECTION_GAP];
       }, []),
-    [sections],
+    [sections, CELL],
   );
 
   const pick = (emoji: string) => {
@@ -554,14 +548,14 @@ export function ChatEmojiPicker({ onSelect, onBackspace }: Props) {
         {sections.map((section) => (
           <View key={section.label} style={styles.section}>
             {toColumns(section.emojis).map((col, ci) => (
-              <View key={ci} style={styles.column}>
+              <View key={ci} style={{ width: CELL }}>
                 {col.map((emoji) => (
                   <Pressable
                     key={emoji}
                     onPress={() => pick(emoji)}
                     accessibilityLabel={emoji}
-                    style={({ pressed }) => [styles.cell, pressed && styles.cellPressed]}>
-                    <Text style={styles.emoji}>{emoji}</Text>
+                    style={({ pressed }) => [styles.cell, { width: CELL, height: CELL }, pressed && styles.cellPressed]}>
+                    <Text style={[styles.emoji, { fontSize: Math.round(CELL * 0.66) }]}>{emoji}</Text>
                   </Pressable>
                 ))}
               </View>
@@ -618,10 +612,9 @@ const styles = StyleSheet.create({
   sectionLabel: { fontSize: 12, fontWeight: '800', paddingHorizontal: 14, marginBottom: 2 },
   strip: { paddingHorizontal: 6 },
   section: { flexDirection: 'row', marginRight: SECTION_GAP },
-  column: { width: CELL },
-  cell: { width: CELL, height: CELL, alignItems: 'center', justifyContent: 'center' },
+  cell: { alignItems: 'center', justifyContent: 'center' },
   cellPressed: { opacity: 0.55, transform: [{ scale: 0.86 }] },
-  emoji: { fontSize: Math.round(CELL * 0.66) },
+  emoji: {},
   bar: {
     flexDirection: 'row',
     alignItems: 'center',

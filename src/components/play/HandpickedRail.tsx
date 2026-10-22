@@ -1,5 +1,7 @@
 import { useRouter } from 'expo-router';
-import { ScrollView, StyleSheet, useWindowDimensions } from 'react-native';
+import { ScrollView, StyleSheet } from 'react-native';
+
+import { useContentWidth } from '@/lib/layout';
 
 import { PLAY_TONES, type ExploreModalKey } from '@/components/activities/explore/explore-catalog';
 import { Spacing } from '@/constants/design-system';
@@ -9,7 +11,8 @@ import { PlayCard } from './PlayCard';
 
 /** Width of a rail card: most of the screen, so the next card peeks in. */
 export function useRailCardWidth() {
-  const { width } = useWindowDimensions();
+  // The page column's width (capped on tablets / unfolded phones), live.
+  const width = useContentWidth();
   return Math.min(332, width - Spacing.lg * 2 - 38);
 }
 

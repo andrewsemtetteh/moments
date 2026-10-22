@@ -1,4 +1,4 @@
-import { Image } from 'expo-image';
+import { MomentThumbImage } from '@/components/moments/MomentThumbImage';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StyleSheet, View } from 'react-native';
 import { Pressable as GHPressable } from 'react-native-gesture-handler';
@@ -37,8 +37,8 @@ export function PartnerStoryAvatar({
   const { colors } = useTheme();
   const hasMoment = activeMoments.length > 0;
   const latestMoment = activeMoments[0];
-  const previewUrl =
-    latestMoment && momentHasVisual(latestMoment) ? latestMoment.media_url : avatarUrl;
+  // Their latest moment as a picture (a video's still, never the video file), else their photo.
+  const momentPicture = latestMoment && momentHasVisual(latestMoment) ? latestMoment : null;
   const ring = size + 12;
   const inner = size + 4;
   const clip = size;
@@ -55,10 +55,10 @@ export function PartnerStoryAvatar({
           { width: inner, height: inner, borderRadius: inner / 2, backgroundColor: colors.background },
         ]}>
         <View style={[styles.storyClip, { width: clip, height: clip, borderRadius: clip / 2 }]}>
-          {previewUrl ? (
-            <Image source={{ uri: previewUrl }} style={{ width: clip, height: clip }} contentFit="cover" />
+          {momentPicture ? (
+            <MomentThumbImage moment={momentPicture} style={{ width: clip, height: clip }} playMark={false} />
           ) : (
-            <Avatar name={name} imageUrl={avatarUrl} size={clip - 4} />
+            <Avatar name={name} imageUrl={avatarUrl} size={clip} />
           )}
         </View>
       </View>

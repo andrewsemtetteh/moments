@@ -77,10 +77,12 @@ function DayCell({
 }) {
   const { colors } = useTheme();
   const today = isToday(day);
-  // A day that's gone by and had plans: a soft green "done" circle (like today's circle,
-  // in its own colour so it never looks like today) instead of dots.
-  const pastPlans = dots.length > 0 && !today && day < startOfDay(new Date());
+  // A day with plans gets a ringed circle instead of dots: soft green once it's gone by
+  // ("done"), the theme colour for today and the days ahead.
+  const hasPlans = dots.length > 0;
+  const pastPlans = hasPlans && !today && day < startOfDay(new Date());
   const pastTint = pastPlans ? colors.success : null;
+  const planTint = hasPlans && !pastPlans ? colors.accent : null;
 
   return (
     <Pressable
@@ -99,15 +101,18 @@ function DayCell({
           selected
             ? { backgroundColor: colors.accent }
             : today
-              ? { backgroundColor: colors.accentSoft }
-              : pastTint
+              ? {
+                  backgroundColor: colors.accentSoft,
+                  ...(planTint ? { borderWidth: 1.5, borderColor: colorWithAlpha(planTint, 0.6) } : null),
+                }
+              : pastTint || planTint
                 ? {
-                    backgroundColor: colorWithAlpha(pastTint, 0.16),
+                    backgroundColor: colorWithAlpha((pastTint ?? planTint)!, pastTint ? 0.16 : 0.12),
                     borderWidth: 1.5,
-                    borderColor: colorWithAlpha(pastTint, 0.55),
+                    borderColor: colorWithAlpha((pastTint ?? planTint)!, 0.55),
                   }
                 : null,
-          muted && pastTint ? { opacity: 0.5 } : null,
+          muted && (pastTint || planTint) ? { opacity: 0.5 } : null,
         ]}>
         <Text
           style={[
@@ -120,16 +125,14 @@ function DayCell({
                   : muted
                     ? colors.textTertiary
                     : colors.text,
-              fontWeight: selected || today ? '800' : pastTint ? '700' : '500',
+              fontWeight: selected || today ? '800' : hasPlans ? '700' : '500',
             },
           ]}>
           {format(day, 'd')}
         </Text>
       </View>
       <View style={styles.dots}>
-        {(pastPlans ? [] : dots).map((color) => (
-          <View key={color} style={[styles.dot, { backgroundColor: color, opacity: muted ? 0.4 : 1 }]} />
-        ))}
+        {/* The ring says it all now: no dots under the day. */}
       </View>
     </Pressable>
   );

@@ -18,6 +18,17 @@ const OUTER =
 const INNER =
   'M62 56 C70 70 84 81 84 101 C84 118 74 128 60 128 C46 128 36 118 36 104 C36 92 42 84 50 78 C50 88 54 94 60 96 C56 82 56 69 62 56 Z';
 const INK = '#000000';
+
+/**
+ * The flame's colours: lit (orange), frozen (ice blue: a streak freeze kept the day, as
+ * on Duolingo) and out (grey: a day missed, the streak lost).
+ */
+export type FlameVariant = 'lit' | 'frozen' | 'out';
+const PALETTES: Record<FlameVariant, { outer: [string, string, string]; inner: [string, string]; shine: string }> = {
+  lit: { outer: ['#FFB23E', '#FF7A1A', '#F0501A'], inner: ['#FFF0A8', '#FFC83D'], shine: '#FFD49A' },
+  frozen: { outer: ['#C9EEFF', '#6EC6FF', '#2E8FD8'], inner: ['#FFFFFF', '#CDEEFF'], shine: '#EAF8FF' },
+  out: { outer: ['#D3CFCA', '#B9B4AF', '#9C978F'], inner: ['#F0EDE9', '#DCD8D3'], shine: '#E6E2DD' },
+};
 const SINE = Easing.inOut(Easing.sin);
 
 type Props = {
@@ -29,6 +40,8 @@ type Props = {
   animated?: boolean;
   /** Spring up from a grey ember on mount (the celebration). */
   ignite?: boolean;
+  /** Lit (default), frozen or out. */
+  variant?: FlameVariant;
   style?: StyleProp<ViewStyle>;
 };
 
@@ -38,7 +51,8 @@ type Props = {
  * yellow inner flame, and (optionally) a face. The layers move on their own
  * rhythms: the outer flame sways, the inner one flickers, the face blinks.
  */
-export function StickerFlame({ size, face = false, animated = false, ignite = false, style }: Props) {
+export function StickerFlame({ size, face = false, animated = false, ignite = false, variant = 'lit', style }: Props) {
+  const palette = PALETTES[variant];
   const uid = useId().replace(/[^a-zA-Z0-9_-]/g, '');
   const reduceMotion = useReducedMotion();
   const w = size;
@@ -125,15 +139,15 @@ export function StickerFlame({ size, face = false, animated = false, ignite = fa
         <Svg width={w} height={h} viewBox="0 0 120 140">
           <Defs>
             <LinearGradient id={`o${uid}`} x1="0" y1="0" x2="0" y2="1">
-              <Stop offset="0" stopColor="#FFB23E" />
-              <Stop offset="0.45" stopColor="#FF7A1A" />
-              <Stop offset="1" stopColor="#F0501A" />
+              <Stop offset="0" stopColor={palette.outer[0]} />
+              <Stop offset="0.45" stopColor={palette.outer[1]} />
+              <Stop offset="1" stopColor={palette.outer[2]} />
             </LinearGradient>
           </Defs>
           <Path d={OUTER} fill={`url(#o${uid})`} stroke={INK} strokeWidth={outerStroke} strokeLinejoin="round" />
           {/* Light catching the left edge. */}
           {small ? null : (
-            <Path d="M28.5 108 C25 98 25.5 88 29.5 80" fill="none" stroke="#FFD49A" strokeWidth={4.5} strokeLinecap="round" />
+            <Path d="M28.5 108 C25 98 25.5 88 29.5 80" fill="none" stroke={palette.shine} strokeWidth={4.5} strokeLinecap="round" />
           )}
         </Svg>
       </Animated.View>
@@ -142,8 +156,8 @@ export function StickerFlame({ size, face = false, animated = false, ignite = fa
         <Svg width={w} height={h} viewBox="0 0 120 140">
           <Defs>
             <LinearGradient id={`i${uid}`} x1="0" y1="0" x2="0" y2="1">
-              <Stop offset="0" stopColor="#FFF0A8" />
-              <Stop offset="1" stopColor="#FFC83D" />
+              <Stop offset="0" stopColor={palette.inner[0]} />
+              <Stop offset="1" stopColor={palette.inner[1]} />
             </LinearGradient>
           </Defs>
           <Path d={INNER} fill={`url(#i${uid})`} stroke={INK} strokeWidth={innerStroke} strokeLinejoin="round" />

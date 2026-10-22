@@ -10,6 +10,7 @@ import Animated, {
     withTiming,
 } from 'react-native-reanimated';
 
+import { outlineColor } from '@/components/ui/primitives';
 import { useTheme } from '@/hooks/useTheme';
 
 const AnimatedText = Animated.createAnimatedComponent(Text);
@@ -53,15 +54,17 @@ export function AuthTextField({
   const [focused, setFocused] = useState(false);
   const floated = focused || value.length > 0;
   const bold = variant === 'bold';
-  const fieldBg = fieldBackgroundColor ?? (bold ? colors.surface : colors.background);
+  // The page's own background (auth pages), unless a screen on a card passes its colour.
+  const fieldBg = fieldBackgroundColor ?? colors.background;
   // Where the label rests (inside) and floats to (on the border line).
   const restTop = bold ? 19 : 14;
   const floatTop = bold ? -10 : -9;
   const restSize = bold ? 16 : 15;
   const floatSize = bold ? 12 : 11;
   const restColor = colors.textSecondary;
-  const focusColor = bold ? colors.text : colors.accent;
-  const borderRest = bold ? colors.text : colors.border;
+  // As in the main app: a soft outline in the theme's ink, the theme colour while typing.
+  const focusColor = colors.accent;
+  const borderRest = bold ? outlineColor(colors) : colors.border;
 
   const focusProgress = useSharedValue(0);
   const labelProgress = useSharedValue(floated ? 1 : 0);
@@ -156,7 +159,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
   },
   // The onboarding name field's look.
-  containerBold: { borderWidth: 2, borderRadius: 16, minHeight: 58, paddingHorizontal: 16 },
+  containerBold: { borderWidth: 1.5, borderRadius: 16, minHeight: 58, paddingHorizontal: 16 },
   labelBold: { left: 12, fontWeight: '800', lineHeight: 18 },
   inputBold: { fontSize: 18, fontWeight: '700' },
   inputRow: {

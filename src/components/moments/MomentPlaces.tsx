@@ -1,8 +1,9 @@
 import { formatDistanceToNowStrict } from 'date-fns';
 import { useMemo, useState } from 'react';
-import { Dimensions, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 
 import { LocationMapPreview, type MapMarker } from '@/components/moments/LocationMapPreview';
+import { OurMapFullScreen } from '@/components/moments/OurMapFullScreen';
 import { MomentSquircle } from '@/components/moments/MomentSquircle';
 import { Icon } from '@/components/ui/Icon';
 import { cardSurface } from '@/components/ui/primitives';
@@ -10,7 +11,6 @@ import { useTheme } from '@/hooks/useTheme';
 import type { MomentPlace } from '@/lib/moment-places';
 import { momentChrome } from '@/lib/moment-theme';
 
-const SCREEN_H = Dimensions.get('window').height;
 
 export function placeTitle(place: MomentPlace) {
   if (place.name) return place.name.name;
@@ -61,9 +61,13 @@ export function OurMapView({
   onOpenPlace: (place: MomentPlace) => void;
   onNamePlace: (place: MomentPlace) => void;
 }) {
+  // Read live, so a fold / unfold, split screen or rotation redraws at the new size.
+  const SCREEN_H = useWindowDimensions().height;
   const { colors } = useTheme();
   const chrome = momentChrome(colors);
   const [focusedKey, setFocusedKey] = useState<string | null>(null);
+  // The map in full screen (tap the map, or its expand button), over this page.
+  const [fullMap, setFullMap] = useState(false);
 
   const markers = useMemo<MapMarker[]>(
     () =>
@@ -113,11 +117,32 @@ export function OurMapView({
             setFocusedKey(place.key);
             onOpenPlace(place);
           }}
+          onMapPress={() => setFullMap(true)}
           style={styles.map}
         />
         {/* The map takes its own touches; this strip on the left edge lets the swipe back start there. */}
         <View style={styles.edgeStrip} />
+        <Pressable
+          onPress={() => setFullMap(true)}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel="Open the map in full screen"
+          style={({ pressed }) => [styles.expand, pressed && { opacity: 0.8 }]}>
+          <Icon name="expand" size={18} color="#FFFFFF" />
+        </Pressable>
       </View>
+      <OurMapFullScreen
+        visible={fullMap}
+        places={places}
+        markers={markers}
+        title={placeTitle}
+        onClose={() => setFullMap(false)}
+        onOpenPlace={(place) => {
+          setFullMap(false);
+          // After the map has slid away, so the place's page opens on top of this one.
+          setTimeout(() => onOpenPlace(place), 350);
+        }}
+      />
 
       <View style={styles.listHeader}>
         <Text style={[styles.listTitle, { color: chrome.text }]}>Places</Text>
@@ -161,7 +186,7 @@ export function OurMapView({
               style={({ pressed }) => [
                 styles.nameBtn,
                 place.name
-                  ? { backgroundColor: chrome.surfaceSoft }
+                  ? cardSurface(colors)
                   : { backgroundColor: chrome.accentSoft, borderColor: chrome.accent, borderWidth: 1.5 },
                 pressed && styles.pressed,
               ]}>
@@ -197,6 +222,17 @@ const styles = StyleSheet.create({
   scroll: { paddingHorizontal: 12 },
   map: { borderRadius: 24 },
   edgeStrip: { position: 'absolute', left: -12, top: 0, bottom: 0, width: 34 },
+  expand: {
+    position: 'absolute',
+    right: 12,
+    top: 12,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   listHeader: { flexDirection: 'row', alignItems: 'baseline', gap: 8, marginTop: 22, marginBottom: 8 },
   listTitle: { fontSize: 20, fontWeight: '800', letterSpacing: -0.3 },
   listCount: { fontSize: 14, fontWeight: '700' },

@@ -1,4 +1,6 @@
 import { getClerkInstance } from '@clerk/expo';
+import { FileSystemUploadType, uploadAsync } from 'expo-file-system/legacy';
+import { Platform } from 'react-native';
 
 /**
  * Cloudflare backend client. It exposes a small query-builder API (`from().select().eq()…`, `rpc`, `storage`, `functions.invoke`,
@@ -211,6 +213,42 @@ function storageBucket(bucket: string) {
         const json = (await res.json().catch(() => ({}))) as { path?: string; error?: string };
         if (!res.ok) return { data: null, error: { message: json.error ?? res.statusText } };
         return { data: { path: json.path ?? path }, error: null };
+      } catch (e) {
+        return { data: null, error: { message: e instanceof Error ? e.message : 'Upload failed' } };
+      }
+    },
+    /**
+     * Upload a file straight from disk (native, streamed: the photo is never copied into JS,
+     * which was most of the time on big photos). The server answers with the file's signed link
+     * too, so no second request is needed. Web: read and send it as bytes instead.
+     */
+    async uploadFile(path: string, fileUri: string, opts?: { contentType?: string }) {
+      if (!API_URL) return { data: null, error: { message: 'EXPO_PUBLIC_API_URL is not set' } };
+      if (Platform.OS === 'web') {
+        const body = await (await fetch(fileUri)).arrayBuffer();
+        const res = await this.upload(path, body, opts);
+        return res.data ? { data: { ...res.data, signedUrl: undefined as string | undefined }, error: null } : res;
+      }
+      try {
+        const token = await authToken();
+        const res = await uploadAsync(`${API_URL}/storage/${bucket}/${encodePath(path)}`, fileUri, {
+          httpMethod: 'POST',
+          uploadType: FileSystemUploadType.BINARY_CONTENT,
+          headers: {
+            'Content-Type': opts?.contentType ?? 'application/octet-stream',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+        });
+        let json: { path?: string; signedUrl?: string; error?: string } = {};
+        try {
+          json = JSON.parse(res.body);
+        } catch {
+          // Not JSON: fall through to the status check.
+        }
+        if (res.status < 200 || res.status >= 300) {
+          return { data: null, error: { message: json.error ?? `Upload failed (${res.status})` } };
+        }
+        return { data: { path: json.path ?? path, signedUrl: json.signedUrl }, error: null };
       } catch (e) {
         return { data: null, error: { message: e instanceof Error ? e.message : 'Upload failed' } };
       }

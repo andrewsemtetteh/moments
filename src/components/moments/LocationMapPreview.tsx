@@ -1,10 +1,12 @@
 import { Image } from 'expo-image';
+import { mediaSource } from '@/lib/storage-cdn';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import MapView, { Marker, PROVIDER_DEFAULT, type Region } from 'react-native-maps';
 
 import { Icon } from '@/components/ui/Icon';
+import { CARTOON_MAP_DARK, CARTOON_MAP_LIGHT } from '@/lib/map-style';
 import { useTheme } from '@/hooks/useTheme';
 
 export interface MapMarker {
@@ -30,6 +32,8 @@ interface LocationMapPreviewProps {
   onMarkerPress?: (index: number) => void;
   /** Bump to re-fit everyone (the full map's "show everyone" button). */
   recenterKey?: number;
+  /** A tap on the map itself (not a pin), e.g. to open it full screen. */
+  onMapPress?: () => void;
 }
 
 const PIN_EDGE = { top: 70, right: 50, bottom: 50, left: 50 };
@@ -62,7 +66,9 @@ function startRegion(markers: MapMarker[], focusedIndex: number | null): Region 
 
 /**
  * A map with each person as a photo pin. Native maps (Apple Maps on iPhone, Google Maps
- * on Android) via react-native-maps, in satellite view with labels: smooth, no web page to load.
+ * on Android) via react-native-maps, drawn the cartoon way (Snap Map style): bright flat
+ * colours on Android (see lib/map-style), Apple's soft "muted" map on iPhone, and sticker
+ * pins (photo, white ring, bold ink outline) everywhere.
  * Non-interactive maps are a still preview (tap opens the full map via `onPress`).
  */
 export function LocationMapPreview({
@@ -74,6 +80,7 @@ export function LocationMapPreview({
   focusedIndex = null,
   onMarkerPress,
   recenterKey = 0,
+  onMapPress,
 }: LocationMapPreviewProps) {
   const { colors } = useTheme();
   const mapRef = useRef<MapView>(null);
@@ -114,10 +121,11 @@ export function LocationMapPreview({
         style={StyleSheet.absoluteFill}
         initialRegion={region}
         onMapReady={fit}
-        // Satellite with street and place names on top: real buildings, trees and land,
-        // not just roads (the standard style only draws buildings when zoomed right in).
-        mapType="hybrid"
-        showsBuildings
+        // Cartoon: flat and friendly, not satellite. Android takes our colours; iPhone's
+        // Apple Maps can't be restyled, so it uses its softest look.
+        mapType={Platform.OS === 'ios' ? 'mutedStandard' : 'standard'}
+        customMapStyle={Platform.OS === 'android' ? (colors.isDark ? CARTOON_MAP_DARK : CARTOON_MAP_LIGHT) : undefined}
+        showsBuildings={false}
         userInterfaceStyle={colors.isDark ? 'dark' : 'light'}
         scrollEnabled={interactive}
         zoomEnabled={interactive}
@@ -125,9 +133,13 @@ export function LocationMapPreview({
         pitchEnabled={false}
         toolbarEnabled={false}
         showsCompass={interactive}
-        showsPointsOfInterests
+        showsPointsOfInterests={false}
         liteMode={Platform.OS === 'android' && !interactive}
-        pointerEvents={interactive ? 'auto' : 'none'}>
+        pointerEvents={interactive ? 'auto' : 'none'}
+        onPress={(e) => {
+          // Taps on a pin come through here too (Android): only a tap on the map itself.
+          if ((e.nativeEvent as { action?: string }).action !== 'marker-press') onMapPress?.();
+        }}>
         {markers.map((m, i) => (
           <PhotoPin
             key={`${m.latitude},${m.longitude},${i}`}
@@ -170,7 +182,6 @@ function PhotoPin({
   onPress?: () => void;
   showTitle: boolean;
 }) {
-  const ring = marker.color ?? '#e85d75';
   // Android draws custom pins once as a bitmap: keep redrawing until the photo has loaded.
   const [tracking, setTracking] = useState(true);
   useEffect(() => {
@@ -186,11 +197,12 @@ function PhotoPin({
       onPress={onPress}
       tracksViewChanges={tracking}>
       <View style={styles.pin}>
+        {/* A sticker: photo, white ring, bold ink outline (Bitmoji / Snap Map style). */}
         <View style={[styles.face, { borderColor: '#fff', shadowColor: '#000' }]}>
-          <View style={[styles.ring, { borderColor: ring }]} />
+          <View style={[styles.ring, { borderColor: INK }]} />
           {marker.avatarUrl ? (
             <Image
-              source={{ uri: marker.avatarUrl }}
+              source={mediaSource(marker.avatarUrl)}
               style={styles.photo}
               contentFit="cover"
               onLoad={() => setTracking(false)}
@@ -201,13 +213,14 @@ function PhotoPin({
             </View>
           )}
         </View>
-        <View style={[styles.pointer, { borderTopColor: ring }]} />
+        <View style={[styles.pointer, { borderTopColor: INK }]} />
       </View>
     </Marker>
   );
 }
 
-const AVATAR = 38;
+const AVATAR = 42;
+const INK = '#111111';
 
 const styles = StyleSheet.create({
   wrapper: {
@@ -245,8 +258,8 @@ const styles = StyleSheet.create({
     left: -5.5,
     right: -5.5,
     bottom: -5.5,
-    borderRadius: (AVATAR + 5) / 2,
-    borderWidth: 2.5,
+    borderRadius: (AVATAR + 11) / 2,
+    borderWidth: 3,
   },
   photo: { width: '100%', height: '100%', borderRadius: AVATAR / 2 },
   initialBox: { alignItems: 'center', justifyContent: 'center' },

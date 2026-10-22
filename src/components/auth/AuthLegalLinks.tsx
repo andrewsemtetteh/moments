@@ -3,6 +3,7 @@ import { StyleSheet, Text, type StyleProp, type TextStyle } from 'react-native';
 
 import { authLinkColors, authLinkStyles } from '@/components/auth/auth-link-styles';
 import { useTheme } from '@/hooks/useTheme';
+import { MIN_AGE } from '@/lib/birthday';
 
 type Props = {
   /** Lead-in copy before the linked legal documents. */
@@ -13,7 +14,7 @@ type Props = {
 };
 
 export function AuthLegalLinks({
-  prefix = 'By continuing, you agree to our',
+  prefix = `By continuing, you confirm you’re ${MIN_AGE} or older and agree to our`,
   style,
   centered = true,
 }: Props) {

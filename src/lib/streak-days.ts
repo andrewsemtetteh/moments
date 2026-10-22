@@ -16,6 +16,10 @@ import {
 import type { StreakStatus } from '@/types/database';
 import { isStreakVisuallyAtRisk } from '@/lib/streak-reminder-timing';
 
+/** A frozen day's colour: ice blue. */
+export const FROZEN_ICE = '#2E8FD8';
+export const FROZEN_FILL = '#DDF1FF';
+
 export type StreakView = 'week' | 'month';
 
 export type StreakDayState =
@@ -24,6 +28,8 @@ export type StreakDayState =
   | 'today-pending'
   | 'today-at-risk'
   | 'missed'
+  /** A streak freeze covered this day: the streak carried on (an ice-blue flame). */
+  | 'frozen'
   | 'idle'
   | 'future'
   | 'inactive';
@@ -61,8 +67,14 @@ function buildStreakWindowSet(status: StreakStatus): Set<string> {
 
   const days = new Set<string>();
   if (lastActive && status.current_streak > 0) {
-    for (let i = 0; i < status.current_streak; i++) {
-      days.add(format(subDays(lastActive, i), 'yyyy-MM-dd'));
+    // Frozen days (a streak freeze) don't count towards the streak: step over them.
+    const frozen = new Set(status.frozen_days ?? []);
+    let counted = 0;
+    for (let i = 0; counted < status.current_streak && i < status.current_streak + frozen.size; i++) {
+      const key = format(subDays(lastActive, i), 'yyyy-MM-dd');
+      if (frozen.has(key)) continue;
+      days.add(key);
+      counted++;
     }
   }
   return days;
@@ -126,6 +138,9 @@ function resolveDayState(
     }
     return { state: 'today-pending' };
   }
+
+  // A streak freeze covered it.
+  if (status.frozen_days?.includes(key)) return { state: 'frozen' };
 
   if (activeDays.has(key)) {
     return { state: 'completed', tone: resolveDayTone(key, status) };
@@ -308,6 +323,7 @@ export function dayLabelColor(
     return colors.textTertiary;
   }
   if (day.state === 'missed') return STREAK_LOST_LABEL;
+  if (day.state === 'frozen') return FROZEN_ICE;
   if (day.state === 'today-pending') return STREAK_PENDING_LABEL;
   if (day.state === 'today-at-risk') return STREAK_DANGER_LABEL;
   return colors.textSecondary;

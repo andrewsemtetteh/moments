@@ -94,8 +94,17 @@ interface UIState {
   showPartnerProfile: boolean;
   partnerLocationMap: PartnerLocationMapState | null;
   streakMilestoneCount: number | null;
+  /** The rating page, opened from Settings › Rate Moments. */
+  showRatingPage: boolean;
   /** Dev preview: the sign-in screens, opened from Settings (shows an "Exit preview" button). */
   authPreview: boolean;
+  /** Dev preview of a set of screens (onboarding, sign-in, widgets): shows the "Exit preview" pill. */
+  devPreview: boolean;
+  /**
+   * The birthday page: on the day ('today', for whoever's birthday it is or their
+   * partner) or the day before ('eve', the partner's reminder).
+   */
+  birthdayCelebration: BirthdayCelebration | null;
   /** Dev preview: bumped to start the app tour again. */
   tourRequest: number;
   requestTour: () => void;
@@ -164,6 +173,14 @@ const MODAL_HANDOFF_MS = 350;
  * close: on iPhone a full-screen layer opened over another one never appears — which is why
  * the celebration went missing after sending a moment from the camera.
  */
+export type BirthdayCelebration = {
+  kind: 'today' | 'eve';
+  /** Whose birthday: yours, or your partner's. */
+  whose: 'me' | 'partner';
+  /** Dev preview: shown without marking it seen. */
+  preview?: boolean;
+};
+
 export function isFullScreenLayerOpen(s: UIState): boolean {
   return (
     s.showMomentCreator ||
@@ -176,7 +193,8 @@ export function isFullScreenLayerOpen(s: UIState): boolean {
     s.showPaywall ||
     s.streakSpark != null ||
     s.streakMilestoneCount != null ||
-    s.togetherMilestoneCount != null
+    s.togetherMilestoneCount != null ||
+    s.birthdayCelebration != null
   );
 }
 
@@ -207,6 +225,9 @@ export const useUIStore = create<UIState>((set, get) => ({
   streakMilestoneCount: null,
   togetherMilestoneCount: null,
   authPreview: false,
+  devPreview: false,
+  birthdayCelebration: null,
+  showRatingPage: false,
   tourRequest: 0,
   requestTour: () => set((s) => ({ tourRequest: s.tourRequest + 1 })),
   openTogetherMilestone: (togetherMilestoneCount) => set({ togetherMilestoneCount }),
@@ -333,6 +354,21 @@ interface CallState {
   isCameraOff: boolean;
   isSpeaker: boolean;
   error: string | null;
+  /** When the call connected (ms): the timer counts from here. */
+  connectedAt: number | null;
+  /** Shrunk to the pill (voice) or floating window (video) while you use the app. */
+  minimized: boolean;
+  setMinimized: (minimized: boolean) => void;
+  /** Video: front or back camera. */
+  flipCamera: () => void;
+  /**
+   * Each person's camera is their own. A video call starts with both on, a voice call with
+   * both off; either of you can turn yours on or off at any time.
+   */
+  partnerCameraOn: boolean;
+  setPartnerCamera: (on: boolean) => void;
+  /** Turn your camera on or off (previews just switch the screen). */
+  setMyCamera: (on: boolean) => Promise<void>;
   setPhase: (phase: CallPhase) => void;
   setIncoming: (payload: { callId: string; mode: CallMode; partnerName: string }) => void;
   setMode: (mode: CallMode) => void;
@@ -354,13 +390,37 @@ const initialCallState = {
   isCameraOff: false,
   isSpeaker: false,
   error: null,
+  connectedAt: null as number | null,
+  minimized: false,
+  partnerCameraOn: false,
 };
 
 export const useCallStore = create<CallState>((set, get) => ({
   ...initialCallState,
-  setPhase: (phase) => set({ phase }),
-  setIncoming: ({ callId, mode, partnerName }) => set({ phase: 'incoming', callId, mode, partnerName, error: null }),
-  setMode: (mode) => set({ mode }),
+  setPhase: (phase) =>
+    set((s) => ({ phase, connectedAt: phase === 'active' ? (s.connectedAt ?? Date.now()) : s.connectedAt })),
+  setMinimized: (minimized) => set({ minimized }),
+  flipCamera: () => callManager.switchCamera(),
+  setPartnerCamera: (partnerCameraOn) => set({ partnerCameraOn }),
+  setMyCamera: async (on) => {
+    const preview = !!get().callId?.startsWith('preview-');
+    if (!preview) await callManager.setCamera(on);
+    // Video on: the speaker, as on every video call.
+    set({ isCameraOff: !on, isSpeaker: on ? true : get().isSpeaker });
+  },
+  // A video call starts with both cameras on; a voice call with both off.
+  setIncoming: ({ callId, mode, partnerName }) =>
+    set({
+      phase: 'incoming',
+      callId,
+      mode,
+      partnerName,
+      error: null,
+      isCameraOff: mode !== 'video',
+      partnerCameraOn: mode === 'video',
+      isSpeaker: mode === 'video',
+    }),
+  setMode: (mode) => set({ mode, isCameraOff: mode !== 'video', partnerCameraOn: mode === 'video', isSpeaker: mode === 'video' }),
   setCallId: (callId) => set({ callId }),
   setPartnerName: (partnerName) => set({ partnerName }),
   setError: (error) => set({ error }),
@@ -370,9 +430,7 @@ export const useCallStore = create<CallState>((set, get) => ({
     set({ isMuted: next });
   },
   toggleCamera: () => {
-    const next = !get().isCameraOff;
-    callManager.toggleCamera(next);
-    set({ isCameraOff: next });
+    void get().setMyCamera(get().isCameraOff);
   },
   toggleSpeaker: () => set((s) => ({ isSpeaker: !s.isSpeaker })),
   reset: () => set(initialCallState),

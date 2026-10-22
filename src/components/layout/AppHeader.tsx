@@ -22,7 +22,7 @@ import { isHiddenFrom } from '@/lib/plan-day';
 import { isPlanCompleted } from '@/lib/plan-meta';
 import { openCalendar } from '@/lib/router';
 import { filterInboxNotifications } from '@/lib/notification-display';
-import { buildPartnerHeaderLine, formatPartnerClock } from '@/lib/partner-header-line';
+import { buildPartnerHeaderLine, formatPartnerClock, type PartnerClock } from '@/lib/partner-header-line';
 import { useAuthStore, useRelationshipStore } from '@/stores';
 
 const APP_NAME = 'Moments';
@@ -32,9 +32,11 @@ interface AppHeaderProps {
   showPlan?: boolean;
   /** Home: the header sits on the intro card's band (its colour and text colour). */
   band?: { background: string; ink: string };
+  /** Settings › Developer: draw the paired header with this distance and clock. */
+  preview?: { location: string; clock: PartnerClock };
 }
 
-export function AppHeader({ showPlan = true, band }: AppHeaderProps) {
+export function AppHeader({ showPlan = true, band, preview }: AppHeaderProps) {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { colors } = useTheme();
@@ -84,11 +86,10 @@ export function AppHeader({ showPlan = true, band }: AppHeaderProps) {
     );
     return formatDistanceApart(km);
   }, [sharesLocation, user, partner]);
-  const partnerClock = formatPartnerClock(partner?.timezone);
-  const metaLine = buildPartnerHeaderLine({
-    location: distanceApart,
-    clock: partnerClock,
-  });
+  const partnerClock = preview ? preview.clock : formatPartnerClock(partner?.timezone);
+  // "4,812 km apart · 9:40" then a sun or moon (instead of AM / PM, which made it long).
+  const lead = buildPartnerHeaderLine({ location: preview ? preview.location : distanceApart });
+  const metaLine = lead || partnerClock;
   // const partnerFirstName = getFirstName(partner?.name);
 
   return (
@@ -120,7 +121,7 @@ export function AppHeader({ showPlan = true, band }: AppHeaderProps) {
         }}
         accessibilityRole="button"
         accessibilityLabel={partner ? `View ${partner.name ?? 'partner'} profile` : APP_NAME}>
-        {partner ? (
+        {partner || preview ? (
           // Paired: only the distance/clock line — no app name, avatar or partner name.
           <View style={styles.centerRow}>
             {/* Hidden for now — kept to bring back easily:
@@ -135,8 +136,27 @@ export function AppHeader({ showPlan = true, band }: AppHeaderProps) {
               ) : null}
               */}
               {metaLine ? (
-                <Text style={[styles.title, { color: band?.ink ?? colors.text }]} numberOfLines={1}>
-                  {metaLine}
+                // A long line (far apart + their time) shrinks a little to fit instead of "…".
+                <Text
+                  style={[styles.title, { color: band?.ink ?? colors.text }]}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.8}>
+                  {lead}
+                  {lead && partnerClock ? ' · ' : null}
+                  {partnerClock ? (
+                    <>
+                      {partnerClock.time}{' '}
+                      {/* Sun in their daytime, moon at night. The solid crescent reads bigger than
+                          the sun (whose rays thin it out), so it's drawn smaller to match. */}
+                      <Icon
+                        name={partnerClock.isDaytime ? 'sunny' : 'moon'}
+                        size={partnerClock.isDaytime ? 16 : 13}
+                        filled
+                        color={band?.ink ?? colors.text}
+                      />
+                    </>
+                  ) : null}
                 </Text>
               ) : null}
             </View>
@@ -233,8 +253,9 @@ const styles = StyleSheet.create({
     paddingBottom: 8,
     overflow: 'visible',
   },
+  // Just the icon's room on each side (with space for its badge), so the middle line gets the rest.
   side: {
-    flex: 1,
+    width: 56,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
@@ -242,7 +263,7 @@ const styles = StyleSheet.create({
   },
   left: { justifyContent: 'flex-start' },
   right: { justifyContent: 'flex-end', paddingRight: 2 },
-  center: { flexShrink: 1, maxWidth: '52%', alignItems: 'center' },
+  center: { flex: 1, minWidth: 0, alignItems: 'center', paddingHorizontal: 4 },
   centerRow: { flexDirection: 'row', alignItems: 'center', gap: 8, maxWidth: '100%' },
   centerText: { flexShrink: 1, minWidth: 0 },
   // Was 12px / 9px — below comfortable reading size, especially the 9px status line.

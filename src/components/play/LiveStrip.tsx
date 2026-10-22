@@ -1,19 +1,47 @@
 import * as Haptics from '@/lib/haptics';
 import { LinearGradient } from 'expo-linear-gradient';
+import { router } from 'expo-router';
 import { useEffect } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
-import Animated, { useAnimatedStyle, useSharedValue, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withSequence,
+  withTiming,
+} from 'react-native-reanimated';
 
 import { PLAY_TONES } from '@/components/activities/explore/explore-catalog';
 import { firstName, shade } from '@/components/games/room-ui';
 import { gameRoom } from '@/lib/game-room/manager';
+import { useIsPlus } from '@/hooks/useIsPlus';
 import { requirePlusNow } from '@/lib/plus';
-import { getGameDefinition } from '@/lib/game-room/types';
+import { Crown } from '@/components/ui/Crown';
+import { getGameDefinition, type LiveGameKind } from '@/lib/game-room/types';
 import { useAuthStore, useRelationshipStore } from '@/stores';
 import { useGameRoomStore } from '@/stores/game-room-store';
 
-/** Opens the optional live session (lobby, voice on), or rejoins one already running. */
-export function openLiveSession() {
+/**
+ * Go live: rejoin a session that's already running, or (nothing running) pick a game to play live;
+ * its page starts the session and invites your partner.
+ */
+export function goLive() {
+  const { state } = useGameRoomStore.getState();
+  if (state && state.phase !== 'finished') {
+    openLiveSession();
+    return;
+  }
+  // Locked without Plus: the Plus page instead of the games.
+  if (!requirePlusNow('Live games')) return;
+  void Haptics.selectionAsync();
+  router.push('/play/live');
+}
+
+/**
+ * Opens the live room (voice on) at its lobby, where you set the vibe and rounds and your partner is
+ * invited; or rejoins one already running. `game`: the room opens with that game chosen.
+ */
+export function openLiveSession(game?: LiveGameKind) {
   const { partner } = useRelationshipStore.getState();
   if (!partner) {
     Alert.alert('Connect with your partner', 'Live sessions are for two. Link up with your partner first.');
@@ -22,7 +50,7 @@ export function openLiveSession() {
   // Live games are written by AI: Plus (or its free trial).
   if (!requirePlusNow('Live games')) return;
   void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-  void gameRoom.openRoom();
+  void gameRoom.openRoom(game);
 }
 
 function usePulse() {
@@ -40,6 +68,7 @@ export function LiveStrip() {
   const partnerOnline = useGameRoomStore((s) => s.partnerOnline);
   const room = useGameRoomStore((s) => s.state);
   const pulseStyle = usePulse();
+  const isPlus = useIsPlus();
   const name = firstName(partner?.name);
 
   const live = !!room && room.phase !== 'finished';
@@ -52,7 +81,7 @@ export function LiveStrip() {
 
   return (
     <Pressable
-      onPress={openLiveSession}
+      onPress={goLive}
       accessibilityRole="button"
       accessibilityLabel={`${cta}. ${title}`}
       style={({ pressed }) => [pressed && { transform: [{ scale: 0.985 }] }]}>
@@ -62,6 +91,13 @@ export function LiveStrip() {
         end={{ x: 1, y: 1 }}
         style={styles.card}>
         <View style={styles.glow} pointerEvents="none" />
+        {/* Live games are Plus: marked until you have it. */}
+        {!isPlus ? (
+          <View style={styles.lock} pointerEvents="none">
+            <Crown size={15} color="#3A2A00" />
+            <Text style={styles.lockText}>PLUS</Text>
+          </View>
+        ) : null}
         <View style={styles.badge}>
           <View style={styles.dotWrap}>
             {joinable || partnerOnline ? <Animated.View style={[styles.halo, pulseStyle]} /> : null}
@@ -117,4 +153,17 @@ const styles = StyleSheet.create({
     borderBottomColor: 'rgba(0,0,0,0.18)',
   },
   ctaText: { color: '#3B2BB0', fontSize: 15, fontWeight: '900' },
+  lock: {
+    position: 'absolute',
+    top: 14,
+    right: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#FFD54A',
+    borderRadius: 999,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+  },
+  lockText: { color: '#3A2A00', fontSize: 11, fontWeight: '900', letterSpacing: 0.8 },
 });

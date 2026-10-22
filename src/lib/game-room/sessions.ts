@@ -3,7 +3,8 @@ import { sendPartnerNotification } from '@/services/api';
 import { fetchGameContent } from '@/services/game-content';
 import { usePlayProgressStore } from '@/stores/play-progress-store';
 
-import { createRoom, reduceRoom, statsFromRoom } from './reducer';
+import { createRoom, needsMoreItems, reduceRoom, statsFromRoom } from './reducer';
+import { rivalryAward } from './rivalry';
 import {
   getGameDefinition,
   type LiveGameKind,
@@ -82,6 +83,7 @@ export async function startOwnTimeGame(input: {
   vibe: Vibe;
   rounds: number;
   topic?: string;
+  doubleFinal?: boolean;
 }): Promise<GameSession> {
   const { me, partner, game, vibe, rounds } = input;
   let state = createRoom({
@@ -92,7 +94,11 @@ export async function startOwnTimeGame(input: {
     vibe,
     mode: 'async',
   });
-  state = reduceRoom(state, { t: 'configure', game, vibe, rounds, topic: input.topic ?? '' }, me.id);
+  state = reduceRoom(
+    state,
+    { t: 'configure', game, vibe, rounds, topic: input.topic ?? '', doubleFinal: input.doubleFinal },
+    me.id,
+  );
   state = reduceRoom(state, { t: 'begin' }, me.id);
 
   const content = await fetchGameContent({
@@ -140,8 +146,24 @@ export async function applySessionAction(
     const current = await getSession(sessionId);
     if (!current) throw new Error('This game no longer exists');
 
-    const next = reduceRoom(current.state, action, me.id);
+    let next = reduceRoom(current.state, action, me.id);
     if (next === current.state) return current;
+    // Unlimited rounds: more questions go in with this move once the loaded ones run low.
+    if (needsMoreItems(next)) {
+      try {
+        const more = await fetchGameContent({
+          relationshipId: current.relationship_id,
+          game: next.game,
+          vibe: next.vibe,
+          count: 10,
+          topic: next.topic,
+          names: [me.name, partner.name],
+        });
+        if (more.items.length) next = reduceRoom(next, { t: 'more', items: more.items }, me.id);
+      } catch {
+        // It loops round the questions it has; the next move tries again.
+      }
+    }
 
     const finished = next.phase === 'finished';
     const { data, error } = await backend
@@ -160,8 +182,12 @@ export async function applySessionAction(
     const saved = (data as GameSession[] | null)?.[0];
     if (!saved) continue; // partner moved first — re-read and retry against their state
 
-    if (finished && current.state.phase !== 'finished') award(saved);
-    else if (isWaitingOn(next, partner.id) && !isWaitingOn(current.state, partner.id)) {
+    if (finished && current.state.phase !== 'finished') {
+      award(saved);
+      // Tell them it's over, and how it went (in the app and on their phone).
+      const content = finishedLine(saved.state, me, partner);
+      if (content) void notify(saved, partner, content, true);
+    } else if (isWaitingOn(next, partner.id) && !isWaitingOn(current.state, partner.id)) {
       void notify(saved, partner, `${me.name} played in ${getGameDefinition(next.game).title}. Your move!`);
     }
     return saved;
@@ -181,11 +207,30 @@ function award(session: GameSession) {
   if (state.tally.sync_matches) events.sync_match = state.tally.sync_matches;
   if (state.tally.dares_done) events.dare_done = state.tally.dares_done;
   if (state.game === 'quiz' && state.result.winnerId) events.quiz_win = 1;
-  const stats = { ...statsFromRoom(state) };
+  const rivalry = rivalryAward(state.game, state.result);
+  const stats = { ...statsFromRoom(state), ...rivalry.stats };
   delete stats.live_games;
   void usePlayProgressStore
     .getState()
-    .award(session.relationship_id, { xp: state.result.xp, stats, events }, 'Game finished');
+    .award(session.relationship_id, { xp: state.result.xp, stats, maxStats: rivalry.maxStats, events }, 'Game finished');
+}
+
+/** "Alex won Quiz 7–5. Rematch?": the result, as told to the partner. */
+function finishedLine(state: RoomState, me: RoomPlayer, partner: RoomPlayer): string | null {
+  const result = state.result;
+  if (!result) return null;
+  const myName = me.name.split(' ')[0] || 'Your partner';
+  const title = getGameDefinition(state.game).title;
+  if (result.teamGame) {
+    return result.syncPct != null
+      ? `You and ${myName} finished ${title}: ${result.syncPct}% in sync.`
+      : `You and ${myName} finished ${title}.`;
+  }
+  const mine = state.scores[me.id] ?? 0;
+  const theirs = state.scores[partner.id] ?? 0;
+  if (result.winnerId === partner.id) return `${title} is over: you beat ${myName} ${theirs}–${mine}.`;
+  if (result.winnerId === me.id) return `${myName} won ${title} ${mine}–${theirs}. Rematch?`;
+  return `${title} with ${myName} ended in a tie, ${mine}–${theirs}.`;
 }
 
 async function notify(session: GameSession, partner: RoomPlayer, content: string, force = false) {

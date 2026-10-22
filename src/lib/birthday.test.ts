@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { daysUntilBirthday, nextBirthday, turningAge } from '@/lib/birthday';
+import { ageOn, daysUntilBirthday, isOldEnough, latestBirthYear, nextBirthday, turningAge } from '@/lib/birthday';
 
 describe('birthdays', () => {
   const now = new Date('2026-10-18T15:00:00');
@@ -25,5 +25,25 @@ describe('birthdays', () => {
   it('ignores missing or malformed birthdays', () => {
     expect(daysUntilBirthday(null, now)).toBeNull();
     expect(daysUntilBirthday('24/10/1998', now)).toBeNull();
+  });
+});
+
+describe('age (16+)', () => {
+  const now = new Date('2026-10-19T09:00:00');
+
+  it('works out age, before and after this year’s birthday', () => {
+    expect(ageOn('2000-10-19', now)).toBe(26);
+    expect(ageOn('2000-10-20', now)).toBe(25);
+    expect(ageOn('not a date', now)).toBeNull();
+  });
+
+  it('is old enough from the 16th birthday', () => {
+    expect(isOldEnough('2010-10-19', now)).toBe(true);
+    expect(isOldEnough('2010-10-20', now)).toBe(false);
+    expect(isOldEnough(null, now)).toBe(false);
+  });
+
+  it('stops the birthday wheels at the youngest allowed year', () => {
+    expect(latestBirthYear(now)).toBe(2010);
   });
 });

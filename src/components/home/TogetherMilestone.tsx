@@ -11,7 +11,7 @@ import Animated, {
   withSequence,
   withTiming,
 } from 'react-native-reanimated';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { StickerHeart } from '@/components/home/StickerHeart';
 import { ShareCardModal } from '@/components/share/ShareCardModal';
@@ -115,11 +115,13 @@ function TogetherCelebration({ count, onClose }: { count: number; onClose: () =>
     onClose();
   };
 
+  const insets = useSafeAreaInsets();
   return (
     <Modal visible animationType="fade" onRequestClose={done} statusBarTranslucent presentationStyle="fullScreen">
       <ThemedStatusBar />
       <View style={[styles.screen, { backgroundColor: colors.background }]}>
-        <SafeAreaView style={styles.content} edges={['top', 'bottom']}>
+        {/* Clear of the status bar and home bar: measured padding (a SafeAreaView inside a full-screen Modal can read 0 and put the ✕ on the status bar). */}
+        <View style={[styles.content, { paddingTop: insets.top + 8, paddingBottom: insets.bottom + 8 }]}>
           <View style={styles.main}>
             <Animated.View style={heartStyle}>
               <StickerHeart size={150} />
@@ -166,7 +168,7 @@ function TogetherCelebration({ count, onClose }: { count: number; onClose: () =>
               <Text style={[styles.shareText, { color: colors.text }]}>Share achievement</Text>
             </Pressable>
           </Animated.View>
-        </SafeAreaView>
+        </View>
 
         {/* Inside this popup, so it sits on top of the celebration. */}
         <ShareCardModal visible={sharing} onClose={() => setSharing(false)} title="Share your together milestone" inline>

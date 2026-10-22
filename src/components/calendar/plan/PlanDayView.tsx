@@ -1,7 +1,6 @@
 import { format } from 'date-fns';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { Icon } from '@/components/ui/Icon';
 import { Avatar, separatorColor, cardSurface } from '@/components/ui/primitives';
 import { useTheme } from '@/hooks/useTheme';
 import { getFirstName } from '@/lib/avatar-initial';
@@ -33,7 +32,6 @@ export function PlanDayView({
   events,
   me,
   partner,
-  freeLabel,
   onPressEvent,
   onPlanFree,
   emptyTitle,
@@ -44,7 +42,6 @@ export function PlanDayView({
   events: CalendarEvent[];
   me: UserProfile | null;
   partner: UserProfile | null;
-  freeLabel: string | null;
   onPressEvent: (event: CalendarEvent) => void;
   onPlanFree: () => void;
   /** Wording for the current filter when the day has nothing. */
@@ -65,21 +62,6 @@ export function PlanDayView({
 
   return (
     <View style={styles.root}>
-      {/* Only alongside plans: an empty day shows just its empty state. */}
-      {freeLabel && sorted.length > 0 ? (
-        <Pressable
-          onPress={onPlanFree}
-          accessibilityRole="button"
-          style={({ pressed }) => [styles.freeBar, { backgroundColor: colors.accentSoft }, pressed && styles.pressed]}>
-          <Icon name="heart" size={18} color={colors.accent} filled />
-          <Text style={[styles.freeText, { color: colors.text }]}>
-            {isTodaySelected ? 'You’re both free ' : `Both free ${format(day, 'EEE')} `}
-            <Text style={{ color: colors.accent }}>{freeLabel}</Text>
-          </Text>
-          <Text style={[styles.freeAction, { color: colors.accent }]}>Plan something</Text>
-        </Pressable>
-      ) : null}
-
       {sorted.length === 0 ? (
         <PlanEmptyState
           icon={day < new Date(new Date().toDateString()) ? 'moon' : 'calendar'}
@@ -165,16 +147,6 @@ export function PlanDayView({
 const styles = StyleSheet.create({
   root: { gap: 10 },
   pressed: { opacity: 0.7 },
-  freeBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderRadius: 16,
-  },
-  freeText: { flex: 1, fontSize: 14, fontWeight: '700' },
-  freeAction: { fontSize: 13, fontWeight: '800' },
   list: { borderRadius: 18, overflow: 'hidden' },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingVertical: 12, minHeight: 64 },
   // Fixed width for the longest time ("12:45" / "PM"), so every row's bar lines up.

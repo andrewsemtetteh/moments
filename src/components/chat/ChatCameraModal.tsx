@@ -2,17 +2,9 @@ import { CameraView, useCameraPermissions, useMicrophonePermissions } from 'expo
 import { paperEdge } from '@/components/ui/primitives';
 import * as Haptics from '@/lib/haptics';
 import { Image } from 'expo-image';
+import { mediaSource } from '@/lib/storage-cdn';
 import { useEffect, useRef, useState } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
-  Dimensions,
-  Modal,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { ActivityIndicator, Alert, Modal, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -28,7 +20,6 @@ import { ThemedStatusBar } from '@/components/ui/ThemedStatusBar';
 
 const MAX_VIDEO_SEC = 60;
 const SHUTTER_HOLD_MS = 280;
-const SCREEN_H = Dimensions.get('window').height;
 
 interface Props {
   visible: boolean;
@@ -37,6 +28,8 @@ interface Props {
 }
 
 export function ChatCameraModal({ visible, onClose, onCapture }: Props) {
+  // Read live, so a fold / unfold, split screen or rotation redraws at the new size.
+  const SCREEN_H = useWindowDimensions().height;
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const cameraRef = useRef<CameraView>(null);
@@ -292,7 +285,7 @@ export function ChatCameraModal({ visible, onClose, onCapture }: Props) {
                 previewIsVideo ? (
                   <MomentVideoPlayer uri={previewUri} fill autoPlay />
                 ) : (
-                  <Image source={{ uri: previewUri }} style={StyleSheet.absoluteFill} contentFit="cover" />
+                  <Image source={mediaSource(previewUri)} style={StyleSheet.absoluteFill} contentFit="cover" />
                 )
               ) : cameraPermission?.granted ? (
                 <CameraView

@@ -14,6 +14,7 @@ import { formatAuthError, normalizeAuthEmail } from '@/lib/auth-errors';
 import { emailProblem, emailSuggestion } from '@/lib/email-validation';
 import { sanitizeEmailInput, sanitizePasswordInput } from '@/lib/sanitize-input';
 import { designPass } from '@/lib/onboarding-v2';
+import { MIN_AGE } from '@/lib/birthday';
 
 export default function SignupEmailScreen() {
   const router = useRouter();
@@ -97,6 +98,9 @@ export default function SignupEmailScreen() {
       // Always tappable: a tap shows what still needs fixing.
       busy={loading}
       centered
+      secondaryLabel="I already have an account"
+      secondaryAction="Sign in"
+      onSecondary={() => router.replace('/(auth)/login')}
       onBack={goBack}>
       <AuthTextField
         variant="bold"
@@ -138,7 +142,7 @@ export default function SignupEmailScreen() {
 
       <View style={styles.agreementRow}>
         <AuthCheckbox checked={agreedToTerms} onToggle={() => setAgreedToTerms((v) => !v)} hitSlop={8} />
-        <AuthLegalLinks prefix="I agree to the" centered={false} style={styles.agreementText} />
+        <AuthLegalLinks prefix={`I’m ${MIN_AGE} or older and agree to the`} centered={false} style={styles.agreementText} />
       </View>
       {tried && !agreedToTerms ? (
         <Text style={[styles.fieldError, styles.center, { color: colors.error }]}>
