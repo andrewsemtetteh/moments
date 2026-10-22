@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text } from 'react-native';
 
 import { OtpCodeInput } from '@/components/auth/OtpCodeInput';
+import { useEnterApp } from '@/components/auth/useEnterApp';
 import { EnvelopeCharacter } from '@/components/onboarding/Characters';
 import { OnboardingStepScreen } from '@/components/onboarding/OnboardingStepScreen';
 import { useTheme } from '@/hooks/useTheme';
@@ -27,6 +28,7 @@ export default function CheckEmailScreen() {
   const [resendCooldown, setResendCooldown] = useState(RESEND_COOLDOWN_SECONDS);
   const [resending, setResending] = useState(false);
   const [verifying, setVerifying] = useState(false);
+  const { enter, entering } = useEnterApp();
 
   useEffect(() => {
     if (!email) router.replace('/(auth)/login');
@@ -71,7 +73,9 @@ export default function CheckEmailScreen() {
         if (signIn.status === 'needs_new_password') {
           router.replace('/(auth)/reset-password');
         } else if (signIn.status === 'complete') {
-          await signIn.finalize({ navigate: () => router.replace('/') });
+          const { error: finalizeError } = await signIn.finalize();
+          if (finalizeError) throw finalizeError;
+          await enter();
         } else {
           Alert.alert('Almost there', 'Sign in with your email and password to carry on.', [
             { text: 'OK', onPress: () => router.replace('/(auth)/login') },
@@ -83,7 +87,10 @@ export default function CheckEmailScreen() {
       const { error } = await signUp.verifications.verifyEmailCode({ code });
       if (error) throw error;
       if (signUp.status === 'complete') {
-        await signUp.finalize({ navigate: () => router.replace('/(onboarding)/about-you') });
+        // Session first, then on (navigating inside finalize ran before the session existed).
+        const { error: finalizeError } = await signUp.finalize();
+        if (finalizeError) throw finalizeError;
+        router.replace('/(onboarding)/about-you');
       }
     } catch (e: unknown) {
       Alert.alert('Invalid code', formatAuthError(e));
@@ -100,10 +107,10 @@ export default function CheckEmailScreen() {
       art={<EnvelopeCharacter size={170} />}
       title="Check your email"
       subtitle={`We sent a 6 digit code to ${email}${flow === 'recovery' ? ' to reset your password' : ''}. Check spam if it’s not there.`}
-      primaryLabel={verifying ? 'Verifying…' : 'Verify'}
+      primaryLabel={verifying || entering ? 'Verifying…' : 'Verify'}
       onPrimary={() => void handleVerify()}
-      primaryDisabled={(code.length !== 6 || verifying) && !(__DEV__ && designPass.on)}
-      busy={verifying}
+      primaryDisabled={(code.length !== 6 || verifying || entering) && !(__DEV__ && designPass.on)}
+      busy={verifying || entering}
       centered
       // No back arrow here; "Wrong email? Change it" is the way back.
       onBack={null}>

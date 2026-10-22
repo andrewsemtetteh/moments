@@ -116,6 +116,8 @@ function AuthSync({ children }: { children: ReactNode }) {
           if (existingUser?.id === userId && useAuthStore.getState().session) {
             return;
           }
+          // The launch screen waits for this instead of deciding "signed out" mid-load.
+          setLoading(true);
           await hydrateAuthSession({
             id: userId,
             email: user?.primaryEmailAddress?.emailAddress ?? null,

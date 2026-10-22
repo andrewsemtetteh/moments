@@ -8,6 +8,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { AuthChoiceButton } from '@/components/auth/AuthChoiceButton';
 import { AuthLegalLinks } from '@/components/auth/AuthLegalLinks';
+import { useEnterApp } from '@/components/auth/useEnterApp';
 import { AppleIcon, GoogleIcon } from '@/components/auth/OAuthBrandIcon';
 import { useSocialSignIn, type SocialProvider } from '@/components/auth/useSocialSignIn';
 import { Icon } from '@/components/ui/Icon';
@@ -35,7 +36,9 @@ export function GetStartedAuth({ showBack = false }: Props) {
   const showApple = Platform.OS === 'ios' || Platform.OS === 'android';
   // Still when everything fits.
   const fit = useScrollWhenNeeded();
-  const social = useSocialSignIn({ onSuccess: () => router.replace('/'), beforeStart: markIntroCompleted });
+  const { enter, entering } = useEnterApp();
+  const social = useSocialSignIn({ onSuccess: () => void enter(), beforeStart: markIntroCompleted });
+  const busy = social.busy || entering;
 
   const startSocial = (provider: SocialProvider) => {
     if (__DEV__ && designPass.on) {
@@ -108,7 +111,7 @@ export function GetStartedAuth({ showBack = false }: Props) {
                 icon={<AppleIcon size={20} color={colors.background} />}
                 onPress={() => startSocial('apple')}
                 loading={social.loadingProvider === 'apple'}
-                disabled={social.busy}
+                disabled={busy}
               />
             ) : null}
             <AuthChoiceButton
@@ -116,7 +119,7 @@ export function GetStartedAuth({ showBack = false }: Props) {
               icon={<GoogleIcon size={18} />}
               onPress={() => startSocial('google')}
               loading={social.loadingProvider === 'google'}
-              disabled={social.busy}
+              disabled={busy}
             />
             <View style={styles.orRow}>
               <View style={[styles.orLine, { backgroundColor: separatorColor(colors) }]} />
@@ -127,7 +130,7 @@ export function GetStartedAuth({ showBack = false }: Props) {
               label="Continue with email"
               icon={<Icon name="mail" size={20} color={colors.text} />}
               onPress={() => void handleEmail()}
-              disabled={social.busy}
+              disabled={busy}
             />
             <Pressable onPress={() => void goSignIn()} hitSlop={8} accessibilityRole="link" style={styles.switchRow}>
               <Text style={[styles.switchText, { color: colors.textSecondary }]}>

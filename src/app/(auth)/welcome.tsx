@@ -13,7 +13,6 @@ import Svg, { Path } from 'react-native-svg';
 import { colorWithAlpha } from '@/components/ui/primitives';
 import { Radius, Spacing } from '@/constants/design-system';
 import { useTheme } from '@/hooks/useTheme';
-import { markIntroCompleted } from '@/lib/intro-storage';
 // Used by the commented-out dev previews:
 // import { useAuthStore } from '@/stores';
 // import { designPass } from '@/lib/onboarding-v2';
@@ -163,12 +162,6 @@ export default function AuthWelcomeScreen() {
     router.push('/(auth)/get-started');
   };
 
-  const handleSignIn = () => {
-    void Haptics.selectionAsync();
-    void markIntroCompleted();
-    router.push('/(auth)/login');
-  };
-
   /* Dev-only previews (their buttons are commented out below):
   // Dev-only escape hatch to look at the tab screens without a real sign-in —
   // `__DEV__` is a compile-time constant, so this branch (and the button
@@ -314,17 +307,6 @@ export default function AuthWelcomeScreen() {
                     </Text>
                   </Pressable>
 
-                  {/* Back already: straight to signing in, not through sign-up. */}
-                  <Pressable
-                    onPress={handleSignIn}
-                    hitSlop={8}
-                    accessibilityRole="button"
-                    style={({ pressed }) => [styles.signInLink, { opacity: pressed ? 0.6 : 1 }]}>
-                    <Text style={[styles.signInText, { color: colors.textSecondary, fontSize: 15 * typeScale }]}>
-                      I already have an account{' '}
-                      <Text style={[styles.signInAction, { color: colors.text }]}>Sign in</Text>
-                    </Text>
-                  </Pressable>
 
                   {/* Dev-only previews, removed from the page (bring back for testing):
                   {__DEV__ && (
@@ -359,9 +341,6 @@ export default function AuthWelcomeScreen() {
 }
 
 const styles = StyleSheet.create({
-  signInLink: { alignItems: 'center', paddingVertical: 6 },
-  signInText: { fontWeight: '600' },
-  signInAction: { fontWeight: '800', textDecorationLine: 'underline' },
   screen: {
     flex: 1,
   },

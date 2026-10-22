@@ -63,6 +63,7 @@ export default function ForgotPasswordScreen() {
       centered
       primaryLabel={loading ? 'Sending…' : 'Send code'}
       onPrimary={() => void handleSend()}
+      primaryDisabled={!email.trim() || !!problem}
       busy={loading}
       secondaryLabel="Remember it?"
       secondaryAction="Sign in"
@@ -78,7 +79,9 @@ export default function ForgotPasswordScreen() {
         onChangeText={(text) => setEmail(sanitizeEmailInput(text))}
         onBlur={() => setTouched(true)}
         returnKeyType="send"
-        onSubmitEditing={() => void handleSend()}
+        onSubmitEditing={() => {
+          if (email.trim() && !problem) void handleSend();
+        }}
       />
       {showProblem ? (
         <Text style={[styles.fieldError, { color: colors.error }]}>{problem}</Text>

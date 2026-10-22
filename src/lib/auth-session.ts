@@ -116,6 +116,27 @@ export async function hydrateAuthSession(authUser: ClerkAuthUser): Promise<void>
   return pending;
 }
 
+/**
+ * After a sign-in's session is active: load the account, so the launch screen routes
+ * straight into the app. (Navigating first found no session yet and bounced back to
+ * sign in until the account caught up.) Throws if the account couldn't be loaded.
+ */
+export async function loadSignedInAccount(): Promise<void> {
+  const clerk = getClerkInstance();
+  const u = clerk.user;
+  if (!clerk.session || !u) throw new Error('Sign in didn’t finish. Please try again.');
+  await hydrateAuthSession({
+    id: u.id,
+    email: u.primaryEmailAddress?.emailAddress ?? null,
+    name: u.fullName ?? null,
+  });
+}
+
+/** Whether Clerk already has a session on this phone (e.g. it loaded but the account didn't). */
+export function hasActiveSession(): boolean {
+  return !!getClerkInstance().session;
+}
+
 export async function clearAuthSession() {
   useAuthStore.getState().reset();
   useRelationshipStore.getState().reset();

@@ -1,12 +1,13 @@
-import { useSignIn } from '@clerk/expo';
+import { useAuth, useSignIn } from '@clerk/expo';
 import { useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Alert, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { AuthChoiceButton } from '@/components/auth/AuthChoiceButton';
 import { AuthLegalLinks } from '@/components/auth/AuthLegalLinks';
 import { AuthTextField } from '@/components/auth/AuthTextField';
 import { OtpCodeInput } from '@/components/auth/OtpCodeInput';
+import { useEnterApp } from '@/components/auth/useEnterApp';
 import { AppleIcon, GoogleIcon } from '@/components/auth/OAuthBrandIcon';
 import { PasswordInput } from '@/components/auth/PasswordInput';
 import { useSocialSignIn } from '@/components/auth/useSocialSignIn';
@@ -14,6 +15,7 @@ import { OnboardingStepScreen } from '@/components/onboarding/OnboardingStepScre
 import { separatorColor } from '@/components/ui/primitives';
 import { useTheme } from '@/hooks/useTheme';
 import { formatAuthError } from '@/lib/auth-errors';
+import { hasActiveSession, signOutUser } from '@/lib/auth-session';
 import {
   getRememberedEmail,
   setRememberedEmail,
@@ -44,17 +46,31 @@ export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [prefsLoaded, setPrefsLoaded] = useState(false);
-  const social = useSocialSignIn({ onSuccess: () => router.replace('/') });
+  // Signing in finishes by loading the account, then opening the app (see useEnterApp).
+  const { enter, entering } = useEnterApp();
+  // Set once this screen opens the app itself, so the leftover-session check below doesn't too.
+  const autoTried = useRef(false);
+  const enterNow = () => {
+    autoTried.current = true;
+    return enter();
+  };
+  const social = useSocialSignIn({ onSuccess: () => void enterNow() });
   const showApple = Platform.OS === 'ios' || Platform.OS === 'android';
   // Two-step verification: the method being used, and the code typed.
   const [factor, setFactor] = useState<SecondFactor | null>(null);
   const [mfaCode, setMfaCode] = useState('');
   const [verifyingMfa, setVerifyingMfa] = useState(false);
 
-  const loading = fetchStatus === 'fetching';
+  const loading = fetchStatus === 'fetching' || entering;
 
+  /** Make the session active first, then load the account and open the app. */
   const finish = async () => {
-    await signIn.finalize({ navigate: () => router.replace('/') });
+    const { error } = await signIn.finalize();
+    if (error) {
+      Alert.alert('Couldn’t finish signing in', formatAuthError(error));
+      return;
+    }
+    await enterNow();
   };
 
   /** The account asks for a second step: pick the best method it has (app, then text, then email). */
@@ -125,9 +141,14 @@ export default function LoginScreen() {
   const handleLogin = async () => {
     const cleanIdentifier = sanitizeEmailInput(email).trim();
     const cleanPassword = sanitizePasswordInput(password);
-    if (!cleanIdentifier || !cleanPassword) return;
+    if (!cleanIdentifier || !cleanPassword || loading) return;
+    // Already signed in on this phone (the account just hadn't loaded): open it.
+    if (hasActiveSession()) {
+      await enterNow();
+      return;
+    }
 
-    await setRememberedEmail(cleanIdentifier);
+    void setRememberedEmail(cleanIdentifier);
 
     const { error } = await signIn.password({ identifier: cleanIdentifier, password: cleanPassword });
     if (error) {
@@ -151,6 +172,36 @@ export default function LoginScreen() {
     }
   };
 
+  // Already signed in on this phone, but the account didn't load (offline at launch, say).
+  // Open it straight away; if that fails, offer Try again / Sign out, no password needed.
+  const { isSignedIn } = useAuth();
+  const [signingOut, setSigningOut] = useState(false);
+  useEffect(() => {
+    if (!isSignedIn || autoTried.current) return;
+    autoTried.current = true;
+    void enter();
+  }, [isSignedIn, enter]);
+
+  if (isSignedIn && !factor) {
+    return (
+      <OnboardingStepScreen
+        title="Welcome back"
+        subtitle={entering ? 'Opening your space…' : 'You’re signed in, but your space didn’t load. Check your connection and try again.'}
+        centered
+        primaryLabel={entering ? 'Opening…' : 'Try again'}
+        onPrimary={() => void enter()}
+        busy={entering || signingOut}
+        secondaryLabel="Not you?"
+        secondaryAction="Sign out"
+        onSecondary={() => {
+          setSigningOut(true);
+          void signOutUser().finally(() => setSigningOut(false));
+        }}
+        onBack={null}
+      />
+    );
+  }
+
   if (factor) {
     const copy = SECOND_FACTOR_COPY[factor];
     return (
@@ -158,10 +209,10 @@ export default function LoginScreen() {
         title={copy.title}
         subtitle={copy.subtitle}
         centered
-        primaryLabel={verifyingMfa ? 'Verifying…' : 'Verify'}
+        primaryLabel={verifyingMfa || entering ? 'Verifying…' : 'Verify'}
         onPrimary={() => void verifySecondFactor()}
         primaryDisabled={factor === 'backup_code' ? mfaCode.trim().length < 6 : mfaCode.length !== 6}
-        busy={verifyingMfa}
+        busy={verifyingMfa || entering}
         secondaryLabel={factor === 'backup_code' ? 'Back' : 'Use a backup code'}
         onSecondary={() => {
           setMfaCode('');
@@ -251,6 +302,8 @@ export default function LoginScreen() {
         autoComplete="password"
         value={password}
         onChangeText={(text) => setPassword(sanitizePasswordInput(text))}
+        returnKeyType="go"
+        onSubmitEditing={() => void handleLogin()}
       />
       {errors.fields.password ? (
         <Text style={[styles.fieldError, { color: colors.error }]}>{errors.fields.password.message}</Text>

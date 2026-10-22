@@ -160,6 +160,10 @@ export default function AboutYouScreen() {
         autoCapitalize="words"
         autoComplete="name"
         returnKeyType="done"
+        // Done on the keyboard carries on, like Continue.
+        onSubmitEditing={() => {
+          if (name.trim() && !busy) void save(true);
+        }}
         maxLength={32}
         style={[styles.input, { color: colors.text, borderColor: colors.text, backgroundColor: colors.surface }]}
       />

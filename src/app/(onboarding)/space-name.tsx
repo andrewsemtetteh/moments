@@ -49,6 +49,10 @@ export default function SpaceNameScreen() {
         placeholderTextColor={colors.textTertiary}
         autoCapitalize="words"
         returnKeyType="done"
+        // Done on the keyboard carries on, like Continue.
+        onSubmitEditing={() => {
+          if (name.trim()) void next(name);
+        }}
         maxLength={32}
         style={[styles.input, { color: colors.text, borderColor: colors.text, backgroundColor: colors.surface }]}
       />

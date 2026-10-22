@@ -238,7 +238,7 @@ type SuperwallEventData = {
  * the App Store / Google Play keep retrying the payment. A successful retry arrives as a
  * renewal and carries on as normal; otherwise Plus ends when these days are up.
  */
-export const BILLING_GRACE_DAYS = 3;
+export const BILLING_GRACE_DAYS = 7;
 
 /** The new end of Plus for a payment problem: the later of now and the period's end, plus the grace days. */
 export function graceUntil(expirationAt: number | null | undefined, now = Date.now()): string {

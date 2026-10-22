@@ -4,6 +4,7 @@ import { Alert, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 
 import { PasswordInput } from '@/components/auth/PasswordInput';
+import { useEnterApp } from '@/components/auth/useEnterApp';
 import { OnboardingStepScreen } from '@/components/onboarding/OnboardingStepScreen';
 import { Icon } from '@/components/ui/Icon';
 import { useTheme } from '@/hooks/useTheme';
@@ -19,7 +20,8 @@ export default function ResetPasswordScreen() {
   // Problems show once they've tapped Update, then update live as they fix them.
   const [tried, setTried] = useState(false);
 
-  const loading = fetchStatus === 'fetching';
+  const { enter, entering } = useEnterApp();
+  const loading = fetchStatus === 'fetching' || entering;
 
   useEffect(() => {
     if (signIn.status !== 'needs_new_password') {
@@ -41,13 +43,11 @@ export default function ResetPasswordScreen() {
       if (error) throw error;
 
       if (signIn.status === 'complete') {
-        await signIn.finalize({
-          navigate: () => {
-            Alert.alert('Password updated', 'Your new password is ready. Welcome back.', [
-              { text: 'Continue', onPress: () => router.replace('/') },
-            ]);
-          },
-        });
+        const { error: finalizeError } = await signIn.finalize();
+        if (finalizeError) throw finalizeError;
+        Alert.alert('Password updated', 'Your new password is ready. Welcome back.', [
+          { text: 'Continue', onPress: () => void enter() },
+        ]);
       }
     } catch (e: unknown) {
       Alert.alert('Could not update password', formatAuthError(e));
@@ -64,6 +64,7 @@ export default function ResetPasswordScreen() {
       centered
       primaryLabel={loading ? 'Saving…' : 'Update password'}
       onPrimary={() => void handleSave()}
+      primaryDisabled={!passOk || !matches}
       busy={loading}
       // Changed your mind: back to signing in (the reset just isn't finished).
       onBack={() => router.replace('/(auth)/login')}>

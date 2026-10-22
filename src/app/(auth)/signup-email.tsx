@@ -14,7 +14,6 @@ import { formatAuthError, normalizeAuthEmail } from '@/lib/auth-errors';
 import { emailProblem, emailSuggestion } from '@/lib/email-validation';
 import { sanitizeEmailInput, sanitizePasswordInput } from '@/lib/sanitize-input';
 import { designPass } from '@/lib/onboarding-v2';
-import { MIN_AGE } from '@/lib/birthday';
 
 export default function SignupEmailScreen() {
   const router = useRouter();
@@ -35,6 +34,8 @@ export default function SignupEmailScreen() {
   const emailError = emailProblem(email);
   const suggestion = emailSuggestion(email);
   const passOk = password.length >= 8;
+  // Create account only lights up once the form is complete.
+  const ready = !!email.trim() && !emailError && passOk && agreedToTerms;
   const showEmailError = !!emailError && (tried || (emailTouched && email.trim().length > 0));
 
   const handleCreateAccount = async () => {
@@ -67,7 +68,13 @@ export default function SignupEmailScreen() {
     }
 
     if (signUp.status === 'complete') {
-      await signUp.finalize({ navigate: () => router.replace('/(onboarding)/about-you') });
+      // Session first, then on (navigating inside finalize ran before the session existed).
+      const { error: finalizeError } = await signUp.finalize();
+      if (finalizeError) {
+        Alert.alert('Sign up failed', formatAuthError(finalizeError));
+        return;
+      }
+      router.replace('/(onboarding)/about-you');
       return;
     }
 
@@ -95,7 +102,7 @@ export default function SignupEmailScreen() {
       subtitle="Your email and a password. That’s it."
       primaryLabel={loading ? 'Creating…' : 'Create account'}
       onPrimary={() => void handleCreateAccount()}
-      // Always tappable: a tap shows what still needs fixing.
+      primaryDisabled={!ready && !(__DEV__ && designPass.on)}
       busy={loading}
       centered
       secondaryLabel="I already have an account"
@@ -132,17 +139,19 @@ export default function SignupEmailScreen() {
         value={password}
         onChangeText={(text) => setPassword(sanitizePasswordInput(text))}
       />
-      {/* Only after they've tried, and only while it's still too short. */}
-      {tried && !passOk ? (
+      {/* While it's too short: a quiet hint as they type (red only after a try). */}
+      {password.length > 0 && !passOk ? (
         <View style={styles.rule}>
-          <Icon name="close" size={14} color={colors.error} />
-          <Text style={[styles.ruleText, { color: colors.error }]}>Use at least 8 characters</Text>
+          <Icon name="close" size={14} color={tried ? colors.error : colors.textSecondary} />
+          <Text style={[styles.ruleText, { color: tried ? colors.error : colors.textSecondary }]}>
+            Use at least 8 characters
+          </Text>
         </View>
       ) : null}
 
       <View style={styles.agreementRow}>
         <AuthCheckbox checked={agreedToTerms} onToggle={() => setAgreedToTerms((v) => !v)} hitSlop={8} />
-        <AuthLegalLinks prefix={`I’m ${MIN_AGE} or older and agree to the`} centered={false} style={styles.agreementText} />
+        <AuthLegalLinks prefix="I agree to the" centered={false} style={styles.agreementText} />
       </View>
       {tried && !agreedToTerms ? (
         <Text style={[styles.fieldError, styles.center, { color: colors.error }]}>

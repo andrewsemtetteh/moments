@@ -29,11 +29,9 @@ export function useSocialSignIn({ onSuccess, beforeStart }: { onSuccess: () => v
         onSuccess();
         return;
       }
+      // Already signed in to this account on this phone (Clerk switches to that session): carry on.
       if (signIn?.existingSession || signUp?.existingSession) {
-        Alert.alert(
-          `Already signed in with ${label}`,
-          'This account is already signed in on another session. Sign out there first, or use a different account.',
-        );
+        onSuccess();
         return;
       }
       if (signUp?.status === 'missing_requirements') {
