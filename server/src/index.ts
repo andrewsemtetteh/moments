@@ -4,7 +4,7 @@ import { Hono } from 'hono';
 import { deleteAccount } from './account';
 import { requireAuth, type AuthVariables } from './auth';
 import { assertMomentAllowance, billingWebhooks, carryPersonalPlus, ensureBillingUserId } from './billing';
-import { ApiError, emitRow, publicProfile, sendMoodCheckins, sendStreakRiskReminders } from './core';
+import { ApiError, emitRow, publicProfile, sendMoodCheckins, sendStreakRiskReminders, settleBrokenStreaks } from './core';
 import { sendBirthdayHeadsUps } from './birthdays';
 import { profileUpdateError } from './profile-rules';
 import { compat } from './compat';
@@ -811,6 +811,8 @@ export default {
     ctx.waitUntil(sendBirthdayHeadsUps(env).catch(() => 0));
     // Streaks ending tonight: a warning in each person's last 3 hours (once a day, deduped).
     ctx.waitUntil(sendStreakRiskReminders(env).catch(() => 0));
+    // Streaks that missed a day: ended (or frozen) just after their midnight, restore windows closed.
+    ctx.waitUntil(settleBrokenStreaks(env).catch(() => 0));
     // No mood shared for over a day: "How are you feeling?" (daytime, once a day).
     ctx.waitUntil(sendMoodCheckins(env).catch(() => 0));
     // Rate-limit windows older than a day are never read again: clear them so the table stays small.

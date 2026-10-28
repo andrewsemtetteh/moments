@@ -27,3 +27,42 @@ export function daysToFreeze(last: string | null, today: string, freezes: number
   if (missed > freezes) return null;
   return Array.from({ length: missed }, (_, i) => shiftDay(last, i + 1));
 }
+
+/**
+ * The day a missed streak actually ended: freezes would have covered the first missed
+ * days, so it ends at the start of the day after the first one they couldn't.
+ */
+export function streakLostDay(last: string, freezes: number): string {
+  return shiftDay(last, 2 + Math.max(0, freezes));
+}
+
+/** When `day` began where this person is (its local midnight), in ms; UTC when unknown. */
+export function localMidnightMs(day: string, timeZone: string | null | undefined): number {
+  const utcMidnight = Date.parse(`${day}T00:00:00Z`);
+  const zone = timeZone?.trim();
+  if (!zone) return utcMidnight;
+  try {
+    const fmt = new Intl.DateTimeFormat('en-CA', {
+      timeZone: zone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hourCycle: 'h23',
+    });
+    const offsetAt = (ms: number) => {
+      const parts = fmt.formatToParts(new Date(ms));
+      const get = (t: string) => Number(parts.find((p) => p.type === t)?.value ?? 0);
+      const asUtc = Date.UTC(get('year'), get('month') - 1, get('day'), get('hour'), get('minute'), get('second'));
+      return asUtc - Math.floor(ms / 1000) * 1000;
+    };
+    // Twice, so a daylight-saving change near midnight lands on the right offset.
+    let guess = utcMidnight - offsetAt(utcMidnight);
+    guess = utcMidnight - offsetAt(guess);
+    return guess;
+  } catch {
+    return utcMidnight;
+  }
+}

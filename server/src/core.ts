@@ -1,5 +1,5 @@
 import { signMediaInText } from './media-sign';
-import { daysToFreeze, FREEZE_EVERY_DAYS, MAX_STREAK_FREEZES } from './streak-freeze';
+import { daysToFreeze, FREEZE_EVERY_DAYS, localMidnightMs, MAX_STREAK_FREEZES, streakLostDay } from './streak-freeze';
 import { pushNotificationNow } from './push';
 import { afterResponse } from './request-context';
 import type { HubEvent } from './hub';
@@ -247,10 +247,14 @@ function todayStr(): string {
  * Today as a calendar date where this person is (their synced timezone), so streak days
  * line up with the week and month the app draws in local time. UTC when unknown.
  */
+async function userTimeZone(env: Env, userId: string): Promise<string | null> {
+  const row = await env.DB.prepare('SELECT timezone FROM users WHERE id = ?1').bind(userId).first<{ timezone: string | null }>();
+  return row?.timezone?.trim() || null;
+}
+
 async function localToday(env: Env, userId: string | null | undefined): Promise<string> {
   if (!userId) return todayStr();
-  const row = await env.DB.prepare('SELECT timezone FROM users WHERE id = ?1').bind(userId).first<{ timezone: string | null }>();
-  const timeZone = row?.timezone?.trim();
+  const timeZone = await userTimeZone(env, userId);
   if (!timeZone) return todayStr();
   try {
     // en-CA formats as YYYY-MM-DD.
@@ -286,6 +290,7 @@ async function notifyStreakRiskIfDue(
   userId: string,
   streak: number,
   today: string,
+  freezes = 0,
 ) {
   if ((await localHour(env, userId)) < 24 - STREAK_RISK_NOTIFY_HOURS) return;
   if (!(await tryNotificationDedup(env, relationshipId, `streak_risk:${userId}:${today}`))) return;
@@ -293,7 +298,9 @@ async function notifyStreakRiskIfDue(
     relationshipId,
     recipientId: userId,
     type: 'streak',
-    content: `Your ${streak}-day streak ends in less than ${STREAK_RISK_NOTIFY_HOURS} hours. Send a moment, share your mood, answer today’s question or play a game to keep it.`,
+    content: freezes
+      ? `Your ${streak}-day streak needs a check-in in the next ${STREAK_RISK_NOTIFY_HOURS} hours, or a freeze will be used. Send a moment, share your mood, answer today’s question or play a game.`
+      : `Your ${streak}-day streak ends in less than ${STREAK_RISK_NOTIFY_HOURS} hours. Send a moment, share your mood, answer today’s question or play a game to keep it.`,
   });
 }
 
@@ -341,7 +348,8 @@ export async function sendMoodCheckins(env: Env): Promise<number> {
 export async function sendStreakRiskReminders(env: Env): Promise<number> {
   const { results } = await env.DB.prepare(
     `SELECT r.id AS relationship_id, r.user_1_id, r.user_2_id,
-            s.user_1_streak, s.user_2_streak, s.user_1_last_active_date, s.user_2_last_active_date
+            s.user_1_streak, s.user_2_streak, s.user_1_last_active_date, s.user_2_last_active_date,
+            s.user_1_freezes, s.user_2_freezes
        FROM relationships r JOIN streaks s ON s.relationship_id = r.id
       WHERE r.status = 'active' AND (s.user_1_streak > 0 OR s.user_2_streak > 0)`,
   ).all<{
@@ -352,6 +360,8 @@ export async function sendStreakRiskReminders(env: Env): Promise<number> {
     user_2_streak: number;
     user_1_last_active_date: string | null;
     user_2_last_active_date: string | null;
+    user_1_freezes: number | null;
+    user_2_freezes: number | null;
   }>();
   let sent = 0;
   for (const r of results ?? []) {
@@ -362,11 +372,33 @@ export async function sendStreakRiskReminders(env: Env): Promise<number> {
       const today = await localToday(env, userId);
       // Kept yesterday, not yet today: it ends at their midnight.
       if (r[`${side}_last_active_date`] !== shiftDay(today, -1)) continue;
-      await notifyStreakRiskIfDue(env, r.relationship_id, userId, streak, today);
+      await notifyStreakRiskIfDue(env, r.relationship_id, userId, streak, today, r[`${side}_freezes`] ?? 0);
       sent += 1;
     }
   }
   return sent;
+}
+
+/**
+ * Hourly (cron): ends streaks that missed a day (or uses a freeze) shortly after the person's
+ * midnight, so "it ended / restore it" reaches them on the day, the partner's screen agrees,
+ * and closed restore windows are cleared — without waiting for someone to open the app.
+ */
+export async function settleBrokenStreaks(env: Env): Promise<number> {
+  // Anyone not checked in today (UTC) might be past a midnight somewhere; normalize decides.
+  const { results } = await env.DB.prepare(
+    `SELECT r.id AS relationship_id, r.user_1_id, r.user_2_id
+       FROM relationships r JOIN streaks s ON s.relationship_id = r.id
+      WHERE r.status = 'active' AND (
+        (s.user_1_streak > 0 AND (s.user_1_last_active_date IS NULL OR s.user_1_last_active_date < date('now'))) OR
+        (s.user_2_streak > 0 AND (s.user_2_last_active_date IS NULL OR s.user_2_last_active_date < date('now'))) OR
+        (s.current_streak > 0 AND (s.last_active_date IS NULL OR s.last_active_date < date('now'))) OR
+        s.user_1_lost_at IS NOT NULL OR s.user_2_lost_at IS NOT NULL)`,
+  ).all<{ relationship_id: string; user_1_id: string; user_2_id: string | null }>();
+  for (const r of results ?? []) {
+    await normalizeStreaksIfBroken(env, r.relationship_id, r).catch(() => undefined);
+  }
+  return results?.length ?? 0;
 }
 
 function shiftDay(day: string, delta: number): string {
@@ -472,31 +504,50 @@ async function normalizeStreaksIfBroken(
         }
         continue;
       }
+      // The 24 hours run from when it really ended (their midnight), not from whenever
+      // someone next opened the app; noticed later than that, there's nothing to restore.
+      const lostMs = last
+        ? localMidnightMs(streakLostDay(last, row[`${side}_freezes`] ?? 0), await userTimeZone(env, userId))
+        : Date.now();
+      const restorable = Date.now() - lostMs < RESTORE_WINDOW_MS;
+      const lostAt = new Date(lostMs).toISOString();
       await env.DB.prepare(
-        `UPDATE streaks SET ${side}_restorable = ?1, ${side}_lost_at = ?2, ${side}_streak = 0, updated_at = ?2
-         WHERE relationship_id = ?3`,
+        `UPDATE streaks SET ${side}_restorable = ?1, ${side}_lost_at = ?2, ${side}_streak = 0, updated_at = ?3
+         WHERE relationship_id = ?4`,
       )
-        .bind(count, nowIso(), relationshipId)
+        .bind(restorable ? count : null, restorable ? lostAt : null, nowIso(), relationshipId)
         .run();
+      row[`${side}_streak`] = 0;
+      row[`${side}_restorable`] = restorable ? count : null;
+      row[`${side}_lost_at`] = restorable ? lostAt : null;
       changed = true;
       if (await tryNotificationDedup(env, relationshipId, `streak_lost:${userId}:${today}`)) {
+        // The window runs to the end of the day it ended on: "before midnight".
+        const { getPlusState } = await import('./billing');
+        const plus = restorable && (await getPlusState(env, relationshipId)).plus;
         await createPartnerNotification(env, {
           relationshipId,
           recipientId: userId,
           type: 'streak',
-          content: `Your ${count}-day streak ended. Plus members can restore it within 24 hours.`,
+          content: !restorable
+            ? `Your ${count}-day streak ended. Check in today to start a new one.`
+            : plus
+              ? `Your ${count}-day streak ended. Restore it before midnight to keep it going.`
+              : `Your ${count}-day streak ended. Restore it with Plus before midnight, or check in to start again.`,
         });
       }
     }
-    // The restore window closed.
+    // The restore window closed (even if they've started a new streak since).
     const lostAt = row[`${side}_lost_at`];
     if (lostAt && new Date(lostAt).getTime() <= Date.now() - RESTORE_WINDOW_MS) {
       await env.DB.prepare(
-        `UPDATE streaks SET ${side}_restorable = NULL, ${side}_lost_at = NULL
-         WHERE relationship_id = ?1 AND ${side}_streak = 0`,
+        `UPDATE streaks SET ${side}_restorable = NULL, ${side}_lost_at = NULL WHERE relationship_id = ?1`,
       )
         .bind(relationshipId)
         .run();
+      row[`${side}_restorable`] = null;
+      row[`${side}_lost_at`] = null;
+      changed = true;
     }
   }
 
@@ -527,6 +578,8 @@ export async function updateStreak(env: Env, relationshipId: string, userId: str
   if (!rel || rel.status !== 'active') return;
   if (userId && userId !== rel.user_1_id && userId !== rel.user_2_id) return;
 
+  // Settle a missed day first, so a check-in on the day it ended leaves the old streak restorable.
+  await normalizeStreaksIfBroken(env, relationshipId, rel);
   const row = await ensureStreakRow(env, relationshipId);
   const sides: Side[] =
     userId === null ? ['user_1', 'user_2'] : [userId === rel.user_1_id ? 'user_1' : 'user_2'];
@@ -546,8 +599,10 @@ export async function updateStreak(env: Env, relationshipId: string, userId: str
       row[`${side}_freezes`] = Math.min(MAX_STREAK_FREEZES, (row[`${side}_freezes`] ?? 0) + 1);
     }
     row[`${side}_last_active_date`] = today;
-    if (last !== shiftDay(today, -1)) {
-      // A fresh start: the old streak can't be restored any more.
+    const lostAt = row[`${side}_lost_at`];
+    if (last !== shiftDay(today, -1) && !(lostAt && new Date(lostAt).getTime() > Date.now() - RESTORE_WINDOW_MS)) {
+      // A fresh start once the restore window has closed: the old streak is gone. Inside the
+      // window it stays restorable — checking in first mustn't cost you the streak you lost.
       row[`${side}_restorable`] = null;
       row[`${side}_lost_at`] = null;
     }
@@ -627,14 +682,17 @@ export async function getStreakStatus(env: Env, relationshipId: string, userId: 
   // Your streak ends tonight: you kept it yesterday, not yet today.
   const atRisk = myStreak > 0 && mine === yesterday;
   const partnerAtRisk = theirStreak > 0 && theirs === shiftDay(partnerToday, -1);
+  // Their last few hours (their clock, not yours): when the app shows their streak as ending.
+  const partnerEndsSoon =
+    partnerAtRisk && !!partnerId && (await localHour(env, partnerId)) >= 24 - STREAK_RISK_NOTIFY_HOURS;
+  // Still offered after a check-in on the day it ended: restoring joins the two.
   const canRestore =
-    myStreak === 0 &&
     (myRestorable ?? 0) > 0 &&
     !!myLostAt &&
     new Date(myLostAt).getTime() > Date.now() - RESTORE_WINDOW_MS;
 
   // Only in the last few hours of their day (see notifyStreakRiskIfDue); the hourly job covers it too.
-  if (atRisk) await notifyStreakRiskIfDue(env, relationshipId, userId, myStreak, today);
+  if (atRisk) await notifyStreakRiskIfDue(env, relationshipId, userId, myStreak, today, row[`${mySide}_freezes`] ?? 0);
 
   const [myDays, togetherDays, myFrozen] = await Promise.all([
     env.DB.prepare(
@@ -672,6 +730,7 @@ export async function getStreakStatus(env: Env, relationshipId: string, userId: 
     partner_longest_streak: row[`${theirSide}_longest`],
     partner_active_today: theirs === partnerToday,
     partner_at_risk: partnerAtRisk,
+    partner_ends_soon: partnerEndsSoon,
     // Together: days you both showed up.
     together_streak: row.current_streak,
     together_longest_streak: row.longest_streak,
@@ -692,21 +751,43 @@ export async function restoreStreak(env: Env, relationshipId: string, userId: st
   const side: Side = rel.user_2_id === userId ? 'user_2' : 'user_1';
   const restorable = row[`${side}_restorable`];
   const lostAt = row[`${side}_lost_at`];
-  if (row[`${side}_streak`] !== 0 || !restorable || restorable <= 0) {
+  const current = row[`${side}_streak`];
+  const today = await localToday(env, userId);
+  // Lost and not back yet (0), or already checked in again today (the new streak joins on).
+  const checkedInToday = current > 0 && row[`${side}_last_active_date`] === today;
+  if ((current !== 0 && !checkedInToday) || !restorable || restorable <= 0) {
     throw new ApiError('No restorable streak available', 400);
   }
   if (!lostAt || new Date(lostAt).getTime() <= Date.now() - RESTORE_WINDOW_MS) {
     throw new ApiError('Restore window expired', 400);
   }
 
-  // Back as if you'd checked in yesterday: today's check-in keeps it going.
-  const today = await localToday(env, userId);
-  await env.DB.prepare(
-    `UPDATE streaks SET ${side}_streak = ?1, ${side}_last_active_date = ?2, ${side}_restorable = NULL, ${side}_lost_at = NULL,
-       ${side}_longest = MAX(${side}_longest, ?1), updated_at = ?3 WHERE relationship_id = ?4`,
+  // Not checked in yet: back as if you had yesterday, so today's check-in keeps it going.
+  // Checked in already: the old streak and the new one become one.
+  const next = restorable + current;
+  const last = checkedInToday ? today : shiftDay(today, -1);
+  // The missed days it bridges are drawn covered (like a freeze), not as check-ins.
+  const newStart = checkedInToday ? shiftDay(today, -(current - 1)) : today;
+  const prev = await env.DB.prepare(
+    'SELECT MAX(activity_date) AS d FROM user_streak_days WHERE relationship_id = ?1 AND user_id = ?2 AND activity_date < ?3',
   )
-    .bind(restorable, shiftDay(today, -1), nowIso(), relationshipId)
-    .run();
+    .bind(relationshipId, userId, newStart)
+    .first<{ d: string | null }>();
+  const covered: string[] = [];
+  for (let d = prev?.d ? shiftDay(prev.d, 1) : newStart; d < newStart && covered.length < 7; d = shiftDay(d, 1)) {
+    covered.push(d);
+  }
+  await env.DB.batch([
+    env.DB.prepare(
+      `UPDATE streaks SET ${side}_streak = ?1, ${side}_last_active_date = ?2, ${side}_restorable = NULL, ${side}_lost_at = NULL,
+         ${side}_longest = MAX(${side}_longest, ?1), updated_at = ?3 WHERE relationship_id = ?4`,
+    ).bind(next, last, nowIso(), relationshipId),
+    ...covered.map((day) =>
+      env.DB.prepare(
+        'INSERT OR IGNORE INTO user_streak_frozen_days (relationship_id, user_id, frozen_date) VALUES (?1, ?2, ?3)',
+      ).bind(relationshipId, userId, day),
+    ),
+  ]);
   await emitStreakRow(env, relationshipId);
   return getStreakStatus(env, relationshipId, userId);
 }
