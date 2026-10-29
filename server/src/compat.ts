@@ -19,7 +19,7 @@ import {
   tryNotificationDedup,
   updateStreak,
 } from './core';
-import { clientOrNewId, generateId, isRelationshipMember, newInviteCode, toggleReaction, updateJsonColumn, withUser, nowIso, parseJson, relationshipIdsForUser } from './db';
+import { clientOrNewId, generateId, isRelationshipMember, newInviteCode, toggleReaction, withFreshInviteCode, updateJsonColumn, withUser, nowIso, parseJson, relationshipIdsForUser } from './db';
 import { assertMomentAllowance, stripProtected } from './billing';
 import { runFunction } from './functions';
 import { normalizeContentType, sniffImageType } from './media-type';
@@ -392,7 +392,15 @@ compat.post('/db', async (c) => {
             : ` ON CONFLICT (${conflict}) DO NOTHING`;
         }
         sql += ' RETURNING *';
-        const row = await env.DB.prepare(sql).bind(...binds).first<Record<string, unknown>>();
+        const codeAt = req.table === 'relationships' ? keys.indexOf('invite_code') : -1;
+        const row =
+          codeAt >= 0
+            ? // A code another waiting space already has is refused; a fresh one is tried instead.
+              await withFreshInviteCode((code) => {
+                binds[codeAt] = code;
+                return env.DB.prepare(sql).bind(...binds).first<Record<string, unknown>>();
+              })
+            : await env.DB.prepare(sql).bind(...binds).first<Record<string, unknown>>();
         if (row) inserted.push(row);
         else if (appId) {
           const scopeBinds: unknown[] = [appId];
@@ -524,7 +532,15 @@ compat.post('/db', async (c) => {
       const setBinds = keys.map((k) => toBind(k, patch[k]));
       const shifted = updateWhere.replace(/\?(\d+)/g, (_m, n) => `?${Number(n) + setBinds.length}`);
       const sql = `UPDATE ${req.table} SET ${keys.map((k, i) => `${k} = ?${i + 1}`).join(', ')} WHERE ${shifted} RETURNING *`;
-      const { results } = await env.DB.prepare(sql).bind(...setBinds, ...binds).all<Record<string, unknown>>();
+      const codeAt = req.table === 'relationships' ? keys.indexOf('invite_code') : -1;
+      const { results } =
+        codeAt >= 0
+          ? // A new code someone else's waiting space already has: try a fresh one.
+            await withFreshInviteCode((code) => {
+              setBinds[codeAt] = code;
+              return env.DB.prepare(sql).bind(...setBinds, ...binds).all<Record<string, unknown>>();
+            })
+          : await env.DB.prepare(sql).bind(...setBinds, ...binds).all<Record<string, unknown>>();
 
       for (const row of results) {
         await emitRow(env, req.table, 'UPDATE', row);
@@ -677,12 +693,14 @@ const RPC: Record<string, RpcHandler> = {
 
   /** A code for my waiting space, made here (never by the app), if it has none yet. */
   async ensure_invite_code(env, userId, a) {
-    const row = await env.DB.prepare(
-      `UPDATE relationships SET invite_code = COALESCE(invite_code, ?1)
-        WHERE id = ?2 AND user_1_id = ?3 AND user_2_id IS NULL AND status = 'pending' RETURNING *`,
-    )
-      .bind(newInviteCode(), a.p_relationship_id, userId)
-      .first<Record<string, unknown>>();
+    const row = await withFreshInviteCode((code) =>
+      env.DB.prepare(
+        `UPDATE relationships SET invite_code = COALESCE(invite_code, ?1)
+          WHERE id = ?2 AND user_1_id = ?3 AND user_2_id IS NULL AND status = 'pending' RETURNING *`,
+      )
+        .bind(code, a.p_relationship_id, userId)
+        .first<Record<string, unknown>>(),
+    );
     if (!row) throw new ApiError('Space not found', 404);
     return shapeRow(row);
   },

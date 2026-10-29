@@ -13,6 +13,27 @@ export function newInviteCode(): string {
   return Array.from(crypto.getRandomValues(new Uint8Array(8)), (b) => INVITE_ALPHABET[b % 32]).join('');
 }
 
+/** The database turned a code down because another waiting space already has it. */
+function isInviteCodeTaken(e: unknown): boolean {
+  return /UNIQUE constraint failed: relationships\.invite_code/i.test(e instanceof Error ? e.message : String(e));
+}
+
+/**
+ * Runs a write that gives a space a new invite code. Codes are unique (the column's UNIQUE
+ * constraint), so in the rare case a new code is already some other waiting space's, the
+ * database refuses it: then it's simply tried again with a fresh code (up to 5 times, about a
+ * one in 10^12 chance each), instead of the person seeing an error.
+ */
+export async function withFreshInviteCode<T>(write: (code: string) => Promise<T>): Promise<T> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await write(newInviteCode());
+    } catch (e) {
+      if (attempt >= 5 || !isInviteCodeTaken(e)) throw e;
+    }
+  }
+}
+
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**

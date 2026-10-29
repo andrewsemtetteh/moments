@@ -13,7 +13,7 @@ import { links } from './links';
 import { coupleDocs } from './couple-docs';
 import { stockBanks } from './functions';
 import { verifyToken } from '@clerk/backend';
-import { buildUpdate, clientOrNewId, generateId, isRelationshipMember, toggleReaction, updateJsonColumn, withUser, newInviteCode, nowIso, parseJson, relationshipIdsForUser } from './db';
+import { buildUpdate, clientOrNewId, generateId, isRelationshipMember, toggleReaction, updateJsonColumn, withUser, withFreshInviteCode, nowIso, parseJson, relationshipIdsForUser } from './db';
 import { joinWithInviteCode, onPaired } from './pairing';
 import { hasMediaUrl, isPrivateMediaKey, signedMediaUrl, signMediaInText, verifyMediaSignature } from './media-sign';
 import { isInlineMediaType, resolveImageType } from './media-type';
@@ -493,21 +493,23 @@ app.post('/relationships', rateLimit('space-create', 10, 3600), async (c) => {
   type CreateRelationshipBody = { relationship_name?: string; anniversary_date?: string; relationship_type?: string };
   const body = await c.req.json<CreateRelationshipBody>().catch((): CreateRelationshipBody => ({}));
   const id = generateId();
-  const inviteCode = newInviteCode();
 
-  await c.env.DB.prepare(
-    `INSERT INTO relationships (id, user_1_id, status, invite_code, relationship_name, anniversary_date, relationship_type)
-     VALUES (?1, ?2, 'pending', ?3, ?4, ?5, ?6)`,
-  )
-    .bind(
-      id,
-      userId,
-      inviteCode,
-      body.relationship_name ?? 'Our Moments',
-      body.anniversary_date ?? null,
-      body.relationship_type ?? null,
+  // A code another waiting space already has is refused; a fresh one is tried instead.
+  await withFreshInviteCode((inviteCode) =>
+    c.env.DB.prepare(
+      `INSERT INTO relationships (id, user_1_id, status, invite_code, relationship_name, anniversary_date, relationship_type)
+       VALUES (?1, ?2, 'pending', ?3, ?4, ?5, ?6)`,
     )
-    .run();
+      .bind(
+        id,
+        userId,
+        inviteCode,
+        body.relationship_name ?? 'Our Moments',
+        body.anniversary_date ?? null,
+        body.relationship_type ?? null,
+      )
+      .run(),
+  );
   await carryPersonalPlus(c.env, userId, id);
 
   const created = await c.env.DB.prepare('SELECT * FROM relationships WHERE id = ?1').bind(id).first();
@@ -527,10 +529,10 @@ app.post('/relationships/:id/invite-code', async (c) => {
   if (!relationship) return c.json({ error: 'Space not found' }, 404);
   if (relationship.invite_code) return c.json({ invite_code: relationship.invite_code });
 
-  const inviteCode = newInviteCode();
-  await c.env.DB.prepare('UPDATE relationships SET invite_code = ?1 WHERE id = ?2')
-    .bind(inviteCode, relationshipId)
-    .run();
+  const inviteCode = await withFreshInviteCode(async (code) => {
+    await c.env.DB.prepare('UPDATE relationships SET invite_code = ?1 WHERE id = ?2').bind(code, relationshipId).run();
+    return code;
+  });
   return c.json({ invite_code: inviteCode });
 });
 
