@@ -385,6 +385,7 @@ export function BadgesShelf() {
 
       <ScrollView
         horizontal
+        alwaysBounceHorizontal={false}
         showsHorizontalScrollIndicator={false}
         style={styles.hBleed}
         contentContainerStyle={styles.tiles}

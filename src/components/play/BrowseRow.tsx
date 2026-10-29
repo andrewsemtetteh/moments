@@ -38,6 +38,7 @@ export function BrowseRow() {
   return (
     <ScrollView
       horizontal
+      alwaysBounceHorizontal={false}
       showsHorizontalScrollIndicator={false}
       style={styles.scroll}
       contentContainerStyle={styles.row}>

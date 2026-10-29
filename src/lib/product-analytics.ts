@@ -65,4 +65,15 @@ export function captureEvent(event: string, metadata?: Record<string, unknown>) 
   client.capture(event, safeProps(metadata));
 }
 
+/**
+ * A PostHog experiment's variant for this person ("control", "prices-first"…), or undefined
+ * when analytics is off or flags haven't loaded (callers fall back to control). Reading it
+ * records the exposure PostHog's experiment results count.
+ */
+export function getFlagVariant(key: string): string | undefined {
+  if (!client) return undefined;
+  const value = client.getFeatureFlag(key);
+  return typeof value === 'string' ? value : undefined;
+}
+
 export { safeProps as _safePropsForTests };

@@ -203,7 +203,7 @@ export const useUIStore = create<UIState>((set, get) => ({
   // choice (src/lib/theme-storage.ts) — i.e. this is what every new signup sees
   // through the whole auth/onboarding flow. Existing users' saved preference
   // always overrides this on boot (see AppProviders), so this never touches them.
-  theme: 'violet',
+  theme: 'amethyst',
   themeReady: false,
   isOffline: false,
   showMomentCreator: false,

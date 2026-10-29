@@ -82,7 +82,7 @@ export function AlbumsShelf({
           <Icon name="chevronRight" size={18} color={chrome.textTertiary} />
         </Pressable>
       ) : (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.shelfRow}>
+        <ScrollView horizontal alwaysBounceHorizontal={false} showsHorizontalScrollIndicator={false} contentContainerStyle={styles.shelfRow}>
           {albums.map((album) => (
             <AlbumFolder key={album.id} album={album} momentsById={momentsById} onPress={() => onOpen(album)} />
           ))}
@@ -309,6 +309,7 @@ function Page({
             layer is a pop-up the system doesn't resize, so shrink it to the space left. */}
         <KeyboardAvoidingView behavior={Platform.OS === 'android' ? 'height' : undefined} style={styles.flex}>
           <ScrollView
+            alwaysBounceVertical={false}
             contentContainerStyle={styles.pageBody}
             keyboardShouldPersistTaps="handled"
             automaticallyAdjustKeyboardInsets
@@ -663,7 +664,7 @@ export function AlbumPickerSheet({
       <Text style={[styles.sheetTitle, { color: chrome.text }]}>
         Add {count} moment{count === 1 ? '' : 's'} to…
       </Text>
-      <ScrollView style={[styles.pickerList, ...sheetListStyle(colors)]} keyboardShouldPersistTaps="handled">
+      <ScrollView alwaysBounceVertical={false} style={[styles.pickerList, ...sheetListStyle(colors)]} keyboardShouldPersistTaps="handled">
         <Pressable
           onPress={onNew}
           style={({ pressed }) => [

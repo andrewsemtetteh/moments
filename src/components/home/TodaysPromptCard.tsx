@@ -14,6 +14,7 @@ import {
 import { TextInput } from '@/components/ui/ThemedTextInput';
 
 import { Icon } from '@/components/ui/Icon';
+import { NudgeButton } from '@/components/ui/NudgeButton';
 import { Avatar, PrimaryButton } from '@/components/ui/primitives';
 import { dailyChallengeQueryKey } from '@/hooks/queries';
 import { useTheme } from '@/hooks/useTheme';
@@ -421,21 +422,7 @@ export function PromptStatus({ challenge, ring }: { challenge: DailyChallenge; r
         {line}
       </Text>
       {nudge ? (
-        <Pressable
-          onPress={() => void sendNudge()}
-          disabled={nudged || sending}
-          accessibilityRole="button"
-          accessibilityLabel={nudged ? `${partnerFirst} was nudged` : `Nudge ${partnerFirst}`}
-          style={({ pressed }) => [
-            styles.nudge,
-            styles.nudgeRow,
-            { backgroundColor: colors.accentSoft, opacity: sending ? 0.6 : 1 },
-            pressed && { opacity: 0.8 },
-          ]}>
-          <Text style={[styles.nudgeText, { color: colors.accent }]}>{nudged ? 'Nudged' : 'Nudge'}</Text>
-          {/* A paper plane after "Nudge" (it's sent to them); a tick once it's gone. */}
-          <Icon name={nudged ? 'check' : 'paperPlane'} size={14} color={colors.accent} filled />
-        </Pressable>
+        <NudgeButton name={partnerFirst} nudged={nudged} busy={sending} onPress={() => void sendNudge()} />
       ) : null}
     </View>
   );
@@ -542,9 +529,6 @@ const styles = StyleSheet.create({
   statusOverlap: { marginLeft: -8 },
   emptySlot: { width: 30, height: 30, borderRadius: 15, borderWidth: 2, borderStyle: 'dashed' },
   statusText: { flex: 1, fontSize: 13, fontWeight: '600' },
-  nudge: { height: 34, paddingHorizontal: 14, borderRadius: 17, justifyContent: 'center' },
-  nudgeRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  nudgeText: { fontSize: 13, fontWeight: '800' },
   answeredAvatar: { borderWidth: 2, borderRadius: 15 },
   answeredBadge: {
     position: 'absolute',

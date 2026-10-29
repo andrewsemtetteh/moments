@@ -7,21 +7,18 @@ import { PLAY_TONES, type ExploreModalKey } from '@/components/activities/explor
 import { ExploreActivityModal } from '@/components/activities/explore/ExploreActivityModal';
 import { LiveStrip } from '@/components/play/LiveStrip';
 import { GameGroups, OwnTimeGames } from '@/components/play/GameList';
-import { PlayCard } from '@/components/play/PlayCard';
+import { PackRow, packRowText, useSetProgress } from '@/components/play/PackRow';
 import { PlayHeader } from '@/components/play/PlayHeader';
 import { PLAY_GUTTER, PlayChip, PlayType } from '@/components/play/PlayKit';
-import { usePackAnswers } from '@/hooks/play-queries';
 import { useTheme } from '@/hooks/useTheme';
 import {
   AREAS,
-  DEPTHS,
   itemsForArea,
   itemsWithFormat,
   packProgress,
   type HandpickedFormat,
   type HandpickedItem,
 } from '@/lib/handpicked';
-import { useAuthStore } from '@/stores';
 
 type PageId = HandpickedFormat | 'games' | 'all';
 type Kind = HandpickedFormat | 'games' | 'everything';
@@ -52,30 +49,21 @@ export default function FormatScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
-  const userId = useAuthStore((s) => s.user?.id);
-  const { data: answers } = usePackAnswers();
   const [activeModal, setActiveModal] = useState<ExploreModalKey | null>(null);
   const [kind, setKind] = useState<Kind>('everything');
 
   const groups = useMemo(() => {
-    if (!format || format === 'games') return [];
+    if (!format) return [];
+    // The Games page also lists the built-in games (Never Have I Ever and the rest), by area.
     if (format !== 'all') return itemsWithFormat(format);
-    if (kind === 'games') return [];
     return AREAS.map((area) => ({
       area,
       items: itemsForArea(area.id).filter((i) => kind === 'everything' || i.format === kind),
     })).filter((g) => g.items.length > 0);
   }, [format, kind]);
   const showGames = format === 'games' || (format === 'all' && (kind === 'everything' || kind === 'games'));
-  const myAnswered = useMemo(() => {
-    const byPack = new Map<string, Set<string>>();
-    for (const a of answers ?? []) {
-      if (a.user_id !== userId) continue;
-      if (!byPack.has(a.pack_id)) byPack.set(a.pack_id, new Set());
-      byPack.get(a.pack_id)!.add(a.question_id);
-    }
-    return byPack;
-  }, [answers, userId]);
+  // Your answers per set, and who has finished each (both of you, for the rows).
+  const { mine: myAnswered, doneByOf } = useSetProgress();
 
   if (!format) return <Redirect href="/(tabs)/activities" />;
 
@@ -101,6 +89,7 @@ export default function FormatScreen() {
           {format === 'all' ? (
             <ScrollView
               horizontal
+              alwaysBounceHorizontal={false}
               showsHorizontalScrollIndicator={false}
               style={styles.chipBleed}
               contentContainerStyle={styles.chips}>
@@ -125,21 +114,17 @@ export default function FormatScreen() {
                 {items.map((item) => {
                   const progress =
                     item.kind === 'pack' ? packProgress(item.pack, myAnswered.get(item.id) ?? new Set()) : null;
-                  const depthLabel = DEPTHS.find((d) => d.id === item.depth)?.label ?? '';
-                  const badge = progress?.done
-                    ? 'Done'
-                    : progress && progress.answered > 0
-                      ? `${progress.answered} of ${progress.total} answered`
-                      : depthLabel;
+                  // One kind per page, so the kind isn't repeated (except on the mixed Activities page).
+                  const { title, meta } = packRowText(item, progress, { withFormat: format === 'all' });
                   return (
-                    <PlayCard
+                    <PackRow
                       key={`${item.kind}-${item.id}`}
                       tone={tone}
-                      art={item.kind === 'pack' ? item.pack.art ?? area.art : item.activity.art}
-                      badge={badge}
-                      title={item.title}
-                      sub={item.kind === 'pack' ? item.pack.blurb : item.activity.tagline}
-                      cta={progress?.done ? 'See answers' : progress && progress.answered > 0 ? 'Continue' : 'Start'}
+                      format={item.format}
+                      title={title}
+                      meta={meta}
+                      progress={progress}
+                      doneBy={doneByOf(item)}
                       onPress={() => open(item)}
                     />
                   );
@@ -158,7 +143,8 @@ export default function FormatScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1 },
   body: { paddingHorizontal: PLAY_GUTTER, paddingTop: 12, gap: 32 },
-  group: { gap: 12 },
+  // Rows sit close, like a list.
+  group: { gap: 10 },
   chipBleed: { marginHorizontal: -PLAY_GUTTER, marginBottom: -16 },
   chips: { gap: 8, paddingHorizontal: PLAY_GUTTER },
 });

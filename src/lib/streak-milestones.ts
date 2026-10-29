@@ -10,6 +10,21 @@ export function isStreakMilestone(days: number): boolean {
   return false;
 }
 
+/** The next milestone above `count` (what the streak page counts towards). */
+export function nextStreakMilestone(count: number): number {
+  const next = (STREAK_MILESTONE_DAYS as readonly number[]).find((d) => d > count);
+  return next ?? (Math.floor(count / 100) + 1) * 100;
+}
+
+/** "1 week", "2 weeks", "1 month", "1 year", otherwise "50 days". */
+export function streakMilestoneName(days: number): string {
+  if (days === 7) return '1 week';
+  if (days === 15) return '2 weeks';
+  if (days === 30) return '1 month';
+  if (days === 365) return '1 year';
+  return `${days} days`;
+}
+
 /**
  * The line under the big number on the milestone celebration. The number is
  * already shown, so these never spell it out again ("50" + "days of showing up").

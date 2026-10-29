@@ -32,6 +32,8 @@ export type AreaId =
 export type Depth = 'light' | 'real' | 'deep';
 
 export type HandpickedFormat = 'questions' | 'quizzes' | 'prompts' | 'activities';
+/** What a list item is: a set's format, or a game (built-in games like Never Have I Ever). */
+export type ItemFormat = HandpickedFormat | 'games';
 
 export interface Area {
   id: AreaId;
@@ -46,6 +48,11 @@ export interface PackQuestion {
   text: string;
   /** Quick answers to tap; a written note is always optional on top. Absent = write your own. */
   picks?: string[];
+  /**
+   * Where its answers are saved, when it was moved here from another set (Quick picks gather
+   * the options questions of mixed sets): that set's id and the question's id there.
+   */
+  from?: { packId: string; questionId: string };
 }
 
 export interface QuestionPack {
@@ -62,6 +69,15 @@ export interface QuestionPack {
    * prompts are talk-about cards, activities are things to go and do, ticked off together.
    */
   format?: HandpickedFormat;
+  /** Quizzes only: you also guess your partner's pick, and each of you is scored on the other. */
+  guessPartner?: boolean;
+  /**
+   * A part of a longer open-ended set: the set's own id, which answers are saved under
+   * (so answers given before the split still show, in the part with their question).
+   */
+  sourceId?: string;
+  /** For a part: which one (1-based), how many there are, and the whole set's title. */
+  part?: { index: number; count: number; setTitle: string };
   questions: PackQuestion[];
 }
 
@@ -109,7 +125,7 @@ export const AREAS: Area[] = [
     tone: 'teal',
     art: 'attachment',
   },
-  { id: 'conflict', title: 'Conflict', blurb: 'Disagree well and repair faster.', tone: 'sage', art: 'attachment' },
+  { id: 'conflict', title: 'Conflict', blurb: 'Disagree well and repair faster.', tone: 'sage', art: 'compatibility' },
   {
     id: 'distance',
     title: 'Long distance',
@@ -154,11 +170,12 @@ export const DEPTHS: { id: Depth; label: string }[] = [
   { id: 'deep', label: 'Deep' },
 ];
 
-export const FORMATS: { id: HandpickedFormat; label: string }[] = [
+export const FORMATS: { id: ItemFormat; label: string }[] = [
   { id: 'questions', label: 'Questions' },
   { id: 'quizzes', label: 'Quizzes' },
   { id: 'prompts', label: 'Prompts' },
   { id: 'activities', label: 'Activities' },
+  { id: 'games', label: 'Games' },
 ];
 
 const q = (id: string, text: string, picks?: string[]): PackQuestion => ({ id, text, picks });
@@ -663,17 +680,142 @@ const BASE_PACKS: QuestionPack[] = [
   },
 ];
 
-/** Every pack: the originals (with their card descriptions) plus the larger set in handpicked-packs. */
-export const PACKS: QuestionPack[] = [
+/** Typing questions (a text box, no options) come one or two at a time. */
+export const MAX_TYPING_QUESTIONS = 2;
+/** Questions with options to choose from come in parts of up to this many. */
+export const MAX_PICK_QUESTIONS = 10;
+/** A typing question at least this long is a big one: it stands on its own. */
+const LONG_QUESTION = 80;
+
+/** Answered by tapping one of its options (multiple choice); otherwise it's typed. */
+export function hasPicks(qq: PackQuestion): boolean {
+  return !!qq.picks?.length;
+}
+
+/** Even part sizes, none over `max`: 12 → 6+6, 13 → 7+6. */
+export function partSizes(n: number, max = MAX_PICK_QUESTIONS): number[] {
+  const parts = Math.max(1, Math.ceil(n / max));
+  const base = Math.floor(n / parts);
+  const extra = n % parts;
+  return Array.from({ length: parts }, (_, i) => base + (i < extra ? 1 : 0));
+}
+
+/** Typing questions in order, one or two at a time: a big one on its own, two shorter ones together. */
+export function typingChunks(questions: PackQuestion[]): PackQuestion[][] {
+  const out: PackQuestion[][] = [];
+  for (let i = 0; i < questions.length; ) {
+    const a = questions[i];
+    const b = questions[i + 1];
+    if (b && a.text.length < LONG_QUESTION && b.text.length < LONG_QUESTION) {
+      out.push([a, b]);
+      i += 2;
+    } else {
+      out.push([a]);
+      i += 1;
+    }
+  }
+  return out;
+}
+
+/** A set as numbered parts. Part 1 keeps the set's id (links and notifications to it still work). */
+function asParts(set: QuestionPack, chunks: PackQuestion[][], sourceId: string | undefined): QuestionPack[] {
+  if (chunks.length === 1) return [{ ...set, questions: chunks[0] }];
+  return chunks.map((questions, i) => ({
+    ...set,
+    id: i === 0 ? set.id : `${set.id}-${i + 1}`,
+    title: `${set.title} · Part ${i + 1}`,
+    sourceId,
+    part: { index: i + 1, count: chunks.length, setTitle: set.title },
+    questions,
+  }));
+}
+
+/**
+ * One set as it's shown. All multiple choice: whole, up to 10 a part. Typing questions: one or two
+ * at a time. A set mixing both keeps its typing questions here and sends its options questions to
+ * its area's Quick picks (`quick`), so a part is never a few options questions on their own.
+ */
+export function splitPack(pack: QuestionPack, quick?: Map<AreaId, PackQuestion[]>): QuestionPack[] {
+  const typed = pack.questions.filter((qq) => !hasPicks(qq));
+  const picks = pack.questions.filter(hasPicks);
+  if (typed.length === 0) {
+    if (picks.length <= MAX_PICK_QUESTIONS) return [pack];
+    let at = 0;
+    const chunks = partSizes(picks.length).map((size) => picks.slice(at, (at += size)));
+    return asParts(pack, chunks, pack.id);
+  }
+  if (picks.length && quick) {
+    const list = quick.get(pack.area) ?? [];
+    for (const qq of picks) {
+      list.push({ ...qq, id: `${pack.id}~${qq.id}`, from: { packId: pack.id, questionId: qq.id } });
+    }
+    quick.set(pack.area, list);
+  }
+  return asParts(pack, typingChunks(typed), pack.id);
+}
+
+/** An area's Quick picks: the options questions from its mixed sets, up to 10 a part. */
+function quickPicks(area: AreaId, questions: PackQuestion[]): QuestionPack[] {
+  const set: QuestionPack = {
+    id: `${area}-quick`,
+    area,
+    title: 'Quick picks',
+    depth: 'light',
+    blurb: 'Fast ones to tap through. Add a few words if you like.',
+    format: 'questions',
+    questions,
+  };
+  if (questions.length <= MAX_PICK_QUESTIONS) return [set];
+  let at = 0;
+  const chunks = partSizes(questions.length).map((size) => questions.slice(at, (at += size)));
+  // Each question carries where it's saved (`from`), so the parts need no set id of their own.
+  return asParts(set, chunks, undefined);
+}
+
+const QUICK = new Map<AreaId, PackQuestion[]>();
+const SHOWN = [
   ...BASE_PACKS.map((pack) => ({ ...pack, blurb: pack.blurb ?? EXISTING_PACK_BLURBS[pack.id] })),
   ...MORE_PACKS,
   ...FORMAT_PACKS,
-];
+].flatMap((pack) => splitPack(pack, QUICK));
+
+/** Every pack as shown: the originals, the larger set in handpicked-packs, the formats, and Quick picks. */
+export const PACKS: QuestionPack[] = [...SHOWN, ...[...QUICK].flatMap(([area, qs]) => quickPicks(area, qs))];
+
+/** The id answers to this pack are saved under (the whole set's, for a part). */
+export function storedPackId(pack: QuestionPack): string {
+  return pack.sourceId ?? pack.id;
+}
+
+/** Where a question's answers are saved: its own set's id and question id. */
+export function savedAs(pack: QuestionPack, qq: PackQuestion): { packId: string; questionId: string } {
+  return qq.from ?? { packId: storedPackId(pack), questionId: qq.id };
+}
+
+/** Saved answer (set id + question id) → the pack and question it shows as. */
+const ANSWER_HOME = new Map<string, { packId: string; questionId: string }>();
+for (const pack of PACKS) {
+  for (const qq of pack.questions) {
+    const saved = savedAs(pack, qq);
+    ANSWER_HOME.set(`${saved.packId}/${saved.questionId}`, { packId: pack.id, questionId: qq.id });
+  }
+}
+
+/** Which pack (part) and question a saved answer shows in. */
+export function answerHome(answer: { pack_id: string; question_id: string }): { packId: string; questionId: string } {
+  return ANSWER_HOME.get(`${answer.pack_id}/${answer.question_id}`) ?? { packId: answer.pack_id, questionId: answer.question_id };
+}
+
+/** Which pack (part) a saved answer shows in. */
+export function packIdForAnswer(answer: { pack_id: string; question_id: string }): string {
+  return answerHome(answer).packId;
+}
 
 interface CatalogTag {
   area: AreaId;
   depth: Depth;
-  format: Exclude<HandpickedFormat, 'questions'>;
+  /** What it really is: a quiz, cards to answer, something to go and do, or a game. */
+  format: Exclude<ItemFormat, 'questions'>;
 }
 
 /** Existing ready-made activities, filed under the area they serve. */
@@ -686,14 +828,15 @@ const CATALOG_TAGS: Partial<Record<ExploreModalKey, CatalogTag>> = {
   quiz: { area: 'intimacy', depth: 'real', format: 'quizzes' },
   loveQuiz: { area: 'intimacy', depth: 'light', format: 'quizzes' },
   appreciation: { area: 'intimacy', depth: 'light', format: 'prompts' },
-  compliment: { area: 'intimacy', depth: 'light', format: 'activities' },
-  neverHaveI: { area: 'fun', depth: 'light', format: 'activities' },
-  emojiStory: { area: 'fun', depth: 'light', format: 'activities' },
-  fortuneWheel: { area: 'fun', depth: 'light', format: 'activities' },
+  // Writing notes to each other: answered like cards, not something to go and do.
+  compliment: { area: 'intimacy', depth: 'light', format: 'prompts' },
+  neverHaveI: { area: 'fun', depth: 'light', format: 'games' },
+  emojiStory: { area: 'fun', depth: 'light', format: 'games' },
+  fortuneWheel: { area: 'fun', depth: 'light', format: 'games' },
   trivia: { area: 'fun', depth: 'light', format: 'quizzes' },
   memory: { area: 'story', depth: 'light', format: 'quizzes' },
-  games: { area: 'fun', depth: 'light', format: 'activities' },
-  drawTogether: { area: 'fun', depth: 'light', format: 'activities' },
+  games: { area: 'fun', depth: 'light', format: 'games' },
+  drawTogether: { area: 'fun', depth: 'light', format: 'games' },
   playlist: { area: 'fun', depth: 'light', format: 'activities' },
   bucket: { area: 'future', depth: 'light', format: 'activities' },
   goals: { area: 'future', depth: 'real', format: 'activities' },
@@ -706,7 +849,7 @@ const CATALOG_TAGS: Partial<Record<ExploreModalKey, CatalogTag>> = {
 };
 
 export type HandpickedItem =
-  | { kind: 'pack'; id: string; title: string; depth: Depth; format: HandpickedFormat; pack: QuestionPack }
+  | { kind: 'pack'; id: string; title: string; depth: Depth; format: ItemFormat; pack: QuestionPack }
   | {
       kind: 'activity';
       id: ExploreModalKey;
@@ -751,7 +894,7 @@ export function itemsForArea(area: AreaId): HandpickedItem[] {
 }
 
 /** Everything of one format, grouped by area in the areas' order (the Browse circles). */
-export function itemsWithFormat(format: HandpickedFormat): { area: Area; items: HandpickedItem[] }[] {
+export function itemsWithFormat(format: ItemFormat): { area: Area; items: HandpickedItem[] }[] {
   return AREAS.map((area) => ({ area, items: itemsForArea(area.id).filter((i) => i.format === format) })).filter(
     (g) => g.items.length > 0,
   );

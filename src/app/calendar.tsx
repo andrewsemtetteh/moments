@@ -56,6 +56,7 @@ import {
   useUpcomingCalendarEvents,
 } from '@/hooks/queries';
 import { encodeAttachment } from '@/lib/chat-attachments';
+import { useScrollWhenNeeded } from '@/hooks/useScrollWhenNeeded';
 import { useTheme } from '@/hooks/useTheme';
 import {
   createListFromPlan,
@@ -274,6 +275,13 @@ export default function CalendarScreen() {
         .slice(0, COMING_UP_LIMIT),
     [upcomingEvents, selectedDate, openedAt, ownerFilter, me?.id],
   );
+
+  // Showing an empty state, the room left for the + button never makes the page scroll (it
+  // only let an empty page be dragged into blank space). With plans, it's kept so the last
+  // one can scroll clear of the button.
+  const [memoriesEmpty, setMemoriesEmpty] = useState(false);
+  const pageEmpty = tab === 'memories' ? memoriesEmpty : dayEvents.length === 0 && comingUp.length === 0;
+  const fit = useScrollWhenNeeded(pageEmpty ? FAB_CLEARANCE : 0);
 
   // What an empty day says depends on the "whose plans" filter.
   const emptyCopy = (() => {
@@ -724,11 +732,12 @@ export default function CalendarScreen() {
       </View>
 
       <ScrollView
+        {...fit}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={[
           styles.scroll,
-          { paddingBottom: insets.bottom + 120 },
+          { paddingBottom: insets.bottom + 16 + FAB_CLEARANCE },
           tab === 'memories' && styles.scrollFill,
         ]}>
         {tab === 'memories' ? (
@@ -741,12 +750,14 @@ export default function CalendarScreen() {
             onOpen={setOpenMemory}
             onAcceptSuggestion={acceptSuggestion}
             onDismissSuggestion={dismissSuggestion}
+            onEmptyChange={setMemoriesEmpty}
           />
         ) : (
         <>
         {partner ? (
           <ScrollView
             horizontal
+            alwaysBounceHorizontal={false}
             showsHorizontalScrollIndicator={false}
             style={styles.ownerChipsScroll}
             contentContainerStyle={styles.ownerChips}>
@@ -1056,6 +1067,9 @@ export default function CalendarScreen() {
     </View>
   );
 }
+
+/** Room under the last item so it scrolls clear of the + button (60pt, 20pt up). */
+const FAB_CLEARANCE = 104;
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },

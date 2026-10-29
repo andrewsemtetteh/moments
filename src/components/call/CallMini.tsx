@@ -1,8 +1,7 @@
 import * as Haptics from '@/lib/haptics';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Animated as RNAnimated, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import { runOnJS } from 'react-native-reanimated';
 
 import { CALL, CallBackdrop, useCallTimer } from '@/components/call/CallParts';
 import { DraggableWindow } from '@/components/call/DraggableWindow';
@@ -52,24 +51,38 @@ function VoicePill({ onEnd }: { onEnd: () => void }) {
   const { width } = useWindowDimensions();
   const partnerName = useCallStore((s) => s.partnerName);
   const isMuted = useCallStore((s) => s.isMuted);
+  // The store's own action, held locally like `onEnd`: a gesture callback must only use values
+  // from this component, not module-level functions (those weren't carried into the compiled
+  // callback, and muting threw "toggleMute" errors).
+  const storeToggleMute = useCallStore((s) => s.toggleMute);
   const phase = useCallStore((s) => s.phase);
   const partner = useRelationshipStore((s) => s.partner);
   const timer = useCallTimer();
   const name = getFirstName(partnerName ?? partner?.name) ?? 'Call';
 
-  // Its own buttons, made once: tapping them never opens the call.
+  const onMute = useCallback(() => {
+    void Haptics.selectionAsync();
+    storeToggleMute();
+  }, [storeToggleMute]);
+
+  // Its own buttons: tapping them never opens the call. They run on the JS thread
+  // (`runOnJS(true)`): they only call plain JS (the call store), nothing to animate.
   const muteTap = useMemo(
     () =>
-      Gesture.Tap().onEnd((_e, ok) => {
-        if (ok) runOnJS(toggleMute)();
-      }),
-    [],
+      Gesture.Tap()
+        .runOnJS(true)
+        .onEnd((_e, ok) => {
+          if (ok) onMute();
+        }),
+    [onMute],
   );
   const endTap = useMemo(
     () =>
-      Gesture.Tap().onEnd((_e, ok) => {
-        if (ok) runOnJS(onEnd)();
-      }),
+      Gesture.Tap()
+        .runOnJS(true)
+        .onEnd((_e, ok) => {
+          if (ok) onEnd();
+        }),
     [onEnd],
   );
   const blockers = useMemo(() => [muteTap, endTap], [muteTap, endTap]);
@@ -113,7 +126,6 @@ function VoicePill({ onEnd }: { onEnd: () => void }) {
 }
 
 const PILL_H = 56;
-const toggleMute = () => useCallStore.getState().toggleMute();
 
 const FLOAT_W = 112;
 const FLOAT_H = 164;
@@ -127,12 +139,15 @@ function VideoFloat({ remoteStream, onEnd }: { remoteStream: Stream; onEnd: () =
   const { colors } = useTheme();
   const partner = useRelationshipStore((s) => s.partner);
   const timer = useCallTimer();
-  // The end button's own tap (made once), so pressing it doesn't also open the call.
+  // The end button's own tap (made once), so pressing it doesn't also open the call. On the JS
+  // thread, like the pill's buttons (see VoicePill).
   const endTap = useMemo(
     () =>
-      Gesture.Tap().onEnd((_e, ok) => {
-        if (ok) runOnJS(onEnd)();
-      }),
+      Gesture.Tap()
+        .runOnJS(true)
+        .onEnd((_e, ok) => {
+          if (ok) onEnd();
+        }),
     [onEnd],
   );
   const blockers = useMemo(() => [endTap], [endTap]);

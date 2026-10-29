@@ -21,7 +21,9 @@ struct WidgetSnapshot: Codable {
 
     /// Realistic data for the widget gallery and placeholders.
     static let preview = WidgetSnapshot(
-        partnerName: "Alex", daysTogether: 587, since: nil, streak: 42, streakSafeToday: true,
+        partnerName: "Alex", daysTogether: 587,
+        since: ISO8601DateFormatter().string(from: Date().addingTimeInterval(-587 * 86_400)),
+        streak: 42, streakSafeToday: true,
         momentImageUrl: nil, momentCaption: "Sunset walk", momentAt: nil,
         partnerMoodEmoji: "🥰", partnerMoodLabel: "Loved", paired: true, updatedAt: nil
     )
@@ -48,6 +50,104 @@ struct WidgetSnapshot: Codable {
 
     var momentDate: Date? { Self.date(momentAt) }
     var displayName: String { partnerName.isEmpty ? "Your person" : partnerName }
+    var sinceDate: Date? { Self.date(since) }
+
+    /// The next anniversary on or after today: its date, which one it is and the days left (0 on the day).
+    func nextAnniversary(from now: Date) -> Anniversary? {
+        guard let start = sinceDate else { return nil }
+        let cal = Calendar.current
+        let parts = cal.dateComponents([.year, .month, .day], from: start)
+        guard let startYear = parts.year else { return nil }
+        let today = cal.startOfDay(for: now)
+        let year = cal.component(.year, from: today)
+        for candidate in [year, year + 1] where candidate > startYear {
+            var c = DateComponents()
+            c.year = candidate
+            c.month = parts.month
+            c.day = parts.day
+            guard let date = cal.date(from: c) else { continue }
+            let day = cal.startOfDay(for: date)
+            guard day >= today else { continue }
+            let left = cal.dateComponents([.day], from: today, to: day).day ?? 0
+            return Anniversary(date: day, years: candidate - startYear, daysLeft: left)
+        }
+        return nil
+    }
+
+    /// The next milestone in days together: the next round hundred or the next anniversary, whichever comes first.
+    func nextMilestone(at now: Date) -> Milestone {
+        let count = days(at: now)
+        let hundred = (count / 100 + 1) * 100
+        if let anniversary = nextAnniversary(from: now) {
+            // On the day itself, the next one is a year away.
+            let onTheDay = anniversary.daysLeft == 0
+            let yearTarget = count + (onTheDay ? 365 : anniversary.daysLeft)
+            let years = onTheDay ? anniversary.years + 1 : anniversary.years
+            if yearTarget <= hundred {
+                return Milestone(target: yearTarget, previous: max(0, yearTarget - 365), current: count,
+                                 label: years == 1 ? "1 year" : "\(years) years")
+            }
+        }
+        return Milestone(target: hundred, previous: hundred - 100, current: count, label: "\(hundred) days")
+    }
+}
+
+struct Anniversary {
+    let date: Date
+    /// Which anniversary (1 = first).
+    let years: Int
+    let daysLeft: Int
+
+    /// How far through the year to it, for rings.
+    var progress: Double { max(0, min(1, 1 - Double(daysLeft) / 365)) }
+    var ordinal: String {
+        let f = NumberFormatter()
+        f.numberStyle = .ordinal
+        return f.string(from: NSNumber(value: years)) ?? "\(years)th"
+    }
+}
+
+struct Milestone {
+    let target: Int
+    let previous: Int
+    let current: Int
+    let label: String
+
+    var daysLeft: Int { max(0, target - current) }
+    var progress: Double {
+        let span = Double(max(1, target - previous))
+        return max(0, min(1, Double(current - previous) / span))
+    }
+}
+
+/// The app's sticker art (the streak page's flame and heart), in full colour even on tinted Home Screens.
+struct Sticker: View {
+    let name: String
+    let width: CGFloat
+
+    var body: some View {
+        if #available(iOS 18.0, *) {
+            Image(name).resizable().widgetAccentedRenderingMode(.fullColor).scaledToFit().frame(width: width)
+        } else {
+            Image(name).resizable().scaledToFit().frame(width: width)
+        }
+    }
+}
+
+/// A rounded progress bar on the widget's own paper.
+struct MilestoneBar: View {
+    let progress: Double
+    let tint: Color
+
+    var body: some View {
+        GeometryReader { geo in
+            ZStack(alignment: .leading) {
+                Capsule().fill(Color.track)
+                Capsule().fill(tint).frame(width: max(8, geo.size.width * progress)).widgetAccentable()
+            }
+        }
+        .frame(height: 6)
+    }
 }
 
 struct SnapshotEntry: TimelineEntry {
@@ -153,7 +253,12 @@ extension Color {
     static let flame = adaptive(0xF26A0A, 0xFF9A4A)
     static let lilacBackground = adaptive(0xE3DDFF, 0x262049)
     static let creamBackground = adaptive(0xFFF1D6, 0x33240F)
+    static let blushBackground = adaptive(0xFFE4EC, 0x3A1E2A)
     static let plainBackground = adaptive(0xFFFFFF, 0x1C1C1E)
+    /// The empty part of bars and rings, on every widget paper.
+    static let track = adaptive(0xFFFFFF, 0x48484A)
+    /// Deep pink for text on the blush paper (4.5:1 or better in both modes).
+    static let rose = adaptive(0xB0124A, 0xFF8FAB)
 }
 
 extension View {
@@ -177,7 +282,7 @@ extension Image {
 struct ConnectPrompt: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Image(systemName: "heart.fill").font(.title2).foregroundStyle(Color.coral).widgetAccentable()
+            Sticker(name: "StickerHeart", width: 34)
             Spacer(minLength: 0)
             Text("Connect with your person")
                 .font(.headline.weight(.heavy))

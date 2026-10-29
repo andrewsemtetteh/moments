@@ -16,8 +16,15 @@ import { useStatusBarStyle } from '@/hooks/useLightStatusBar';
 import { useTheme } from '@/hooks/useTheme';
 import { getFirstName } from '@/lib/avatar-initial';
 import { closeStackScreen } from '@/lib/router';
-import { emptyStreakStatus, isStreakRestoreAvailable, partnerStreakCount, togetherStreakCount } from '@/lib/streak';
+import {
+  emptyStreakStatus,
+  isPartnerStreakEndingSoon,
+  isStreakRestoreAvailable,
+  partnerStreakCount,
+  togetherStreakCount,
+} from '@/lib/streak';
 import { STREAK_COLORS, TOGETHER_RING } from '@/lib/streak-colors';
+import { nextStreakMilestone, streakMilestoneName } from '@/lib/streak-milestones';
 import { isStreakVisuallyAtRisk } from '@/lib/streak-reminder-timing';
 import { useAuthStore, useRelationshipStore } from '@/stores';
 
@@ -32,14 +39,8 @@ function isDarkColor(hex: string) {
   return 0.299 * r + 0.587 * g + 0.114 * b < 140;
 }
 
-/** Streak milestones shown on the page (days). */
-const MILESTONES: { days: number; label: string }[] = [
-  { days: 7, label: '1 week' },
-  { days: 30, label: '1 month' },
-  { days: 50, label: '50 days' },
-  { days: 100, label: '100 days' },
-  { days: 365, label: '1 year' },
-];
+/** The milestone badges on the page (each one also has its celebration). */
+const BADGE_DAYS = [7, 30, 50, 100, 365];
 
 /**
  * The full streak view, opened from Home's streak pill: the count, today's
@@ -69,7 +70,10 @@ export default function StreakScreen() {
   // Default: every card is a sticker (ink outline).
   const outline = colors.boldBorder && colors.hero ? { borderWidth: 2, borderColor: colors.border } : null;
   const count = status.current_streak;
-  const next = MILESTONES.find((m) => m.days > count) ?? null;
+  // The same milestones the celebration fires on (7, 15, 30, 50, 75, 100…).
+  const nextDays = nextStreakMilestone(count);
+  const next = { days: nextDays, label: streakMilestoneName(nextDays) };
+  const canRestore = isStreakRestoreAvailable(status);
   const best = Math.max(status.longest_streak, count);
   const atRisk = count > 0 && isStreakVisuallyAtRisk(status);
   const dark = colors.isDark;
@@ -89,9 +93,11 @@ export default function StreakScreen() {
       : count > 0
         ? 'Not yet today'
         : 'Check in today to start';
+  // Same "ends tonight" moment as yours: their last few hours, on their clock.
+  const theirEndsSoon = isPartnerStreakEndingSoon(status);
   const theirLine = status.partner_active_today
     ? 'Checked in today'
-    : status.partner_at_risk
+    : theirEndsSoon
       ? 'Ends tonight'
       : theirCount > 0
         ? 'Not yet today'
@@ -100,7 +106,7 @@ export default function StreakScreen() {
   const explain = () =>
     Alert.alert(
       'How streaks work',
-      'Each of you has your own streak. It grows every day you check in: send a moment, share your mood, answer today’s question or play a game together. Every 7 days in a row earns a streak freeze (you can hold 2): if you miss a day, one is used automatically and your streak is kept. Miss a day with no freeze and it starts over (with Plus you can restore it within 24 hours).\n\nDays you both check in count towards your together streak.',
+      'Each of you has your own streak. It grows every day you check in: send a moment, share your mood, answer today’s question or play a game together. Every 7 days in a row earns a streak freeze (you can hold 2): if you miss a day, one is used automatically and your streak is kept. Miss a day with no freeze and it starts over, but you can restore it for 5 days, even if you’ve started a new one (restoring joins them). The first day it’s free with Plus; after that, or without Plus, a restore is a one-time purchase.\n\nDays you both check in count towards your together streak.',
     );
 
   return (
@@ -139,9 +145,11 @@ export default function StreakScreen() {
             {atRisk ? 'day streak · ends tonight' : `day${count === 1 ? '' : 's'} streak`}
           </Text>
           <Text style={[styles.heroSub, { color: ink }]}>
-            {count > 0
-              ? `You’ve shown up ${count} day${count === 1 ? '' : 's'} in a row.`
-              : 'Check in today to start day 1.'}
+            {canRestore
+              ? `Restore your ${status.restorable_streak}-day streak below to keep it.`
+              : count > 0
+                ? `You’ve shown up ${count} day${count === 1 ? '' : 's'} in a row.`
+                : 'Check in today to start day 1.'}
           </Text>
           <View style={styles.pills}>
             {best > 0 ? (
@@ -161,7 +169,7 @@ export default function StreakScreen() {
           </View>
         </View>
 
-        {isStreakRestoreAvailable(status) ? <StreakRestoreBanner status={status} /> : null}
+        {canRestore ? <StreakRestoreBanner status={status} /> : null}
 
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: colors.text }]}>You two</Text>
@@ -195,7 +203,7 @@ export default function StreakScreen() {
                   <Text
                     style={[
                       styles.cardSub,
-                      { color: status.partner_at_risk && !status.partner_active_today ? STREAK_COLORS.atRisk : colors.textSecondary },
+                      { color: theirEndsSoon ? STREAK_COLORS.atRisk : colors.textSecondary },
                     ]}>
                     {theirLine}
                   </Text>
@@ -238,46 +246,44 @@ export default function StreakScreen() {
           </View>
         </View>
 
-        {next ? (
-          <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>Next milestone</Text>
-            <View style={[styles.card, styles.milestoneCard, { backgroundColor: colors.surface }, outline]}>
-              <View style={styles.milestoneHead}>
-                <View style={[styles.milestoneBadge, styles.stickerLit]}>
-                  <StickerFlame size={20} />
-                  <Text style={[styles.milestoneBadgeDays, { color: colors.text }]}>{next.days}</Text>
-                </View>
-                <View style={styles.milestoneText}>
-                  <Text style={[styles.milestoneTitle, { color: colors.text }]}>{next.label}</Text>
-                  <Text style={[styles.cardSub, { color: colors.textSecondary }]}>
-                    {next.days - count === 1 ? 'Just 1 more day' : `${next.days - count} more days`}
-                    {count > 0 ? ' in a row' : ' to get there'}
-                  </Text>
-                </View>
-                <View style={[styles.toGoPill, { backgroundColor: soft }]}>
-                  <Text style={[styles.toGo, { color: STREAK_COLORS.active }]}>
-                    {Math.round(Math.min(100, (count / next.days) * 100))}%
-                  </Text>
-                </View>
+        <View style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Next milestone</Text>
+          <View style={[styles.card, styles.milestoneCard, { backgroundColor: colors.surface }, outline]}>
+            <View style={styles.milestoneHead}>
+              <View style={[styles.milestoneBadge, styles.stickerLit]}>
+                <StickerFlame size={20} />
+                <Text style={[styles.milestoneBadgeDays, { color: colors.text }]}>{next.days}</Text>
               </View>
-              <View style={[styles.track, { backgroundColor: trackColor(colors) }, paperEdge(colors, 1.5)]}>
-                <View
-                  style={[
-                    styles.fill,
-                    {
-                      backgroundColor: STREAK_COLORS.active,
-                      width: `${Math.max(count > 0 ? 4 : 0, Math.min(100, (count / next.days) * 100))}%`,
-                    },
-                  ]}
-                />
+              <View style={styles.milestoneText}>
+                <Text style={[styles.milestoneTitle, { color: colors.text }]}>{next.label}</Text>
+                <Text style={[styles.cardSub, { color: colors.textSecondary }]}>
+                  {next.days - count === 1 ? 'Just 1 more day' : `${next.days - count} more days`}
+                  {count > 0 ? ' in a row' : ' to get there'}
+                </Text>
               </View>
-              <View style={styles.spread}>
-                <Text style={[styles.trackLabel, { color: colors.textTertiary }]}>Day {count}</Text>
-                <Text style={[styles.trackLabel, { color: colors.textTertiary }]}>Day {next.days}</Text>
+              <View style={[styles.toGoPill, { backgroundColor: soft }]}>
+                <Text style={[styles.toGo, { color: STREAK_COLORS.active }]}>
+                  {Math.round(Math.min(100, (count / next.days) * 100))}%
+                </Text>
               </View>
             </View>
+            <View style={[styles.track, { backgroundColor: trackColor(colors) }, paperEdge(colors, 1.5)]}>
+              <View
+                style={[
+                  styles.fill,
+                  {
+                    backgroundColor: STREAK_COLORS.active,
+                    width: `${Math.max(count > 0 ? 4 : 0, Math.min(100, (count / next.days) * 100))}%`,
+                  },
+                ]}
+              />
+            </View>
+            <View style={styles.spread}>
+              <Text style={[styles.trackLabel, { color: colors.textTertiary }]}>Day {count}</Text>
+              <Text style={[styles.trackLabel, { color: colors.textTertiary }]}>Day {next.days}</Text>
+            </View>
           </View>
-        ) : null}
+        </View>
 
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: colors.text }]}>Calendar</Text>
@@ -287,7 +293,8 @@ export default function StreakScreen() {
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: colors.text }]}>Milestones</Text>
           <View style={[styles.card, styles.badges, { backgroundColor: colors.surface }, outline]}>
-            {MILESTONES.map((m) => {
+            {BADGE_DAYS.map((days) => {
+              const m = { days, label: streakMilestoneName(days) };
               const earned = best >= m.days;
               return (
                 <View key={m.days} style={styles.badge}>
@@ -395,7 +402,6 @@ const styles = StyleSheet.create({
     borderBottomLeftRadius: 32,
     borderBottomRightRadius: 32,
   },
-  bandBleed: { position: 'absolute', left: 0, right: 0, top: -600, height: 600 },
   bandTop: {
     alignSelf: 'stretch',
     flexDirection: 'row',
@@ -428,15 +434,6 @@ const styles = StyleSheet.create({
   },
   // The flame sits above the number, centred.
   countRow: { alignItems: 'center', gap: 2 },
-  glow: {
-    position: 'absolute',
-    width: 260,
-    height: 260,
-    borderRadius: 130,
-    right: -90,
-    top: -120,
-    backgroundColor: 'rgba(255,255,255,0.22)',
-  },
   count: { fontSize: 60, fontWeight: '900', letterSpacing: -2, lineHeight: 66 },
   countUnit: { fontSize: 17, fontWeight: '800' },
   heroSub: { fontSize: 14, fontWeight: '600', opacity: 0.85, textAlign: 'center', marginTop: 2 },
@@ -445,9 +442,6 @@ const styles = StyleSheet.create({
   bestPill: { marginTop: 8, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999, borderWidth: 1.5 },
   bestText: { fontSize: 13, fontWeight: '800' },
   card: { borderRadius: 22 },
-  todayCard: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16 },
-  avatars: { flexDirection: 'row' },
-  overlap: { marginLeft: -10 },
   checkAvatar: { borderWidth: 2, borderRadius: 999 },
   checkBadge: {
     position: 'absolute',
@@ -471,7 +465,6 @@ const styles = StyleSheet.create({
   toGoPill: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999 },
   trackLabel: { fontSize: 12, fontWeight: '700', marginTop: -4 },
   spread: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 10 },
-  kicker: { fontSize: 13, fontWeight: '800' },
   toGo: { fontSize: 14, fontWeight: '800' },
   milestoneTitle: { fontSize: 17, fontWeight: '800' },
   track: { height: 10, borderRadius: 5, overflow: 'hidden' },

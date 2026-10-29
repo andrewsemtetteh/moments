@@ -196,6 +196,7 @@ export function PlanWeekStrip({
         <ScrollView
           ref={scrollRef}
           horizontal
+          alwaysBounceHorizontal={false}
           pagingEnabled
           showsHorizontalScrollIndicator={false}
           decelerationRate="fast"

@@ -4,8 +4,40 @@ export type ChatAttachment =
   | { type: 'location'; label: string; latitude: number; longitude: number }
   | { type: 'contact'; name: string; email?: string; phone?: string }
   | { type: 'file'; name: string; url: string; mimeType?: string }
+  /**
+   * Any Play item: an own-time game, the daily duel, a pack (questions, cards, quizzes, things to
+   * do) or a live game. Posted when it's your partner's turn and when it ends (live games: when
+   * they end). `line` is written by whoever posted it ("Andrew played round 3. Your move!").
+   */
+  | {
+      type: 'game';
+      kind: 'session' | 'duel' | 'pack' | 'live';
+      /** The session id, the duel's date (YYYY-MM-DD), the pack id, or the live room id. */
+      id: string;
+      title: string;
+      emoji: string;
+      status: 'turn' | 'finished';
+      line: string;
+    }
   /** Posted when you've both answered every question in a Play pack. */
   | { type: 'play_result'; packId: string; title: string; area: string; count: number }
+  /** A note about a set (questions, cards, a quiz or things to do), sent from its end. */
+  | { type: 'play_comment'; packId: string; title: string; area: string; kind: string; comment: string }
+  /**
+   * A guess quiz finished by you both, with a note from the sender: how well the sender read the
+   * other (`senderScore`) and the other read them (`otherScore`), out of `total`.
+   */
+  | {
+      type: 'guess_result';
+      packId: string;
+      title: string;
+      area: string;
+      total: number;
+      senderScore: number;
+      otherScore: number;
+      /** Older cards always had one; posted automatically when the quiz finishes, it has none. */
+      comment?: string;
+    }
   /** A daily quest finished or a trophy unlocked, posted for you both. */
   | {
       type: 'achievement';
@@ -61,8 +93,14 @@ export function getAttachmentPreviewText(attachment: ChatAttachment): string {
       return `👤 ${attachment.name}`;
     case 'file':
       return `📎 ${attachment.name}`;
+    case 'game':
+      return `${attachment.emoji} ${attachment.line}`;
     case 'play_result':
       return `🎮 You both finished “${attachment.title}”`;
+    case 'guess_result':
+      return attachment.comment ? `Guess quiz: ${attachment.comment}` : `🏆 Guess quiz results: “${attachment.title}”`;
+    case 'play_comment':
+      return `On “${attachment.title}”: ${attachment.comment}`;
     case 'achievement':
       return attachment.kind === 'quest' ? `${attachment.emoji} Quest complete: ${attachment.title}` : `🏆 Trophy unlocked: ${attachment.title}`;
     case 'plan':

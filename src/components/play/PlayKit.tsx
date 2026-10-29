@@ -79,12 +79,15 @@ export function PlayHero({
   color,
   pill,
   blurb,
+  note,
   children,
   minHeight,
 }: {
   color: string;
   pill?: string;
   blurb?: string;
+  /** A smaller line under the blurb ("6 questions. Answer on your own…"). */
+  note?: string;
   children?: ReactNode;
   minHeight?: number;
 }) {
@@ -93,6 +96,7 @@ export function PlayHero({
       <View style={styles.heroBody}>
         {pill ? <PlayPill label={pill} /> : null}
         {blurb ? <Text style={styles.heroBlurb}>{blurb}</Text> : null}
+        {note ? <Text style={styles.heroNote}>{note}</Text> : null}
       </View>
       {children ? <View style={styles.heroExtra}>{children}</View> : null}
     </View>
@@ -146,4 +150,5 @@ const styles = StyleSheet.create({
   },
   heroPillText: { color: '#FFFFFF', fontSize: 11, fontWeight: '900', letterSpacing: 1.1 },
   heroBlurb: { color: '#FFFFFF', fontSize: 20, fontWeight: '700', lineHeight: 27, letterSpacing: -0.3 },
+  heroNote: { color: 'rgba(255,255,255,0.85)', fontSize: 15, fontWeight: '600', lineHeight: 21, marginTop: -4 },
 });

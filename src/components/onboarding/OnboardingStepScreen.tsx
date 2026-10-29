@@ -18,7 +18,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Icon } from '@/components/ui/Icon';
 import { useTheme } from '@/hooks/useTheme';
 import { prevStep as stepBefore, stepProgress, stepRoute, type OnboardingStep } from '@/lib/onboarding-v2';
-import { trackColor } from '@/components/ui/primitives';
+import { trackColor, primaryButtonEdge } from '@/components/ui/primitives';
 
 function useKeyboardOpen() {
   const [open, setOpen] = useState(false);
@@ -233,6 +233,7 @@ export function OnboardingStepScreen({
                 style={({ pressed }) => [
                   styles.primary,
                   { backgroundColor: colors.accent, opacity: primaryDisabled ? 0.4 : pressed ? 0.85 : 1 },
+                  primaryButtonEdge(colors),
                 ]}>
                 {busy ? (
                   <ActivityIndicator color={colors.onAccent} />

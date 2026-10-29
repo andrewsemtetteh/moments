@@ -19,4 +19,10 @@ module.exports = (config) => ({
     $accent: '#FF4D6D',
     $widgetBackground: '#FFFFFF',
   },
+  // The streak page's sticker art (made by scripts/widget-stickers.mjs): Image("StickerFlame") in Swift.
+  images: {
+    StickerFlame: './stickers/sticker-flame.png',
+    StickerFlameOut: './stickers/sticker-flame-out.png',
+    StickerHeart: './stickers/sticker-heart.png',
+  },
 });

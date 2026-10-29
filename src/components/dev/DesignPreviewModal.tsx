@@ -80,7 +80,7 @@ function DesignPreview({ kind, onClose }: { kind: DesignPreviewKind; onClose: ()
 
   // A long distance, so you can also see that it fits.
   const header = {
-    location: '4,812 km apart',
+    location: '4,812 km Away',
     clock: variant === 'night' ? partnerClockAt(23, 40) : partnerClockAt(14, 15),
   };
 

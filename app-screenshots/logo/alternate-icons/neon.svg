@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 100 100" style="display:block"><rect width="100" height="100" fill="#0B0A14"/><defs><filter id="glow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="1.6" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>
+       <g filter="url(#glow)"><g transform="translate(0 -6.59)">
+    <clipPath id="cut"><rect x="0" y="0" width="100" height="61.5"/></clipPath>
+    <g clip-path="url(#cut)"><path d="M50 72 C34 61 26 52 26 42 C26 34 32 29 39 29 C44 29 48 32 50 36 C52 32 56 29 61 29 C68 29 74 34 74 42 C74 52 66 61 50 72 Z" transform="translate(50 56) scale(1.18) translate(-50 -50)" fill="none" stroke="#FF4D6D" stroke-width="2.4" stroke-linejoin="round"/></g>
+    <path d="M32.68 66.35 H67.32" stroke="#FF4D6D" stroke-width="3.4" stroke-linecap="round" />
+    <path d="M39.66 72.91 H60.34" stroke="#FF4D6D" stroke-width="3.4" stroke-linecap="round" />
+    <circle cx="50" cy="79.86" r="2.1" fill="#FF4D6D" />
+  </g>
+       <path d="M27.9 54.9 H72.1" stroke="#FF4D6D" stroke-width="2.4" stroke-linecap="round"/></g></svg>

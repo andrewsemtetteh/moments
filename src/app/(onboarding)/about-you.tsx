@@ -9,6 +9,7 @@ import { TextInput } from '@/components/ui/ThemedTextInput';
 
 import { OnboardingStepScreen } from '@/components/onboarding/OnboardingStepScreen';
 import { Icon } from '@/components/ui/Icon';
+import { fieldOutline } from '@/components/ui/primitives';
 import { useTheme } from '@/hooks/useTheme';
 import { ensureUserProfile } from '@/lib/auth-session';
 import { uploadMyAvatar, updateMyProfile } from '@/lib/moments-api';
@@ -37,6 +38,8 @@ export default function AboutYouScreen() {
   );
   const [photo, setPhoto] = useState<string | null>(user?.avatar_url ?? null);
   const [busy, setBusy] = useState(false);
+  // The field's outline takes the theme colour while typing.
+  const [focused, setFocused] = useState(false);
 
   // Signed in but no profile row yet (first launch after sign-up): make one.
   useEffect(() => {
@@ -165,7 +168,9 @@ export default function AboutYouScreen() {
           if (name.trim() && !busy) void save(true);
         }}
         maxLength={32}
-        style={[styles.input, { color: colors.text, borderColor: colors.text, backgroundColor: colors.surface }]}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
+        style={[styles.input, { color: colors.text, backgroundColor: colors.surface }, fieldOutline(colors, { focused })]}
       />
       <Text style={[styles.peek, { color: colors.textSecondary }]}>
         {name.trim() ? `Your person will see “${sanitizeNameInput(name).trim()}”` : 'This is what your person sees'}
@@ -203,7 +208,6 @@ const styles = StyleSheet.create({
     marginTop: 22,
     height: 58,
     borderRadius: 16,
-    borderWidth: 2,
     paddingHorizontal: 16,
     fontSize: 19,
     fontWeight: '800',

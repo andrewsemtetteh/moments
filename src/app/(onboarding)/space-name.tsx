@@ -6,6 +6,7 @@ import { TextInput } from '@/components/ui/ThemedTextInput';
 
 import { CoupleCharacters } from '@/components/onboarding/Characters';
 import { OnboardingStepScreen } from '@/components/onboarding/OnboardingStepScreen';
+import { fieldOutline } from '@/components/ui/primitives';
 import { useTheme } from '@/hooks/useTheme';
 import { goNext, previewAnswers, saveOnboardingDraft, useSavedAnswer } from '@/lib/onboarding-v2';
 import { sanitizeNameInput } from '@/lib/sanitize-input';
@@ -23,6 +24,8 @@ export default function SpaceNameScreen() {
   const { colors } = useTheme();
   const userId = useAuthStore((s) => s.user?.id);
   const [name, setName] = useState(preview ? (previewAnswers.spaceName ?? '') : '');
+  // The field's outline takes the theme colour while typing.
+  const [focused, setFocused] = useState(false);
   useSavedAnswer(userId, preview, 'spaceName', setName);
 
   const next = async (value: string | null) => {
@@ -54,7 +57,9 @@ export default function SpaceNameScreen() {
           if (name.trim()) void next(name);
         }}
         maxLength={32}
-        style={[styles.input, { color: colors.text, borderColor: colors.text, backgroundColor: colors.surface }]}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
+        style={[styles.input, { color: colors.text, backgroundColor: colors.surface }, fieldOutline(colors, { focused })]}
       />
       <Text style={[styles.label, { color: colors.textSecondary }]}>Or pick one</Text>
       <View style={styles.chips}>
@@ -70,10 +75,12 @@ export default function SpaceNameScreen() {
               accessibilityRole="button"
               style={({ pressed }) => [
                 styles.chip,
-                { borderColor: colors.text, backgroundColor: on ? colors.text : colors.surface },
+                on
+                  ? { borderWidth: 2, borderColor: colors.accent, backgroundColor: colors.accent }
+                  : { ...fieldOutline(colors), backgroundColor: colors.surface },
                 pressed && styles.pressed,
               ]}>
-              <Text style={[styles.chipText, { color: on ? colors.background : colors.text }]}>{s}</Text>
+              <Text style={[styles.chipText, { color: on ? colors.onAccent : colors.text }]}>{s}</Text>
             </Pressable>
           );
         })}
@@ -83,10 +90,10 @@ export default function SpaceNameScreen() {
 }
 
 const styles = StyleSheet.create({
-  input: { height: 58, borderRadius: 16, borderWidth: 2, paddingHorizontal: 16, fontSize: 19, fontWeight: '800', textAlign: 'center' },
+  input: { height: 58, borderRadius: 16, paddingHorizontal: 16, fontSize: 19, fontWeight: '800', textAlign: 'center' },
   label: { fontSize: 13, fontWeight: '800', textAlign: 'center', marginTop: 4 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 8 },
-  chip: { height: 40, paddingHorizontal: 14, borderRadius: 20, borderWidth: 2, justifyContent: 'center' },
+  chip: { height: 40, paddingHorizontal: 14, borderRadius: 20, justifyContent: 'center' },
   chipText: { fontSize: 14, fontWeight: '800' },
   pressed: { opacity: 0.8 },
 });

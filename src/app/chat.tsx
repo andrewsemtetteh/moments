@@ -1201,6 +1201,7 @@ export default function ChatScreen() {
                 </View>
               ) : (
                 <FlatList
+                  alwaysBounceVertical={false}
                   ref={listRef}
                   data={listItems}
                   keyExtractor={(item) => item.id}

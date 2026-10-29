@@ -12,6 +12,7 @@ import {
   type ViewStyle,
 } from 'react-native';
 
+import { useScrollWhenNeeded } from '@/hooks/useScrollWhenNeeded';
 import { useTabBarInset } from '@/hooks/useTabBarInset';
 
 type Props = ScrollViewProps & {
@@ -39,6 +40,12 @@ export function TabScreenScroll({ children, contentContainerStyle, style, ref, .
   useImperativeHandle(ref, () => scrollRef.current as ScrollView);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const offsetY = useRef(0);
+  // A page whose content fits stays still; it scrolls once it doesn't (the keyboard's room
+  // counts). Pull-to-refresh pages keep their drag.
+  const fit = useScrollWhenNeeded();
+  const fitProps = scrollProps.refreshControl
+    ? {}
+    : { scrollEnabled: fit.scrollEnabled, bounces: fit.bounces, overScrollMode: fit.overScrollMode };
   // Tab pages stay mounted under Chat, Moments, sheets… and used to make room for those
   // screens' keyboards too. When that keyboard closed elsewhere the room could stay
   // (iOS's automatic insets sometimes never reset; Android could miss the hide), leaving
@@ -88,7 +95,17 @@ export function TabScreenScroll({ children, contentContainerStyle, style, ref, .
   return (
     <ScrollView
       ref={scrollRef}
+      alwaysBounceVertical={false}
+      {...fitProps}
       {...scrollProps}
+      onLayout={(e) => {
+        fit.onLayout(e);
+        scrollProps.onLayout?.(e);
+      }}
+      onContentSizeChange={(w, h) => {
+        fit.onContentSizeChange(w, h);
+        scrollProps.onContentSizeChange?.(w, h);
+      }}
       onScroll={(e) => {
         offsetY.current = e.nativeEvent.contentOffset.y;
         scrollProps.onScroll?.(e);

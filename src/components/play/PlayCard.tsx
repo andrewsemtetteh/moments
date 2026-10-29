@@ -1,55 +1,51 @@
-import { LinearGradient } from 'expo-linear-gradient';
+import * as Haptics from '@/lib/haptics';
+import { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View, type DimensionValue } from 'react-native';
+import { SvgXml } from 'react-native-svg';
 
 import { ActivityArt, type ActivityArtId } from '@/components/activities/explore/ActivityArt';
 import type { PlayTone } from '@/components/activities/explore/explore-catalog';
-import { shade } from '@/components/games/room-ui';
 import { Crown } from '@/components/ui/Crown';
+
+import type { ArtPalette } from './area-art';
+import { illustrationPalette } from './illustration-palette';
 
 interface PlayCardProps {
   tone: PlayTone;
   title: string;
-  /** Small dark pill above the title. */
+  /** Small label above the title ("Versus", "Today's pack · Romance"). */
   badge?: string;
   sub?: string;
   cta?: string;
+  /** A flat drawing in the card's colours (area-art / game-art). Takes the place of `art`. */
+  scene?: (c: ArtPalette) => string;
+  /** The simpler line drawing, when there's no scene. */
   art?: ActivityArtId;
   onPress: () => void;
-  /** `wide`: full width or rail card. `tile`: compact card for the two-column area grid. */
-  layout?: 'wide' | 'tile';
   width?: DimensionValue;
   /** Premium, not unlocked: a crown and PLUS in the corner (what a tap does is up to `onPress`). */
   locked?: boolean;
 }
 
-/** Bold gradient card in the tone's colour, with a soft glow, white type and a chunky white button. */
-export function PlayCard({
-  tone,
-  title,
-  badge,
-  sub,
-  cta,
-  art,
-  onPress,
-  layout = 'wide',
-  width,
-  locked,
-}: PlayCardProps) {
-  const tile = layout === 'tile';
-  const ink = shade(tone.accent, -0.5);
+/**
+ * The Play card, in the area cards' illustrated look: the tone's pastel paper, words on the left
+ * in deep ink (label, title, a line, a small button), and a flat drawing on the right.
+ */
+export function PlayCard({ tone, title, badge, sub, cta, scene, art, onPress, width, locked }: PlayCardProps) {
+  const c = useMemo(() => illustrationPalette(tone), [tone]);
+  const xml = useMemo(() => (scene ? scene(c) : null), [scene, c]);
 
   return (
     <Pressable
-      onPress={onPress}
+      onPress={() => {
+        void Haptics.selectionAsync();
+        onPress();
+      }}
       accessibilityRole="button"
       accessibilityLabel={`${cta ? `${cta} ${title}` : title}${locked ? ', Plus only' : ''}`}
       style={({ pressed }) => [{ width }, pressed && styles.pressed]}>
-      <LinearGradient
-        colors={[shade(tone.accent, -0.05), shade(tone.accent, -0.35)]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={tile ? styles.tile : styles.wide}>
-        <View style={tile ? styles.tileGlow : styles.wideGlow} pointerEvents="none" />
+      <View style={[styles.card, { backgroundColor: c.bg }]}>
+        <View style={[styles.blob, { backgroundColor: c.l }]} pointerEvents="none" />
         {locked ? (
           <View style={styles.lock} pointerEvents="none">
             <Crown size={15} color={PLUS_INK} />
@@ -57,35 +53,39 @@ export function PlayCard({
           </View>
         ) : null}
 
-        <View style={tile ? styles.tileBody : styles.wideBody}>
+        <View style={styles.body}>
           {badge ? (
             <View style={styles.badge}>
-              <Text style={styles.badgeText} numberOfLines={1}>
+              <Text style={[styles.badgeText, { color: c.d }]} numberOfLines={1}>
                 {badge.toUpperCase()}
               </Text>
             </View>
           ) : null}
-          <Text style={tile ? styles.tileTitle : styles.wideTitle} numberOfLines={2}>
+          <Text style={[styles.title, { color: c.d }]} numberOfLines={3} maxFontSizeMultiplier={1.3}>
             {title}
           </Text>
           {sub ? (
-            <Text style={styles.sub} numberOfLines={2}>
+            <Text style={[styles.sub, { color: c.d }]} numberOfLines={2} maxFontSizeMultiplier={1.3}>
               {sub}
             </Text>
           ) : null}
           {cta ? (
-            <View style={[styles.cta, tile && styles.ctaTile]}>
-              <Text style={[styles.ctaText, { color: ink }]}>{cta}</Text>
+            <View style={[styles.cta, { backgroundColor: c.d }]}>
+              <Text style={styles.ctaText}>{cta}</Text>
             </View>
           ) : null}
         </View>
 
-        {art && !tile ? (
-          <View style={styles.art} pointerEvents="none">
-            <ActivityArt id={art} size={104} accent="#FFFFFF" soft="rgba(255,255,255,0.22)" />
-          </View>
-        ) : null}
-      </LinearGradient>
+        <View style={styles.art} pointerEvents="none">
+          {xml ? (
+            <SvgXml xml={xml} width="100%" height="100%" />
+          ) : art ? (
+            <View style={styles.artCenter}>
+              <ActivityArt id={art} size={104} accent={c.a} soft={c.l} />
+            </View>
+          ) : null}
+        </View>
+      </View>
     </Pressable>
   );
 }
@@ -93,64 +93,36 @@ export function PlayCard({
 const PLUS_INK = '#3A2A00';
 
 const styles = StyleSheet.create({
-  pressed: { transform: [{ scale: 0.985 }] },
-  wide: {
-    minHeight: 172,
-    borderRadius: 28,
-    padding: 20,
+  pressed: { transform: [{ scale: 0.98 }], opacity: 0.95 },
+  card: {
+    minHeight: 168,
+    borderRadius: 26,
+    borderCurve: 'continuous',
     flexDirection: 'row',
     alignItems: 'center',
     overflow: 'hidden',
   },
-  wideGlow: {
-    position: 'absolute',
-    width: 220,
-    height: 220,
-    borderRadius: 110,
-    backgroundColor: 'rgba(255,255,255,0.13)',
-    right: -70,
-    top: -80,
-  },
-  wideBody: { flex: 1, gap: 8, minWidth: 0 },
-  tile: { minHeight: 168, borderRadius: 26, padding: 16, overflow: 'hidden' },
-  tileGlow: {
-    position: 'absolute',
-    width: 150,
-    height: 150,
-    borderRadius: 75,
-    backgroundColor: 'rgba(255,255,255,0.14)',
-    right: -55,
-    top: -60,
-  },
-  tileBody: { flex: 1, gap: 8, justifyContent: 'space-between' },
+  blob: { position: 'absolute', width: 170, height: 170, borderRadius: 85, right: -50, top: -70, opacity: 0.55 },
+  body: { flex: 1, minWidth: 0, gap: 6, paddingVertical: 18, paddingLeft: 18, paddingRight: 4 },
   badge: {
     alignSelf: 'flex-start',
-    backgroundColor: 'rgba(0,0,0,0.25)',
+    backgroundColor: 'rgba(255,255,255,0.7)',
     borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
   },
-  badgeText: { color: '#FFFFFF', fontSize: 11, fontWeight: '900', letterSpacing: 1.1 },
-  wideTitle: { color: '#FFFFFF', fontSize: 23, fontWeight: '900', letterSpacing: -0.4, lineHeight: 27 },
-  tileTitle: { color: '#FFFFFF', fontSize: 19, fontWeight: '900', letterSpacing: -0.3, lineHeight: 23 },
-  sub: { color: 'rgba(255,255,255,0.88)', fontSize: 14, fontWeight: '600', lineHeight: 20 },
-  cta: {
-    alignSelf: 'flex-start',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    paddingHorizontal: 20,
-    paddingVertical: 11,
-    marginTop: 6,
-    borderBottomWidth: 4,
-    borderBottomColor: 'rgba(0,0,0,0.18)',
-  },
-  ctaTile: { paddingHorizontal: 16, paddingVertical: 9, marginTop: 0 },
-  ctaText: { fontSize: 15, fontWeight: '900' },
-  art: { width: 108, height: 108, alignItems: 'center', justifyContent: 'center', marginLeft: 4 },
+  badgeText: { fontSize: 10, fontWeight: '900', letterSpacing: 1 },
+  title: { fontSize: 19, fontWeight: '800', letterSpacing: -0.4, lineHeight: 23 },
+  sub: { fontSize: 13, fontWeight: '600', lineHeight: 18, opacity: 0.78 },
+  cta: { alignSelf: 'flex-start', borderRadius: 14, paddingHorizontal: 16, paddingVertical: 8, marginTop: 4 },
+  ctaText: { color: '#FFFFFF', fontSize: 14, fontWeight: '900' },
+  // The drawing: a 4:3 scene down the right side.
+  art: { width: '42%', aspectRatio: 200 / 150, marginRight: 6 },
+  artCenter: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   lock: {
     position: 'absolute',
-    top: 14,
-    right: 14,
+    top: 12,
+    right: 12,
     zIndex: 2,
     flexDirection: 'row',
     alignItems: 'center',

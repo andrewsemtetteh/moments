@@ -16,7 +16,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 // import { CoupleCharacters, FloatingArt } from '@/components/onboarding/Characters';
 import { Icon, type IconName } from '@/components/ui/Icon';
 import { Avatar, colorWithAlpha, separatorColor } from '@/components/ui/primitives';
-import { FREE_DAILY_MOMENTS, FREE_TIMELINE_MOMENTS } from '@/constants/design-system';
 import {
   BILLING_CONNECTED,
   DEFAULT_PLAN,
@@ -28,15 +27,15 @@ import {
   type SubscriptionPlan,
   type SubscriptionPlanId,
   REFERRAL_DAYS,
-  YEARLY_PER_MONTH_USD,
+  PER_WEEK_USD,
   YEARLY_SAVING_PERCENT,
 } from '@/constants/subscription';
 import { useTheme } from '@/hooks/useTheme';
 import { getFirstName } from '@/lib/avatar-initial';
-import { FREE_ALBUM_LIMIT } from '@/lib/moment-albums';
 import { purchasePlan, restorePlus, usePurchasesStore, WINBACK_OFFER } from '@/lib/purchases';
 import { PaywallDetour, type PaywallDetourPage } from '@/components/subscription/PaywallDetour';
 import { AnalyticsEvents, trackForCouple } from '@/services/analytics';
+import { getFlagVariant } from '@/lib/product-analytics';
 import { claimNotificationKey, sendPartnerNotification } from '@/services/api';
 import { useAuthStore, useRelationshipStore } from '@/stores';
 
@@ -50,43 +49,38 @@ function isLightColor(hex: string) {
   return 0.299 * r + 0.587 * g + 0.114 * b > 150;
 }
 
-/** The first three show; the rest sit behind "See all". */
+/** The first three show (two on short phones); the rest sit behind "See all", so the plans stay in view. */
 const PERKS_SHOWN = 3;
+const PERKS_SHOWN_SHORT = 2;
+/** The verified badge before each feature, and the space after it ("See all" lines up past both). */
+const PERK_ICON = 18;
+const PERK_GAP = 10;
+/** The feature card's inner padding (left and right). */
+const PERK_INSET = 14;
+/** Below this window height (iPhone SE / mini class) only two features show before the plans. */
+const SHORT_SCREEN_H = 740;
+
 /**
- * Everything Moments Plus unlocks, most important first (only the first PERKS_SHOWN show before
- * "See all"). The top three are what makes a couple pay: the AI games and conversations nobody
- * else has, the limit they run into most (moments), and the loss they'd feel (a broken streak).
- * Then the rest of the depth. "One plan, both of you" is last: the headline already says it.
- * Only what the app really gates: promising something free users already have backfires.
+ * PostHog experiment: features before the plans ("control") or the plans first
+ * ("prices-first"). Every paywall event carries which one was shown (`layout`).
  */
-const PERKS: { icon: IconName; title: string; free: string; tint: string }[] = [
-  {
-    icon: 'cards',
-    title: 'Unlimited games and conversations made for you two',
-    free: 'New ones made just for you two, every time',
-    tint: '#E3DDFF',
-  },
-  { icon: 'camera', title: 'Share unlimited moments every day', free: `Free: ${FREE_DAILY_MOMENTS} a day`, tint: '#FFD9CC' },
-  { icon: 'fire', title: 'Restore a broken streak within 24 hours', free: 'Bring it back within 24 hours', tint: '#FFD6DC' },
-  {
-    icon: 'volumeHigh',
-    title: 'Live game nights with voice chat',
-    free: 'Play together in real time, wherever you are',
-    tint: '#DCEBFF',
-  },
-  {
-    icon: 'time',
-    title: 'See your whole history of moments',
-    free: `Free: your last ${FREE_TIMELINE_MOMENTS} moments`,
-    tint: '#D7F2E3',
-  },
-  { icon: 'albums', title: 'Create as many albums as you like', free: `Free: ${FREE_ALBUM_LIMIT} albums`, tint: '#FFE7A0' },
-  {
-    icon: 'people',
-    title: 'One plan covers both of you',
-    free: 'Your person gets everything too, at no extra cost',
-    tint: '#D7F2E3',
-  },
+const ORDER_FLAG = 'paywall-order';
+/**
+ * Everything Moments Plus unlocks, most important first. The top three are what makes a couple
+ * pay: the AI games and conversations nobody else has, the limit they run into most (moments),
+ * and live game nights together. "One plan, both of you" is last: the headline
+ * already says it. Only what the app really gates: promising something free users already have backfires.
+ */
+const PERKS: { title: string }[] = [
+  // Was 'Unlimited games and conversations made for you two' (kept to bring back).
+  { title: 'Unlimited games & conversations' /* + ' made for you two' */ },
+  { title: 'Share unlimited moments every day' },
+  { title: 'Live game nights with voice chat' },
+  { title: 'Create as many albums as you like' },
+  { title: 'Pick your own app icon' },
+  { title: 'Restore a broken streak the day it ends' },
+  { title: 'See your whole history of moments' },
+  { title: 'One plan covers both of you' },
 ];
 
 const TIMELINE: { day: string; text: string; icon: IconName }[] = [
@@ -124,7 +118,7 @@ type Props = {
  * partner joins, at each free limit and at milestones. One plan covers both partners.
  *
  * Plans: yearly (selected), monthly, weekly. Yearly and weekly start with a free trial; monthly
- * starts today. Each card leads with its billed price; yearly adds what that is a month and each. Prices come from the
+ * starts today. Each card leads with its weekly rate, with the billed price spelled out beside it. Prices come from the
  * store (local currency) once Superwall loads them.
  */
 export function PaywallScreen({
@@ -141,20 +135,27 @@ export function PaywallScreen({
 }: Props) {
   // Read live, so a fold / unfold, split screen or rotation redraws at the new size.
   const SCREEN_H = useWindowDimensions().height;
+  const perksShown = SCREEN_H < SHORT_SCREEN_H ? PERKS_SHOWN_SHORT : PERKS_SHOWN;
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const winbackPrice = usePurchasesStore((s) => s.winbackPrice);
   // The win back offer: one yearly card at the discounted first year price.
   const winback = offer === 'winback' && !!winbackPrice;
+  // Decided once per open, so the page never rearranges under them. The win back offer is for
+  // people who already know Plus: its price leads.
+  const [pricesFirst] = useState(() => winback || getFlagVariant(ORDER_FLAG) === 'prices-first');
+  const layout = pricesFirst ? 'prices_first' : 'features_first';
   const [selectedPlan, setSelectedPlan] = useState<SubscriptionPlanId>(winback ? 'yearly' : DEFAULT_PLAN);
   const [loading, setLoading] = useState(false);
+  const [allPerks, setAllPerks] = useState(false);
   const storePrices = usePurchasesStore((s) => s.prices);
-  const storePerMonth = usePurchasesStore((s) => s.perMonth);
+  const storePerWeek = usePurchasesStore((s) => s.perWeek);
+  // Yearly vs the full weekly price all year: the store's prices once loaded, ours until then.
+  const yearlySaving = usePurchasesStore((s) => s.yearlySaving) ?? YEARLY_SAVING_PERCENT;
   const me = useAuthStore((s) => s.user);
   const partner = useRelationshipStore((s) => s.partner);
   const relationship = useRelationshipStore((s) => s.relationship);
   const them = getFirstName(partner?.name);
-  const [allPerks, setAllPerks] = useState(false);
   // Terms, Privacy or invite-a-couple, slid in over the paywall.
   const [detour, setDetour] = useState<PaywallDetourPage | null>(null);
   // "Send to Sam": idle, sending, then sent (once per open).
@@ -175,8 +176,8 @@ export function PaywallScreen({
   const introSpan = (days: number) => (days === 7 ? 'week' : `${days} days`);
   const shownPlans = winback ? SUBSCRIPTION_PLANS.filter((p) => p.id === 'yearly') : SUBSCRIPTION_PLANS;
   const priceOf = (id: SubscriptionPlanId) => storePrices[id] ?? formatUsd(planById(id).priceUsd);
-  // Yearly as a monthly rate ("$5.83" per month).
-  const yearlyPerMonth = storePerMonth.yearly ?? formatUsd(YEARLY_PER_MONTH_USD);
+  // Every plan as a weekly rate ("$1.35" a week on yearly), in their own currency.
+  const perWeekOf = (id: SubscriptionPlanId) => storePerWeek[id] ?? formatUsd(PER_WEEK_USD[id]);
   // "Try 7 days for $0.00": free, said as a price, in their own currency. The real
   // price sits right under it in the pinned footer.
   const zeroPrice = usePurchasesStore((s) => s.zeroPrice) ?? '$0.00';
@@ -199,7 +200,7 @@ export function PaywallScreen({
 
   // Funnel: shown (and where).
   useEffect(() => {
-    void trackForCouple(AnalyticsEvents.PAYWALL_VIEWED, { placement, reason: reason ?? null });
+    void trackForCouple(AnalyticsEvents.PAYWALL_VIEWED, { placement, reason: reason ?? null, layout });
     // Once per open.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -222,6 +223,7 @@ export function PaywallScreen({
         void trackForCouple(hasTrial ? AnalyticsEvents.TRIAL_STARTED : AnalyticsEvents.PURCHASED, {
           plan: selectedPlan,
           placement,
+          layout,
           offer: winback ? 'winback' : introPrice ? 'intro_price' : null,
         });
         (onPurchased ?? onClose)?.();
@@ -288,7 +290,7 @@ export function PaywallScreen({
   const translateY = useSharedValue(0);
   const scrollY = useSharedValue(0);
   const finish = () => {
-    void trackForCouple(AnalyticsEvents.PAYWALL_CLOSED, { placement });
+    void trackForCouple(AnalyticsEvents.PAYWALL_CLOSED, { placement, layout });
     onClose?.();
   };
   const closeAnimated = () => {
@@ -318,7 +320,132 @@ export function PaywallScreen({
   const heroBarStyle = isLightColor(colors.onAccent) ? 'light' : 'dark';
   const pageBarStyle = isLightColor(colors.background) ? 'dark' : 'light';
   const pageStyle = useAnimatedStyle(() => ({ transform: [{ translateY: translateY.value }] }));
-  const surface = { backgroundColor: colors.surface, borderColor: colors.text };
+
+  // The features card's edge and separators: a faint ink, lighter than the usual separator
+  // (and light on the outlined themes too, whose border colour is solid black).
+  const perkLine = colorWithAlpha(colors.text, colors.isDark ? 0.12 : 0.07);
+
+  // The features card and the plans: their order is the experiment above.
+  const featuresCard = (
+    <View style={[styles.perkCard, { backgroundColor: colors.surface, borderColor: perkLine }]}>
+      {(allPerks ? PERKS : PERKS.slice(0, perksShown)).map((p) => (
+        <View key={p.title} style={[styles.perk, { borderBottomColor: perkLine }]}>
+          <Icon name="verified" size={PERK_ICON} color={colors.success} />
+          <Text style={[styles.perkText, { color: colors.text }]}>{p.title}</Text>
+        </View>
+      ))}
+      <Pressable
+        onPress={() => {
+          void Haptics.selectionAsync();
+          setAllPerks((v) => !v);
+        }}
+        accessibilityRole="button"
+        accessibilityState={{ expanded: allPerks }}
+        style={({ pressed }) => [styles.morePerks, pressed && styles.pressed]}>
+        <Text style={[styles.morePerksText, { color: colors.text }]}>
+          {allPerks ? 'Show less' : `See all ${PERKS.length} Plus features`}
+        </Text>
+        <View style={allPerks ? styles.flipped : undefined}>
+          <Icon name="chevronDown" size={15} color={colors.text} />
+        </View>
+      </Pressable>
+    </View>
+  );
+
+  const plansBlock = (
+    <View style={styles.plans} accessibilityRole="radiogroup">
+      {shownPlans.map((p) => {
+        const on = p.id === selectedPlan;
+        const yearly = p.id === 'yearly';
+        const trial = introOf(p)?.kind === 'free';
+        const pIntro = introOf(p);
+        const pIntroPrice = introPriceOf(p);
+        // Corner badge: only the plan we recommend (or the one-time offer).
+        const badge = winback
+          ? 'One-time offer'
+          : yearly
+            ? `Best value · Save ${yearlySaving}%`
+            : null;
+        const monthly = p.id === 'monthly';
+        // Yearly and weekly read as a weekly rate; monthly keeps its monthly price (and the win
+        // back offer its first-year price).
+        const period = winback || monthly ? p.per : '/week';
+        return (
+            <Pressable
+              key={p.id}
+              onPress={() => {
+                void Haptics.selectionAsync();
+                setSelectedPlan(p.id);
+              }}
+              accessibilityRole="radio"
+              accessibilityState={{ selected: on }}
+              style={({ pressed }) => [
+                styles.plan,
+                {
+                  // Selected: the accent outline and a light accent wash.
+                  backgroundColor: on
+                    ? colorWithAlpha(colors.accent, colors.isDark ? 0.16 : 0.07)
+                    : colors.surface,
+                  borderColor: on ? colors.accent : colors.border,
+                  borderWidth: on ? 2.5 : 1.5,
+                },
+                pressed && styles.pressed,
+              ]}>
+              {badge ? (
+                <View style={[styles.badge, { backgroundColor: colors.accent }]}>
+                  <Text style={[styles.badgeText, { color: colors.onAccent }]}>{badge}</Text>
+                </View>
+              ) : null}
+              {/* Check: filled when chosen. */}
+              <View
+                style={[
+                  styles.radio,
+                  on
+                    ? { backgroundColor: colors.accent, borderColor: colors.accent }
+                    : { borderColor: colors.border },
+                ]}>
+                {on ? <Icon name="check" size={14} color={colors.onAccent} /> : null}
+              </View>
+              {/* Top line: the plan and its price. Under it, on its own line: how it starts. */}
+              <View style={styles.planInfo}>
+                <View style={styles.planTop}>
+                  <Text style={[styles.planName, { color: colors.text }]} numberOfLines={1}>
+                    {p.name}
+                  </Text>
+                  {/* "$1.35/week": the period smaller, on the price's baseline. What's actually
+                      billed is in the line below and under the button. */}
+                  <Text style={[styles.price, { color: colors.text }]} numberOfLines={1}>
+                    {winback ? winbackPrice : monthly ? priceOf(p.id) : perWeekOf(p.id)}
+                    <Text style={[styles.per, { color: colors.textSecondary }]}>{period}</Text>
+                  </Text>
+                </View>
+                {/* Always one line: shrinks a touch on narrow phones rather than wrapping. */}
+                <Text
+                  style={[styles.planSub, { color: colors.textSecondary }]}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.8}>
+                  {winback
+                    ? `Your first year, then ${priceOf('yearly')} a year`
+                    : yearly
+                      ? // Yearly: what you're billed, in words, under the weekly rate.
+                        trial
+                        ? `${TRIAL_DAYS} days free, then ${priceOf('yearly')} a year`
+                        : `${priceOf('yearly')} billed once a year`
+                      : trial
+                        ? `${TRIAL_DAYS} days free, then ${priceOf(p.id)} ${p.perWords}`
+                        : pIntroPrice && pIntro
+                          ? `${pIntroPrice} your first ${introSpan(pIntro.days)}, then ${priceOf(p.id)} ${p.perWords}`
+                          : monthly
+                            ? 'Starts today, billed monthly'
+                            : `Starts today, ${priceOf(p.id)} ${p.perWords}`}
+                  </Text>
+              </View>
+            </Pressable>
+          );
+        })}
+      </View>
+  );
 
   return (
     <View style={styles.root}>
@@ -363,7 +490,7 @@ export function PaywallScreen({
                   </FloatingArt>
                 </View>
                 */}
-            {/* The two of you: Plus is for the couple, not one phone. */}
+            {/* The two of you, hidden for now (kept to bring back easily):
             <View style={styles.couple}>
               <View style={[styles.coupleRing, { borderColor: colors.onAccent }]}>
                 <Avatar name={me?.name} imageUrl={me?.avatar_url} size={52} />
@@ -378,6 +505,7 @@ export function PaywallScreen({
                 )}
               </View>
             </View>
+            */}
             <Text style={[styles.heroTitle, { color: colors.onAccent }]} numberOfLines={1} adjustsFontSizeToFit>
               {headline ??
                 (winback
@@ -388,135 +516,23 @@ export function PaywallScreen({
             </Text>
             <Text style={[styles.heroSub, { color: colorWithAlpha(colors.onAccent, 0.85) }]}>
               {them
-                ? `Plus for you and ${them}. One plan, both phones.`
-                : 'Plus for both of you. Your person joins free.'}
+                ? `One plan covers you and ${them}.`
+                : 'One plan covers you and your person.'}
             </Text>
           </LinearGradient>
 
           <View style={styles.body}>
-            <View style={[styles.card, surface]}>
-              {(allPerks ? PERKS : PERKS.slice(0, PERKS_SHOWN)).map((p, i, shown) => (
-                <View
-                  key={p.title}
-                  style={[
-                    styles.perk,
-                    // A line under every row: the See all / Show less button follows.
-                    {
-                      borderBottomWidth: 1,
-                      borderBottomColor: separatorColor(colors),
-                    },
-                  ]}>
-                  <View style={[styles.perkTile, { backgroundColor: p.tint }]}>
-                    <Icon name={p.icon} size={18} color={INK} />
-                  </View>
-                  <View style={styles.flex}>
-                    <Text style={[styles.perkTitle, { color: colors.text }]}>{p.title}</Text>
-                    {/* The descriptions are off for now: each title says it in full.
-                    <Text style={[styles.perkFree, { color: colors.textSecondary }]}>{p.free}</Text>
-                    */}
-                  </View>
-                  <Icon name="check" size={18} color={colors.success} />
-                </View>
-              ))}
-              {/* Opens the rest, then folds them away again. */}
-              <Pressable
-                onPress={() => {
-                  void Haptics.selectionAsync();
-                  setAllPerks((v) => !v);
-                }}
-                accessibilityRole="button"
-                accessibilityState={{ expanded: allPerks }}
-                style={({ pressed }) => [styles.morePerks, pressed && styles.pressed]}>
-                <Text style={[styles.morePerksText, { color: colors.text }]}>
-                  {allPerks ? 'Show less' : `See all ${PERKS.length} Plus features`}
-                </Text>
-                <View style={allPerks ? styles.flipped : undefined}>
-                  <Icon name="chevronDown" size={16} color={colors.text} />
-                </View>
-              </Pressable>
-            </View>
-
-            <View style={styles.plans} accessibilityRole="radiogroup">
-              {shownPlans.map((p) => {
-                const on = p.id === selectedPlan;
-                const yearly = p.id === 'yearly';
-                const trial = introOf(p)?.kind === 'free';
-                const pIntro = introOf(p);
-                const pIntroPrice = introPriceOf(p);
-                // Corner badge: only the plan we recommend (or the one-time offer).
-                const badge = winback
-                  ? 'One-time offer'
-                  : yearly
-                    ? `Best value · Save ${YEARLY_SAVING_PERCENT}%`
-                    : null;
-                // "/year", "/month", "/week" (yearly is shown as its monthly rate).
-                const period = yearly && !winback ? '/month' : p.per;
-                return (
-                  <Pressable
-                    key={p.id}
-                    onPress={() => {
-                      void Haptics.selectionAsync();
-                      setSelectedPlan(p.id);
-                    }}
-                    accessibilityRole="radio"
-                    accessibilityState={{ selected: on }}
-                    style={({ pressed }) => [
-                      styles.plan,
-                      {
-                        // Selected: the accent outline and a light accent wash.
-                        backgroundColor: on
-                          ? colorWithAlpha(colors.accent, colors.isDark ? 0.16 : 0.07)
-                          : colors.surface,
-                        borderColor: on ? colors.accent : colors.border,
-                        borderWidth: on ? 2.5 : 1.5,
-                      },
-                      pressed && styles.pressed,
-                    ]}>
-                    {badge ? (
-                      <View style={[styles.badge, { backgroundColor: colors.accent }]}>
-                        <Text style={[styles.badgeText, { color: colors.onAccent }]}>{badge}</Text>
-                      </View>
-                    ) : null}
-                    {/* Check: filled when chosen. */}
-                    <View
-                      style={[
-                        styles.radio,
-                        on
-                          ? { backgroundColor: colors.accent, borderColor: colors.accent }
-                          : { borderColor: colors.border },
-                      ]}>
-                      {on ? <Icon name="check" size={14} color={colors.onAccent} /> : null}
-                    </View>
-                    {/* Left: what it is, and how it starts. */}
-                    <View style={styles.planInfo}>
-                      <Text style={[styles.planName, { color: colors.text }]}>{p.name}</Text>
-                      <Text style={[styles.planSub, { color: colors.textSecondary }]}>
-                        {winback
-                          ? `Your first year, then ${priceOf('yearly')} a year`
-                          : yearly
-                            ? // Yearly: what you're billed, in words, under the monthly rate.
-                              trial
-                              ? `${TRIAL_DAYS} days free, then ${priceOf('yearly')} a year`
-                              : `${priceOf('yearly')} billed once a year`
-                            : trial
-                              ? `${TRIAL_DAYS} days free, then billed ${p.perWords}`
-                              : pIntroPrice && pIntro
-                                ? `${pIntroPrice} your first ${introSpan(pIntro.days)}, then billed ${p.perWords}`
-                                : `Starts today, billed ${p.perWords}`}
-                      </Text>
-                    </View>
-                    {/* Right: the price. Yearly reads as its monthly rate; the yearly charge is
-                            spelled out beside it and in the line under the button. */}
-                    <View style={styles.priceCol}>
-                      <Text style={[styles.price, { color: colors.text }]}>
-                        {winback ? winbackPrice : yearly ? yearlyPerMonth : priceOf(p.id)}
-                      </Text>
-                      <Text style={[styles.per, { color: colors.textSecondary }]}>{period}</Text>
-                    </View>
-                  </Pressable>
-                );
-              })}
-            </View>
+            {pricesFirst ? (
+              <>
+                {plansBlock}
+                {featuresCard}
+              </>
+            ) : (
+              <>
+                {featuresCard}
+                {plansBlock}
+              </>
+            )}
 
             {partner && relationship && !winback ? (
               <Pressable
@@ -715,28 +731,45 @@ const styles = StyleSheet.create({
   coupleRing: { borderWidth: 3, borderRadius: 32 },
   coupleSecond: { marginLeft: -14 },
   couplePlaceholder: { width: 52, height: 52, borderRadius: 26, alignItems: 'center', justifyContent: 'center' },
-  flipped: { transform: [{ rotate: '180deg' }] },
-  morePerks: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingVertical: 12 },
-  morePerksText: { fontSize: 14, fontWeight: '800' },
   suggest: { flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 2, borderRadius: 18, padding: 14 },
   heroTitle: { fontSize: 25, fontWeight: '900', letterSpacing: -0.5, marginTop: 6, textAlign: 'center' },
   heroSub: { fontSize: 15, fontWeight: '600', textAlign: 'center', marginTop: 4 },
   body: { paddingHorizontal: 20, paddingTop: 20, gap: 16 },
   card: { borderWidth: 2, borderRadius: 22, overflow: 'hidden' },
-  perk: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, paddingHorizontal: 14 },
-  perkTile: { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-  perkTitle: { fontSize: 15, fontWeight: '800' },
-  perkFree: { fontSize: 12, marginTop: 1 },
-  // Only the first card (Yearly) wears a badge on its top edge, so the room is above it, not between.
-  plans: { gap: 10, marginTop: 12 },
+  // Same width as the plans below; a thin, light edge rather than the heavy ink one.
+  perkCard: { borderWidth: 1, borderRadius: 20, overflow: 'hidden' },
+  // Rows kept short (so the plans stay in view), with a light line under each.
+  perk: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: PERK_GAP,
+    paddingHorizontal: PERK_INSET,
+    paddingVertical: 9,
+    borderBottomWidth: 1,
+  },
+  perkText: { flex: 1, fontSize: 14, fontWeight: '600', lineHeight: 18 },
+  // Lined up with the feature text (past the badge).
+  morePerks: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 4,
+    marginLeft: PERK_INSET + PERK_ICON + PERK_GAP,
+    paddingVertical: 9,
+  },
+  morePerksText: { fontSize: 13, fontWeight: '600' },
+  flipped: { transform: [{ rotate: '180deg' }] },
+  // Only the first card (Yearly) wears a badge on its top edge (11 above it): the section gap
+  // plus this clears it, with no extra room between the cards.
+  plans: { gap: 10, marginTop: 4 },
   plan: {
-    minHeight: 68,
+    minHeight: 64,
     borderRadius: 20,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
     paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingVertical: 12,
   },
   // The recommended plan's corner badge, sitting on the card's top edge at the right.
   badge: {
@@ -750,12 +783,12 @@ const styles = StyleSheet.create({
   },
   badgeText: { fontSize: 11, fontWeight: '900', letterSpacing: 0.3, textTransform: 'uppercase' },
   radio: { width: 24, height: 24, borderRadius: 12, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
-  planInfo: { flex: 1, minWidth: 0, gap: 4, alignItems: 'flex-start' },
-  planName: { fontSize: 17, fontWeight: '900', letterSpacing: -0.2 },
+  planInfo: { flex: 1, minWidth: 0, gap: 3 },
+  planTop: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: 10 },
+  planName: { flexShrink: 1, fontSize: 17, fontWeight: '900', letterSpacing: -0.2 },
   planSub: { fontSize: 13, fontWeight: '600' },
-  priceCol: { alignItems: 'flex-end', flexShrink: 0, gap: 1 },
-  price: { fontSize: 20, fontWeight: '900', letterSpacing: -0.4, textAlign: 'right' },
-  per: { fontSize: 12, fontWeight: '700' },
+  price: { flexShrink: 0, fontSize: 20, fontWeight: '900', letterSpacing: -0.4, textAlign: 'right' },
+  per: { fontSize: 13, fontWeight: '700', letterSpacing: 0 },
   timeline: { borderRadius: 20, padding: 16, gap: 12 },
   timelineTitle: { fontSize: 14, fontWeight: '900' },
   step: { flexDirection: 'row', alignItems: 'stretch', gap: 12 },

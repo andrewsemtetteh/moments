@@ -103,6 +103,7 @@ export function OurMapView({
 
   return (
     <ScrollView
+      alwaysBounceVertical={false}
       contentContainerStyle={[styles.scroll, { paddingBottom: bottomInset + 24 }]}
       showsVerticalScrollIndicator={false}>
       <View>

@@ -170,8 +170,11 @@ export function MomentHistoryModal() {
   const viewerOpen = useUIStore((s) => !!s.momentViewer);
   // A newly opened album starts scrolled to the top, cover behind the status bar.
   const [heroAlbumId, setHeroAlbumId] = useState(albumId);
+  /** "Choose cover photo": the next tap on a photo in the open album makes it the cover. */
+  const [pickingCover, setPickingCover] = useState(false);
   if (heroAlbumId !== albumId) {
     setHeroAlbumId(albumId);
+    setPickingCover(false);
     setHeroBehindStatus(true);
   }
   const longPressLockRef = useRef(false);
@@ -215,9 +218,19 @@ export function MomentHistoryModal() {
       ),
     [displayMoments, COLS],
   );
+  // Free sees an album's first moments up to the same limit as Our moments; the rest are behind Plus
+  // (counting moments not loaded on Free as locked too).
+  const albumVisible = useMemo(
+    () => (Number.isFinite(limits.timelineMoments) ? albumMoments.slice(0, limits.timelineMoments) : albumMoments),
+    [albumMoments, limits.timelineMoments],
+  );
+  const albumLockedCount =
+    openAlbum && Number.isFinite(limits.timelineMoments)
+      ? Math.max(0, Math.max(openAlbum.momentIds.length, albumMoments.length) - albumVisible.length)
+      : 0;
   const albumRows = useMemo(
-    () => (openAlbum ? toRows(openAlbum.id, openAlbum.name, albumMoments, false, COLS) : []),
-    [openAlbum, albumMoments, COLS],
+    () => (openAlbum ? toRows(openAlbum.id, openAlbum.name, albumVisible, false, COLS) : []),
+    [openAlbum, albumVisible, COLS],
   );
 
   // Free accounts still page in until they've loaded enough to fill their
@@ -388,6 +401,12 @@ export function MomentHistoryModal() {
       toggleSelect(moment.id);
       return;
     }
+    if (pickingCover && openAlbum) {
+      setCover(openAlbum.id, moment.id);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setPickingCover(false);
+      return;
+    }
     openMoment(moment, sectionMoments, sectionLabel);
   };
 
@@ -490,7 +509,26 @@ export function MomentHistoryModal() {
     });
   };
 
+  /** Free can fill albums from moments they've shared; uploading from the phone is Plus. */
+  const showAlbumUploadPlus = () =>
+    setSheet({
+      kind: 'actions',
+      title: 'Upload to albums',
+      message: 'Uploading photos and videos straight into albums is part of Moments Plus. You can still add moments you’ve already shared.',
+      thumb: (
+        <View style={[styles.sheetThumbIcon, { backgroundColor: chrome.accentSoft }]}>
+          <Icon name="image" size={26} color={chrome.accent} filled />
+        </View>
+      ),
+      actions: [],
+      primary: { label: 'Unlock album uploads', color: '#FF4D6D', icon: 'unlock', onPress: () => openPlus('Album uploads') },
+    });
+
   const uploadFromLibrary = async (album: { id: string; name: string }) => {
+    if (!isPlus) {
+      showAlbumUploadPlus();
+      return;
+    }
     if (uploadsLeft <= 0) {
       showMomentLimit();
       return;
@@ -580,13 +618,26 @@ export function MomentHistoryModal() {
           },
         },
         {
-          label: 'Upload photos & videos',
-          icon: 'image',
+          label: isPlus ? 'Upload photos & videos' : 'Upload photos & videos (Plus)',
+          icon: isPlus ? 'image' : 'lock',
           onPress: () => {
             setSheet(null);
             void uploadFromLibrary(openAlbum);
           },
         },
+        ...(count > 0
+          ? [
+              {
+                label: 'Choose cover photo',
+                icon: 'image' as const,
+                onPress: () => {
+                  setSheet(null);
+                  Haptics.selectionAsync();
+                  setPickingCover(true);
+                },
+              },
+            ]
+          : []),
         { label: 'Edit album', icon: 'edit', onPress: () => setSheet({ kind: 'rename', album: openAlbum }) },
         {
           label: 'Delete album',
@@ -793,8 +844,12 @@ export function MomentHistoryModal() {
               moment={moment}
               width={TILE}
               height={TILE_H}
-              selecting={selecting}
-              selected={selectedIds.has(moment.id)}
+              selecting={selecting || (inAlbumList && pickingCover)}
+              selected={
+                inAlbumList && pickingCover && openAlbum
+                  ? moment.id === albumCoverId(openAlbum)
+                  : selectedIds.has(moment.id)
+              }
               reactionBadge={selecting ? null : getHistoryReactionBadge(moment, user?.id ?? '', partner?.id)}
               onPress={() => onTilePress(moment, item.sectionMoments, item.sectionLabel)}
               onLongPress={() => (inAlbumList ? albumMomentOptions(moment) : enterSelection(moment.id))}
@@ -923,8 +978,8 @@ export function MomentHistoryModal() {
           },
         },
         {
-          label: 'Upload photos & videos',
-          icon: 'image',
+          label: isPlus ? 'Upload photos & videos' : 'Upload photos & videos (Plus)',
+          icon: isPlus ? 'image' : 'lock',
           onPress: () => {
             setSheet(null);
             void uploadFromLibrary(openAlbum);
@@ -999,6 +1054,7 @@ export function MomentHistoryModal() {
             </View>
           ) : (
             <FlatList
+              alwaysBounceVertical={false}
               ref={listRef}
               data={rows}
               keyExtractor={(row) => row.key}
@@ -1162,6 +1218,18 @@ export function MomentHistoryModal() {
                       albumRows.length === 0 && styles.scrollFill,
                     ]}
                     showsVerticalScrollIndicator={false}
+                    ListFooterComponent={
+                      albumLockedCount > 0 ? (
+                        <Pressable
+                          onPress={() => openPlus('Full albums')}
+                          style={[styles.unlockBanner, cardSurface(colors)]}>
+                          <Icon name="lock" size={18} color={chrome.text} />
+                          <Text style={[styles.unlockText, { color: chrome.text }]}>
+                            Unlock {albumLockedCount} more moment{albumLockedCount === 1 ? '' : 's'} with Plus
+                          </Text>
+                        </Pressable>
+                      ) : null
+                    }
                     ListEmptyComponent={
                       <View style={styles.albumEmpty}>
                         <View style={[styles.emptyIcon, { backgroundColor: chrome.accentSoft }]}>
@@ -1174,12 +1242,28 @@ export function MomentHistoryModal() {
                       </View>
                     }
                   />
-                  <FloatingButton
-                    icon="plus"
-                    label="Add to moments"
-                    onPress={addToAlbumMenu}
-                    bottomInset={insets.bottom}
-                  />
+                  {pickingCover ? (
+                    <View style={[styles.coverHint, { bottom: insets.bottom + 18, backgroundColor: chrome.elevated, borderColor: chrome.border }]}>
+                      <Icon name="image" size={20} color={chrome.accent} />
+                      <Text style={[styles.coverHintText, { color: chrome.text }]} numberOfLines={1}>
+                        Tap a photo to make it the cover
+                      </Text>
+                      <Pressable
+                        onPress={() => setPickingCover(false)}
+                        hitSlop={8}
+                        accessibilityRole="button"
+                        style={styles.coverHintCancel}>
+                        <Text style={[styles.coverHintCancelText, { color: chrome.accent }]}>Cancel</Text>
+                      </Pressable>
+                    </View>
+                  ) : (
+                    <FloatingButton
+                      icon="plus"
+                      label="Add to moments"
+                      onPress={addToAlbumMenu}
+                      bottomInset={insets.bottom}
+                    />
+                  )}
                   {/* Back and options float over the cover (and stay put as you scroll). */}
                   <View pointerEvents="box-none" style={[styles.albumChips, { top: insets.top + 6 }]}>
                     {[
@@ -1211,7 +1295,7 @@ export function MomentHistoryModal() {
           <AlbumEditSheet
             title="New album"
             submitLabel="Create album"
-            withMedia
+            withMedia={isPlus}
             mediaLimit={Number.isFinite(uploadsLeft) ? uploadsLeft : undefined}
             freeDailyMoments={limits.dailyMoments}
             moments={allMoments}
@@ -1301,6 +1385,27 @@ function FloatingButton({
 }
 
 const styles = StyleSheet.create({
+  coverHint: {
+    position: 'absolute',
+    left: 16,
+    right: 16,
+    minHeight: 56,
+    borderRadius: 28,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingLeft: 18,
+    paddingRight: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    shadowColor: '#000',
+    shadowOpacity: 0.18,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 8,
+  },
+  coverHintText: { flex: 1, fontSize: 15, fontWeight: '800' },
+  coverHintCancel: { height: 44, paddingHorizontal: 14, justifyContent: 'center' },
+  coverHintCancelText: { fontSize: 15, fontWeight: '800' },
   root: { flex: 1 },
   header: {
     flexDirection: 'row',

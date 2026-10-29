@@ -41,7 +41,7 @@ export function CardsDeckScreen() {
 
   return (
     <View style={s.stack}>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.tabs}>
+      <ScrollView horizontal alwaysBounceHorizontal={false} showsHorizontalScrollIndicator={false} contentContainerStyle={s.tabs}>
         {CARD_CATEGORIES.map((c) => {
           const active = category === c;
           return (
@@ -268,7 +268,7 @@ export function BucketListScreen() {
         </Pressable>
       </View>
 
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.tabs}>
+      <ScrollView horizontal alwaysBounceHorizontal={false} showsHorizontalScrollIndicator={false} contentContainerStyle={s.tabs}>
         {filters.map((t) => {
           const active = filter === t;
           return (

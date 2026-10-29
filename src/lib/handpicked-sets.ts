@@ -18,6 +18,8 @@ export interface FormatPackDef {
   blurb: string;
   art?: ActivityArtId;
   format: Exclude<HandpickedFormat, 'questions'>;
+  /** Guess quizzes: pick for yourself, then guess your partner's pick. */
+  guessPartner?: boolean;
   questions: PackQuestion[];
 }
 
@@ -41,6 +43,16 @@ const quiz = (
   format: 'quizzes',
   questions: items.map(([text, picks], i) => ({ id: String(i + 1), text, picks })),
 });
+
+/** A quiz where you pick for yourself, then guess your partner's pick; each of you is scored on the other. */
+const guessQuiz = (
+  id: string,
+  area: AreaId,
+  title: string,
+  depth: Depth,
+  blurb: string,
+  items: [string, string[]][],
+): FormatPackDef => ({ ...quiz(id, area, title, depth, blurb, items), guessPartner: true });
 
 const thisOrThat = (id: string, area: AreaId, title: string, blurb: string, pairs: [string, string][]): FormatPackDef => ({
   id,
@@ -85,6 +97,18 @@ export const FORMAT_PACKS: FormatPackDef[] = [
     ['Morning person or night owl?', ['Morning', 'Night', 'Neither', 'Depends on the day']],
     ['Favourite season?', ['Spring', 'Summer', 'Autumn', 'Winter']],
   ]),
+  guessQuiz('knowing-guess', 'knowing', 'Do you really know me?', 'light', 'Pick yours, then guess theirs. Who knows who better?', [
+    ['Ideal night in?', ['Movie and snacks', 'Cooking together', 'Games', 'Early night']],
+    ['First thing in the morning?', ['Check my phone', 'Coffee or tea', 'Straight to the shower', 'Hit snooze']],
+    ['Biggest pet peeve?', ['Lateness', 'Loud chewing', 'Mess', 'Slow replies']],
+    ['Dream job if money didn’t matter?', ['Something creative', 'Travel the world', 'Run my own thing', 'Help people']],
+    ['Pick a superpower', ['Fly', 'Teleport', 'Read minds', 'Stop time']],
+    ['When stressed, you…', ['Talk it out', 'Need space', 'Keep busy', 'Sleep on it']],
+    ['Favourite way to be spoiled?', ['A surprise gift', 'Plans made for me', 'Good food', 'Time together']],
+    ['Karaoke: what’s your move?', ['Power ballad', 'Rap verse', 'Duet only', 'Not a chance']],
+    ['Favourite kind of weather?', ['Sunny', 'Rainy', 'Snowy', 'Crisp and cold']],
+    ['Ideal birthday?', ['Big party', 'Dinner out', 'A quiet day', 'A trip away']],
+  ]),
   thisOrThat('knowing-tot', 'knowing', 'This or that: everyday', 'Quick picks. Fast, fun, surprisingly telling.', [
     ['Coffee', 'Tea'],
     ['Call', 'Text'],
@@ -94,6 +118,8 @@ export const FORMAT_PACKS: FormatPackDef[] = [
     ['Book', 'Movie'],
     ['Plan everything', 'Go with the flow'],
     ['Big party', 'Small dinner'],
+    ['Beach', 'Mountains'],
+    ['Early bird', 'Night owl'],
   ]),
   cards('knowing-cards', 'knowing', 'Get curious', 'real', 'Cards that go one layer past small talk.', [
     'What’s something you’ve changed your mind about in the last year?',
@@ -150,6 +176,18 @@ export const FORMAT_PACKS: FormatPackDef[] = [
   ]),
 
   // ── Fun ────────────────────────────────────────────────────────────────
+  guessQuiz('fun-guess', 'fun', 'Read my mind', 'light', 'Pick yours, guess theirs. Bragging rights on the line.', [
+    ['Pineapple on pizza?', ['Yes please', 'Never', 'Sometimes', 'Never tried it']],
+    ['Pick a holiday', ['Beach', 'Snow', 'City', 'Safari']],
+    ['Last-minute plans?', ['Love them', 'Fine by me', 'Need some notice', 'Hate them']],
+    ['Horror films?', ['Love them', 'Watch through my fingers', 'Only with you', 'Absolutely not']],
+    ['Best snack', ['Crisps', 'Chocolate', 'Fruit', 'Popcorn']],
+    ['Board games', ['Play to win', 'Play for fun', 'Rules expert', 'Avoid them']],
+    ['Lottery win: first thing you buy?', ['A house', 'A big trip', 'A car', 'Save it all']],
+    ['On the dance floor you’re…', ['First on', 'On after a drink', 'Slow songs only', 'Never on']],
+    ['Best rainy-day plan?', ['Films', 'Baking', 'Games', 'A long nap']],
+    ['At a theme park you head for…', ['Rollercoasters', 'Water rides', 'Food stalls', 'A bench']],
+  ]),
   quiz('fun-quiz-likely', 'fun', 'Who’s more likely to…', 'light', 'Pick who. See if you agree.', [
     ['Get lost with a map open?', ['Me', 'You', 'Both of us', 'Neither']],
     ['Cry at a film?', ['Me', 'You', 'Both of us', 'Neither']],
@@ -158,6 +196,9 @@ export const FORMAT_PACKS: FormatPackDef[] = [
     ['Win a game show?', ['Me', 'You', 'Both of us', 'Neither']],
     ['Survive a zombie apocalypse?', ['Me', 'You', 'Both of us', 'Neither']],
     ['Laugh at the wrong moment?', ['Me', 'You', 'Both of us', 'Neither']],
+    ['Fall asleep halfway through a film?', ['Me', 'You', 'Both of us', 'Neither']],
+    ['Stop to say hello to every dog?', ['Me', 'You', 'Both of us', 'Neither']],
+    ['Forget where the car is parked?', ['Me', 'You', 'Both of us', 'Neither']],
   ]),
   thisOrThat('fun-tot', 'fun', 'This or that: weekend', 'The weekend debate, settled.', [
     ['Arcade', 'Escape room'],
@@ -168,6 +209,8 @@ export const FORMAT_PACKS: FormatPackDef[] = [
     ['Pyjama day', 'Adventure day'],
     ['Cook at home', 'Order in'],
     ['Road trip', 'Staycation'],
+    ['Concert', 'Cinema'],
+    ['Lie-in', 'Early start'],
   ]),
   cards('fun-cards', 'fun', 'Silly questions', 'light', 'Ridiculous questions with real answers.', [
     'If we were a band, what would we be called?',
@@ -187,9 +230,24 @@ export const FORMAT_PACKS: FormatPackDef[] = [
     'Take silly photos in a photo booth or on a timer.',
     'Have a bake-off with a secret ingredient.',
     'Go on a walk and only take turns left or right by coin flip.',
+    'Have a themed film night, with snacks to match.',
+    'Make each other a playlist, then swap and listen.',
+    'Try a free class or workshop nearby, together.',
   ]),
 
   // ── Romance ────────────────────────────────────────────────────────────
+  guessQuiz('romance-guess', 'romance', 'Guess my love style', 'light', 'Pick yours, then guess theirs. See who reads who.', [
+    ['What makes you feel most loved?', ['Kind words', 'Time together', 'A thoughtful gift', 'A long hug']],
+    ['Perfect date?', ['Dinner out', 'A picnic', 'An adventure', 'A night in']],
+    ['Best kind of surprise?', ['A sweet note', 'A trip', 'A favourite meal', 'A visit out of nowhere']],
+    ['Most romantic time of day?', ['Morning', 'Afternoon', 'Sunset', 'Late night']],
+    ['Flowers?', ['Love them', 'Rather a plant', 'Chocolate instead', 'Not fussed']],
+    ['Affection in public?', ['Love it', 'A little is nice', 'Holding hands only', 'Keep it private']],
+    ['Anniversary plans?', ['Big celebration', 'Quiet dinner', 'A trip away', 'Try something new']],
+    ['After a long day you want…', ['A hug', 'To vent', 'Food', 'Some quiet']],
+    ['Love notes?', ['Handwritten', 'A sweet text', 'A voice note', 'Said out loud']],
+    ['Dream getaway for two?', ['Cosy cabin', 'Beach villa', 'City hotel', 'Road trip']],
+  ]),
   quiz('romance-quiz', 'romance', 'Romance style quiz', 'light', 'What makes each of you swoon.', [
     ['The most romantic gesture is…', ['A handwritten note', 'A surprise plan', 'Undivided attention', 'A thoughtful gift']],
     ['Ideal date night?', ['Dinner out', 'Cosy night in', 'Something new', 'Dancing']],
@@ -539,5 +597,206 @@ export const FORMAT_PACKS: FormatPackDef[] = [
     'Write letters to future you, to open in five years.',
     'Plan your dream holiday down to the day.',
     'Set three goals for the next 90 days.',
+  ]),
+  // ── Guess quizzes: pick yours, guess theirs, see who knows who better ───
+  guessQuiz('knowing-mind', 'knowing', 'Little things about me', 'light', 'The small stuff. Pick yours, guess theirs.', [
+    ['How do you take your eggs?', ['Scrambled', 'Fried', 'Boiled', 'No eggs, thanks']],
+    ['Phone battery at…', ['Always 100%', 'Around half', 'Living on 5%', 'Always charging']],
+    ['Favourite way to travel?', ['Plane', 'Train', 'Car', 'On foot']],
+    ['Messy or tidy?', ['Spotless', 'Tidy-ish', 'Organised chaos', 'Just chaos']],
+    ['Best meal of the day?', ['Breakfast', 'Lunch', 'Dinner', 'Midnight snack']],
+    ['What would you save in a fire?', ['Photos', 'My phone', 'A sentimental gift', 'Just us']],
+  ]),
+  guessQuiz('comm-guess', 'communication', 'How I talk', 'light', 'Your talking style. Pick yours, guess theirs.', [
+    ['Bad news: how do you like it?', ['Straight away', 'Gently', 'In person', 'Over text first']],
+    ['When upset, you first…', ['Talk right away', 'Go quiet', 'Need a walk', 'Write it down']],
+    ['Favourite way to catch up during the day?', ['Calls', 'Texts', 'Voice notes', 'Memes']],
+    ['Big decision: you want…', ['To talk it through', 'Time alone first', 'A list of pros and cons', 'Your gut feeling']],
+    ['Texting style?', ['Long paragraphs', 'Lots of short ones', 'Mostly emoji', 'Calls instead']],
+    ['When you vent, you want…', ['Just listening', 'Advice', 'A hug', 'A distraction']],
+  ]),
+  guessQuiz('comm-mind', 'communication', 'Read my signals', 'real', 'How well do you read each other? Pick yours, guess theirs.', [
+    ['When you go quiet, it usually means…', ['I’m tired', 'I’m thinking', 'Something’s wrong', 'I’m content']],
+    ['Best time for a serious talk?', ['Morning', 'Over dinner', 'Late at night', 'On a walk']],
+    ['What helps most after a hard day?', ['Talking it out', 'Space', 'Being looked after', 'Doing something fun']],
+    ['A compliment you love most?', ['About how I look', 'About who I am', 'About what I do', 'In front of others']],
+    ['How do you show you’re listening?', ['Questions', 'Eye contact', 'Remembering later', 'Touch']],
+    ['What makes you feel unheard?', ['Interruptions', 'Phones out', 'Quick fixes', 'Changing the subject']],
+  ]),
+  guessQuiz('int-guess', 'intimacy', 'Close to you', 'real', 'How each of you likes to feel close. Pick yours, guess theirs.', [
+    ['Favourite kind of affection?', ['Cuddles', 'Holding hands', 'Kisses', 'Sitting close']],
+    ['Best time to feel close?', ['Mornings in bed', 'Evenings on the sofa', 'Out together', 'Late night talks']],
+    ['What makes you feel most wanted?', ['Being noticed', 'Being touched', 'Being told', 'Being chosen']],
+    ['Ideal cosy night?', ['Film under a blanket', 'Bath and candles', 'Talking for hours', 'Early night together']],
+    ['How do you like to be comforted?', ['A long hug', 'Kind words', 'Quiet company', 'A distraction']],
+    ['What’s most romantic?', ['A slow dance', 'A love note', 'A surprise kiss', 'Undivided attention']],
+  ]),
+  guessQuiz('int-mind', 'intimacy', 'Guess my closeness', 'light', 'Soft questions about being close. Pick yours, guess theirs.', [
+    ['Big spoon or little spoon?', ['Big spoon', 'Little spoon', 'Either', 'No spooning']],
+    ['Holding hands in public?', ['Always', 'Sometimes', 'Only abroad', 'Not really']],
+    ['Favourite place to be kissed?', ['Forehead', 'Cheek', 'Lips', 'Hand']],
+    ['Sleeping position as a couple?', ['Wrapped up', 'Touching feet', 'Back to back', 'Starfish, sorry']],
+    ['Best hug?', ['From behind', 'Long and tight', 'Lift off the ground', 'Sleepy morning hug']],
+    ['Pet names?', ['Love them', 'Just one', 'Only in private', 'Use my name']],
+  ]),
+  guessQuiz('fun-mind', 'fun', 'Weekend me', 'light', 'Your idea of fun. Pick yours, guess theirs.', [
+    ['Free Saturday: first move?', ['Lie-in', 'Big breakfast', 'Out the door', 'Jobs first']],
+    ['Pick a game night', ['Cards', 'Board games', 'Video games', 'Quiz night']],
+    ['Festival or spa day?', ['Festival', 'Spa day', 'Both', 'Neither']],
+    ['Best kind of film?', ['Comedy', 'Thriller', 'Romance', 'Action']],
+    ['Competitive?', ['Very', 'A bit', 'Only at games I win', 'Not at all']],
+    ['Dream day out?', ['Theme park', 'Beach', 'Countryside', 'City wander']],
+  ]),
+  guessQuiz('conflict-guess', 'conflict', 'How I argue', 'real', 'Know each other’s fighting style. Pick yours, guess theirs.', [
+    ['In an argument, you…', ['Raise my voice', 'Go quiet', 'Stay calm', 'Walk away']],
+    ['What cools you down fastest?', ['Time alone', 'A hug', 'A joke', 'Talking it out']],
+    ['Who should say sorry first?', ['Whoever’s wrong', 'Whoever’s calmer', 'Me, usually', 'You, usually']],
+    ['How long to bounce back?', ['Minutes', 'A few hours', 'A day', 'Depends']],
+    ['What makes a fight worse?', ['Old stuff brought up', 'Silence', 'Sarcasm', 'Not listening']],
+    ['Best way to make up?', ['A proper talk', 'A hug', 'A small gesture', 'Moving on']],
+  ]),
+  guessQuiz('conflict-mind', 'conflict', 'After the storm', 'real', 'What helps you both make up. Pick yours, guess theirs.', [
+    ['After a fight you need…', ['Reassurance', 'Space', 'An apology', 'A plan']],
+    ['Apology you like best?', ['Said in words', 'Shown in actions', 'Written down', 'With a hug']],
+    ['Go to bed angry?', ['Never', 'Sometimes it’s best', 'Only if very tired', 'Often']],
+    ['What do you most need to hear?', ['I understand', 'I’m sorry', 'We’re okay', 'I love you']],
+    ['Small things you argue about?', ['Chores', 'Plans', 'Phones', 'Being late']],
+    ['How do you show you’re ready to make up?', ['A joke', 'A touch', 'A message', 'Making food']],
+  ]),
+  guessQuiz('money-guess', 'money', 'Money and me', 'light', 'Spender or saver? Pick yours, guess theirs.', [
+    ['A surprise bit of extra money?', ['Save it', 'Treat myself', 'Treat us', 'Pay something off']],
+    ['Biggest money weakness?', ['Food', 'Clothes', 'Gadgets', 'Travel']],
+    ['Check your bank balance…', ['Daily', 'Weekly', 'When I dare', 'Never']],
+    ['Big purchase style?', ['Research for weeks', 'Quick decision', 'Ask you first', 'Wait for a sale']],
+    ['Splitting the bill on a date?', ['Always split', 'Take turns', 'Whoever invited', 'Doesn’t matter']],
+    ['Dream splurge?', ['A trip', 'A car', 'A home upgrade', 'A designer piece']],
+  ]),
+  guessQuiz('money-mind', 'money', 'Guess my money style', 'real', 'How you each think about money. Pick yours, guess theirs.', [
+    ['Money makes you feel…', ['Secure', 'Stressed', 'Free', 'Not much']],
+    ['Budgeting?', ['Every penny', 'Rough plan', 'Try to', 'What budget?']],
+    ['Lend money to a friend?', ['Happily', 'Small amounts', 'Only family', 'Rather not']],
+    ['Saving for…', ['A home', 'Travel', 'A rainy day', 'Retirement']],
+    ['Joint account?', ['Yes, everything', 'One for bills', 'Not yet', 'Keep it separate']],
+    ['Worth spending more on?', ['Experiences', 'Quality things', 'Comfort', 'Food']],
+  ]),
+  guessQuiz('future-guess', 'future', 'Future me', 'light', 'Where you see yourself. Pick yours, guess theirs.', [
+    ['Where would you love to live?', ['Big city', 'Small town', 'Countryside', 'By the sea']],
+    ['Dream home?', ['Modern flat', 'Cosy cottage', 'Big family house', 'Somewhere abroad']],
+    ['In ten years you’re…', ['Settled down', 'Travelling', 'Building a business', 'Somewhere new']],
+    ['Retirement plan?', ['Travel the world', 'Quiet garden life', 'Near family', 'Never retire']],
+    ['Pets someday?', ['A dog', 'A cat', 'Several', 'None']],
+    ['Big life goal?', ['Family', 'Career', 'Adventure', 'Peace and quiet']],
+  ]),
+  guessQuiz('future-mind', 'future', 'Our next chapter', 'real', 'What you each want next. Pick yours, guess theirs.', [
+    ['Next big step you want?', ['Moving in', 'A big trip', 'Saving up', 'Taking it slow']],
+    ['How often to see family later on?', ['Every week', 'Monthly', 'Holidays', 'When we can']],
+    ['Would you move abroad?', ['Tomorrow', 'For the right reason', 'Maybe for a year', 'No']],
+    ['Wedding style, if ever?', ['Big party', 'Small and close', 'Just us', 'Not for me']],
+    ['Work-life balance goal?', ['Work less', 'Work smarter', 'Work from anywhere', 'Love my work']],
+    ['Where will we be in 5 years?', ['Same city', 'New city', 'New country', 'Wherever life takes us']],
+  ]),
+  guessQuiz('family-guess', 'family', 'Family and me', 'light', 'Families and traditions. Pick yours, guess theirs.', [
+    ['Family size growing up felt…', ['Small and close', 'Big and loud', 'Somewhere between', 'Complicated']],
+    ['Best family tradition?', ['Holiday meals', 'Trips away', 'Game nights', 'Birthdays']],
+    ['How often do you call family?', ['Daily', 'Weekly', 'Monthly', 'When something happens']],
+    ['Holidays: whose family?', ['Take turns', 'Both on the day', 'Just us', 'Whoever’s closest']],
+    ['Most like which parent?', ['Mum', 'Dad', 'Both', 'Neither']],
+    ['Family gatherings: you’re…', ['Life of the party', 'In the kitchen', 'With the kids', 'Ready to leave']],
+  ]),
+  guessQuiz('family-mind', 'family', 'Guess my roots', 'real', 'Where you come from. Pick yours, guess theirs.', [
+    ['What you got from home?', ['Kindness', 'Hard work', 'Humour', 'Stubbornness']],
+    ['A tradition to keep?', ['Sunday dinners', 'Holiday rituals', 'Family trips', 'Birthday customs']],
+    ['A tradition to drop?', ['Long visits', 'Big gift lists', 'Fixed holidays', 'None']],
+    ['How close to family should we live?', ['Same street', 'Same city', 'A drive away', 'Far is fine']],
+    ['Kids someday?', ['Yes', 'Maybe', 'Not sure yet', 'No']],
+    ['Who do you turn to first?', ['A parent', 'A sibling', 'A friend', 'You']],
+  ]),
+  guessQuiz('growth-guess', 'growth', 'How I grow', 'light', 'How you each like to grow. Pick yours, guess theirs.', [
+    ['Learn something new by…', ['Doing it', 'Reading', 'Videos', 'A class']],
+    ['Skill you’d love to pick up?', ['A language', 'An instrument', 'Cooking', 'A sport']],
+    ['New Year’s resolutions?', ['Always', 'Sometimes', 'Never stick', 'Don’t believe in them']],
+    ['Feel best after…', ['A workout', 'A good sleep', 'Time outside', 'A good talk']],
+    ['Motivated by…', ['Goals', 'Praise', 'Competition', 'Curiosity']],
+    ['Handle a setback by…', ['Trying again', 'Taking a break', 'Talking it through', 'Changing course']],
+  ]),
+  guessQuiz('growth-mind', 'growth', 'Becoming me', 'real', 'Who you’re growing into. Pick yours, guess theirs.', [
+    ['What are you working on most?', ['Patience', 'Confidence', 'Health', 'Balance']],
+    ['Biggest strength?', ['Kindness', 'Grit', 'Humour', 'Loyalty']],
+    ['How do you recharge?', ['Alone time', 'With friends', 'In nature', 'With you']],
+    ['Feedback: how do you like it?', ['Direct', 'Gentle', 'In private', 'With a plan']],
+    ['Proudest of…', ['My work', 'My relationships', 'How I’ve grown', 'Getting through hard times']],
+    ['What do you want more of?', ['Calm', 'Adventure', 'Creativity', 'Time together']],
+  ]),
+  guessQuiz('home-guess', 'home', 'Home habits', 'light', 'Who does what, really? Pick yours, guess theirs.', [
+    ['Least favourite chore?', ['Washing up', 'Laundry', 'Cleaning the bathroom', 'Taking out the bins']],
+    ['Temperature at home?', ['Warm and toasty', 'Cool', 'Window open', 'Whatever’s free']],
+    ['Cooking at home?', ['I love it', 'Simple meals', 'Only on weekends', 'Order in']],
+    ['Bedtime?', ['Before 10', 'Around 11', 'After midnight', 'Whenever']],
+    ['Decor style?', ['Minimal', 'Cosy and full', 'Plants everywhere', 'Colourful']],
+    ['Sunday at home looks like…', ['Cleaning reset', 'Sofa day', 'Cooking big', 'Out and about']],
+  ]),
+  guessQuiz('home-mind', 'home', 'Guess my space', 'light', 'Your little preferences at home. Pick yours, guess theirs.', [
+    ['Side of the bed?', ['Left', 'Right', 'Middle', 'Don’t mind']],
+    ['Shoes in the house?', ['Off at the door', 'Slippers only', 'On is fine', 'Depends']],
+    ['Dishes: when?', ['Straight away', 'Before bed', 'Next morning', 'When they pile up']],
+    ['Background noise at home?', ['Music', 'TV on', 'Podcasts', 'Silence']],
+    ['Favourite room?', ['Bedroom', 'Kitchen', 'Living room', 'Bathroom']],
+    ['Morning routine?', ['Up and out', 'Slow coffee', 'Workout', 'Snooze, snooze']],
+  ]),
+  guessQuiz('romance-mind', 'romance', 'Dates I’d love', 'light', 'Your kind of date. Pick yours, guess theirs.', [
+    ['Dream first-date redo?', ['Fancy dinner', 'Coffee walk', 'Something active', 'Cosy night in']],
+    ['Romantic film or…', ['Romcom', 'Big love story', 'Action, please', 'Animated']],
+    ['Best date season?', ['Spring', 'Summer', 'Autumn', 'Winter']],
+    ['Surprise date or planned?', ['Surprise me', 'Plan together', 'I’ll plan', 'You plan']],
+    ['Perfect date ending?', ['Late-night food', 'A walk home', 'Stargazing', 'Straight to bed']],
+    ['Date night how often?', ['Every week', 'Twice a month', 'Monthly', 'Every day counts']],
+  ]),
+  guessQuiz('trust-guess', 'trust', 'Feel safe with me', 'real', 'What helps each of you feel secure. Pick yours, guess theirs.', [
+    ['What builds trust most?', ['Honesty', 'Consistency', 'Openness', 'Keeping promises']],
+    ['Sharing phone passwords?', ['Of course', 'If asked', 'Not needed', 'Rather not']],
+    ['Feel most secure when…', ['We text often', 'We talk about the future', 'You’re affectionate', 'You keep your word']],
+    ['Jealousy level?', ['Never', 'A little', 'Sometimes', 'More than I’d like']],
+    ['Friends of the opposite sex?', ['Totally fine', 'Fine if I know them', 'Depends', 'Not keen']],
+    ['When trust wobbles, you need…', ['Reassurance', 'An honest talk', 'Time', 'Actions over words']],
+  ]),
+  guessQuiz('trust-mind', 'trust', 'Guess my honesty', 'light', 'Little truths. Pick yours, guess theirs.', [
+    ['White lies?', ['Never', 'To be kind', 'Sometimes', 'All the time']],
+    ['Tell me if my outfit looks bad?', ['Always', 'Gently', 'Only if asked', 'Never']],
+    ['Keep a surprise secret?', ['Like a vault', 'Mostly', 'I’d drop hints', 'I’d tell right away']],
+    ['Read my messages if I left my phone?', ['Never', 'Only if it beeped', 'Tempted', 'Probably']],
+    ['Admit when you’re wrong?', ['Straight away', 'After a while', 'Eventually', 'Rarely']],
+    ['Share how you feel?', ['Always', 'When asked', 'With time', 'Hard for me']],
+  ]),
+  guessQuiz('distance-guess', 'distance', 'Miles apart, me', 'light', 'How you each stay close apart. Pick yours, guess theirs.', [
+    ['Best way to stay close apart?', ['Video calls', 'Texting all day', 'Voice notes', 'Letters and gifts']],
+    ['Call length?', ['Quick check-ins', 'An hour', 'Fall asleep on call', 'Varies']],
+    ['Hardest part of distance?', ['Time zones', 'No touch', 'Missing moments', 'Goodbyes']],
+    ['Countdown to next visit?', ['Every day', 'On the calendar', 'In my head', 'Rather not count']],
+    ['Watch something together online?', ['Every week', 'Sometimes', 'Rarely', 'Not our thing']],
+    ['Best surprise from afar?', ['Food delivery', 'A letter', 'A visit', 'A playlist']],
+  ]),
+  guessQuiz('distance-mind', 'distance', 'Guess my missing you', 'real', 'Missing each other, honestly. Pick yours, guess theirs.', [
+    ['When you miss me, you…', ['Call', 'Look at photos', 'Keep busy', 'Tell you']],
+    ['First thing on a visit?', ['A long hug', 'Food', 'Nap together', 'Go out']],
+    ['Goodbyes at the airport?', ['Tears', 'Brave face', 'Quick and done', 'Long and slow']],
+    ['How often do you want to talk?', ['All day', 'Morning and night', 'Once a day', 'When it fits']],
+    ['What keeps you going?', ['The next visit', 'Our plans', 'Daily messages', 'Trust']],
+    ['When distance ends, first plan?', ['Move in', 'Slow routine', 'A trip', 'Every day together']],
+  ]),
+  guessQuiz('story-guess', 'story', 'Our story, my side', 'light', 'Your memories of us. Pick yours, guess theirs.', [
+    ['When did you know you liked me?', ['First meeting', 'First date', 'A few weeks in', 'Took a while']],
+    ['Best part of our first date?', ['The talking', 'The place', 'The nerves', 'The ending']],
+    ['Our funniest moment was…', ['A travel mishap', 'A cooking disaster', 'An inside joke', 'Something we can’t say']],
+    ['Favourite photo of us?', ['A holiday one', 'A silly selfie', 'A dressed-up one', 'One you took of me']],
+    ['Song that feels like us?', ['A slow one', 'An upbeat one', 'A throwback', 'Still looking']],
+    ['Best trip together so far?', ['A city break', 'A beach trip', 'A road trip', 'Yet to come']],
+  ]),
+  guessQuiz('story-mind', 'story', 'Remember when', 'light', 'How you each remember it. Pick yours, guess theirs.', [
+    ['Who made the first move?', ['Me', 'You', 'Both of us', 'Still debated']],
+    ['First impression of me?', ['Cute', 'Funny', 'Shy', 'Trouble']],
+    ['Our first kiss was…', ['Perfect', 'Awkward', 'A surprise', 'Hard to remember']],
+    ['Best gift so far?', ['Something handmade', 'An experience', 'Something I needed', 'A surprise']],
+    ['When did it feel serious?', ['Meeting family', 'Saying I love you', 'A trip', 'Moving in']],
+    ['Our relationship in one word?', ['Fun', 'Calm', 'Adventure', 'Home']],
   ]),
 ];

@@ -135,6 +135,7 @@ export function AddEventSheet({
     <>
       <DraggableSheet visible={visible} onClose={onClose} avoidKeyboard style={styles.sheet}>
             <ScrollView
+              alwaysBounceVertical={false}
               showsVerticalScrollIndicator={false}
               keyboardShouldPersistTaps="handled"
               contentContainerStyle={styles.scroll}>
@@ -162,6 +163,7 @@ export function AddEventSheet({
 
               <ScrollView
                 horizontal
+                alwaysBounceHorizontal={false}
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={styles.kindRow}
                 style={styles.kindScroll}>

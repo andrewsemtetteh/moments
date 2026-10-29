@@ -66,14 +66,15 @@ export default function GoalsScreen() {
               style={({ pressed }) => [
                 styles.card,
                 {
-                  backgroundColor: on ? colors.surface : colors.boldBorder ? '#F3F3F3' : colors.surfaceElevated,
-                  borderColor: on ? colors.text : 'transparent',
+                  // Paper's surfaces are all white: unpicked cards take its raised page colour.
+                  backgroundColor: on ? colors.surface : colors.boldBorder ? colors.backgroundElevated : colors.surfaceElevated,
+                  borderColor: on ? colors.accent : 'transparent',
                 },
                 pressed && styles.pressed,
               ]}>
               <Text style={[styles.label, { color: colors.text }]}>{g.label}</Text>
-              <View style={[styles.tick, { backgroundColor: colors.text, opacity: on ? 1 : 0 }]}>
-                <Icon name="check" size={13} color={colors.background} />
+              <View style={[styles.tick, { backgroundColor: colors.accent, opacity: on ? 1 : 0 }]}>
+                <Icon name="check" size={13} color={colors.onAccent} />
               </View>
               <View style={styles.peek} pointerEvents="none">
                 <PeekCharacter color={g.color} size={62} happy={on} seed={i} lookAt={on ? null : lookAtFor(i)} />

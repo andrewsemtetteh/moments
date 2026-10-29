@@ -10,24 +10,61 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { PLAY_TONES, type PlayTone } from '@/components/activities/explore/explore-catalog';
 import { ChunkyButton, firstName, shade } from '@/components/games/room-ui';
+import { GuessQuiz, type GuessRow } from '@/components/play/GuessQuiz';
+import { CommentBox } from '@/components/play/CommentBox';
+import { PickList } from '@/components/play/PickList';
 import { PlayHeader } from '@/components/play/PlayHeader';
 import { PLAY_GUTTER, PlayHero, PlayPill, playCardStyle, playEdge } from '@/components/play/PlayKit';
 import { Icon } from '@/components/ui/Icon';
+import { NudgeButton } from '@/components/ui/NudgeButton';
 import { Avatar } from '@/components/ui/primitives';
 import { useLockPackAnswer, usePackAnswers, type PackAnswer } from '@/hooks/play-queries';
 import { useLightStatusBar } from '@/hooks/useLightStatusBar';
 import { useTheme } from '@/hooks/useTheme';
 import { encodeAttachment, type ChatAttachment } from '@/lib/chat-attachments';
-import { DEPTHS, getArea, getPack, type HandpickedFormat, type PackQuestion } from '@/lib/handpicked';
+import {
+  DEPTHS,
+  getArea,
+  getPack,
+  answerHome,
+  savedAs,
+  storedPackId,
+  type HandpickedFormat,
+  type PackQuestion,
+} from '@/lib/handpicked';
 import { usePlayProgressStore } from '@/stores/play-progress-store';
 import { sendMessage, sendPartnerNotification } from '@/services/api';
 import { useAuthStore, useRelationshipStore } from '@/stores';
 
 const NUDGE_EVERY_MS = 30 * 60_000;
 const lastNudge = new Map<string, number>();
+
+/** "I'm done, your turn" from the end of a pack. False while it's cooling down (10 minutes). */
+async function nudgeForPack(
+  relationshipId: string,
+  partnerId: string,
+  myName: string,
+  packId: string,
+  packTitle: string,
+): Promise<boolean> {
+  const key = `nudge:${packId}`;
+  const now = Date.now();
+  if (now - (lastNudge.get(key) ?? 0) < 10 * 60_000) return false;
+  lastNudge.set(key, now);
+  await sendPartnerNotification(
+    relationshipId,
+    partnerId,
+    'activity',
+    `${myName} finished “${packTitle}” and is waiting on your answers.`,
+    { relatedId: packId },
+  ).catch(() => undefined);
+  return true;
+}
 const QUICK_REACTIONS = ['❤️', '😂', '🥹', '🔥', '🤯'];
 // Packs whose results card this phone already posted to chat (so a re-render can't double post).
 const resultsPosted = new Set<string>();
+// Packs whose "your turn" card this phone already posted (once per pack, when you finish your side).
+const turnPosted = new Set<string>();
 
 function answerText(a: PackAnswer | undefined) {
   if (!a) return '';
@@ -71,10 +108,29 @@ const COPY: Record<
   },
 };
 
+/** What a set is, on its chat card ("ROMANCE · QUIZ"). */
+const KIND_LABEL: Record<HandpickedFormat, string> = {
+  questions: 'Questions',
+  quizzes: 'Quiz',
+  prompts: 'Cards',
+  activities: 'To do',
+};
+
+/** The emoji on a pack's chat card (packs have none of their own). */
+const FORMAT_EMOJI: Record<HandpickedFormat, string> = {
+  questions: '💬',
+  quizzes: '🧠',
+  prompts: '🃏',
+  activities: '✅',
+};
+
 /** Two answers match when both tapped the same pick (quizzes). */
 function isMatch(e: Entry) {
   return !!e.mine?.choice && e.mine.choice === e.theirs?.choice;
 }
+
+const GUESS_INTRO = (n: number) =>
+  `${n} questions. Answer them all for yourself, then guess your partner’s. Results when you’ve both finished.`;
 
 /** A Handpicked question pack: answer separately, then each answer unlocks once you've both locked in. */
 export default function PackScreen() {
@@ -100,6 +156,20 @@ export default function PackScreen() {
     void queryClient.invalidateQueries({ queryKey: ['messages', relationshipId] });
   };
 
+  /** "Andrew finished “Deep talks”. Your turn…": the pack as a turn card in your chat. */
+  const postTurnCard = (next = 'Your turn: answer to see each other’s.') => {
+    if (!pack || !user) return;
+    postToChat({
+      type: 'game',
+      kind: 'pack',
+      id: pack.id,
+      title: pack.title,
+      emoji: FORMAT_EMOJI[pack.format ?? 'questions'],
+      status: 'turn',
+      line: `${firstName(user.name)} finished “${pack.title}”. ${next}`,
+    }).catch(() => turnPosted.delete(pack.id));
+  };
+
   const [index, setIndex] = useState<number | null>(null);
   const [pick, setPick] = useState<string | null>(null);
   const [note, setNote] = useState('');
@@ -107,11 +177,12 @@ export default function PackScreen() {
   const packId = pack?.id;
   const byQuestion = new Map<string, Entry>();
   for (const a of answers ?? []) {
-    if (a.pack_id !== packId) continue;
-    const entry = byQuestion.get(a.question_id) ?? {};
+    const home = answerHome(a);
+    if (home.packId !== packId) continue;
+    const entry = byQuestion.get(home.questionId) ?? {};
     if (a.user_id === user?.id) entry.mine = a;
     else entry.theirs = a;
-    byQuestion.set(a.question_id, entry);
+    byQuestion.set(home.questionId, entry);
   }
 
   // Open on the first question you haven't answered yet (decided once, when answers first load).
@@ -138,6 +209,7 @@ export default function PackScreen() {
   const entry = byQuestion.get(question.id) ?? {};
   const partnerName = firstName(partner?.name);
   const depthLabel = DEPTHS.find((d) => d.id === pack.depth)?.label ?? '';
+  const guessing = format === 'quizzes' && !!pack.guessPartner;
   const canLock = (!!pick || !!note.trim()) && !lock.isPending;
   const firstOpen = pack.questions.findIndex((qq) => !byQuestion.get(qq.id)?.mine);
   const furthest = firstOpen === -1 ? total : firstOpen;
@@ -146,9 +218,11 @@ export default function PackScreen() {
     if (!canLock) return;
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     lock.mutate(
-      { packId: pack.id, questionId: question.id, choice: pick, note: note.trim() || null },
+      { ...savedAs(pack, question), choice: pick, note: note.trim() || null },
       {
         onSuccess: () => {
+          // Straight on to the next question: answers only show at the end, in the summary.
+          goTo(i + 1);
           const finishedMine = pack.questions.every((qq) => qq.id === question.id || !!byQuestion.get(qq.id)?.mine);
           const matched = format === 'quizzes' && !!pick && pick === entry.theirs?.choice;
           if (relationshipId) {
@@ -196,6 +270,11 @@ export default function PackScreen() {
             return;
           }
           if (!partner || !relationshipId || !user) return;
+          // You've finished your side and they haven't: a "your turn" card in chat (once).
+          if (finishedMine && !turnPosted.has(pack.id)) {
+            turnPosted.add(pack.id);
+            postTurnCard();
+          }
           const now = Date.now();
           if (now - (lastNudge.get(pack.id) ?? 0) < NUDGE_EVERY_MS) return;
           lastNudge.set(pack.id, now);
@@ -215,6 +294,81 @@ export default function PackScreen() {
     );
   };
 
+  /** Guess quiz finished on this phone: every answer and guess saved together. */
+  const submitGuesses = async (rows: GuessRow[]) => {
+    try {
+      await Promise.all(
+        rows.map((r) =>
+          lock.mutateAsync({ packId: storedPackId(pack), questionId: r.questionId, choice: r.choice, note: null, guess: r.guess }),
+        ),
+      );
+    } catch {
+      Alert.alert('Couldn’t save your answers', 'Check your connection and try again.');
+      return false;
+    }
+    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    const partnerDone = pack.questions.every((qq) => !!byQuestion.get(qq.id)?.theirs);
+    const right = partnerDone ? rows.filter((r) => r.guess === byQuestion.get(r.questionId)?.theirs?.choice).length : 0;
+    if (partnerDone && !resultsPosted.has(pack.id)) {
+      // Finished by you both: the results in chat, scored from each side (how well they read you).
+      const theyRead = rows.filter((r) => byQuestion.get(r.questionId)?.theirs?.guess === r.choice).length;
+      resultsPosted.add(pack.id);
+      postToChat({
+        type: 'guess_result',
+        packId: pack.id,
+        title: pack.title,
+        area: area.title,
+        total,
+        senderScore: right,
+        otherScore: theyRead,
+      }).catch(() => resultsPosted.delete(pack.id));
+    } else if (!partnerDone && !turnPosted.has(pack.id)) {
+      turnPosted.add(pack.id);
+      postTurnCard('Your turn: answer for yourself, then guess theirs.');
+    }
+    if (relationshipId) {
+      void usePlayProgressStore.getState().award(
+        relationshipId,
+        {
+          xp: 8 * rows.length + 40 + 5 * right,
+          stats: { pack_answers: rows.length, packs_completed: 1, ...(right ? { sync_matches: right } : {}) },
+          events: { pack_answered: rows.length, ...(right ? { sync_match: right } : {}) },
+        },
+        'Guess quiz',
+      );
+    }
+    if (partner && relationshipId && user) {
+      void sendPartnerNotification(
+        relationshipId,
+        partner.id,
+        'activity',
+        partnerDone
+          ? `${firstName(user.name)} finished “${pack.title}”. Results are in: see who knew who best.`
+          : `${firstName(user.name)} finished “${pack.title}”. Your turn: answer for yourself, then guess theirs.`,
+        { relatedId: pack.id },
+      ).catch(() => undefined);
+    }
+    return true;
+  };
+
+  // The results post themselves when the quiz finishes, so a note from the end goes as a note
+  // (not a second copy of the scores).
+  const sendGuessComment = (comment: string) =>
+    postToChat({
+      type: 'play_comment',
+      packId: pack.id,
+      title: pack.part?.setTitle ?? pack.title,
+      area: area.title,
+      kind: KIND_LABEL[format],
+      comment,
+    });
+
+  // From the end of the pack: "I'm done, your turn".
+  const nudgePartner = () =>
+    partner && relationshipId && user
+      ? nudgeForPack(relationshipId, partner.id, firstName(user.name), pack.id, pack.title)
+      : Promise.resolve(false);
+
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
       <KeyboardFormScrollView
@@ -232,7 +386,9 @@ export default function PackScreen() {
         <View style={{ backgroundColor: tone.accent }}>
           <PlayHeader title={pack.title} onColor="#FFFFFF" />
         </View>
-        <PlayHero color={tone.accent} pill={`${area.title} · ${depthLabel}`} blurb={copy.intro(total)}>
+        <PlayHero color={tone.accent} pill={`${area.title} · ${depthLabel}`} blurb={pack.blurb ?? (guessing ? GUESS_INTRO(total) : copy.intro(total))}
+          note={pack.blurb ? (guessing ? GUESS_INTRO(total) : copy.intro(total)) : undefined}>
+          {guessing ? null : (
           <View style={styles.steps}>
             {pack.questions.map((qq, idx) => {
               const mine = !!byQuestion.get(qq.id)?.mine;
@@ -241,7 +397,8 @@ export default function PackScreen() {
                 <Pressable
                   key={qq.id}
                   onPress={() => goTo(idx)}
-                  disabled={idx > furthest}
+                  // Only once you've answered everything (mid-game it would show your answers again).
+                  disabled={firstOpen !== -1 || idx > furthest}
                   accessibilityRole="button"
                   accessibilityLabel={`Question ${idx + 1}${mine ? ', answered' : ''}`}
                   hitSlop={8}
@@ -255,10 +412,23 @@ export default function PackScreen() {
               );
             })}
           </View>
+          )}
         </PlayHero>
 
         <View style={styles.body}>
-          {finished ? (
+          {guessing && user ? (
+            <GuessQuiz
+              pack={pack}
+              tone={tone}
+              entries={byQuestion}
+              userId={user.id}
+              me={{ name: firstName(user.name), avatar: user.avatar_url }}
+              partner={{ name: partnerName, avatar: partner?.avatar_url }}
+              onSubmit={submitGuesses}
+              onComment={sendGuessComment}
+              onNudge={nudgePartner}
+            />
+          ) : finished ? (
             <Summary
               questions={pack.questions}
               byQuestion={byQuestion}
@@ -266,6 +436,18 @@ export default function PackScreen() {
               tone={tone}
               format={format}
               onOpen={goTo}
+              partnerAvatar={partner?.avatar_url}
+              onNudge={nudgePartner}
+              onComment={(text) =>
+                postToChat({
+                  type: 'play_comment',
+                  packId: pack.id,
+                  title: pack.part?.setTitle ?? pack.title,
+                  area: area.title,
+                  kind: KIND_LABEL[format],
+                  comment: text,
+                })
+              }
             />
           ) : (
             <>
@@ -330,18 +512,7 @@ export default function PackScreen() {
                         }}
                       />
                     </>
-                  ) : (
-                    <View
-                      style={[
-                        styles.statusBox,
-                        playCardStyle(colors),
-                      ]}>
-                      <Avatar name={partner?.name} imageUrl={partner?.avatar_url} size={32} />
-                      <Text style={[styles.statusText, { color: colors.textSecondary }]}>
-                        Waiting for {partnerName}. You’ll both see each other’s answer once they reply.
-                      </Text>
-                    </View>
-                  )}
+                  ) : null}
                   <ActionBar
                     label={i + 1 >= total ? 'See all answers' : 'Next question'}
                     color={tone.accent}
@@ -352,31 +523,7 @@ export default function PackScreen() {
               ) : (
                 <>
                   {question.picks ? (
-                    <View style={styles.picks}>
-                      {question.picks.map((p) => {
-                        const selected = pick === p;
-                        return (
-                          <Pressable
-                            key={p}
-                            onPress={() => {
-                              void Haptics.selectionAsync();
-                              setPick(selected ? null : p);
-                            }}
-                            accessibilityRole="button"
-                            accessibilityState={{ selected }}
-                            style={[
-                              styles.pick,
-                              {
-                                backgroundColor: selected ? tone.accent : colors.surfaceElevated,
-                                borderColor: selected ? shade(tone.accent, -0.25) : colors.border,
-                              },
-                            ]}>
-                            <Text style={[styles.pickText, { color: selected ? '#FFFFFF' : colors.text }]}>{p}</Text>
-                            {selected ? <Icon name="check" size={16} color="#FFFFFF" /> : null}
-                          </Pressable>
-                        );
-                      })}
-                    </View>
+                    <PickList picks={question.picks} value={pick} onChange={setPick} accent={tone.accent} />
                   ) : null}
 
                   <TextInput
@@ -398,23 +545,21 @@ export default function PackScreen() {
                     ]}
                   />
 
-                  <View
-                    style={[styles.statusBox, playCardStyle(colors)]}>
-                    <Avatar name={partner?.name} imageUrl={partner?.avatar_url} size={32} />
-                    <Text style={[styles.statusText, { color: colors.textSecondary }]}>
-                      {entry.theirs
-                        ? `${partnerName} answered. Theirs unlocks when you lock in yours.`
-                        : `${partnerName} hasn’t answered yet.`}
-                    </Text>
-                    {entry.theirs ? <Icon name="lock" size={18} color={colors.textSecondary} /> : null}
-                  </View>
+                  {/* They've answered this one already (both show at the end). Nothing when they haven't. */}
+                  {entry.theirs ? (
+                    <View style={[styles.waitingLine, { backgroundColor: tone.soft }]}>
+                      <Icon name="lock" size={14} color={tone.accent} filled />
+                      <Text style={[styles.waitingText, { color: tone.accent }]} numberOfLines={2}>
+                        {partnerName} has answered this one. You’ll see both at the end.
+                      </Text>
+                    </View>
+                  ) : null}
 
                   <ActionBar
-                    label={lock.isPending ? 'Saving…' : entry.theirs ? `${copy.lock} and reveal` : copy.lock}
+                    label={lock.isPending ? 'Saving…' : copy.lock}
                     color={tone.accent}
                     disabled={!canLock}
                     onPress={lockIn}
-                    onBack={i > 0 ? () => goTo(i - 1) : undefined}
                   />
                 </>
               )}
@@ -536,11 +681,7 @@ function ActionBar({
           onPress={onBack}
           accessibilityRole="button"
           accessibilityLabel="Previous question"
-          style={({ pressed }) => [
-            styles.backSquare,
-            playCardStyle(colors),
-            { opacity: pressed ? 0.85 : 1 },
-          ]}>
+          style={({ pressed }) => [styles.backSquare, playCardStyle(colors), { opacity: pressed ? 0.85 : 1 }]}>
           <Icon name="chevronLeft" size={24} color={colors.text} />
         </Pressable>
       ) : null}
@@ -550,7 +691,6 @@ function ActionBar({
     </View>
   );
 }
-
 
 function AnswerCard({
   label,
@@ -584,6 +724,9 @@ function Summary({
   tone,
   format,
   onOpen,
+  partnerAvatar,
+  onNudge,
+  onComment,
 }: {
   questions: PackQuestion[];
   byQuestion: Map<string, Entry>;
@@ -591,8 +734,15 @@ function Summary({
   tone: PlayTone;
   format: HandpickedFormat;
   onOpen: (index: number) => void;
+  partnerAvatar?: string | null;
+  /** Pings your partner; resolves false while it's cooling down. */
+  onNudge: () => Promise<boolean>;
+  /** A note about the set, sent to your chat. */
+  onComment: (text: string) => Promise<void>;
 }) {
   const { colors } = useTheme();
+  const [nudged, setNudged] = useState(false);
+  const theirsCount = questions.filter((qq) => !!byQuestion.get(qq.id)?.theirs).length;
   const both = questions.filter((qq) => byQuestion.get(qq.id)?.mine && byQuestion.get(qq.id)?.theirs).length;
   const matches = questions.filter((qq) => isMatch(byQuestion.get(qq.id) ?? {})).length;
   const allDone = both === questions.length;
@@ -622,6 +772,32 @@ function Summary({
         <Text style={styles.question}>{headline}</Text>
       </LinearGradient>
 
+      {/* Where your partner is in the pack, and a nudge while they're not done. */}
+      {theirsCount < questions.length ? (
+        <View style={[styles.statusBox, playCardStyle(colors)]}>
+          <Avatar name={partnerName} imageUrl={partnerAvatar ?? undefined} size={36} />
+          <View style={styles.statusLines}>
+            <Text style={[styles.statusTitle, { color: colors.text }]} numberOfLines={1}>
+              {theirsCount === 0 ? `${partnerName} hasn’t started` : `${partnerName}: ${theirsCount} of ${questions.length}`}
+            </Text>
+            <Text style={[styles.statusText, { color: colors.textSecondary }]} numberOfLines={2}>
+              You’ll get a notification when they finish.
+            </Text>
+          </View>
+          <NudgeButton
+            name={partnerName}
+            nudged={nudged}
+            accent={tone.accent}
+            onPress={() =>
+              void onNudge().then((sent) => {
+                setNudged(true);
+                if (!sent) Alert.alert('Already nudged', `We let ${partnerName} know a moment ago.`);
+              })
+            }
+          />
+        </View>
+      ) : null}
+
       {questions.map((qq, idx) => {
         const e = byQuestion.get(qq.id) ?? {};
         const open = !!e.mine && !!e.theirs;
@@ -641,6 +817,8 @@ function Summary({
           </Pressable>
         );
       })}
+
+      <CommentBox accent={tone.accent} partner={partnerName} onSend={onComment} />
     </View>
   );
 }
@@ -668,43 +846,24 @@ const styles = StyleSheet.create({
     top: -80,
   },
   question: { color: '#FFFFFF', fontSize: 23, fontWeight: '900', lineHeight: 29, letterSpacing: -0.4 },
-  picks: { gap: 8 },
-  pick: {
-    minHeight: 52,
-    borderRadius: 16,
-    borderWidth: 1.5,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+  input: { borderRadius: 16, padding: 14, fontSize: 16, lineHeight: 22, minHeight: 84, textAlignVertical: 'top' },
+  statusBox: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12 },
+  statusLines: { flex: 1, gap: 2 },
+  statusTitle: { fontSize: 15, fontWeight: '800' },
+  statusText: { fontSize: 13, fontWeight: '600', lineHeight: 18 },
+  waitingLine: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 10,
+    gap: 8,
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
   },
-  pickText: { flex: 1, fontSize: 16, fontWeight: '700' },
-  input: {
-    borderRadius: 16,
-    padding: 14,
-    fontSize: 16,
-    lineHeight: 22,
-    minHeight: 84,
-    textAlignVertical: 'top',
-  },
-  statusBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    padding: 12,
-  },
-  statusText: { flex: 1, fontSize: 14, fontWeight: '600', lineHeight: 20 },
+  waitingText: { flex: 1, fontSize: 14, fontWeight: '800' },
   reveal: { gap: 12 },
   actionBar: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
   actionGrow: { flex: 1 },
-  backSquare: {
-    width: 56,
-    height: 56,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  backSquare: { width: 56, height: 56, alignItems: 'center', justifyContent: 'center' },
   answer: { padding: 16, gap: 10 },
   answerHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   answerName: { fontSize: 13, fontWeight: '800' },

@@ -1,6 +1,7 @@
 import { backend } from '@/lib/backend';
 import { todayKey } from '@/lib/play-progress';
-import { sendPartnerNotification } from '@/services/api';
+import { encodeAttachment } from '@/lib/chat-attachments';
+import { sendMessage, sendPartnerNotification } from '@/services/api';
 import { usePlayProgressStore } from '@/stores/play-progress-store';
 
 import { DUEL_QUESTIONS } from './duel-questions';
@@ -188,6 +189,21 @@ export async function answerDuel(
     if (!saved) continue; // they answered at the same moment: re-read and try again
 
     const first = (n: string) => n.split(' ')[0];
+    // The same news as a card in your chat, worded for you both (it opens the duel).
+    const postCard = (status: 'turn' | 'finished', line: string) =>
+      void sendMessage(
+        saved.relationship_id,
+        me.id,
+        encodeAttachment({
+          type: 'game',
+          kind: 'duel',
+          id: next.date,
+          title: 'Today’s duel',
+          emoji: '⚔️',
+          status,
+          line,
+        }),
+      ).catch(() => undefined);
     if (finished && next.result) {
       award(saved, next.result);
       const winner = next.result.winnerId;
@@ -197,10 +213,21 @@ export async function answerDuel(
           : winner
             ? 'You won today’s duel! Tap to see the answers.'
             : 'Today’s duel is a tie. Tap to see the answers.';
+      const mine = next.result.scores[me.id] ?? 0;
+      const theirs = next.result.scores[partner.id] ?? 0;
+      postCard(
+        'finished',
+        winner === me.id
+          ? `${first(me.name)} won ${mine}–${theirs}.`
+          : winner
+            ? `${first(partner.name)} won ${theirs}–${mine}.`
+            : `A tie at ${mine} each.`,
+      );
       void sendPartnerNotification(saved.relationship_id, partner.id, 'game_turn', line, { relatedId: id }).catch(
         () => undefined,
       );
     } else {
+      postCard('turn', `${first(me.name)} played. Your turn: three questions, ${first(partner.name)}.`);
       void sendPartnerNotification(
         saved.relationship_id,
         partner.id,

@@ -4,6 +4,7 @@ import type { ComponentProps } from 'react';
 
 export type IconName =
   | 'filter'
+  | 'verified'
   | 'home'
   | 'spark'
   | 'plus'
@@ -108,9 +109,10 @@ type IoniconName = ComponentProps<typeof Ionicons>['name'];
 /** Icons Ionicons doesn't have, from Material Community Icons (same package). */
 const MATERIAL_ICONS: Partial<Record<IconName, ComponentProps<typeof MaterialCommunityIcons>['name']>> = {
   swords: 'sword-cross',
+  verified: 'check-decagram',
 };
 
-const ICON_MAP: Record<Exclude<IconName, 'swords'>, { outline: IoniconName; filled: IoniconName }> = {
+const ICON_MAP: Record<Exclude<IconName, 'swords' | 'verified'>, { outline: IoniconName; filled: IoniconName }> = {
   home: { outline: 'home-outline', filled: 'home' },
   spark: { outline: 'sparkles-outline', filled: 'sparkles' },
   plus: { outline: 'add', filled: 'add' },
@@ -229,7 +231,7 @@ interface IconProps {
 export function Icon({ name, size = 24, color = '#000', filled = false }: IconProps) {
   const material = MATERIAL_ICONS[name];
   if (material) return <MaterialCommunityIcons name={material} size={size} color={color} />;
-  const mapped = ICON_MAP[name as Exclude<IconName, 'swords'>];
+  const mapped = ICON_MAP[name as Exclude<IconName, 'swords' | 'verified'>];
   const ionName = filled ? mapped.filled : mapped.outline;
   return <Ionicons name={ionName} size={size} color={color} />;
 }

@@ -199,6 +199,7 @@ export function RatingPage({ onDone }: { onDone: () => void }) {
         </View>
         {/* Scrolls on small phones and with the keyboard up; a tap outside the box closes the keyboard. */}
         <ScrollView
+          alwaysBounceVertical={false}
           style={styles.flex}
           contentContainerStyle={[styles.scroll, { paddingBottom: typing ? 12 : insets.bottom + 24 }]}
           keyboardShouldPersistTaps="handled"
@@ -222,9 +223,9 @@ export function RatingPage({ onDone }: { onDone: () => void }) {
             <Animated.View key="rate" entering={FadeIn.duration(220)} style={styles.flex}>
               <View style={styles.middle}>
                 <CoupleCharacters width={220} />
-                <Text style={[styles.title, { color: colors.text }]}>How would you rate us?</Text>
+                <Text style={[styles.title, { color: colors.text }]}>Help us reach more couples</Text>
                 <Text style={[styles.body, { color: colors.textSecondary }]}>
-                  It takes a second and helps other couples find Moments.
+                  A quick rating helps us recommend Moments to couples like you two.
                 </Text>
                 <StarRow value={stars} onRate={pickStars} emptyColor={colors.textTertiary} />
                 <Text style={[styles.starWord, { color: colors.text }]}>{STAR_WORDS[stars]}</Text>

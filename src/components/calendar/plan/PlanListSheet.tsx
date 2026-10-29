@@ -185,7 +185,7 @@ export function PlanListSheet({
             </Pressable>
           </View>
 
-          <ScrollView style={{ maxHeight: 420 }} keyboardShouldPersistTaps="handled">
+          <ScrollView alwaysBounceVertical={false} style={{ maxHeight: 420 }} keyboardShouldPersistTaps="handled">
             {list.sections.map((section) => (
               <View key={section.id} style={styles.section}>
                 {editingSectionId === section.id ? (

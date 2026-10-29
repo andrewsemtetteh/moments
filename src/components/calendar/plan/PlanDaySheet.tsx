@@ -86,6 +86,7 @@ export function PlanDaySheet({
         </View>
 
         <ScrollView
+          alwaysBounceVertical={false}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={styles.scroll}>

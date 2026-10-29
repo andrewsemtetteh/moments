@@ -4,6 +4,7 @@ import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'rea
 import { TextInput } from '@/components/ui/ThemedTextInput';
 
 import { Icon } from '@/components/ui/Icon';
+import { NudgeButton } from '@/components/ui/NudgeButton';
 import { Avatar, PrimaryButton, colorWithAlpha } from '@/components/ui/primitives';
 import { WEEK_CHALLENGE } from '@/constants/activity-content';
 import { useSharedActivities } from '@/hooks/useSharedActivity';
@@ -140,17 +141,22 @@ export function GratitudeSwapScreen() {
         ) : !theirs ? (
           <>
             <GratitudeList label="Yours" items={mine} />
-            <View style={[styles.waiting, { backgroundColor: colorWithAlpha(colors.accent, 0.1) }]}>
-              <Text style={[styles.waitingText, { color: colors.text }]}>Waiting for {partnerName}</Text>
-              <Pressable
+            <View style={[styles.waiting, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
+              <View style={styles.waitingLines}>
+                <Text style={[styles.waitingTitle, { color: colors.text }]} numberOfLines={1}>
+                  Waiting for {partnerName}
+                </Text>
+                <Text style={[styles.waitingText, { color: colors.textSecondary }]} numberOfLines={2}>
+                  Your three are in. Theirs show here once they swap.
+                </Text>
+              </View>
+              <NudgeButton
+                name={partnerName}
                 onPress={() => {
                   void Haptics.selectionAsync();
                   openChat('Your turn for our gratitude swap 💛');
                 }}
-                accessibilityRole="button"
-                style={[styles.nudge, { backgroundColor: colors.accent }]}>
-                <Text style={[styles.nudgeText, { color: colors.onAccent }]}>Nudge</Text>
-              </Pressable>
+              />
             </View>
           </>
         ) : (
@@ -374,10 +380,17 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, borderRadius: 14, borderWidth: StyleSheet.hairlineWidth, padding: 12 },
   num: { fontSize: 15, fontWeight: '900', width: 16, marginTop: 2 },
   input: { flex: 1, fontSize: 15, lineHeight: 20, minHeight: 22, padding: 0 },
-  waiting: { flexDirection: 'row', alignItems: 'center', gap: 10, borderRadius: 14, padding: 12 },
-  waitingText: { flex: 1, fontSize: 14, fontWeight: '700' },
-  nudge: { height: 34, paddingHorizontal: 14, borderRadius: 17, justifyContent: 'center' },
-  nudgeText: { fontSize: 13, fontWeight: '800' },
+  waiting: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    borderRadius: 16,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: 12,
+  },
+  waitingLines: { flex: 1, gap: 2 },
+  waitingTitle: { fontSize: 15, fontWeight: '800' },
+  waitingText: { fontSize: 13, fontWeight: '600', lineHeight: 18 },
   list: { borderRadius: 14, padding: 12, gap: 4 },
   listLabel: { fontSize: 12, fontWeight: '800', marginBottom: 2 },
   listItem: { fontSize: 15, lineHeight: 21 },

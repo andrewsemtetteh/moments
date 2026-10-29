@@ -9,6 +9,7 @@ import { useState, type ReactNode } from 'react';
 import { ActivityIndicator, Alert, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { AppIconPicker } from '@/components/profile/AppIconPicker';
 import { ChangePasswordModal, MIN_PASSWORD_LENGTH } from '@/components/profile/ChangePasswordModal';
 import { EditAnniversaryModal } from '@/components/profile/EditAnniversaryModal';
 import { EditFieldModal } from '@/components/profile/EditFieldModal';
@@ -24,7 +25,7 @@ import { ScreenHeader } from '@/components/layout/ScreenHeader';
 import { Icon, type IconName } from '@/components/ui/Icon';
 import { Avatar, colorWithAlpha, separatorColor } from '@/components/ui/primitives';
 import { SOCIAL_LINKS, SUPPORT_EMAIL } from '@/constants/social';
-import { THEME_META, Spacing, Themes, type AppTheme, type ThemeColors } from '@/constants/design-system';
+import { THEME_GRID_FILLERS, THEME_META, Spacing, Themes, type AppTheme, type ThemeColors } from '@/constants/design-system';
 import { usePlanActions } from '@/hooks/usePlanActions';
 import { useSubscription } from '@/hooks/useSubscription';
 import { REFERRAL_DAYS } from '@/constants/subscription';
@@ -504,6 +505,7 @@ Until then, Plus features the server checks (restoring a streak, AI games, the m
       <ScreenHeader title="Settings" onBack={() => closeStackScreen(router)} />
 
       <ScrollView
+        alwaysBounceVertical={false}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 16 }]}>
         {/* Profile photo only — name and email live in Account below. */}
@@ -603,7 +605,11 @@ Until then, Plus features the server checks (restoring a streak, AI games, the m
             {THEME_META.map((t) => (
               <ThemePreview key={t.key} themeKey={t.key} label={t.label} active={theme === t.key} onPress={() => setTheme(t.key)} />
             ))}
+            {THEME_GRID_FILLERS.map((k) => (
+              <View key={k} style={styles.themeItem} />
+            ))}
           </View>
+          <AppIconPicker />
         </Section>
 
         <Section title="Privacy">

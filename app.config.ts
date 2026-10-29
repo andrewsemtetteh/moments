@@ -71,11 +71,16 @@ export default ({ config: base }: ConfigContext): ExpoConfig => {
     },
     // Sentry: the org and project its plugin uploads source maps to at build time (with
     // SENTRY_AUTH_TOKEN as an EAS secret), so crash reports show our real code.
-    plugins: (base.plugins ?? []).map((p) =>
-      p === '@sentry/react-native' && process.env.SENTRY_ORG && process.env.SENTRY_PROJECT
-        ? ['@sentry/react-native', { organization: process.env.SENTRY_ORG, project: process.env.SENTRY_PROJECT }]
-        : p,
-    ),
+    plugins: [
+      ...(base.plugins ?? []).map((p) =>
+        p === '@sentry/react-native' && process.env.SENTRY_ORG && process.env.SENTRY_PROJECT
+          ? (['@sentry/react-native', { organization: process.env.SENTRY_ORG, project: process.env.SENTRY_PROJECT }] as [
+              string,
+              Record<string, string>,
+            ])
+          : p,
+      ),
+    ],
     extra: {
       ...base.extra,
       eas: {

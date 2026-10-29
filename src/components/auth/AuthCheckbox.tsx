@@ -8,6 +8,7 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { useTheme } from '@/hooks/useTheme';
+import { outlineColor } from '@/components/ui/primitives';
 
 type Props = {
   checked: boolean;
@@ -36,7 +37,7 @@ export function AuthCheckbox({ checked, onToggle, label, hitSlop = 4 }: Props) {
       style={[
         styles.checkbox,
         boxStyle,
-        { borderColor: colors.border, backgroundColor: colors.surface },
+        { borderColor: outlineColor(colors), backgroundColor: colors.surface },
         checked && { backgroundColor: colors.accent, borderColor: colors.accent },
       ]}>
       {checked && <Text style={[styles.checkmark, { color: colors.onAccent }]}>✓</Text>}

@@ -2,13 +2,15 @@ import type { RealtimeChannel } from '@/lib/cloudflare';
 
 import { backend } from '@/lib/backend';
 import { fetchGameContent } from '@/services/game-content';
-import { sendPartnerNotification } from '@/services/api';
+import { encodeAttachment } from '@/lib/chat-attachments';
+import { sendMessage, sendPartnerNotification } from '@/services/api';
 import { useCallStore } from '@/stores';
 import { useGameRoomStore } from '@/stores/game-room-store';
 import { usePlayProgressStore } from '@/stores/play-progress-store';
 
 import { RoomAudio } from './audio';
 import { createRoom, needsMoreItems, reduceRoom, statsFromRoom } from './reducer';
+import { finishedLine } from './result-line';
 import { rivalryAward } from './rivalry';
 import {
   getGameDefinition,
@@ -285,6 +287,26 @@ class GameRoomManager {
         { xp: state.result.xp, stats: { ...statsFromRoom(state), ...rivalry.stats }, maxStats: rivalry.maxStats, events },
         'Live game finished',
       );
+    // The result in your chat, like an own-time game's: posted once, by the host's phone.
+    if (this.me && this.partner && state.hostId === this.me.id) {
+      const line = finishedLine(state, this.me, this.partner);
+      const def = getGameDefinition(state.game);
+      if (line) {
+        void sendMessage(
+          this.relationshipId,
+          this.me.id,
+          encodeAttachment({
+            type: 'game',
+            kind: 'live',
+            id: state.id,
+            title: def.title,
+            emoji: def.emoji,
+            status: 'finished',
+            line,
+          }),
+        ).catch(() => undefined);
+      }
+    }
   }
 
   // ---- public API ---------------------------------------------------------

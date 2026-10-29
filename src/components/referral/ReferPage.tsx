@@ -84,9 +84,10 @@ export function ReferPage({ onBack }: { onBack?: () => void } = {}) {
 
   return (
     <SafeAreaView style={[styles.root, { backgroundColor: colors.background }]} edges={['top', 'left', 'right']}>
+      {/* Close, top right: the page is a detour you dismiss, not a step you go back from. */}
       <View style={styles.top}>
-        <Pressable onPress={back} hitSlop={10} accessibilityRole="button" accessibilityLabel="Back" style={styles.back}>
-          <Icon name="chevronLeft" size={28} color={colors.text} />
+        <Pressable onPress={back} hitSlop={10} accessibilityRole="button" accessibilityLabel="Close" style={styles.back}>
+          <Icon name="close" size={26} color={colors.text} />
         </Pressable>
       </View>
       <View style={styles.body}>
@@ -152,7 +153,7 @@ export function ReferPage({ onBack }: { onBack?: () => void } = {}) {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  top: { paddingHorizontal: 14, paddingTop: 6 },
+  top: { paddingHorizontal: 14, paddingTop: 6, alignItems: 'flex-end' },
   back: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   body: { flex: 1, paddingHorizontal: 24, gap: 14 },
   art: { alignItems: 'center' },

@@ -101,7 +101,7 @@ export default function BirthdayScreen() {
       secondaryLabel="Skip for now"
       onSecondary={() => void save(null)}
       scroll={false}>
-      <AnniversaryWheelPicker value={date} onChange={choose} surfaceColor={colors.surface} minYear={1920} maxYear={latestBirthYear()} />
+      <AnniversaryWheelPicker value={date} onChange={choose} surfaceColor={colors.background} minYear={1920} maxYear={latestBirthYear()} />
       <View style={[styles.note, { backgroundColor: colors.surfaceElevated }, paperEdge(colors)]}>
         <StickerCake size={56} />
         <Text style={[styles.noteText, { color: colors.text }]}>

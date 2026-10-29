@@ -70,6 +70,7 @@ export function PromptHistoryScreen() {
         />
       ) : (
         <ScrollView
+          alwaysBounceVertical={false}
           contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 16 }]}
           showsVerticalScrollIndicator={false}>
           {entries.map((entry) => {
@@ -136,6 +137,7 @@ export function PromptHistoryDetailScreen() {
         )
       ) : (
         <ScrollView
+          alwaysBounceVertical={false}
           contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 16 }]}
           showsVerticalScrollIndicator={false}>
           <Text style={[styles.detailPrompt, { color: colors.text }]}>{entry.prompt}</Text>

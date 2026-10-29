@@ -1,5 +1,8 @@
 import type { IconName } from '@/components/ui/Icon';
 import { FREE_DAILY_MOMENTS, FREE_TIMELINE_MOMENTS } from '@/constants/design-system';
+import { yearlySavingPercent } from '@/lib/plan-saving';
+
+export { yearlySavingPercent };
 
 /**
  * Moments Plus pricing: source of truth (see src/docs/MONETIZATION.md §4).
@@ -49,8 +52,8 @@ export const PER_WEEK_USD: Record<SubscriptionPlanId, number> = {
 /** What a month costs on yearly, for "$5.83/month" under the yearly price. */
 export const YEARLY_PER_MONTH_USD = roundUsd(YEARLY_PRICE_USD / 12);
 
-/** Yearly vs paying weekly all year (69.99 vs 259.48 → 73%). */
-export const YEARLY_SAVING_PERCENT = Math.round((1 - YEARLY_PRICE_USD / (WEEKLY_PRICE_USD * WEEKS_PER_YEAR)) * 100);
+/** The saving at our USD prices, until the store's (local currency) prices load. */
+export const YEARLY_SAVING_PERCENT = yearlySavingPercent(YEARLY_PRICE_USD, WEEKLY_PRICE_USD) ?? 0;
 
 /** How a plan starts for someone who hasn't had an introductory offer yet (one per person). */
 export type PlanIntro = { kind: 'free'; days: number } | { kind: 'paid'; days: number; priceUsd: number };
@@ -113,5 +116,5 @@ export const PLUS_FEATURE_ITEMS: PlusFeatureItem[] = [
   { icon: 'camera', title: 'Unlimited daily moments', freeLimit: `${FREE_DAILY_MOMENTS} per day on Free` },
   { icon: 'list', title: 'Full moment timeline', freeLimit: `${FREE_TIMELINE_MOMENTS} recent moments on Free` },
   { icon: 'bulb', title: 'AI games and questions', freeLimit: 'Plus only' },
-  { icon: 'fire', title: 'Streak restore', freeLimit: 'Plus only' },
+  { icon: 'fire', title: 'Free streak restore', freeLimit: 'Paid restore' },
 ];

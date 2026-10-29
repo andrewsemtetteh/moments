@@ -10,7 +10,7 @@ import Animated, {
     withTiming,
 } from 'react-native-reanimated';
 
-import { outlineColor } from '@/components/ui/primitives';
+import { fieldOutline } from '@/components/ui/primitives';
 import { useTheme } from '@/hooks/useTheme';
 
 const AnimatedText = Animated.createAnimatedComponent(Text);
@@ -62,9 +62,9 @@ export function AuthTextField({
   const restSize = bold ? 16 : 15;
   const floatSize = bold ? 12 : 11;
   const restColor = colors.textSecondary;
-  // As in the main app: a soft outline in the theme's ink, the theme colour while typing.
+  // Bold: the onboarding fields' 2pt line in the theme's ink, the theme colour while typing.
   const focusColor = colors.accent;
-  const borderRest = bold ? outlineColor(colors) : colors.border;
+  const borderRest = bold ? fieldOutline(colors).borderColor : colors.border;
 
   const focusProgress = useSharedValue(0);
   const labelProgress = useSharedValue(floated ? 1 : 0);
@@ -159,7 +159,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
   },
   // The onboarding name field's look.
-  containerBold: { borderWidth: 1.5, borderRadius: 16, minHeight: 58, paddingHorizontal: 16 },
+  containerBold: { borderWidth: 2, borderRadius: 16, minHeight: 58, paddingHorizontal: 16 },
   labelBold: { left: 12, fontWeight: '800', lineHeight: 18 },
   inputBold: { fontSize: 18, fontWeight: '700' },
   inputRow: {

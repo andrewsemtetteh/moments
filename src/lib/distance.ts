@@ -26,8 +26,8 @@ export function haversineDistanceKm(a: Coords, b: Coords): number {
  * 10. Otherwise: nearest whole km with a thousands separator.
  */
 export function formatDistanceApart(km: number): string {
-  // Title case, like the rest of the header ("Same City", "5,712 km Apart").
+  // Title case, like the rest of the header ("Same City", "5,712 km Away").
   if (km < 5) return 'Same City';
-  if (km < 100) return `${Math.round(km / 10) * 10} km Apart`;
-  return `${Math.round(km).toLocaleString()} km Apart`;
+  if (km < 100) return `${Math.round(km / 10) * 10} km Away`;
+  return `${Math.round(km).toLocaleString()} km Away`;
 }

@@ -10,7 +10,7 @@ import {
 } from 'date-fns';
 import { Image } from 'expo-image';
 import { thumbUrl, mediaSource } from '@/lib/storage-cdn';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { TextInput } from '@/components/ui/ThemedTextInput';
 
@@ -79,6 +79,7 @@ export function PlanMemoriesTab({
   onOpen,
   onAcceptSuggestion,
   onDismissSuggestion,
+  onEmptyChange,
 }: {
   memories: CalendarEvent[];
   momentsById: Map<string, Moment>;
@@ -88,6 +89,8 @@ export function PlanMemoriesTab({
   onOpen: (entry: CalendarEvent) => void;
   onAcceptSuggestion: (s: MemorySuggestion) => void;
   onDismissSuggestion: (s: MemorySuggestion) => void;
+  /** Whether the empty state is showing (the page then stays still, if it fits). */
+  onEmptyChange?: (empty: boolean) => void;
 }) {
   const { colors } = useTheme();
   const [query, setQuery] = useState('');
@@ -134,6 +137,11 @@ export function PlanMemoriesTab({
     return [...memoryItems, ...auto].sort((a, b) => b.date.getTime() - a.date.getTime());
   }, [memories, momentsById, suggestions, anniversaryDate, currentStreak, filter, q]);
 
+  const empty = items.length === 0;
+  useEffect(() => {
+    onEmptyChange?.(empty);
+  }, [empty, onEmptyChange]);
+
   const thisYear = getYear(new Date());
 
   const showSearch = memories.length >= SEARCH_MIN_MEMORIES || !!query;
@@ -163,6 +171,7 @@ export function PlanMemoriesTab({
       {/* As in the design: plain text pills in one row that scrolls sideways. */}
       <ScrollView
         horizontal
+        alwaysBounceHorizontal={false}
         showsHorizontalScrollIndicator={false}
         style={styles.chipsScroll}
         contentContainerStyle={styles.chips}>
@@ -336,11 +345,11 @@ function TogetherSinceCard({ date }: { date: Date }) {
               {format(facts.milestone.date, 'EEE d MMM yyyy')}
             </Text>
           </View>
-          {/* How long to go, as its own little block: the number big, the words under it. */}
+          {/* How many days are left, as its own little block: the number big, the words under it. */}
           <View style={[styles.daysLeft, { backgroundColor: tone.fill }]}>
             <Text style={[styles.daysLeftNum, { color: colors.text }]}>{facts.milestone.inDays.toLocaleString()}</Text>
             <Text style={[styles.daysLeftUnit, { color: colors.textSecondary }]}>
-              {facts.milestone.inDays === 1 ? 'day to go' : 'days to go'}
+              {facts.milestone.inDays === 1 ? 'day left' : 'days left'}
             </Text>
           </View>
         </View>

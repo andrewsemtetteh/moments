@@ -3,6 +3,7 @@ import { ScrollView, TextInput, View, useWindowDimensions, type ScrollViewProps 
 import { KeyboardEvents } from 'react-native-keyboard-controller';
 
 import { subscribeInputFocused } from '@/components/ui/KeyboardAwareScrollView';
+import { useScrollWhenNeeded } from '@/hooks/useScrollWhenNeeded';
 
 type Props = ScrollViewProps & {
   /** Space kept under the field you're typing in. */
@@ -25,6 +26,8 @@ export function KeyboardFormScrollView({
   endGap = 16,
   topInset = 16,
   onScroll,
+  onLayout,
+  onContentSizeChange,
   children,
   ...props
 }: Props) {
@@ -37,6 +40,8 @@ export function KeyboardFormScrollView({
   const [keyboardH, setKeyboardH] = useState(0);
   const keyboardRef = useRef(0);
   const settle = useRef(0);
+  // Still when the page fits; scrolls once it doesn't (the keyboard's room counts).
+  const fit = useScrollWhenNeeded();
 
   const scrollIntoPlace = () => {
     const scroll = scrollRef.current;
@@ -97,7 +102,19 @@ export function KeyboardFormScrollView({
       ref={scrollRef}
       keyboardShouldPersistTaps="handled"
       scrollEventThrottle={16}
+      scrollEnabled={fit.scrollEnabled}
+      bounces={fit.bounces}
+      alwaysBounceVertical={false}
+      overScrollMode={fit.overScrollMode}
       {...props}
+      onLayout={(e) => {
+        fit.onLayout(e);
+        onLayout?.(e);
+      }}
+      onContentSizeChange={(w, h) => {
+        fit.onContentSizeChange(w, h);
+        onContentSizeChange?.(w, h);
+      }}
       onScroll={(e) => {
         offsetY.current = e.nativeEvent.contentOffset.y;
         onScroll?.(e);

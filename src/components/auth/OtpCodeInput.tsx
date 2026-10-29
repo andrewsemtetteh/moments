@@ -1,6 +1,7 @@
 import { useRef } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { TextInput } from '@/components/ui/ThemedTextInput';
+import { fieldOutline } from '@/components/ui/primitives';
 
 import { useTheme } from '@/hooks/useTheme';
 import { sanitizeOtpInput } from '@/lib/sanitize-input';
@@ -33,7 +34,7 @@ export function OtpCodeInput({ value, onChange, autoFocus = true }: Props) {
               style={[
                 styles.box,
                 {
-                  borderColor: focused || char ? colors.accent : colors.border,
+                  ...fieldOutline(colors, { focused: focused || !!char }),
                   backgroundColor: colors.background,
                 },
               ]}>
@@ -66,7 +67,6 @@ const styles = StyleSheet.create({
     aspectRatio: 0.85,
     maxWidth: 52,
     borderRadius: 14,
-    borderWidth: 1.5,
     alignItems: 'center',
     justifyContent: 'center',
   },

@@ -298,9 +298,8 @@ export function PrimaryButton({
         {
           backgroundColor: colors.accent,
           opacity: disabled ? 0.45 : pressed ? 0.9 : 1,
-          borderWidth: colors.boldBorder && !colors.sticker ? 2 : 0,
-          borderColor: colors.text,
         },
+        primaryButtonEdge(colors),
         colors.sticker && styles.stickerBtn,
         style,
       ]}>
@@ -375,6 +374,26 @@ export function separatorColor(colors: { text: string; isDark: boolean }) {
 /** A card or field outline you can actually see: the bold border on outlined themes, else soft ink. */
 export function outlineColor(colors: { text: string; isDark: boolean; border: string; boldBorder?: boolean }) {
   return colors.boldBorder ? colors.border : colorWithAlpha(colors.text, colors.isDark ? 0.22 : 0.16);
+}
+
+/** The main button's edge: Paper / Colour's 2pt ink line, none on the other themes. */
+export function primaryButtonEdge(colors: { text: string; boldBorder?: boolean; sticker?: boolean }) {
+  return { borderWidth: colors.boldBorder && !colors.sticker ? 2 : 0, borderColor: colors.text };
+}
+
+/**
+ * A text field's outline on the onboarding and sign-in pages: a bold 2pt line in the theme's ink
+ * (dark on light themes, light on dark ones), the theme colour while typing, the error colour
+ * when something's wrong.
+ */
+export function fieldOutline(
+  colors: { text: string; accent: string; error: string },
+  state: { focused?: boolean; error?: boolean } = {},
+) {
+  return {
+    borderWidth: 2,
+    borderColor: state.error ? colors.error : state.focused ? colors.accent : colors.text,
+  };
 }
 
 /**

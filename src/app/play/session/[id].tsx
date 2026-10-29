@@ -12,7 +12,7 @@ import { PlayHeader } from '@/components/play/PlayHeader';
 import { PLAY_GUTTER, playCardStyle } from '@/components/play/PlayKit';
 import { RivalryCard, SyncBestLine } from '@/components/play/Versus';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { Icon } from '@/components/ui/Icon';
+import { NudgeButton } from '@/components/ui/NudgeButton';
 import { Avatar } from '@/components/ui/primitives';
 import { useGameSession } from '@/hooks/play-queries';
 import { useTheme } from '@/hooks/useTheme';
@@ -173,8 +173,10 @@ function NudgeCard({
   const { colors } = useTheme();
   const partner = useRelationshipStore((s) => s.partner);
   const name = firstName(them.name);
+  const [nudged, setNudged] = useState(false);
 
   const nudge = () => {
+    setNudged(true);
     void nudgePartner(session, me, them).then((sent) =>
       notifyIsland(
         sent
@@ -192,18 +194,16 @@ function NudgeCard({
 
   return (
     <View style={[styles.nudge, playCardStyle(colors)]}>
-      <Icon name="time" size={20} color={colors.textSecondary} />
-      <Text style={[styles.nudgeText, { color: colors.textSecondary }]} numberOfLines={2}>
-        Waiting on {name}
-      </Text>
-      <Pressable
-        onPress={nudge}
-        accessibilityRole="button"
-        accessibilityLabel={`Nudge ${name}`}
-        style={({ pressed }) => [styles.nudgeButton, { backgroundColor: accent, opacity: pressed ? 0.85 : 1 }]}>
-        <Icon name="send" size={15} color="#FFFFFF" />
-        <Text style={styles.nudgeButtonText}>Nudge</Text>
-      </Pressable>
+      <Avatar name={them.name} imageUrl={partner?.avatar_url ?? undefined} size={36} />
+      <View style={styles.nudgeLines}>
+        <Text style={[styles.nudgeTitle, { color: colors.text }]} numberOfLines={1}>
+          Waiting on {name}
+        </Text>
+        <Text style={[styles.nudgeText, { color: colors.textSecondary }]} numberOfLines={2}>
+          It’s their move. You’ll get a notification when they play.
+        </Text>
+      </View>
+      <NudgeButton name={name} nudged={nudged} accent={accent} onPress={nudge} />
     </View>
   );
 }
@@ -314,21 +314,14 @@ const styles = StyleSheet.create({
   nudge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 12,
     paddingVertical: 12,
-    paddingLeft: 14,
+    paddingLeft: 12,
     paddingRight: 12,
   },
-  nudgeText: { flex: 1, fontSize: 15, fontWeight: '700' },
-  nudgeButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    borderRadius: 999,
-    paddingHorizontal: 16,
-    height: 38,
-  },
-  nudgeButtonText: { color: '#FFFFFF', fontSize: 15, fontWeight: '800' },
+  nudgeLines: { flex: 1, gap: 2 },
+  nudgeTitle: { fontSize: 15, fontWeight: '800' },
+  nudgeText: { fontSize: 13, fontWeight: '600', lineHeight: 18 },
   results: { alignItems: 'center', gap: 14, paddingTop: 16 },
   headline: { fontSize: 26, fontWeight: '900', textAlign: 'center' },
   xp: { borderRadius: 999, borderWidth: 1.5, paddingHorizontal: 16, paddingVertical: 8 },

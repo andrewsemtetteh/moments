@@ -2,7 +2,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
-import { paperEdge } from '@/components/ui/primitives';
+import { paperEdge, insetCardStyle, separatorColor } from '@/components/ui/primitives';
 import { CoupleCharacters } from '@/components/onboarding/Characters';
 import { OnboardingStepScreen } from '@/components/onboarding/OnboardingStepScreen';
 import { Icon, type IconName } from '@/components/ui/Icon';
@@ -72,11 +72,11 @@ export default function YourPlanScreen() {
       subtitle={space ? `Made for ${space}` : `Made for ${me} and your person`}
       primaryLabel="Let’s set it up"
       onPrimary={() => void goNext(router, 'your-plan', { userId: user?.id, preview })}>
-      <View style={[styles.list, { borderColor: colors.text, backgroundColor: colors.surface }]}>
+      <View style={[styles.list, insetCardStyle(colors, 'page')]}>
         {rows.map((r, i, arr) => (
           <View
             key={r.title}
-            style={[styles.row, i < arr.length - 1 && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border }]}>
+            style={[styles.row, i < arr.length - 1 && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: separatorColor(colors) }]}>
             <View style={[styles.tile, { backgroundColor: colors.accent }]}>
               <Icon name={r.icon} size={18} color={colors.onAccent} />
             </View>

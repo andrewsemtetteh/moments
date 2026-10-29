@@ -16,7 +16,8 @@ import { GameGroups, GameRail, OwnTimeGames } from '@/components/play/GameList';
 import { FeaturedPackCard, HandpickedRail } from '@/components/play/HandpickedRail';
 import { LiveStrip } from '@/components/play/LiveStrip';
 import { PlayTabs, type PlayTab } from '@/components/play/PlayTabs';
-import { DailyDuelCard, RivalryCard } from '@/components/play/Versus';
+import { DailyDuelCard } from '@/components/play/Versus';
+// import { RivalryCard } from '@/components/play/Versus'; // head to head, off the Play tab for now
 import { Spacing } from '@/constants/design-system';
 import { useDailyChallenge, useRealtimeSubscription } from '@/hooks/queries';
 import { useTheme } from '@/hooks/useTheme';
@@ -79,10 +80,13 @@ export default function ActivitiesScreen() {
 
           {tab === 'all' ? (
             <View style={styles.stack}>
-              {/* The daily habit first: three questions, and the scoreboard it feeds. */}
+              {/* Games waiting on one of you, first: the most time-sensitive thing here (nothing when none). */}
+              <OwnTimeGames />
+              {/* The daily habit: three questions a day. */}
               <Section title="Daily duel">
                 <DailyDuelCard />
-                <RivalryCard onPress={() => router.push('/play/progress')} />
+                {/* Head to head is on the progress page; off here for now. */}
+                {/* <RivalryCard onPress={() => router.push('/play/progress')} /> */}
               </Section>
               <Section title="Today’s pack">
                 <FeaturedPackCard />
@@ -92,7 +96,6 @@ export default function ActivitiesScreen() {
               </Section>
               <Section title="Endless" onSeeAll={() => setTab('endless')}>
                 <LiveStrip />
-                <OwnTimeGames />
                 <GameRail />
               </Section>
               <Section title="Your progress">
@@ -125,9 +128,9 @@ export default function ActivitiesScreen() {
 
           {tab === 'endless' ? (
             <View style={styles.stack}>
+              <OwnTimeGames />
               <DailyDuelCard />
               <LiveStrip />
-              <OwnTimeGames />
               <GameGroups />
             </View>
           ) : null}

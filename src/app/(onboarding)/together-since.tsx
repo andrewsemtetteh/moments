@@ -56,7 +56,7 @@ export default function TogetherSinceScreen() {
       secondaryLabel="Skip for now"
       onSecondary={() => void next(null)}
       scroll={false}>
-      <AnniversaryWheelPicker value={date} onChange={choose} surfaceColor={colors.surface} />
+      <AnniversaryWheelPicker value={date} onChange={choose} surfaceColor={colors.background} />
       <View style={[styles.note, { backgroundColor: colors.surfaceElevated }, paperEdge(colors)]}>
         <CalendarCharacter size={64} />
         <Text style={[styles.noteText, { color: colors.text }]}>

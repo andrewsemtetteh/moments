@@ -51,8 +51,9 @@ export default function RelationshipKindScreen() {
             style={({ pressed }) => [
               styles.option,
               {
-                backgroundColor: colors.boldBorder ? '#F3F3F3' : colors.surface,
-                borderColor: on ? colors.text : 'transparent',
+                // Paper's surfaces are all white: the options take its raised page colour.
+                backgroundColor: colors.boldBorder ? colors.backgroundElevated : colors.surface,
+                borderColor: on ? colors.accent : 'transparent',
               },
               pressed && styles.pressed,
             ]}>

@@ -13,6 +13,6 @@ export async function getSavedTheme(): Promise<AppTheme | null> {
   // Older names: Black is now Dark; the short-lived Light is Default.
   if (value === 'black') return 'dark';
   if (value === 'light') return 'default';
-  if (value === 'default' || value === 'dark' || value === 'night' || value === 'violet' || value === 'blue' || value === 'coral' || value === 'cream' || value === 'paper' || value === 'color') return value;
+  if (value === 'default' || value === 'dark' || value === 'night' || value === 'violet' || value === 'amethyst' || value === 'blue' || value === 'coral' || value === 'cream' || value === 'paper' || value === 'color') return value;
   return null;
 }

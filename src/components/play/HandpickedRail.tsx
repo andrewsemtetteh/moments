@@ -7,6 +7,7 @@ import { PLAY_TONES, type ExploreModalKey } from '@/components/activities/explor
 import { Spacing } from '@/constants/design-system';
 import { activitiesWithFormat, featuredPack, getArea, packsForRail } from '@/lib/handpicked';
 
+import { AREA_ART } from './area-art';
 import { PlayCard } from './PlayCard';
 
 /** Width of a rail card: most of the screen, so the next card peeks in. */
@@ -30,6 +31,7 @@ export function HandpickedRail({
   return (
     <ScrollView
       horizontal
+      alwaysBounceHorizontal={false}
       showsHorizontalScrollIndicator={false}
       decelerationRate="fast"
       snapToInterval={cardWidth + 12}
@@ -55,6 +57,7 @@ export function HandpickedRail({
             key={pack.id}
             width={cardWidth}
             tone={PLAY_TONES[area.tone]}
+            scene={AREA_ART[area.id]}
             art={pack.art ?? area.art}
             badge={area.title}
             title={pack.title}
@@ -77,9 +80,11 @@ export function FeaturedPackCard() {
   return (
     <PlayCard
       tone={PLAY_TONES[area.tone]}
+      scene={AREA_ART[area.id]}
       art={area.art}
-      badge={`Today’s pack · ${area.title}`}
+      badge="Today’s pack"
       title={pack.title}
+      sub={area.title}
       cta="Start"
       onPress={() => router.push({ pathname: '/play/pack/[id]', params: { id: pack.id } })}
     />

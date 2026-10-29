@@ -3,7 +3,6 @@ import { describe, expect, it } from 'vitest';
 import {
   isStreakVisuallyAtRisk,
   needsStreakReminders,
-  shouldShowStreakAtRiskCard,
   streakReminderFireAt,
   STREAK_NUDGE_HOURS_BEFORE_MIDNIGHT,
   STREAK_WARN_HOURS_BEFORE_MIDNIGHT,
@@ -52,7 +51,7 @@ describe('isStreakVisuallyAtRisk', () => {
   it('hides danger until the last 3 hours', () => {
     const status = baseStatus();
     expect(isStreakVisuallyAtRisk(status, new Date('2026-08-03T18:00:00'))).toBe(false);
-    expect(shouldShowStreakAtRiskCard(status, new Date('2026-08-03T21:00:00'))).toBe(true);
+    expect(isStreakVisuallyAtRisk(status, new Date('2026-08-03T21:00:00'))).toBe(true);
     expect(isStreakVisuallyAtRisk(status, new Date('2026-08-03T23:30:00'))).toBe(true);
   });
 });

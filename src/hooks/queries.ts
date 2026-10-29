@@ -6,6 +6,7 @@ import { Alert } from 'react-native';
 
 import type { MoodHistoryFilter } from '@/lib/mood-history';
 import { resolveMoodFilterUserId as resolveMoodHistoryUserId } from '@/lib/mood-history';
+import * as Haptics from '@/lib/haptics';
 import { getErrorMessage, toUserFacingNetworkError } from '@/lib/network-error';
 import { filterInboxNotifications } from '@/lib/notification-display';
 import { emptyStreakStatus } from '@/lib/streak';
@@ -19,7 +20,7 @@ import { backend } from '@/lib/backend';
 import * as api from '@/services/api';
 import { useAuthStore, useRelationshipStore } from '@/stores';
 import { usePlayProgressStore } from '@/stores/play-progress-store';
-import type { Message, Moment, MoodLog, Notification } from '@/types/database';
+import type { Message, Moment, MoodLog, Notification, StreakStatus } from '@/types/database';
 
 export function useProfile() {
   const user = useAuthStore((s) => s.user);
@@ -545,17 +546,71 @@ export function useMoodHistoryOverview(filter: MoodHistoryFilter) {
   });
 }
 
+/** How a restore attempt ended, for the card to react to. */
+export type StreakRestoreOutcome =
+  | 'restored'
+  /** Needs a paid restore, and none was bought (the card offers it). */
+  | 'needs_purchase'
+  | 'cancelled'
+  /** Paid, but the server hasn't recorded it yet: it stays theirs; restoring again shortly works. */
+  | 'awaiting'
+  | 'failed';
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * Restores your lost streak. `pay: false`: free (Plus, day one) or with a paid restore you already
+ * hold; without one it ends as `needs_purchase`. `pay: true`: buys a restore ($0.99) first, then
+ * restores, retrying for a few seconds while the store's webhook reaches the server.
+ */
 export function useRestoreStreak() {
   const queryClient = useQueryClient();
   const relationship = useRelationshipStore((s) => s.relationship);
 
   return useMutation({
-    mutationFn: () => api.restoreStreak(relationship!.id),
-    onSuccess: (status) => {
-      queryClient.setQueryData(streakQueryKey(relationship?.id), status);
+    mutationFn: async ({ pay = false }: { pay?: boolean } = {}): Promise<{
+      outcome: StreakRestoreOutcome;
+      status?: StreakStatus | null;
+      message?: string;
+    }> => {
+      const relationshipId = relationship!.id;
+      if (pay) {
+        const { purchaseStreakRestore } = await import('@/lib/purchases');
+        const bought = await purchaseStreakRestore();
+        if (bought.result === 'cancelled') return { outcome: 'cancelled' };
+        if (bought.result !== 'purchased') {
+          return {
+            outcome: bought.result === 'pending' ? 'awaiting' : 'failed',
+            message: bought.message ?? 'Purchases aren’t available right now.',
+          };
+        }
+        for (let attempt = 0; attempt < 8; attempt++) {
+          try {
+            return { outcome: 'restored', status: await api.restoreStreak(relationshipId) };
+          } catch (e) {
+            if (!(e instanceof api.StreakRestoreNeedsPurchaseError)) throw e;
+            await sleep(1500);
+          }
+        }
+        return {
+          outcome: 'awaiting',
+          message: 'Your payment went through. Your streak will be ready to restore in a moment: tap Restore again shortly.',
+        };
+      }
+      try {
+        return { outcome: 'restored', status: await api.restoreStreak(relationshipId) };
+      } catch (e) {
+        if (e instanceof api.StreakRestoreNeedsPurchaseError) return { outcome: 'needs_purchase' };
+        throw e;
+      }
+    },
+    onSuccess: ({ outcome, status, message }) => {
+      if (outcome === 'restored' && status) queryClient.setQueryData(streakQueryKey(relationship?.id), status);
+      if (outcome === 'restored') void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      if (message) Alert.alert(outcome === 'awaiting' ? 'Payment received' : 'Couldn’t restore your streak', message);
       void queryClient.invalidateQueries({ queryKey: streakQueryKey(relationship?.id) });
     },
-    // It used to fail silently: say why (no Plus on the server, the 24 hours passed, offline).
+    // Say why (the restore days passed, offline…), never fail silently.
     onError: (e) => {
       Alert.alert('Couldn’t restore your streak', toUserFacingNetworkError(e, 'Please try again.').message);
       void queryClient.invalidateQueries({ queryKey: streakQueryKey(relationship?.id) });

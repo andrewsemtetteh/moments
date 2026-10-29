@@ -208,6 +208,7 @@ export function MomentFocusViewer() {
             ref={listRef as never}
             data={moments}
             horizontal
+            alwaysBounceHorizontal={false}
             pagingEnabled
             showsHorizontalScrollIndicator={false}
             keyExtractor={(m) => m.id}
@@ -284,6 +285,7 @@ export function MomentFocusViewer() {
                   ref={stripRef}
                   data={moments}
                   horizontal
+                  alwaysBounceHorizontal={false}
                   keyExtractor={(m) => `strip-${m.id}`}
                   showsHorizontalScrollIndicator={false}
                   getItemLayout={(_, i) => ({ length: THUMB + THUMB_GAP, offset: (THUMB + THUMB_GAP) * i, index: i })}

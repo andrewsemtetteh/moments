@@ -141,7 +141,8 @@ export function ChatAttachmentCard({ attachment, isSelf }: Props) {
       <Pressable
         onPress={() =>
           quest
-            ? router.navigate('/(tabs)/activities')
+            ? // Chat sits above the tabs: navigate would switch the tab hidden underneath it.
+              router.dismissTo('/(tabs)/activities')
             : useUIStore.getState().openTrophy(attachment.id ?? attachment.title)
         }
         accessibilityRole="button"
@@ -213,6 +214,136 @@ export function ChatAttachmentCard({ attachment, isSelf }: Props) {
             <Text style={[styles.playReply, { color: textColor }]}>{attachment.reply}</Text>
           </>
         ) : null}
+      </Pressable>
+    );
+  }
+
+  if (attachment.type === 'game') {
+    // Any Play item: whose turn it is, or how it ended. A tap opens it (a live game, which has
+    // nothing to reopen, opens Play).
+    const open = () => {
+      if (attachment.kind === 'duel') router.push({ pathname: '/play/duel', params: { date: attachment.id } });
+      else if (attachment.kind === 'pack') router.push({ pathname: '/play/pack/[id]', params: { id: attachment.id } });
+      else if (attachment.kind === 'live') router.push('/(tabs)/activities');
+      else router.push({ pathname: '/play/session/[id]', params: { id: attachment.id } });
+    };
+    const turn = attachment.status === 'turn';
+    // The turn card is news for the partner; the one who sent it is the one waiting.
+    const kicker = turn
+      ? isSelf
+        ? 'THEIR MOVE'
+        : 'YOUR MOVE'
+      : attachment.kind === 'pack'
+        ? 'ALL DONE'
+        : 'GAME OVER';
+    const action = turn ? (isSelf ? 'Open' : 'Play') : attachment.kind === 'pack' ? 'See your answers' : 'See results';
+    return (
+      <Pressable
+        onPress={open}
+        accessibilityRole="button"
+        accessibilityLabel={`${attachment.title}. ${attachment.line}`}
+        style={({ pressed }) => [
+          styles.card,
+          styles.wide,
+          styles.playCard,
+          { backgroundColor: cardBg, borderColor: cardBorder },
+          pressed && styles.pressed,
+        ]}>
+        <View style={styles.playHead}>
+          <View style={[styles.iconBadge, { backgroundColor: badgeBg }]}>
+            <Text style={styles.gameEmoji}>{attachment.emoji}</Text>
+          </View>
+          <View style={styles.metaText}>
+            <Text style={[styles.contactKicker, { color: subColor }]}>{kicker}</Text>
+            <Text style={[styles.title, { color: textColor }]} numberOfLines={2}>
+              {attachment.title}
+            </Text>
+          </View>
+        </View>
+        <Text style={[styles.playBody, { color: textColor }]}>{attachment.line}</Text>
+        <View style={[styles.divider, { backgroundColor: dividerColor }]} />
+        <View style={styles.playFoot}>
+          <Text style={[styles.sub, styles.playAction, { color: actionColor }]}>{action}</Text>
+          <Icon name="chevronRight" size={16} color={actionColor} />
+        </View>
+      </Pressable>
+    );
+  }
+
+  if (attachment.type === 'play_comment') {
+    return (
+      <Pressable
+        onPress={() => router.push({ pathname: '/play/pack/[id]', params: { id: attachment.packId } })}
+        accessibilityRole="button"
+        accessibilityLabel={`${attachment.title}. ${attachment.comment}. See your answers`}
+        style={({ pressed }) => [
+          styles.card,
+          styles.wide,
+          styles.playCard,
+          { backgroundColor: cardBg, borderColor: cardBorder },
+          pressed && styles.pressed,
+        ]}>
+        <View style={styles.playHead}>
+          <View style={[styles.iconBadge, { backgroundColor: badgeBg }]}>
+            <Icon name="messages" size={18} color={badgeIconColor} filled />
+          </View>
+          <View style={styles.metaText}>
+            <Text style={[styles.contactKicker, { color: subColor }]}>
+              {`${attachment.area} · ${attachment.kind}`.toUpperCase()}
+            </Text>
+            <Text style={[styles.title, { color: textColor }]} numberOfLines={2}>
+              {attachment.title}
+            </Text>
+          </View>
+        </View>
+        <Text style={[styles.guessComment, { color: textColor }]}>“{attachment.comment}”</Text>
+        <View style={[styles.divider, { backgroundColor: dividerColor }]} />
+        <View style={styles.playFoot}>
+          <Text style={[styles.sub, styles.playAction, { color: actionColor }]}>See your answers</Text>
+          <Icon name="chevronRight" size={16} color={actionColor} />
+        </View>
+      </Pressable>
+    );
+  }
+
+  if (attachment.type === 'guess_result') {
+    // Scores from the reader's side: the sender's own score is "you" only on their phone.
+    const yours = isSelf ? attachment.senderScore : attachment.otherScore;
+    const theirs = isSelf ? attachment.otherScore : attachment.senderScore;
+    return (
+      <Pressable
+        onPress={() => router.push({ pathname: '/play/pack/[id]', params: { id: attachment.packId } })}
+        accessibilityRole="button"
+        accessibilityLabel={`${attachment.title}. You knew them ${yours} of ${attachment.total}, they knew you ${theirs} of ${attachment.total}.${attachment.comment ? ` ${attachment.comment}.` : ''} See results`}
+        style={({ pressed }) => [
+          styles.card,
+          styles.wide,
+          styles.playCard,
+          { backgroundColor: cardBg, borderColor: cardBorder },
+          pressed && styles.pressed,
+        ]}>
+        <View style={styles.playHead}>
+          <View style={[styles.iconBadge, { backgroundColor: badgeBg }]}>
+            <Icon name="trophy" size={18} color={badgeIconColor} filled />
+          </View>
+          <View style={styles.metaText}>
+            <Text style={[styles.contactKicker, { color: subColor }]}>{attachment.area.toUpperCase()} · GUESS QUIZ</Text>
+            <Text style={[styles.title, { color: textColor }]} numberOfLines={2}>
+              {attachment.title}
+            </Text>
+          </View>
+        </View>
+        <Text style={[styles.playBody, { color: subColor }]}>
+          You knew them {yours}/{attachment.total} · They knew you {theirs}/{attachment.total}
+        </Text>
+        {attachment.comment ? (
+          <Text style={[styles.guessComment, { color: textColor }]}>“{attachment.comment}”</Text>
+        ) : null}
+        <View style={[styles.divider, { backgroundColor: dividerColor }]} />
+        <View style={styles.playFoot}>
+          <Text style={[styles.sub, styles.playAction, { color: actionColor }]}>See results</Text>
+          <Icon name="chevronRight" size={16} color={actionColor} />
+        </View>
       </Pressable>
     );
   }
@@ -317,6 +448,7 @@ export function ChatAttachmentCard({ attachment, isSelf }: Props) {
 }
 
 const styles = StyleSheet.create({
+  gameEmoji: { fontSize: 20 },
   card: {
     borderRadius: 14,
     overflow: 'hidden',
@@ -387,6 +519,7 @@ const styles = StyleSheet.create({
   achieveEmoji: { fontSize: 28 },
   playHead: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   playBody: { fontSize: 14, fontWeight: '600', lineHeight: 20 },
+  guessComment: { fontSize: 16, fontWeight: '700', lineHeight: 22 },
   playFoot: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: 2 },
   playAction: { marginTop: 0 },
   playQuestion: { fontSize: 15, fontWeight: '800', lineHeight: 20 },

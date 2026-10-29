@@ -1,5 +1,7 @@
 import { backend } from '@/lib/backend';
-import { sendPartnerNotification } from '@/services/api';
+import { encodeAttachment } from '@/lib/chat-attachments';
+import { finishedLine } from '@/lib/game-room/result-line';
+import { sendMessage, sendPartnerNotification } from '@/services/api';
 import { fetchGameContent } from '@/services/game-content';
 import { usePlayProgressStore } from '@/stores/play-progress-store';
 
@@ -131,7 +133,10 @@ export async function startOwnTimeGame(input: {
   if (error || !data) throw error ?? new Error('Couldn’t start the game');
   const session = data as GameSession;
 
-  void notify(session, partner, `${me.name} started ${getGameDefinition(game).title}. Your move!`, true);
+  void notify(session, partner, `${me.name} started ${getGameDefinition(game).title}. Your move!`, true, {
+    me,
+    status: 'turn',
+  });
   return session;
 }
 
@@ -186,9 +191,12 @@ export async function applySessionAction(
       award(saved);
       // Tell them it's over, and how it went (in the app and on their phone).
       const content = finishedLine(saved.state, me, partner);
-      if (content) void notify(saved, partner, content, true);
+      if (content) void notify(saved, partner, content, true, { me, status: 'finished' });
     } else if (isWaitingOn(next, partner.id) && !isWaitingOn(current.state, partner.id)) {
-      void notify(saved, partner, `${me.name} played in ${getGameDefinition(next.game).title}. Your move!`);
+      void notify(saved, partner, `${me.name} played in ${getGameDefinition(next.game).title}. Your move!`, false, {
+        me,
+        status: 'turn',
+      });
     }
     return saved;
   }
@@ -212,34 +220,48 @@ function award(session: GameSession) {
   delete stats.live_games;
   void usePlayProgressStore
     .getState()
-    .award(session.relationship_id, { xp: state.result.xp, stats, maxStats: rivalry.maxStats, events }, 'Game finished');
+    .award(
+      session.relationship_id,
+      { xp: state.result.xp, stats, maxStats: rivalry.maxStats, events },
+      'Game finished',
+    );
 }
 
-/** "Alex won Quiz 7–5. Rematch?": the result, as told to the partner. */
-function finishedLine(state: RoomState, me: RoomPlayer, partner: RoomPlayer): string | null {
-  const result = state.result;
-  if (!result) return null;
-  const myName = me.name.split(' ')[0] || 'Your partner';
-  const title = getGameDefinition(state.game).title;
-  if (result.teamGame) {
-    return result.syncPct != null
-      ? `You and ${myName} finished ${title}: ${result.syncPct}% in sync.`
-      : `You and ${myName} finished ${title}.`;
-  }
-  const mine = state.scores[me.id] ?? 0;
-  const theirs = state.scores[partner.id] ?? 0;
-  if (result.winnerId === partner.id) return `${title} is over: you beat ${myName} ${theirs}–${mine}.`;
-  if (result.winnerId === me.id) return `${myName} won ${title} ${mine}–${theirs}. Rematch?`;
-  return `${title} with ${myName} ended in a tie, ${mine}–${theirs}.`;
-}
-
-async function notify(session: GameSession, partner: RoomPlayer, content: string, force = false) {
+/**
+ * Tells your partner (on their phone), at most every half hour unless `force`. With `chat`, the same
+ * line also goes to your chat as a game card (it's their turn, or how it ended) that opens the game:
+ * every time, since each card marks a real hand-off; only the push is held back.
+ */
+async function notify(
+  session: GameSession,
+  partner: RoomPlayer,
+  content: string,
+  force = false,
+  chat?: { me: RoomPlayer; status: 'turn' | 'finished' },
+) {
   const now = Date.now();
-  if (!force && now - (lastNudge.get(session.id) ?? 0) < NUDGE_EVERY_MS) return;
-  lastNudge.set(session.id, now);
-  await sendPartnerNotification(session.relationship_id, partner.id, 'game_turn', content, {
-    relatedId: session.id,
-  }).catch(() => undefined);
+  if (force || now - (lastNudge.get(session.id) ?? 0) >= NUDGE_EVERY_MS) {
+    lastNudge.set(session.id, now);
+    await sendPartnerNotification(session.relationship_id, partner.id, 'game_turn', content, {
+      relatedId: session.id,
+    }).catch(() => undefined);
+  }
+  if (chat) {
+    const def = getGameDefinition(session.state.game);
+    await sendMessage(
+      session.relationship_id,
+      chat.me.id,
+      encodeAttachment({
+        type: 'game',
+        kind: 'session',
+        id: session.id,
+        title: def.title,
+        emoji: def.emoji,
+        status: chat.status,
+        line: content,
+      }),
+    ).catch(() => undefined);
+  }
 }
 
 const MANUAL_NUDGE_EVERY_MS = 10 * 60_000;

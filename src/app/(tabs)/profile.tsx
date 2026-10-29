@@ -211,7 +211,7 @@ export default function ProfileScreen() {
               </View>
 
               <View style={styles.avatarLink} accessibilityElementsHidden>
-                <ProfileCoupleLink accent={colors.accent} ringColor={colors.text} />
+                <ProfileCoupleLink band={band} onBand={onBand} accent={colors.accent} />
               </View>
 
               {partner ? (

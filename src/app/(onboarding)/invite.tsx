@@ -17,6 +17,7 @@ import { getPendingInvite } from '@/lib/pending-links';
 import { useAuthStore, useRelationshipStore } from '@/stores';
 import { formatInviteCode } from '@/lib/invite-code';
 import { getFirstName } from '@/lib/avatar-initial';
+import { insetCardStyle } from '@/components/ui/primitives';
 
 /**
  * Step 8: bring your person in. Your space is made here (with the answers so
@@ -126,7 +127,7 @@ export default function InviteScreen() {
       onPrimary={next}
       secondaryLabel="I’ll invite them later"
       onSecondary={next}>
-      <View style={[styles.card, { borderColor: colors.text, backgroundColor: colors.surface }]}>
+      <View style={[styles.card, insetCardStyle(colors, 'page')]}>
         {copied ? (
           <Animated.View entering={FadeIn.duration(150)} style={styles.copiedRow}>
             <Icon name="check" size={14} color={colors.success} />

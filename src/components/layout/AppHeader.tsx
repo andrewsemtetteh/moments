@@ -63,14 +63,14 @@ export function AppHeader({ showPlan = true, band, preview }: AppHeaderProps) {
     }, [refetchUnreadNotifications]),
   );
 
-  // Re-render on each real minute boundary (and on foreground) so the partner's
-  // local clock and "X minutes ago" status stay live instead of freezing at mount time.
-  useMinuteTick();
+  // The time, updated on each real minute boundary (and on foreground). Everything clock-based
+  // below reads it, so the partner's clock and today's plans stay live (with the React
+  // Compiler, a bare `new Date()` here would be computed once and frozen).
+  const now = useMinuteTick();
 
   // Today's plans still to do, same "done" rule as the Together agenda.
   // A partner's private plans ("Busy") aren't yours to finish, so they don't count.
   const { data: monthPlans } = useCalendarEvents();
-  const now = new Date();
   const openPlansToday = (monthPlans ?? []).filter(
     (e) => isSameDay(new Date(e.date_time), now) && !isHiddenFrom(e, user?.id) && !isPlanCompleted(e, now),
   ).length;
@@ -86,8 +86,8 @@ export function AppHeader({ showPlan = true, band, preview }: AppHeaderProps) {
     );
     return formatDistanceApart(km);
   }, [sharesLocation, user, partner]);
-  const partnerClock = preview ? preview.clock : formatPartnerClock(partner?.timezone);
-  // "4,812 km apart · 9:40" then a sun or moon (instead of AM / PM, which made it long).
+  const partnerClock = preview ? preview.clock : formatPartnerClock(partner?.timezone, now);
+  // "4,812 km Away · 9:40" then a sun or moon (instead of AM / PM, which made it long).
   const lead = buildPartnerHeaderLine({ location: preview ? preview.location : distanceApart });
   const metaLine = lead || partnerClock;
   // const partnerFirstName = getFirstName(partner?.name);
@@ -144,11 +144,11 @@ export function AppHeader({ showPlan = true, band, preview }: AppHeaderProps) {
                   minimumFontScale={0.8}>
                   {lead}
                   {lead && partnerClock ? ' · ' : null}
+                  {partnerClock ? partnerClock.time : null}
+                  {/* Sun in their daytime, moon at night — hidden for now:
                   {partnerClock ? (
                     <>
-                      {partnerClock.time}{' '}
-                      {/* Sun in their daytime, moon at night. The solid crescent reads bigger than
-                          the sun (whose rays thin it out), so it's drawn smaller to match. */}
+                      {' '}
                       <Icon
                         name={partnerClock.isDaytime ? 'sunny' : 'moon'}
                         size={partnerClock.isDaytime ? 16 : 13}
@@ -157,6 +157,7 @@ export function AppHeader({ showPlan = true, band, preview }: AppHeaderProps) {
                       />
                     </>
                   ) : null}
+                  */}
                 </Text>
               ) : null}
             </View>

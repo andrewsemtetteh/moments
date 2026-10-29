@@ -191,6 +191,7 @@ Check your connection and try again.` : 'Check your connection and try again.',
 
         <GHScrollView
           horizontal
+          alwaysBounceHorizontal={false}
           showsHorizontalScrollIndicator={false}
           style={form.typeChipsScroll}
           contentContainerStyle={form.typeChips}>
@@ -256,6 +257,7 @@ Check your connection and try again.` : 'Check your connection and try again.',
         {placeNames.length > 0 && !draft.placeName ? (
           <ScrollView
             horizontal
+            alwaysBounceHorizontal={false}
             showsHorizontalScrollIndicator={false}
             style={styles.bleedRow}
             contentContainerStyle={styles.chips}>
@@ -276,6 +278,7 @@ Check your connection and try again.` : 'Check your connection and try again.',
         </Text>
         <ScrollView
           horizontal
+          alwaysBounceHorizontal={false}
           showsHorizontalScrollIndicator={false}
           style={styles.bleedRow}
           contentContainerStyle={styles.photoRow}>
@@ -479,8 +482,6 @@ export function MemoryDetailSheet({
       visible={!!entryProp}
       title={type.label}
       onBack={onClose}
-      // Opened, not stepped into: a ✕ on the right (the ⋯ menu moves to the left).
-      closeOnRight
       right={
         <HeaderIconButton icon="more" onPress={() => setMenu('actions')} accessibilityLabel="Memory options" />
       }
@@ -565,6 +566,7 @@ export function MemoryDetailSheet({
             <View>
               <ScrollView
                 horizontal
+                alwaysBounceHorizontal={false}
                 pagingEnabled
                 showsHorizontalScrollIndicator={false}
                 onMomentumScrollEnd={(e) => setPage(Math.round(e.nativeEvent.contentOffset.x / photoW))}
@@ -730,7 +732,7 @@ export function HowWasItSheet({
 
   return (
     <DraggableSheet visible={!!planProp} onClose={onSkip} avoidKeyboard style={styles.sheet}>
-      <ScrollView contentContainerStyle={styles.editorBody} keyboardShouldPersistTaps="handled">
+      <ScrollView alwaysBounceVertical={false} contentContainerStyle={styles.editorBody} keyboardShouldPersistTaps="handled">
         <View style={styles.howHead}>
           <View style={[styles.howIcon, { backgroundColor: colors.accentSoft }]}>
             <Icon name={icon} size={28} color={colors.accent} />
@@ -766,7 +768,7 @@ export function HowWasItSheet({
         {photos.length > 0 ? (
           <>
             <Text style={[styles.label, { color: colors.textSecondary }]}>From that day’s moments</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.photoRowPlain}>
+            <ScrollView horizontal alwaysBounceHorizontal={false} showsHorizontalScrollIndicator={false} contentContainerStyle={styles.photoRowPlain}>
               {photos.map((m) => {
                 const on = picked.includes(m.id);
                 return (

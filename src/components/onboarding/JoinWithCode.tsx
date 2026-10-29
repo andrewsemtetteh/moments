@@ -9,6 +9,7 @@ import { OnboardingStepScreen } from '@/components/onboarding/OnboardingStepScre
 import { useTheme } from '@/hooks/useTheme';
 import { formatInviteCode, INVITE_CODE_LENGTH, normalizeInviteCode } from '@/lib/invite-code';
 import { Icon } from '@/components/ui/Icon';
+import { fieldOutline } from '@/components/ui/primitives';
 import { joinRelationshipByInvite, MomentsApiError } from '@/lib/moments-api';
 import { markRelationshipOnboardingDone } from '@/lib/onboarding-storage';
 import { clearPendingInvite, getPendingInvite } from '@/lib/pending-links';
@@ -51,6 +52,8 @@ export function JoinWithCode({
   const [busy, setBusy] = useState(false);
   // Why the last try didn't work, shown under the code (cleared as soon as they edit it).
   const [error, setError] = useState<string | null>(null);
+  // The field's outline takes the theme colour while typing.
+  const [focused, setFocused] = useState(false);
 
   const join = async () => {
     if (preview) {
@@ -105,9 +108,12 @@ export function JoinWithCode({
         maxLength={INVITE_CODE_LENGTH + 1}
         returnKeyType="go"
         onSubmitEditing={() => void join()}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
         style={[
           styles.input,
-          { color: colors.text, borderColor: error ? colors.error : colors.text, backgroundColor: colors.surface },
+          { color: colors.text, backgroundColor: colors.surface },
+          fieldOutline(colors, { focused, error: !!error }),
         ]}
       />
       {/* What went wrong, in plain words, right where they're looking. */}
@@ -142,7 +148,6 @@ const styles = StyleSheet.create({
   input: {
     height: 66,
     borderRadius: 18,
-    borderWidth: 2,
     textAlign: 'center',
     fontSize: 30,
     fontWeight: '900',

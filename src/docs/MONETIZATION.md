@@ -117,6 +117,20 @@ can close; "Send it to {partner}" sends a `plus_suggest` notification that opens
 their phone. When either partner subscribes, the other gets `plus_unlocked` ("Sam unlocked Moments
 Plus for you both") from the billing webhook. Logic: `src/components/layout/PaywallMoments.tsx`.
 
+## Streak restore ($0.99 one-time purchase)
+
+A lost streak can be restored for 5 days from the midnight it ended, then it's gone for good.
+
+* Day 1: free with Plus. Free users choose between $0.99 now or Plus (restores free).
+* Days 2 to 5: $0.99 for everyone, Plus included.
+* Starting a new streak in those 5 days doesn't cancel the offer: restoring joins the old and new
+  streaks, and the missed days are drawn covered (like a freeze).
+* While it's open, the owner gets one evening reminder a day (in the app and as a push), with the
+  days left and a "last day" message on day 5.
+* Product: `streak_restore`, a consumable in App Store Connect and Google Play, added to Superwall.
+  The webhook records each purchase (one row per store transaction, refunds remove an unused one)
+  in `streak_restore_purchases`; restoring uses the oldest unused one. It never turns Plus on.
+
 Regional adjustments (optional later):
 
 * Africa pricing tier (lower entry cost)

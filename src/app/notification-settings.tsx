@@ -73,6 +73,7 @@ export default function NotificationSettingsScreen() {
     <View style={[styles.root, { backgroundColor: colors.background }]}>
       <ScreenHeader title="Notifications" onBack={() => closeStackScreen(router)} />
       <ScrollView
+        alwaysBounceVertical={false}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 16 }]}>
         {off ? (

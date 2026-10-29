@@ -2,17 +2,20 @@ import { useEffect } from 'react';
 import { AppState, Platform, type AppStateStatus } from 'react-native';
 
 import { useStreak } from '@/hooks/queries';
+import { isNotificationTypeEnabled } from '@/lib/notification-prefs';
 import { cancelStreakReminders, syncStreakReminders } from '@/lib/streak-reminders';
 import { useAuthStore, useRelationshipStore } from '@/stores';
 
 /** Schedules 3h + 1h local streak warnings when this user still needs to check in. */
 export function StreakReminderSync() {
   const session = useAuthStore((s) => s.session);
+  // Settings › Notifications › Streak reminders covers these local ones too, not just pushes.
+  const enabled = useAuthStore((s) => isNotificationTypeEnabled(s.user?.notification_prefs, 'streak'));
   const relationship = useRelationshipStore((s) => s.relationship);
   const { data: streak } = useStreak();
 
   useEffect(() => {
-    if (Platform.OS === 'web' || !session || !relationship?.id) {
+    if (Platform.OS === 'web' || !session || !relationship?.id || !enabled) {
       void cancelStreakReminders();
       return;
     }
@@ -27,7 +30,7 @@ export function StreakReminderSync() {
     return () => {
       sub.remove();
     };
-  }, [session, relationship?.id, streak]);
+  }, [session, relationship?.id, streak, enabled]);
 
   return null;
 }

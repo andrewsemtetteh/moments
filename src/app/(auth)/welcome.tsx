@@ -10,7 +10,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import LottieView from 'lottie-react-native';
 import Svg, { Path } from 'react-native-svg';
 
-import { colorWithAlpha } from '@/components/ui/primitives';
+import { colorWithAlpha, primaryButtonEdge } from '@/components/ui/primitives';
 import { Radius, Spacing } from '@/constants/design-system';
 import { useTheme } from '@/hooks/useTheme';
 // Used by the commented-out dev previews:
@@ -297,6 +297,7 @@ export default function AuthWelcomeScreen() {
                     style={({ pressed }) => [
                       styles.primaryCta,
                       { backgroundColor: colors.accent, opacity: pressed ? 0.9 : 1 },
+                      primaryButtonEdge(colors),
                     ]}>
                     <Text
                       style={[

@@ -123,7 +123,7 @@ function Toast({ item }: { item: Celebration }) {
 
   return (
     <Animated.View
-      entering={FadeInUp.springify().damping(14)}
+      entering={FadeInUp.duration(260)}
       exiting={FadeOutUp.duration(200)}
       style={[
         styles.toast,
@@ -154,7 +154,7 @@ function LevelUp({ item }: { item: Extract<Celebration, { kind: 'level' }> }) {
     <Pressable style={styles.levelRoot} onPress={() => dismiss(item.id)} accessibilityLabel="Dismiss level up">
       <Confetti burstKey={item.level} />
       <Animated.View
-        entering={ZoomIn.springify().damping(11)}
+        entering={ZoomIn.duration(260)}
         style={[styles.levelCard, { backgroundColor: colors.surfaceElevated, borderColor: colors.accent }]}>
         <Text style={styles.levelEmoji}>🏅</Text>
         <Text style={[styles.levelKicker, { color: colors.accent }]}>LEVEL UP</Text>
@@ -176,7 +176,7 @@ function TrophyUnlocked({ item, onShare }: { item: BadgeCelebration; onShare?: (
     <Pressable style={styles.levelRoot} onPress={() => dismiss(item.id)} accessibilityLabel="Dismiss trophy">
       <Confetti burstKey={item.badge.goal} />
       <Animated.View
-        entering={ZoomIn.springify().damping(11)}
+        entering={ZoomIn.duration(260)}
         style={[styles.trophyCard, { backgroundColor: colors.surfaceElevated, borderColor: colors.accent }]}>
         <Text style={[styles.levelKicker, { color: colors.accent }]}>TROPHY UNLOCKED</Text>
         <View style={[styles.trophyMedal, { backgroundColor: colors.accentSoft, borderColor: colors.accent }]}>

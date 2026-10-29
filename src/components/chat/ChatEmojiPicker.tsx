@@ -534,6 +534,7 @@ export function ChatEmojiPicker({ onSelect, onBackspace }: Props) {
         ref={scrollRef}
         contentOffset={{ x: remembered.x, y: 0 }}
         horizontal
+        alwaysBounceHorizontal={false}
         showsHorizontalScrollIndicator={false}
         decelerationRate="fast"
         scrollEventThrottle={32}

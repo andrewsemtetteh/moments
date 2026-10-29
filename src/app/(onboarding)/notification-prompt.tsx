@@ -10,6 +10,7 @@ import { goNext } from '@/lib/onboarding-v2';
 import { markNotificationPromptDone } from '@/lib/onboarding-storage';
 import { requestPushNotificationPermission } from '@/lib/push-notifications';
 import { useAuthStore } from '@/stores';
+import { insetCardStyle, separatorColor } from '@/components/ui/primitives';
 
 const ITEMS: { icon: IconName; title: string; body: string; tint: string }[] = [
   { icon: 'cards', title: 'Conversations and games', body: 'When they start a conversation deck or a game for you two', tint: '#DCEBFF' },
@@ -50,11 +51,11 @@ export default function NotificationPromptScreen() {
       busy={busy}
       secondaryLabel="Not now"
       onSecondary={() => void next(false)}>
-      <View style={[styles.list, { borderColor: colors.text, backgroundColor: colors.surface }]}>
+      <View style={[styles.list, insetCardStyle(colors, 'page')]}>
         {ITEMS.map((n, i) => (
           <View
             key={n.title}
-            style={[styles.row, i < ITEMS.length - 1 && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border }]}>
+            style={[styles.row, i < ITEMS.length - 1 && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: separatorColor(colors) }]}>
             <View style={[styles.tile, { backgroundColor: n.tint }]}>
               <Icon name={n.icon} size={18} color="#1A1A1A" />
             </View>

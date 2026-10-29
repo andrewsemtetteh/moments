@@ -3,12 +3,13 @@ import type { WithSpringConfig } from "react-native-reanimated";
 
 const DROP_SPRING: WithSpringConfig = {
   duration: 1150,
-  dampingRatio: 0.82,
+  // 1 = no overshoot (it used to bounce as it dropped in).
+  dampingRatio: 1,
 };
 
 const EXPAND_SPRING: WithSpringConfig = {
   duration: 1000,
-  dampingRatio: 0.8,
+  dampingRatio: 1,
 };
 
 const REVEAL_SPRING: WithSpringConfig = {
@@ -29,7 +30,7 @@ const COLLAPSE_SPRING: WithSpringConfig = {
 
 const RETURN_SPRING: WithSpringConfig = {
   duration: 1150,
-  dampingRatio: 0.9,
+  dampingRatio: 1,
 };
 
 const FADE_SPRING: WithSpringConfig = {

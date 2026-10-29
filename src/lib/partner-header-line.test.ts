@@ -23,8 +23,8 @@ describe('partner header line', () => {
   });
 
   it('joins what it has, no emoji', () => {
-    expect(buildPartnerHeaderLine({ location: '4,812 km apart', clock: partnerClockAt(23, 40) })).toBe(
-      '4,812 km apart · 11:40',
+    expect(buildPartnerHeaderLine({ location: '4,812 km Away', clock: partnerClockAt(23, 40) })).toBe(
+      '4,812 km Away · 11:40',
     );
     expect(buildPartnerHeaderLine({ location: null, clock: partnerClockAt(8, 0) })).toBe('8:00');
   });

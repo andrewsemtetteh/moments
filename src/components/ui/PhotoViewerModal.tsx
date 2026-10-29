@@ -76,6 +76,7 @@ function Viewer({ photos, startIndex, onClose }: { photos: string[]; startIndex:
       <Animated.View style={[styles.flex, photoStyle]}>
         <ScrollView
           horizontal
+          alwaysBounceHorizontal={false}
           pagingEnabled
           showsHorizontalScrollIndicator={false}
           contentOffset={{ x: startIndex * width, y: 0 }}

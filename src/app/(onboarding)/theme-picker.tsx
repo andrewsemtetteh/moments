@@ -8,7 +8,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { OnboardingStepScreen } from '@/components/onboarding/OnboardingStepScreen';
 import { ThemeHomePreview } from '@/components/onboarding/ThemeHomePreview';
 import { Icon } from '@/components/ui/Icon';
-import { THEME_META, Themes } from '@/constants/design-system';
+import { THEME_GRID_FILLERS, THEME_META, Themes } from '@/constants/design-system';
 import { useTheme } from '@/hooks/useTheme';
 import { getFirstName } from '@/lib/avatar-initial';
 import { getOnboardingDraft, goNext, previewAnswers } from '@/lib/onboarding-v2';
@@ -89,6 +89,9 @@ export default function ThemePickerScreen() {
             </Pressable>
           );
         })}
+        {THEME_GRID_FILLERS.map((k) => (
+          <View key={k} style={styles.swatchItem} />
+        ))}
       </View>
     </OnboardingStepScreen>
   );

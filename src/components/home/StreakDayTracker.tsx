@@ -11,7 +11,7 @@ import { Icon } from '@/components/ui/Icon';
 import { Radius, ringColor } from '@/constants/design-system';
 import { useTheme } from '@/hooks/useTheme';
 import { getFirstName } from '@/lib/avatar-initial';
-import { streakSubtitle, partnerStreakCount } from '@/lib/streak';
+import { isPartnerStreakEndingSoon, partnerStreakCount, streakSubtitle } from '@/lib/streak';
 import { STREAK_COLORS, streakToneFromStatus, streakWellColors } from '@/lib/streak-colors';
 import {
   buildStreakMonth,
@@ -149,7 +149,7 @@ export function StreakDayTracker({ status, joinedAt: joinedAtProp, calendarOnly 
             done={status.partner_active_today}
             // Their own streak: waiting while theirs is going, red when theirs ends tonight.
             waiting={partnerStreakCount(status) > 0 && !status.partner_active_today}
-            atRisk={!!status.partner_at_risk && !status.partner_active_today}
+            atRisk={isPartnerStreakEndingSoon(status)}
             isDark={colors.isDark}
             colors={{
               text: colors.text,

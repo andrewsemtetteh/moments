@@ -12,7 +12,7 @@ export function PlanDateIdeas({ onAdd }: { onAdd: (idea: DateIdea) => void }) {
   return (
     <View style={styles.section}>
       <Text style={[styles.heading, { color: colors.text }]}>Date Ideas</Text>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
+      <ScrollView horizontal alwaysBounceHorizontal={false} showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
         {DATE_IDEAS.map((idea) => (
           <View key={idea.id} style={[styles.card, { shadowColor: colors.shadow }]}>
             <Image source={mediaSource(idea.image)} style={styles.image} contentFit="cover" transition={200} />

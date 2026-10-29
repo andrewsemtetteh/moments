@@ -27,9 +27,11 @@ interface MoodSnapshotProps {
   moods: Record<string, MoodLog>;
   onSelectMood?: (mood: string) => void;
   onViewHistory?: () => void;
+  /** The theme picker's preview: sample moods and your person's name, in the real card. */
+  sample?: { partnerName: string; myMood: string; partnerMood: string; partnerSetAt: string };
 }
 
-export function MoodSnapshot({ moods, onSelectMood, onViewHistory }: MoodSnapshotProps) {
+export function MoodSnapshot({ moods, onSelectMood, onViewHistory, sample }: MoodSnapshotProps) {
   const { colors } = useTheme();
   const user = useAuthStore((s) => s.user);
   const relationship = useRelationshipStore((s) => s.relationship);
@@ -47,8 +49,16 @@ export function MoodSnapshot({ moods, onSelectMood, onViewHistory }: MoodSnapsho
         : relationship.user_1_id
       : null);
 
-  const myMood = user ? moods[user.id] : null;
-  const partnerMood = partnerId ? moods[partnerId] : null;
+  const myMood: Pick<MoodLog, 'mood'> | null = sample
+    ? { mood: sample.myMood as MoodLog['mood'] }
+    : user
+      ? moods[user.id]
+      : null;
+  const partnerMood: Pick<MoodLog, 'mood' | 'created_at'> | null = sample
+    ? { mood: sample.partnerMood as MoodLog['mood'], created_at: sample.partnerSetAt }
+    : partnerId
+      ? moods[partnerId]
+      : null;
 
   const quickMoods = useMemo(() => {
     if (moodsLoading) {
@@ -155,7 +165,7 @@ export function MoodSnapshot({ moods, onSelectMood, onViewHistory }: MoodSnapsho
         />
         <View style={[styles.divider, { backgroundColor: colors.border }]} />
         <MoodBubble
-          name={getFirstName(partner?.name) ?? 'Partner'}
+          name={sample?.partnerName ?? getFirstName(partner?.name) ?? 'Partner'}
           mood={partnerMood?.mood}
           setAt={partnerMood?.created_at}
           colors={colors}

@@ -7,15 +7,15 @@ import Animated, { FadeIn } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { PLAY_TONES } from '@/components/activities/explore/explore-catalog';
-import { Confetti } from '@/components/games/Celebration';
 import { AnswerShape } from '@/components/games/AnswerShape';
+import { Confetti } from '@/components/games/Celebration';
 import { PromptCard } from '@/components/games/room-panels';
 import { ChunkyButton, firstName, shade } from '@/components/games/room-ui';
 import { PlayHeader } from '@/components/play/PlayHeader';
-import { PLAY_GUTTER, PlayHero, PlayType, playCardStyle } from '@/components/play/PlayKit';
-import { RivalryCard } from '@/components/play/Versus';
+import { PLAY_GUTTER, PlayPill, PlayType, playCardStyle } from '@/components/play/PlayKit';
+import { Crown } from '@/components/ui/Crown';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { Icon } from '@/components/ui/Icon';
+import { Icon, type IconName } from '@/components/ui/Icon';
 import { Avatar } from '@/components/ui/primitives';
 import { useLightStatusBar } from '@/hooks/useLightStatusBar';
 import { useTheme } from '@/hooks/useTheme';
@@ -25,8 +25,14 @@ import { BOOL_TILE_COLORS, QUIZ_TILE_COLORS } from '@/lib/quiz-live';
 import { useAuthStore, useRelationshipStore } from '@/stores';
 
 const tone = PLAY_TONES.amber;
+const RIGHT = '#26890C';
+const WRONG = '#E21B3C';
 
-/** The daily duel: answer three questions, then see who knew more once you've both played. */
+/**
+ * The daily duel: the same three questions for you both. A "you vs them" header shows where each of
+ * you is; you start when you're ready, answer three, and once you've both played the scores and
+ * every answer show.
+ */
 export default function DuelScreen() {
   const { date: dateParam } = useLocalSearchParams<{ date?: string }>();
   const router = useRouter();
@@ -51,6 +57,7 @@ export default function DuelScreen() {
     enabled: !!id && !!user && !!partner,
   });
 
+  const [started, setStarted] = useState(false);
   const [picks, setPicks] = useState<number[]>([]);
   const [saving, setSaving] = useState(false);
 
@@ -76,9 +83,10 @@ export default function DuelScreen() {
     if (next.length === DUEL_SIZE) void submit(next);
   };
 
+  const title = date === today ? 'Today’s duel' : 'Yesterday’s duel';
   const header = (
     <View style={{ backgroundColor: tone.accent }}>
-      <PlayHeader title={date === today ? 'Today’s duel' : 'Yesterday’s duel'} onColor="#FFFFFF" />
+      <PlayHeader title={title} onColor="#FFFFFF" />
     </View>
   );
 
@@ -98,8 +106,11 @@ export default function DuelScreen() {
   }
 
   const state = duel.state;
-  const answered = !!state.answers[me.id];
+  const result = state.result;
+  const mineIn = !!state.answers[me.id];
+  const theirsIn = !!state.answers[them.id];
   const open = duelOpen(state.date, today);
+  const playing = !result && !mineIn && open && started;
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
@@ -110,17 +121,40 @@ export default function DuelScreen() {
         contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
         showsVerticalScrollIndicator={false}>
         {header}
-        <PlayHero
-          color={tone.accent}
-          pill="Versus · 3 questions"
-          blurb={
-            state.result
-              ? 'Here’s how you both did.'
-              : answered
-                ? `Locked in. The answers show once ${firstName(them.name)} plays.`
-                : 'Same three questions for you both. One point each. No peeking.'
-          }>
-          {!answered && !state.result ? (
+
+        {/* You vs them: where each of you is, or the final score. */}
+        <View style={[styles.hero, { backgroundColor: tone.accent }]}>
+          <PlayPill label={date === today ? 'Daily duel · 3 questions' : 'Closes tonight'} />
+          <View style={styles.vs}>
+            <Player
+              name="You"
+              label={user?.name}
+              avatar={user?.avatar_url}
+              status={result ? null : mineIn ? 'Played' : playing ? 'Playing…' : 'Ready'}
+              done={mineIn}
+              score={result ? (result.scores[me.id] ?? 0) : null}
+              crown={!!result && result.winnerId === me.id}
+            />
+            <View style={styles.vsMiddle}>
+              {result ? (
+                <Text style={styles.vsDash}>–</Text>
+              ) : (
+                <View style={styles.vsBadge}>
+                  <Text style={styles.vsText}>VS</Text>
+                </View>
+              )}
+            </View>
+            <Player
+              name={firstName(them.name)}
+              label={partner?.name}
+              avatar={partner?.avatar_url}
+              status={result ? null : theirsIn ? 'Played' : 'Waiting…'}
+              done={theirsIn}
+              score={result ? (result.scores[them.id] ?? 0) : null}
+              crown={!!result && result.winnerId === them.id}
+            />
+          </View>
+          {playing ? (
             <View style={styles.steps}>
               {Array.from({ length: DUEL_SIZE }).map((_, i) => (
                 <View
@@ -140,12 +174,12 @@ export default function DuelScreen() {
               ))}
             </View>
           ) : null}
-        </PlayHero>
+        </View>
 
         <View style={styles.body}>
-          {state.result ? (
+          {result ? (
             <DuelResults duel={duel} meId={me.id} themId={them.id} onDone={() => router.back()} />
-          ) : answered ? (
+          ) : mineIn ? (
             <Waiting name={firstName(them.name)} onDone={() => router.back()} />
           ) : !open ? (
             <EmptyState
@@ -153,9 +187,12 @@ export default function DuelScreen() {
               title="This duel has closed"
               text="Duels stay open until the end of the next day. Today’s is waiting on Play."
             />
+          ) : !started ? (
+            <Intro theyPlayed={theirsIn} them={firstName(them.name)} onStart={() => setStarted(true)} />
           ) : saving || picks.length >= DUEL_SIZE ? (
             <View style={styles.centered}>
               <ActivityIndicator color={tone.accent} />
+              <Text style={[PlayType.body, { color: colors.textSecondary }]}>Locking in your answers…</Text>
             </View>
           ) : (
             <Question duel={duel} index={picks.length} onPick={choose} />
@@ -163,6 +200,83 @@ export default function DuelScreen() {
         </View>
       </ScrollView>
     </View>
+  );
+}
+
+/** One side of the header: photo (crowned when they won), name, then their status or score. */
+function Player({
+  name,
+  label,
+  avatar,
+  status,
+  done,
+  score,
+  crown,
+}: {
+  name: string;
+  label?: string | null;
+  avatar?: string | null;
+  status: string | null;
+  done: boolean;
+  score: number | null;
+  crown: boolean;
+}) {
+  return (
+    <View style={styles.player}>
+      <View style={[styles.ring, { borderColor: crown ? '#FFD54A' : 'rgba(255,255,255,0.5)' }]}>
+        <Avatar name={label ?? name} imageUrl={avatar ?? undefined} size={64} />
+        {crown ? (
+          <View style={styles.crown} pointerEvents="none">
+            <Crown size={30} />
+          </View>
+        ) : null}
+      </View>
+      <Text style={styles.playerName} numberOfLines={1}>
+        {name}
+      </Text>
+      {score !== null ? (
+        <Text style={styles.score}>
+          {score}
+          <Text style={styles.scoreOf}>/{DUEL_SIZE}</Text>
+        </Text>
+      ) : status ? (
+        <View style={[styles.status, done && styles.statusDone]}>
+          {done ? <Icon name="check" size={13} color={tone.accent} /> : null}
+          <Text style={[styles.statusText, done && { color: tone.accent }]}>{status}</Text>
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+/** Before you start: how it works, in three lines, and Start. */
+function Intro({ theyPlayed, them, onStart }: { theyPlayed: boolean; them: string; onStart: () => void }) {
+  const { colors } = useTheme();
+  const rows: { icon: IconName; text: string }[] = [
+    { icon: 'bulb', text: 'The same three questions for you both' },
+    { icon: 'star', text: 'One point for each right answer' },
+    { icon: 'lock', text: 'Answers stay hidden until you’ve both played' },
+  ];
+  return (
+    <Animated.View entering={FadeIn.duration(160)} style={styles.gap}>
+      {theyPlayed ? (
+        <View style={[styles.nudgeLine, { backgroundColor: tone.soft }]}>
+          <Icon name="time" size={16} color={tone.accent} />
+          <Text style={[styles.nudgeText, { color: tone.accent }]}>{them} has played. Your turn!</Text>
+        </View>
+      ) : null}
+      <View style={[styles.howCard, playCardStyle(colors)]}>
+        {rows.map((r) => (
+          <View key={r.text} style={styles.howRow}>
+            <View style={[styles.howIcon, { backgroundColor: tone.soft }]}>
+              <Icon name={r.icon} size={18} color={tone.accent} filled />
+            </View>
+            <Text style={[PlayType.body, styles.flex, { color: colors.text }]}>{r.text}</Text>
+          </View>
+        ))}
+      </View>
+      <ChunkyButton label="Start the duel" color={tone.accent} onPress={onStart} />
+    </Animated.View>
   );
 }
 
@@ -197,17 +311,22 @@ function Question({ duel, index, onPick }: { duel: DuelSession; index: number; o
   );
 }
 
+/** You've played; they haven't. */
 function Waiting({ name, onDone }: { name: string; onDone: () => void }) {
   const { colors } = useTheme();
   return (
     <View style={styles.gap}>
       <View style={[styles.waitCard, playCardStyle(colors)]}>
-        <Icon name="time" size={22} color={colors.textSecondary} />
-        <Text style={[PlayType.body, styles.flex, { color: colors.textSecondary }]}>
-          We’ve let {name} know it’s their turn. You’ll get a ping when the results are in.
-        </Text>
+        <View style={[styles.howIcon, { backgroundColor: tone.soft }]}>
+          <Icon name="lock" size={18} color={tone.accent} filled />
+        </View>
+        <View style={styles.flex}>
+          <Text style={[PlayType.title, { color: colors.text }]}>Locked in</Text>
+          <Text style={[PlayType.body, { color: colors.textSecondary }]}>
+            We’ve let {name} know it’s their turn. The scores and answers show as soon as they play.
+          </Text>
+        </View>
       </View>
-      <RivalryCard compact />
       <ChunkyButton label="Done" color={tone.accent} onPress={onDone} />
     </View>
   );
@@ -224,101 +343,124 @@ function DuelResults({
   themId: string;
   onDone: () => void;
 }) {
+  const router = useRouter();
   const { colors } = useTheme();
-  const user = useAuthStore((s) => s.user);
   const partner = useRelationshipStore((s) => s.partner);
   const state = duel.state;
   const result = state.result!;
-  const mine = result.scores[meId] ?? 0;
-  const theirs = result.scores[themId] ?? 0;
   const them = firstName(partner?.name);
-  const headline =
-    result.winnerId === meId ? 'You win today 🏆' : result.winnerId ? `${them} wins today 🏆` : 'A tie today 🤝';
+  const headline = result.winnerId === meId ? 'You win today!' : result.winnerId ? `${them} wins today` : 'A tie today';
 
   return (
     <View style={styles.gap}>
       {result.winnerId === meId ? <Confetti burstKey={duel.version} /> : null}
       <Text style={[styles.headline, { color: colors.text }]}>{headline}</Text>
-      <View style={[styles.board, playCardStyle(colors)]}>
-        <Row avatar={user?.avatar_url} label={user?.name} name="You" score={mine} crown={result.winnerId === meId} />
-        <Row
-          avatar={partner?.avatar_url}
-          label={partner?.name}
-          name={them}
-          score={theirs}
-          crown={result.winnerId === themId}
-        />
-      </View>
 
       {state.questions.map((q, i) => {
         const a = state.answers[meId]?.[i];
         const b = state.answers[themId]?.[i];
         return (
           <View key={i} style={[styles.answer, playCardStyle(colors)]}>
+            <Text style={[styles.qLabel, { color: colors.textTertiary }]}>QUESTION {i + 1}</Text>
             <Text style={[PlayType.title, { color: colors.text }]}>{q.question}</Text>
-            <Text style={[PlayType.body, { color: colors.success }]}>✓ {q.options[q.correctIndex]}</Text>
-            <View style={styles.picks}>
-              <Pick who="You" right={a === q.correctIndex} text={a !== undefined ? q.options[a] : '—'} />
-              <Pick who={them} right={b === q.correctIndex} text={b !== undefined ? q.options[b] : '—'} />
+            <View style={[styles.correct, { backgroundColor: `${RIGHT}1A` }]}>
+              <Icon name="check" size={14} color={RIGHT} />
+              <Text style={[styles.correctText, { color: RIGHT }]} numberOfLines={2}>
+                {q.options[q.correctIndex]}
+              </Text>
             </View>
+            <PickLine who="You" right={a === q.correctIndex} text={a !== undefined ? q.options[a] : 'No answer'} />
+            <PickLine who={them} right={b === q.correctIndex} text={b !== undefined ? q.options[b] : 'No answer'} />
           </View>
         );
       })}
 
-      <RivalryCard compact />
+      <Pressable onPress={() => router.push('/play/progress')} accessibilityRole="button" style={styles.h2hLink}>
+        <Text style={[styles.h2hText, { color: tone.accent }]}>See your head to head</Text>
+        <Icon name="chevronRight" size={16} color={tone.accent} />
+      </Pressable>
       <Text style={[PlayType.body, styles.center, { color: colors.textSecondary }]}>New questions tomorrow.</Text>
       <ChunkyButton label="Done" color={tone.accent} onPress={onDone} />
     </View>
   );
 }
 
-function Row({
-  avatar,
-  label,
-  name,
-  score,
-  crown,
-}: {
-  avatar?: string | null;
-  label?: string | null;
-  name: string;
-  score: number;
-  crown: boolean;
-}) {
+/** "You: Paris ✓" with a round tick or cross. */
+function PickLine({ who, right, text }: { who: string; right: boolean; text: string }) {
   const { colors } = useTheme();
   return (
-    <View style={styles.row}>
-      <Avatar name={label ?? name} imageUrl={avatar ?? undefined} size={36} />
-      <Text style={[styles.rowName, { color: colors.text }]}>
-        {name} {crown ? '👑' : ''}
-      </Text>
-      <Text style={[styles.rowScore, { color: colors.text }]}>
-        {score}
-        <Text style={{ color: colors.textTertiary }}>/{DUEL_SIZE}</Text>
+    <View style={styles.pickLine}>
+      <View style={[styles.mark, { backgroundColor: right ? RIGHT : WRONG }]}>
+        <Icon name={right ? 'check' : 'close'} size={12} color="#FFFFFF" />
+      </View>
+      <Text style={[PlayType.body, styles.flex, { color: colors.text }]} numberOfLines={2}>
+        <Text style={styles.bold}>{who}: </Text>
+        {text}
       </Text>
     </View>
-  );
-}
-
-function Pick({ who, right, text }: { who: string; right: boolean; text: string }) {
-  const { colors } = useTheme();
-  return (
-    <Text style={[PlayType.body, styles.flex, { color: right ? colors.text : colors.textSecondary }]} numberOfLines={2}>
-      <Text style={{ fontWeight: '900' }}>{who}: </Text>
-      {text} {right ? '✓' : '✗'}
-    </Text>
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
   flex: { flex: 1 },
+  bold: { fontWeight: '900' },
   center: { textAlign: 'center' },
-  centered: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 48 },
-  steps: { flexDirection: 'row', gap: 6 },
+  centered: { alignItems: 'center', justifyContent: 'center', paddingVertical: 48, gap: 12 },
+  hero: {
+    borderBottomLeftRadius: 32,
+    borderBottomRightRadius: 32,
+    paddingHorizontal: 24,
+    paddingTop: 6,
+    paddingBottom: 24,
+    gap: 16,
+    alignItems: 'center',
+  },
+  vs: { flexDirection: 'row', alignItems: 'flex-start', alignSelf: 'stretch' },
+  vsMiddle: { width: 56, height: 72, alignItems: 'center', justifyContent: 'center' },
+  vsBadge: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(0,0,0,0.22)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  vsText: { color: '#FFFFFF', fontSize: 14, fontWeight: '900', letterSpacing: 1 },
+  vsDash: { color: 'rgba(255,255,255,0.8)', fontSize: 34, fontWeight: '900' },
+  player: { flex: 1, alignItems: 'center', gap: 6 },
+  ring: { borderWidth: 3, borderRadius: 999, padding: 2 },
+  crown: { position: 'absolute', top: -19, left: 0, right: 0, alignItems: 'center' },
+  playerName: { color: '#FFFFFF', fontSize: 16, fontWeight: '800', maxWidth: 120 },
+  score: { color: '#FFFFFF', fontSize: 34, fontWeight: '900', letterSpacing: -0.5 },
+  scoreOf: { fontSize: 16, color: 'rgba(255,255,255,0.75)' },
+  status: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    backgroundColor: 'rgba(0,0,0,0.2)',
+  },
+  statusDone: { backgroundColor: '#FFFFFF' },
+  statusText: { color: '#FFFFFF', fontSize: 12, fontWeight: '800' },
+  steps: { flexDirection: 'row', gap: 6, alignSelf: 'stretch' },
   step: { flex: 1, height: 6, borderRadius: 3 },
   body: { padding: PLAY_GUTTER, paddingTop: 18 },
   gap: { gap: 14 },
+  nudgeLine: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  nudgeText: { fontSize: 14, fontWeight: '800' },
+  howCard: { padding: 16, gap: 14 },
+  howRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  howIcon: { width: 36, height: 36, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   question: { gap: 16 },
   promptText: { color: '#FFFFFF', fontSize: 24, fontWeight: '800', lineHeight: 31 },
   // Two columns: four answers sit in two rows, two answers side by side.
@@ -335,12 +477,22 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   tileText: { color: '#FFFFFF', fontSize: 17, fontWeight: '800', textAlign: 'center' },
-  waitCard: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16 },
+  waitCard: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, padding: 16 },
   headline: { fontSize: 26, fontWeight: '900', textAlign: 'center', marginTop: 4 },
-  board: { padding: 14, gap: 12 },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  rowName: { flex: 1, fontSize: 16, fontWeight: '800' },
-  rowScore: { fontSize: 22, fontWeight: '900' },
-  answer: { padding: 14, gap: 6 },
-  picks: { flexDirection: 'row', gap: 10, marginTop: 2 },
+  answer: { padding: 14, gap: 8 },
+  qLabel: { fontSize: 11, fontWeight: '900', letterSpacing: 1 },
+  correct: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    alignSelf: 'flex-start',
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  correctText: { fontSize: 14, fontWeight: '800', flexShrink: 1 },
+  pickLine: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  mark: { width: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  h2hLink: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingVertical: 6 },
+  h2hText: { fontSize: 15, fontWeight: '800' },
 });

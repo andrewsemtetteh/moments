@@ -1,5 +1,6 @@
 import * as Haptics from '@/lib/haptics';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { StickerFlame } from '@/components/home/StickerFlame';
 import { Icon } from '@/components/ui/Icon';
@@ -7,7 +8,14 @@ import { Radius } from '@/constants/design-system';
 import { useRestoreStreak } from '@/hooks/queries';
 import { usePlusGate } from '@/hooks/usePlusGate';
 import { useTheme } from '@/hooks/useTheme';
-import { isStreakRestoreAvailable, streakRestoreMsLeft } from '@/lib/streak';
+import { usePurchasesStore } from '@/lib/purchases';
+import {
+  isStreakRestoreAvailable,
+  isStreakRestoreFirstDay,
+  isStreakRestoreFree,
+  streakRestoreFreeMsLeft,
+  streakRestoreMsLeft,
+} from '@/lib/streak';
 import { formatTimeLeft } from '@/lib/streak-reminder-timing';
 import { STREAK_COLORS } from '@/lib/streak-colors';
 import type { StreakStatus } from '@/types/database';
@@ -20,22 +28,63 @@ interface StreakRestoreBannerProps {
   now?: Date;
 }
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** "3 days left", or on the last day "5h 20m left". */
+function leftLabel(ms: number): string {
+  if (ms >= DAY_MS) {
+    const days = Math.ceil(ms / DAY_MS);
+    return `${days} days left`;
+  }
+  return `${formatTimeLeft(ms)} left`;
+}
 
 /**
- * Home, after a streak was lost (for 24 hours): the flame gone out, two short lines (what
- * was lost, the time left) and a restore button, like Duolingo's streak repair. The whole
- * card is the button: with Plus it restores, on Free it opens the paywall.
+ * Home (and the streak page), for 5 days after a streak was lost: the flame gone out, what was
+ * lost, what restoring costs and the time left, like Duolingo's streak repair. The whole card is
+ * the button. Free with Plus on the day it was lost; otherwise a $0.99 restore (a paid one you
+ * already hold is used first). Free users on day one choose: $0.99 now, or Plus (free restores).
  */
-export function StreakRestoreBanner({ status, preview = false, now = new Date() }: StreakRestoreBannerProps) {
+export function StreakRestoreBanner({ status, preview = false, now: fixedNow }: StreakRestoreBannerProps) {
   const { colors } = useTheme();
   const { isPlus, requirePlus } = usePlusGate();
   const restoreStreak = useRestoreStreak();
+  const price = usePurchasesStore((s) => s.restorePrice) ?? '$0.99';
+  // The time left ticks every 30 seconds, and the card goes when the restore days are over.
+  const [tick, setTick] = useState(() => Date.now());
+  useEffect(() => {
+    if (fixedNow) return;
+    const id = setInterval(() => setTick(Date.now()), 30_000);
+    return () => clearInterval(id);
+  }, [fixedNow]);
+  const now = fixedNow ?? new Date(tick);
 
   if (!isStreakRestoreAvailable(status, now)) return null;
 
   const count = status.restorable_streak ?? 0;
-  const left = formatTimeLeft(streakRestoreMsLeft(status, now));
+  const free = isStreakRestoreFree(status, now);
+  const credits = status.restore_credits ?? 0;
+  // Started a new streak since: restoring joins the two.
+  const joined = status.current_streak > 0 ? count + status.current_streak : null;
+  const cost = free ? 'Free with Plus' : credits > 0 ? 'Restore ready' : `${price} to restore`;
+  const left = leftLabel(free ? streakRestoreFreeMsLeft(status, now) : streakRestoreMsLeft(status, now));
+  const sub = [joined ? `Makes it ${joined} days` : null, cost, left].filter(Boolean).join(' · ');
   const pending = restoreStreak.isPending;
+
+  const buy = () => restoreStreak.mutate({ pay: true });
+
+  /** No free restore and none held: day one on Free offers Plus too; after that, just the $0.99. */
+  const offerPurchase = () => {
+    if (isStreakRestoreFirstDay(status, now) && !isPlus) {
+      Alert.alert(`Restore your ${count}-day streak`, `Restore it now for ${price}, or get Plus and restore it free today.`, [
+        { text: `Restore for ${price}`, onPress: buy },
+        { text: 'Get Plus', onPress: () => requirePlus('Streak restore') },
+        { text: 'Not now', style: 'cancel' },
+      ]);
+      return;
+    }
+    buy();
+  };
 
   const handleRestore = () => {
     if (pending) return;
@@ -44,11 +93,15 @@ export function StreakRestoreBanner({ status, preview = false, now = new Date() 
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       return;
     }
-    if (isPlus) {
-      restoreStreak.mutate();
+    if (free || credits > 0) {
+      // The server has the last word (the free day may just have ended): offer the purchase if so.
+      restoreStreak.mutate(
+        { pay: false },
+        { onSuccess: ({ outcome }) => (outcome === 'needs_purchase' ? offerPurchase() : undefined) },
+      );
       return;
     }
-    requirePlus('Streak restore');
+    offerPurchase();
   };
 
   return (
@@ -56,7 +109,7 @@ export function StreakRestoreBanner({ status, preview = false, now = new Date() 
       onPress={handleRestore}
       disabled={pending}
       accessibilityRole="button"
-      accessibilityLabel={isPlus ? `Restore your ${count}-day streak` : `Restore your ${count}-day streak with Moments Plus`}
+      accessibilityLabel={`Restore your ${count}-day streak. ${sub}`}
       style={({ pressed }) => [
         styles.card,
         { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: colors.boldBorder ? 2 : 1 },
@@ -68,7 +121,9 @@ export function StreakRestoreBanner({ status, preview = false, now = new Date() 
       </View>
       <View style={styles.copy}>
         <Text style={[styles.title, { color: colors.text }]}>{count}-day streak lost</Text>
-        <Text style={[styles.sub, { color: colors.textSecondary }]}>{left} left to restore</Text>
+        <Text style={[styles.sub, { color: colors.textSecondary }]} numberOfLines={2}>
+          {sub}
+        </Text>
       </View>
       {/* Just the icon: the card says what it does. */}
       {/* The streak's own orange (relighting it), a touch brighter on dark themes. */}

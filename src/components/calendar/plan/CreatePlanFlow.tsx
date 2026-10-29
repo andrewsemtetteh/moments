@@ -275,6 +275,7 @@ export function CreatePlanFlow({
                 {/* Type picked right here (was a separate first page) — one sideways row. */}
                 <GHScrollView
                   horizontal
+                  alwaysBounceHorizontal={false}
                   showsHorizontalScrollIndicator={false}
                   style={styles.typeChipsScroll}
                   contentContainerStyle={styles.typeChips}>

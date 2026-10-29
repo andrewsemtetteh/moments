@@ -60,7 +60,7 @@ export function MomentsStrip({ moments, partnerOnly = false }: MomentsStripProps
   };
 
   return (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
+    <ScrollView horizontal alwaysBounceHorizontal={false} showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
       {!partnerOnly && (
         <StoryRing
           label="You"

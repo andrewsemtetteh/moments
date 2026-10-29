@@ -39,10 +39,6 @@ export function isStreakVisuallyAtRisk(
   return msUntilLocalMidnight(now) <= STREAK_WARN_HOURS_BEFORE_MIDNIGHT * 60 * 60 * 1000;
 }
 
-
-/** @deprecated Prefer isStreakVisuallyAtRisk */
-export const shouldShowStreakAtRiskCard = isStreakVisuallyAtRisk;
-
 export function needsStreakReminders(
   status: Pick<StreakStatus, 'at_risk' | 'current_streak' | 'user_active_today' | 'both_active_today'>,
 ): boolean {

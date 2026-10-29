@@ -3,10 +3,8 @@ import { Platform } from 'react-native';
 import { localCalendarDate } from '@/lib/db-time';
 import { loadExpoNotifications } from '@/lib/expo-notifications-safe';
 import {
-  localMidnight,
   needsStreakReminders,
   STREAK_NUDGE_HOURS_BEFORE_MIDNIGHT,
-  STREAK_WARN_HOURS_BEFORE_MIDNIGHT,
   streakReminderFireAt,
 } from '@/lib/streak-reminder-timing';
 import type { StreakStatus } from '@/types/database';
@@ -15,12 +13,12 @@ export {
   isStreakVisuallyAtRisk,
   msUntilLocalMidnight,
   needsStreakReminders,
-  shouldShowStreakAtRiskCard,
   STREAK_NUDGE_HOURS_BEFORE_MIDNIGHT,
   STREAK_WARN_HOURS_BEFORE_MIDNIGHT,
   streakReminderFireAt,
 } from '@/lib/streak-reminder-timing';
 
+// Warn and end were scheduled by earlier versions: still cancelled, never scheduled now.
 const WARN_ID_PREFIX = 'streak-warn-3h:';
 const NUDGE_ID_PREFIX = 'streak-nudge-1h:';
 const END_ID_PREFIX = 'streak-end:';
@@ -29,16 +27,8 @@ function loadNotifications() {
   return loadExpoNotifications();
 }
 
-function warnIdentifier(day: string) {
-  return `${WARN_ID_PREFIX}${day}`;
-}
-
 function nudgeIdentifier(day: string) {
   return `${NUDGE_ID_PREFIX}${day}`;
-}
-
-function endIdentifier(day: string) {
-  return `${END_ID_PREFIX}${day}`;
 }
 
 async function ensureStreakChannel(
@@ -80,10 +70,10 @@ export async function cancelStreakReminders(): Promise<void> {
 }
 
 /**
- * Schedules today's 3h warning, 1h nudge, and a midnight "streak ended"
- * notification when the streak is at risk and this user still needs to
- * check in. Cancels all three (including "ended") once the user checks in
- * or the streak is no longer at risk.
+ * Schedules tonight's 1-hour "last chance" when your streak ends at midnight and you
+ * haven't checked in. The 3-hour warning and "it ended / restore it" come from the server
+ * (pushes that know about freezes and Plus), so they aren't doubled here. Cancels it once
+ * you've checked in, and clears the older warn/end ones earlier versions scheduled.
  */
 export async function syncStreakReminders(
   status: StreakStatus,
@@ -103,58 +93,27 @@ export async function syncStreakReminders(
 
     if (!needsStreakReminders(status)) return;
 
+    const nudgeAt = streakReminderFireAt(STREAK_NUDGE_HOURS_BEFORE_MIDNIGHT, now);
+    if (!nudgeAt) return;
+
     await ensureStreakChannel(Notifications);
 
-    const day = localCalendarDate(now);
     const count = status.current_streak;
     const streakLabel = count === 1 ? '1 day streak' : `${count} day streak`;
-    const androidChannel = Platform.OS === 'android' ? { channelId: 'streaks' as const } : {};
-
-    const warnAt = streakReminderFireAt(STREAK_WARN_HOURS_BEFORE_MIDNIGHT, now);
-    if (warnAt) {
-      await Notifications.scheduleNotificationAsync({
-        identifier: warnIdentifier(day),
-        content: {
-          title: 'Streak at risk',
-          body: `Your ${streakLabel} ends in 3 hours. Check in to keep it going.`,
-          data: { type: 'streak', kind: 'warn' },
-          ...androidChannel,
-        },
-        trigger: {
-          type: Notifications.SchedulableTriggerInputTypes.DATE,
-          date: warnAt,
-        },
-      });
-    }
-
-    const nudgeAt = streakReminderFireAt(STREAK_NUDGE_HOURS_BEFORE_MIDNIGHT, now);
-    if (nudgeAt) {
-      await Notifications.scheduleNotificationAsync({
-        identifier: nudgeIdentifier(day),
-        content: {
-          title: 'Last chance',
-          body: `Your ${streakLabel} ends in 1 hour. Check in before midnight.`,
-          data: { type: 'streak', kind: 'nudge' },
-          ...androidChannel,
-        },
-        trigger: {
-          type: Notifications.SchedulableTriggerInputTypes.DATE,
-          date: nudgeAt,
-        },
-      });
-    }
-
+    const freezes = status.streak_freezes ?? 0;
     await Notifications.scheduleNotificationAsync({
-      identifier: endIdentifier(day),
+      identifier: nudgeIdentifier(localCalendarDate(now)),
       content: {
-        title: 'Streak ended',
-        body: `Your ${streakLabel} ended. Check in today to start a new one.`,
-        data: { type: 'streak', kind: 'ended' },
-        ...androidChannel,
+        title: 'Last chance',
+        body: freezes
+          ? `Your ${streakLabel} ends in 1 hour. Check in now, or a freeze will be used.`
+          : `Your ${streakLabel} ends in 1 hour. Check in before midnight.`,
+        data: { type: 'streak', kind: 'nudge' },
+        ...(Platform.OS === 'android' ? { channelId: 'streaks' as const } : {}),
       },
       trigger: {
         type: Notifications.SchedulableTriggerInputTypes.DATE,
-        date: localMidnight(now),
+        date: nudgeAt,
       },
     });
   } catch {

@@ -1,10 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMemo } from 'react';
 
 import { backend } from '@/lib/backend';
 import { dayBefore, duelId, getDuel } from '@/lib/game-room/duel';
 import { getSession, listActiveSessions } from '@/lib/game-room/sessions';
 import { todayKey as localToday } from '@/lib/play-progress';
-import { useRelationshipStore } from '@/stores';
+import { answerHome } from '@/lib/handpicked';
+import { useAuthStore, useRelationshipStore } from '@/stores';
 
 export interface PackAnswer {
   id: string;
@@ -14,6 +16,8 @@ export interface PackAnswer {
   question_id: string;
   choice: string | null;
   note: string | null;
+  /** Guess quizzes: which pick you thought your partner would make. */
+  guess?: string | null;
   created_at: string;
 }
 
@@ -80,11 +84,37 @@ export function usePackAnswers() {
   });
 }
 
+/**
+ * Which questions each of you has answered, per pack as shown (a part, or Quick picks): the
+ * lists use it for progress and for who's finished each set.
+ */
+export function useAnsweredByPack() {
+  const { data: answers } = usePackAnswers();
+  const userId = useAuthStore((s) => s.user?.id);
+  return useMemo(() => {
+    const mine = new Map<string, Set<string>>();
+    const theirs = new Map<string, Set<string>>();
+    for (const a of answers ?? []) {
+      const home = answerHome(a);
+      const byPack = a.user_id === userId ? mine : theirs;
+      if (!byPack.has(home.packId)) byPack.set(home.packId, new Set());
+      byPack.get(home.packId)!.add(home.questionId);
+    }
+    return { mine, theirs };
+  }, [answers, userId]);
+}
+
 export function useLockPackAnswer() {
   const queryClient = useQueryClient();
   const relationshipId = useRelationshipStore((s) => s.relationship?.id);
   return useMutation({
-    mutationFn: async (input: { packId: string; questionId: string; choice: string | null; note: string | null }) => {
+    mutationFn: async (input: {
+      packId: string;
+      questionId: string;
+      choice: string | null;
+      note: string | null;
+      guess?: string | null;
+    }) => {
       const { data, error } = await backend
         .from('pack_answers')
         .insert({
@@ -93,6 +123,7 @@ export function useLockPackAnswer() {
           question_id: input.questionId,
           choice: input.choice,
           note: input.note,
+          ...(input.guess ? { guess: input.guess } : {}),
         })
         .select()
         .single();

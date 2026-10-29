@@ -37,7 +37,8 @@ const MAX_LINES = 2;
 const CARD_RADIUS = 24;
 const CARD_MAX_W = 380;
 /** A soft spring, like the system's: it grows out of the island, no wobble or goo. */
-const OPEN = { damping: 22, stiffness: 240, mass: 0.9 };
+// Critically damped (damping ≥ 2·√(stiffness·mass) ≈ 29.4): opens without bouncing.
+const OPEN = { damping: 30, stiffness: 240, mass: 0.9 };
 const CLOSE = { duration: 220, easing: Easing.in(Easing.cubic) };
 
 type Shown = IslandEvent & { key: number; height: number };

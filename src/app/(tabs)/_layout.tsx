@@ -6,6 +6,7 @@ import { BirthdaySync } from '@/components/home/BirthdayCelebration';
 import { TogetherMilestoneSync } from '@/components/home/TogetherMilestone';
 import { StreakReminderSync } from '@/components/home/StreakReminderSync';
 import { StreakSparkSync } from '@/components/home/StreakSparkSync';
+import { AppIconSync } from '@/components/layout/AppIconSync';
 import { AppTabBar } from '@/components/layout/AppTabBar';
 import { ChatMessageSync } from '@/components/layout/ChatMessageSync';
 import { EntryStackReset } from '@/components/layout/EntryStackReset';
@@ -71,6 +72,8 @@ export default function TabsLayout() {
       <StreakReminderSync />
       <StoreReviewSync />
       <WidgetSync />
+      {/* A custom app icon is a Plus perk: back to the original if Plus ends. */}
+      <AppIconSync />
       {/* Runs once, right after onboarding. */}
       <OnboardingTour />
       <Tabs

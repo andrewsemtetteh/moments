@@ -3,12 +3,13 @@ import { useRef, useState } from 'react';
 import { FlatList, Modal, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
 
 import { LocationMapPreview, type MapMarker } from '@/components/moments/LocationMapPreview';
 import { MomentThumbImage } from '@/components/moments/MomentThumbImage';
 import { Icon } from '@/components/ui/Icon';
-import { outlineColor } from '@/components/ui/primitives';
+import { outlineColor, colorWithAlpha } from '@/components/ui/primitives';
 import { useTheme } from '@/hooks/useTheme';
 import type { MomentPlace } from '@/lib/moment-places';
 
@@ -79,6 +80,13 @@ export function OurMapFullScreen({
           style={styles.map}
         />
 
+        {/* The clock and battery sit over busy map tiles: a soft fade in the page colour keeps them clear. */}
+        <LinearGradient
+          pointerEvents="none"
+          colors={[colorWithAlpha(colors.background, 0.92), colorWithAlpha(colors.background, 0)]}
+          style={[styles.statusFade, { height: insets.top + 64 }]}
+        />
+
         {/* Top: close (left), the title (centre), everyone in view (right). */}
         <View style={[styles.top, { top: insets.top + 8 }]} pointerEvents="box-none">
           <Pressable
@@ -110,6 +118,7 @@ export function OurMapFullScreen({
           ref={list}
           data={places}
           horizontal
+          alwaysBounceHorizontal={false}
           keyExtractor={(p) => p.key}
           showsHorizontalScrollIndicator={false}
           snapToInterval={CARD_W + CARD_GAP}
@@ -165,6 +174,7 @@ export function OurMapFullScreen({
 }
 
 const styles = StyleSheet.create({
+  statusFade: { position: 'absolute', top: 0, left: 0, right: 0 },
   root: { flex: 1 },
   // flex: the preview fills the screen (it reads flex as "fill"), square and borderless.
   map: { flex: 1, borderRadius: 0, borderWidth: 0 },

@@ -18,7 +18,8 @@ describe('Home streak cards', () => {
   it('counts down the restore window', () => {
     const now = new Date('2026-10-19T12:00:00');
     const lost = applyStreakScenario(base, 'restore', now);
-    expect(formatTimeLeft(streakRestoreMsLeft(lost, now))).toBe('22h 0m');
+    // Lost two hours ago: 5 days to restore, so 4 days and 22 hours left.
+    expect(streakRestoreMsLeft(lost, now)).toBe((5 * 24 - 2) * 3600_000);
   });
 
   it('writes time left simply', () => {

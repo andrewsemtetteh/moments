@@ -1,0 +1,106 @@
+[
+  {
+    "name": "Happy",
+    "ios": "./assets/app-icons/Happy.png",
+    "android": {
+      "foregroundImage": "./assets/app-icons/Happy-android.png",
+      "backgroundColor": "#1F1B3A"
+    }
+  },
+  {
+    "name": "InLove",
+    "ios": "./assets/app-icons/InLove.png",
+    "android": {
+      "foregroundImage": "./assets/app-icons/InLove-android.png",
+      "backgroundColor": "#5E4CCB"
+    }
+  },
+  {
+    "name": "Wink",
+    "ios": "./assets/app-icons/Wink.png",
+    "android": {
+      "foregroundImage": "./assets/app-icons/Wink-android.png",
+      "backgroundColor": "#FF4D6D"
+    }
+  },
+  {
+    "name": "Sleepy",
+    "ios": "./assets/app-icons/Sleepy.png",
+    "android": {
+      "foregroundImage": "./assets/app-icons/Sleepy-android.png",
+      "backgroundColor": "#000000"
+    }
+  },
+  {
+    "name": "Cool",
+    "ios": "./assets/app-icons/Cool.png",
+    "android": {
+      "foregroundImage": "./assets/app-icons/Cool-android.png",
+      "backgroundColor": "#EE633C"
+    }
+  },
+  {
+    "name": "Party",
+    "ios": "./assets/app-icons/Party.png",
+    "android": {
+      "foregroundImage": "./assets/app-icons/Party-android.png",
+      "backgroundColor": "#5E4CCB"
+    }
+  },
+  {
+    "name": "Shy",
+    "ios": "./assets/app-icons/Shy.png",
+    "android": {
+      "foregroundImage": "./assets/app-icons/Shy-android.png",
+      "backgroundColor": "#F1A3B6"
+    }
+  },
+  {
+    "name": "Kiss",
+    "ios": "./assets/app-icons/Kiss.png",
+    "android": {
+      "foregroundImage": "./assets/app-icons/Kiss-android.png",
+      "backgroundColor": "#FFCDB1"
+    }
+  },
+  {
+    "name": "Starstruck",
+    "ios": "./assets/app-icons/Starstruck.png",
+    "android": {
+      "foregroundImage": "./assets/app-icons/Starstruck-android.png",
+      "backgroundColor": "#FFE7A0"
+    }
+  },
+  {
+    "name": "MissingYou",
+    "ios": "./assets/app-icons/MissingYou.png",
+    "android": {
+      "foregroundImage": "./assets/app-icons/MissingYou-android.png",
+      "backgroundColor": "#B8D9FF"
+    }
+  },
+  {
+    "name": "Pixel",
+    "ios": "./assets/app-icons/Pixel.png",
+    "android": {
+      "foregroundImage": "./assets/app-icons/Pixel-android.png",
+      "backgroundColor": "#1A1A1A"
+    }
+  },
+  {
+    "name": "Neon",
+    "ios": "./assets/app-icons/Neon.png",
+    "android": {
+      "foregroundImage": "./assets/app-icons/Neon-android.png",
+      "backgroundColor": "#0B0A14"
+    }
+  },
+  {
+    "name": "Duo",
+    "ios": "./assets/app-icons/Duo.png",
+    "android": {
+      "foregroundImage": "./assets/app-icons/Duo-android.png",
+      "backgroundColor": "#DCD1FF"
+    }
+  }
+]

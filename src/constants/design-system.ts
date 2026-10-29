@@ -1,4 +1,4 @@
-export type AppTheme = 'default' | 'dark' | 'night' | 'violet' | 'blue' | 'coral' | 'cream' | 'paper' | 'color';
+export type AppTheme = 'default' | 'dark' | 'night' | 'violet' | 'amethyst' | 'blue' | 'coral' | 'cream' | 'paper' | 'color';
 
 /** Pastel card fills, one per part of the app (as Wrapped gives each story its own colour). */
 export type Tint = 'butter' | 'blush' | 'peach' | 'sky' | 'lilac' | 'mint';
@@ -346,6 +346,36 @@ const VIOLET_LIGHT = softLight({
   chatBubblePartner: '#F1EEFB',
 });
 
+/** Amethyst's bright orchid purple, for highlights (decorative, not text). */
+const AMETHYST = '#A855F7';
+/** Deep royal purple for buttons, text and the hero: white on it is 7.0:1. */
+const AMETHYST_DEEP = '#7E22CE';
+
+/**
+ * Amethyst: a warm, jewel-toned purple, redder and richer than Ultraviolet's blue-violet. White
+ * page, royal-purple buttons and hero, orchid highlights, soft pink-purple cards.
+ */
+const AMETHYST_LIGHT = softLight({
+  background: '#FFFFFF',
+  backgroundElevated: '#FBF6FF',
+  surface: '#F5EBFF',
+  surfaceElevated: '#F1E4FD',
+  accent: AMETHYST_DEEP,
+  onAccent: '#FFFFFF',
+  accentSoft: 'rgba(168,85,247,0.14)',
+  accentMuted: '#EBD9FF',
+  highlight: AMETHYST,
+  highlightText: AMETHYST_DEEP,
+  hero: AMETHYST_DEEP,
+  onHero: '#FFFFFF',
+  tints: BRIGHT_PASTELS,
+  border: '#EEDFFB',
+  borderStrong: '#DCC5F4',
+  chatBubbleSelf: AMETHYST_DEEP,
+  chatBubbleSelfText: '#FFFFFF',
+  chatBubblePartner: '#F7EFFF',
+});
+
 /** Blue: white page, deep-blue buttons (white text on them 5.9:1), bright-blue highlights, sky hero. */
 const BLUE_DEEP = '#1D5BD8';
 const BLUE_LIGHT = softLight({
@@ -479,6 +509,8 @@ export const Themes: Record<AppTheme, ThemeColors> = {
   night: NIGHT,
   // Launch screen: vivid violet with a white logo (4.2:1).
   violet: { ...VIOLET_LIGHT, splash: '#7B69E8', splashMark: '#FFFFFF' },
+  // Launch screen: vivid purple with a white logo (5.4:1).
+  amethyst: { ...AMETHYST_LIGHT, splash: '#9333EA', splashMark: '#FFFFFF' },
   // Launch screen: vivid coral with a white logo (3.2:1; the coral heart would vanish on it).
   // Launch screen: royal blue with a white logo (5.2:1).
   blue: { ...BLUE_LIGHT, splash: '#2563EB', splashMark: '#FFFFFF' },
@@ -533,7 +565,8 @@ export function resolveThemeColors(theme: AppTheme): ThemeColors {
 }
 
 export const THEME_META: { key: AppTheme; label: string; swatch: string }[] = [
-  // Ultraviolet is what every new couple starts on.
+  // Amethyst is what every new couple starts on.
+  { key: 'amethyst', label: 'Amethyst', swatch: '#9333EA' },
   { key: 'violet', label: 'Ultraviolet', swatch: VIOLET },
   { key: 'default', label: 'Buttercup', swatch: BUTTER },
   { key: 'dark', label: 'Midnight', swatch: '#000000' },
@@ -544,6 +577,9 @@ export const THEME_META: { key: AppTheme; label: string; swatch: string }[] = [
   { key: 'paper', label: 'Ink', swatch: Themes.paper.background },
   { key: 'color', label: 'Pop', swatch: SUNNY },
 ];
+
+/** Empty slots that fill the theme grid's last row (3 a row), so no tile stretches to fill it. */
+export const THEME_GRID_FILLERS = Array.from({ length: (3 - (THEME_META.length % 3)) % 3 }, (_, i) => `filler-${i}`);
 
 export const MOOD_EMOJI: Record<string, string> = {
   happy: '😊',

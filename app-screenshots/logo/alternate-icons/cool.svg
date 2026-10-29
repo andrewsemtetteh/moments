@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 100 100" style="display:block"><rect width="100" height="100" fill="#EE633C"/><g transform="translate(0 -6.59)">
+    <clipPath id="cut"><rect x="0" y="0" width="100" height="61.5"/></clipPath>
+    <g clip-path="url(#cut)"><path d="M50 72 C34 61 26 52 26 42 C26 34 32 29 39 29 C44 29 48 32 50 36 C52 32 56 29 61 29 C68 29 74 34 74 42 C74 52 66 61 50 72 Z" transform="translate(50 56) scale(1.18) translate(-50 -50)" fill="#FFE7A0"/></g>
+    <path d="M32.68 66.35 H67.32" stroke="#FFE7A0" stroke-width="3.4" stroke-linecap="round" />
+    <path d="M39.66 72.91 H60.34" stroke="#FFE7A0" stroke-width="3.4" stroke-linecap="round" />
+    <circle cx="50" cy="79.86" r="2.1" fill="#FFE7A0" />
+  </g><path d="M36.5 37.2 H48 Q48.4 43.6 42.4 43.8 Q36.6 43.6 36.5 37.2 Z" fill="#1A1A1A"/>
+       <path d="M52 37.2 H63.5 Q63.4 43.6 57.6 43.8 Q51.6 43.6 52 37.2 Z" fill="#1A1A1A"/>
+       <path d="M48 38.2 H52" stroke="#1A1A1A" stroke-width="1.4"/>
+       <path d="M38.6 38.6 L41.2 38.6" stroke="#FFFFFF" stroke-width="0.9" stroke-linecap="round" opacity="0.8"/>
+       <path d="M54.1 38.6 L56.7 38.6" stroke="#FFFFFF" stroke-width="0.9" stroke-linecap="round" opacity="0.8"/>
+       <path d="M46 47.6 Q51 50.2 55 46.4" fill="none" stroke="#1A1A1A" stroke-width="1.8" stroke-linecap="round"/></svg>

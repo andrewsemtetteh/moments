@@ -44,14 +44,14 @@ export function formatPartnerClock(timezone: string | null | undefined, now = ne
 }
 
 interface BuildPartnerHeaderLineArgs {
-  /** e.g. "5,712 km Apart" or "Same City" */
+  /** e.g. "5,712 km Away" or "Same City" */
   location?: string | null;
   clock?: PartnerClock | null;
   statusLabel?: string | null;
 }
 
 /**
- * Joins whatever segments are available with " · " — e.g. "5,712 km apart · 9:40 · online" —
+ * Joins whatever segments are available with " · " — e.g. "5,712 km Away · 9:40 · online" —
  * skipping missing ones so it never leaves a dangling separator. (The header draws a sun or
  * moon icon after the time; see AppHeader.)
  */

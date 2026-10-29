@@ -31,6 +31,7 @@ import { getAnniversaryCountdown, getRelationshipAnniversaryDate, getRelationshi
 import { getFirstName } from '@/lib/avatar-initial';
 import { formatDistanceApart, haversineDistanceKm } from '@/lib/distance';
 import { hasValidCoords } from '@/lib/location';
+import { useMinuteTick } from '@/hooks/useMinuteTick';
 import { formatPartnerClock } from '@/lib/partner-header-line';
 import { filterMomentsForHome, momentHasVisual } from '@/lib/moment-display';
 import * as api from '@/services/api';
@@ -62,6 +63,7 @@ export function PartnerProfileModal() {
   const openMomentViewer = useUIStore((s) => s.openMomentViewer);
 
   const user = useAuthStore((s) => s.user);
+  const minuteNow = useMinuteTick();
   const partner = useRelationshipStore((s) => s.partner);
   const setPartner = useRelationshipStore((s) => s.setPartner);
   const relationship = useRelationshipStore((s) => s.relationship);
@@ -226,7 +228,8 @@ export function PartnerProfileModal() {
       ),
     );
   }, [sharesLocation, user, profile]);
-  const clock = formatPartnerClock(profile?.timezone);
+  // Their time, live: read from the minute tick (a bare `new Date()` would freeze under the compiler).
+  const clock = formatPartnerClock(profile?.timezone, minuteNow);
 
   const anniversary = relationship?.created_at
     ? getAnniversaryCountdown(getRelationshipAnniversaryIso(relationship))

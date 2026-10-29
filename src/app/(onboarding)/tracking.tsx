@@ -9,6 +9,7 @@ import { Icon } from '@/components/ui/Icon';
 import { useTheme } from '@/hooks/useTheme';
 import { goNext } from '@/lib/onboarding-v2';
 import { useAuthStore } from '@/stores';
+import { insetCardStyle, separatorColor } from '@/components/ui/primitives';
 
 /**
  * Step 10: App Tracking Transparency, asked late (never on first launch),
@@ -44,9 +45,9 @@ export default function TrackingScreen() {
       busy={busy}
       secondaryLabel="Not now"
       onSecondary={() => void next(false)}>
-      <View style={[styles.list, { borderColor: colors.text, backgroundColor: colors.surface }]}>
+      <View style={[styles.list, insetCardStyle(colors, 'page')]}>
         {['Your chat and moments stay private either way', 'Change your mind any time in Settings'].map((t, i) => (
-          <View key={t} style={[styles.row, i === 0 && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border }]}>
+          <View key={t} style={[styles.row, i === 0 && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: separatorColor(colors) }]}>
             <Icon name="check" size={18} color={colors.text} />
             <Text style={[styles.text, { color: colors.text }]}>{t}</Text>
           </View>

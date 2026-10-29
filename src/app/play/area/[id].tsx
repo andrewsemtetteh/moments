@@ -5,19 +5,19 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { PLAY_TONES, type ExploreModalKey } from '@/components/activities/explore/explore-catalog';
 import { ExploreActivityModal } from '@/components/activities/explore/ExploreActivityModal';
-import { PlayCard } from '@/components/play/PlayCard';
+import { PackRow, packRowText, useSetProgress } from '@/components/play/PackRow';
 import { DraggableSheet } from '@/components/ui/DraggableSheet';
 import { SheetHeader, sheetListStyle } from '@/components/ui/SheetHeader';
 import { pressedRowColor, separatorColor } from '@/components/ui/primitives';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ChunkyButton } from '@/components/games/room-ui';
 import { PlayHeader } from '@/components/play/PlayHeader';
-import { PLAY_GUTTER, PlayChip, PlayHero, PlayType, playCardStyle } from '@/components/play/PlayKit';
+// PlayType, playCardStyle: also from PlayKit, for the hidden game card.
+import { PLAY_GUTTER, PlayChip, PlayHero } from '@/components/play/PlayKit';
 import { Icon } from '@/components/ui/Icon';
-import { usePackAnswers } from '@/hooks/play-queries';
 import { useLightStatusBar } from '@/hooks/useLightStatusBar';
 import { useTheme } from '@/hooks/useTheme';
-import { getGameDefinition, type LiveGameKind } from '@/lib/game-room/types';
+// import { getGameDefinition, type LiveGameKind } from '@/lib/game-room/types'; // with "Game for this area", below
 import {
   DEPTHS,
   FORMATS,
@@ -25,35 +25,28 @@ import {
   itemsForArea,
   packProgress,
   type Depth,
-  type HandpickedFormat,
+  type ItemFormat,
   type HandpickedItem,
 } from '@/lib/handpicked';
-import { useAuthStore } from '@/stores';
 
-/** An Endless game that suits each area, offered at the bottom of its page. */
-const AREA_GAME: Record<string, LiveGameKind> = {
-  communication: 'guessAnswer',
-  intimacy: 'truthDare',
-  fun: 'wouldYouRather',
-  conflict: 'whosLikely',
-  money: 'thisOrThat',
-  future: 'thisOrThat',
-  family: 'twoTruths',
-  growth: 'guessAnswer',
-  home: 'whosLikely',
-  romance: 'wouldYouRather',
-  trust: 'twoTruths',
-  distance: 'thisOrThat',
-  knowing: 'guessAnswer',
-  story: 'quiz',
-};
-
-const FORMAT_LABEL: Record<HandpickedFormat, string> = {
-  questions: 'Questions',
-  quizzes: 'Quiz',
-  prompts: 'Prompts',
-  activities: 'Activity',
-};
+// Hidden for now: the "Game for this area" card at the bottom of each area (bring back with it).
+// /** An Endless game that suits each area, offered at the bottom of its page. */
+// const AREA_GAME: Record<string, LiveGameKind> = {
+//   communication: 'guessAnswer',
+//   intimacy: 'truthDare',
+//   fun: 'wouldYouRather',
+//   conflict: 'whosLikely',
+//   money: 'thisOrThat',
+//   future: 'thisOrThat',
+//   family: 'twoTruths',
+//   growth: 'guessAnswer',
+//   home: 'whosLikely',
+//   romance: 'wouldYouRather',
+//   trust: 'twoTruths',
+//   distance: 'thisOrThat',
+//   knowing: 'guessAnswer',
+//   story: 'quiz',
+// };
 
 export default function AreaScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -63,9 +56,7 @@ export default function AreaScreen() {
   const { colors } = useTheme();
   // Coloured header with white text: light clock and battery while this page shows.
   useLightStatusBar();
-  const userId = useAuthStore((s) => s.user?.id);
-  const { data: answers } = usePackAnswers();
-  const [format, setFormat] = useState<HandpickedFormat | 'all'>('all');
+  const [format, setFormat] = useState<ItemFormat | 'all'>('all');
   const [depth, setDepth] = useState<Depth | 'all'>('all');
   const [status, setStatus] = useState<'all' | 'unanswered' | 'answered'>('all');
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -74,15 +65,8 @@ export default function AreaScreen() {
 
 
   const items = useMemo(() => (area ? itemsForArea(area.id) : []), [area]);
-  const myAnswered = useMemo(() => {
-    const byPack = new Map<string, Set<string>>();
-    for (const a of answers ?? []) {
-      if (a.user_id !== userId) continue;
-      if (!byPack.has(a.pack_id)) byPack.set(a.pack_id, new Set());
-      byPack.get(a.pack_id)!.add(a.question_id);
-    }
-    return byPack;
-  }, [answers, userId]);
+  // Your answers per set, and who has finished each (both of you, for the rows).
+  const { mine: myAnswered, doneByOf } = useSetProgress();
 
   if (!area) return <Redirect href="/(tabs)/activities" />;
   const tone = PLAY_TONES[area.tone];
@@ -99,7 +83,8 @@ export default function AreaScreen() {
   const visible = items.filter(
     (i) => (format === 'all' || i.format === format) && (depth === 'all' || i.depth === depth) && matchesStatus(i),
   );
-  const game = getGameDefinition(AREA_GAME[area.id] ?? 'wouldYouRather');
+  // const game = getGameDefinition(AREA_GAME[area.id] ?? 'wouldYouRather');
+
 
   const resetFilters = () => {
     setFormat('all');
@@ -153,7 +138,7 @@ export default function AreaScreen() {
               <Icon name="filter" size={18} color={activeFilters ? colors.onAccent : colors.text} />
               {activeFilters ? <Text style={[styles.filterCount, { color: colors.onAccent }]}>{activeFilters}</Text> : null}
             </Pressable>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips} style={styles.chipScroll}>
+            <ScrollView horizontal alwaysBounceHorizontal={false} showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips} style={styles.chipScroll}>
               <PlayChip label="All" selected={format === 'all'} onPress={() => setFormat('all')} />
               {formatsHere.map((f) => (
                 <PlayChip key={f.id} label={f.label} selected={format === f.id} onPress={() => setFormat(f.id)} />
@@ -163,22 +148,18 @@ export default function AreaScreen() {
 
           <View style={styles.list}>
             {visible.map((item) => {
-              const progress = item.kind === 'pack' ? packProgress(item.pack, myAnswered.get(item.id) ?? new Set()) : null;
-              const depthLabel = DEPTHS.find((d) => d.id === item.depth)?.label ?? '';
-              const badge = progress?.done
-                ? 'Done'
-                : progress && progress.answered > 0
-                  ? `${progress.answered} of ${progress.total} answered`
-                  : undefined;
+              const progress =
+                item.kind === 'pack' ? packProgress(item.pack, myAnswered.get(item.id) ?? new Set()) : null;
+              const { title, meta } = packRowText(item, progress, { withFormat: true });
               return (
-                <PlayCard
+                <PackRow
                   key={`${item.kind}-${item.id}`}
                   tone={tone}
-                  art={item.kind === 'pack' ? item.pack.art ?? area.art : item.activity.art}
-                  badge={badge ?? `${FORMAT_LABEL[item.format]} · ${depthLabel}`}
-                  title={item.title}
-                  sub={item.kind === 'pack' ? item.pack.blurb : item.activity.tagline}
-                  cta={progress?.done ? 'See answers' : progress && progress.answered > 0 ? 'Continue' : 'Start'}
+                  format={item.format}
+                  title={title}
+                  meta={meta}
+                  progress={progress}
+                  doneBy={doneByOf(item)}
                   onPress={() => open(item)}
                 />
               );
@@ -211,6 +192,7 @@ export default function AreaScreen() {
             ) : null}
           </View>
 
+          {/* Hidden for now: the game for this area.
           <Pressable
             onPress={() => router.push({ pathname: '/play/game/[kind]', params: { kind: game.kind } })}
             accessibilityRole="button"
@@ -223,6 +205,7 @@ export default function AreaScreen() {
             </View>
             <Icon name="chevronRight" size={18} color={colors.accent} />
           </Pressable>
+          */}
         </View>
       </ScrollView>
 
@@ -337,7 +320,8 @@ const styles = StyleSheet.create({
   sheetActions: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 14 },
   sheetReset: { height: 50, paddingHorizontal: 8, justifyContent: 'center' },
   sheetDone: { flex: 1 },
-  list: { gap: 12 },
+  // Rows sit close, like a list (they used to be big cards).
+  list: { gap: 10 },
   gameLink: {
     flexDirection: 'row',
     alignItems: 'center',

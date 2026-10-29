@@ -245,8 +245,16 @@ export interface StreakStatus {
   /** True only while your streak is 0 and the one you lost can still be brought back. */
   can_restore_streak: boolean;
   restorable_streak: number | null;
-  /** ISO timestamp when your streak was lost; restore is valid for 24 hours after this. */
+  /** ISO timestamp when your streak was lost; restore is valid for 5 days after this. */
   restorable_lost_at: string | null;
+  /** When Plus's free restore day ends (ISO); after it, restoring is a paid restore. */
+  restore_free_until?: string | null;
+  /** When the restore is gone for good (ISO). */
+  restore_until?: string | null;
+  /** Restoring is free right now (Plus, the day it was lost). */
+  restore_free?: boolean;
+  /** Paid restores you've bought and not used yet. */
+  restore_credits?: number;
   /** Days (YYYY-MM-DD) you checked in. */
   active_days?: string[];
   /** Streak freezes you hold (0–2): one is used automatically on a missed day. */
@@ -260,6 +268,8 @@ export interface StreakStatus {
   partner_longest_streak?: number;
   /** Your partner's streak ends tonight. */
   partner_at_risk?: boolean;
+  /** Their streak ends tonight and it's their last few hours (their own clock). */
+  partner_ends_soon?: boolean;
   /** Days in a row you BOTH checked in. */
   together_streak?: number;
   together_longest_streak?: number;

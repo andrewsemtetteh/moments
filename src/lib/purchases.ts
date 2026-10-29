@@ -3,7 +3,7 @@ import * as Crypto from 'expo-crypto';
 import { Linking, Platform } from 'react-native';
 import { create } from 'zustand';
 
-import type { SubscriptionPlanId } from '@/constants/subscription';
+import { type SubscriptionPlanId, yearlySavingPercent } from '@/constants/subscription';
 
 /**
  * Moments Plus billing through Superwall (StoreKit 2 / Google Play Billing, no RevenueCat).
@@ -77,6 +77,13 @@ function sameProduct(a: string, b: string): boolean {
 const WINBACK_PRODUCT_ID = 'yearly_winback';
 export const WINBACK_OFFER = 'winback';
 
+/**
+ * The $0.99 streak restore: a one-time (consumable) product, the same id in both stores. Create it
+ * in App Store Connect and Google Play and add it to Superwall. Buying it gives the buyer one paid
+ * restore on the server (its webhook records it, see server/src/billing.ts); restoring uses it.
+ */
+const STREAK_RESTORE_PRODUCT_ID = 'streak_restore';
+
 type Entitlement = { active: boolean; trial: boolean; expiresAt: string | null; willRenew: boolean };
 
 type PurchasesState = {
@@ -90,6 +97,8 @@ type PurchasesState = {
   perMonth: Partial<Record<SubscriptionPlanId, string>>;
   /** Each plan's price split between the two of you ("$35.00" on yearly). */
   perPerson: Partial<Record<SubscriptionPlanId, string>>;
+  /** Yearly's saving vs the full weekly price all year, from the store's own prices (73). */
+  yearlySaving: number | null;
   /** Paid introductory prices ("$0.99" for weekly's first week), in the local currency. */
   introPrices: Partial<Record<SubscriptionPlanId, string>>;
   /** Whether this account can still get an introductory offer (one per subscription group). */
@@ -98,6 +107,8 @@ type PurchasesState = {
   winbackPrice: string | null;
   /** Nothing, in the store's currency ("$0.00", "AED 0.00"), for "Try 7 days for $0.00". */
   zeroPrice: string | null;
+  /** The streak restore's price in the store's currency ("$0.99"), once loaded. */
+  restorePrice: string | null;
   /** Product id of the active subscription (Play's manage page links straight to it). */
   activeProductId: string | null;
 };
@@ -110,10 +121,12 @@ export const usePurchasesStore = create<PurchasesState>(() => ({
   perWeek: {},
   perMonth: {},
   perPerson: {},
+  yearlySaving: null,
   introPrices: {},
   trialEligible: true,
   winbackPrice: null,
   zeroPrice: null,
+  restorePrice: null,
   activeProductId: null,
 }));
 
@@ -226,7 +239,11 @@ export async function loadPrices() {
   if (!superwall) return;
   try {
     const plans = Object.keys(PRODUCT_IDS) as SubscriptionPlanId[];
-    const products = await sdk().products([...plans.map((p) => PRODUCT_IDS[p]), WINBACK_PRODUCT_ID]);
+    const products = await sdk().products([
+      ...plans.map((p) => PRODUCT_IDS[p]),
+      WINBACK_PRODUCT_ID,
+      STREAK_RESTORE_PRODUCT_ID,
+    ]);
     const find = (id: string) => products.find((p) => sameProduct(p.productIdentifier, id));
     const prices: PurchasesState['prices'] = {};
     const perWeek: PurchasesState['perWeek'] = {};
@@ -247,9 +264,25 @@ export async function loadPrices() {
     // The win back product's introductory price is the discounted first year.
     const winback = find(WINBACK_PRODUCT_ID);
     const winbackPrice = winback && winback.trialPeriodPrice > 0 ? winback.localizedTrialPeriodPrice : null;
-    const any = find(PRODUCT_IDS.yearly) ?? products[0];
+    // Both in the same store currency, so the saving holds wherever they are.
+    const yearlyProduct = find(PRODUCT_IDS.yearly);
+    const weeklyProduct = find(PRODUCT_IDS.weekly);
+    const yearlySaving =
+      yearlyProduct && weeklyProduct ? yearlySavingPercent(yearlyProduct.price, weeklyProduct.price) : null;
+    const any = yearlyProduct ?? products[0];
     const zeroPrice = any ? formatMoney(0, any.currencyCode, any.locale) : null;
-    usePurchasesStore.setState({ prices, perWeek, perMonth, perPerson, introPrices, winbackPrice, zeroPrice });
+    const restorePrice = find(STREAK_RESTORE_PRODUCT_ID)?.localizedPrice ?? null;
+    usePurchasesStore.setState({
+      prices,
+      perWeek,
+      perMonth,
+      perPerson,
+      yearlySaving,
+      introPrices,
+      winbackPrice,
+      zeroPrice,
+      restorePrice,
+    });
   } catch (e) {
     console.warn('[purchases] prices failed', e);
   }
@@ -302,6 +335,33 @@ export async function purchasePlan(
     }
   } catch (e) {
     console.warn('[purchases] purchase threw', e);
+    return { result: 'failed', message: 'The store is having trouble right now. Nothing was charged; please try again.' };
+  }
+}
+
+/**
+ * Buys one streak restore ($0.99). Charged means the store took the payment; the restore itself
+ * is recorded on the server by the webhook a moment later, so the caller then restores (retrying
+ * until the server has it).
+ */
+export async function purchaseStreakRestore(): Promise<{ result: PurchaseResult; message?: string }> {
+  if (!superwall) return { result: 'unavailable' };
+  try {
+    const outcome = await sdk().purchase(STREAK_RESTORE_PRODUCT_ID);
+    switch (outcome.type) {
+      case 'purchased':
+        return { result: 'purchased' };
+      case 'cancelled':
+        return { result: 'cancelled' };
+      case 'pending':
+        return { result: 'pending', message: 'Your payment is pending. Your streak comes back as soon as it’s approved.' };
+      case 'failed':
+      default:
+        console.warn('[purchases] streak restore failed', outcome);
+        return { result: 'failed', message: 'The purchase didn’t go through. Nothing was charged; please try again.' };
+    }
+  } catch (e) {
+    console.warn('[purchases] streak restore threw', e);
     return { result: 'failed', message: 'The store is having trouble right now. Nothing was charged; please try again.' };
   }
 }

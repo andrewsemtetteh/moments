@@ -6,13 +6,34 @@ import { colorWithAlpha } from '@/components/ui/primitives';
 const WIDTH = 112;
 const HEIGHT = 58;
 
+/** WCAG contrast ratio between two `#RRGGBB` colours (null if either isn't one). */
+function contrast(a: string, b: string): number | null {
+  const lum = (hex: string) => {
+    const h = hex.replace('#', '');
+    if (!/^[0-9a-f]{6}$/i.test(h)) return null;
+    const [r, g, b] = [0, 2, 4].map((i) => {
+      const c = parseInt(h.slice(i, i + 2), 16) / 255;
+      return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+    });
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  };
+  const la = lum(a);
+  const lb = lum(b);
+  if (la == null || lb == null) return null;
+  return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+}
+
 /**
  * Interlocking rings between the two avatars, joined to them by wavy bridges,
  * with a stroked heart sitting in the overlap (no chip behind it).
- * Rendered on top of the theme's hero gradient, so `ringColor` should be
- * whatever reads on that gradient (i.e. `colors.onAccent`), not a fixed white.
+ * Drawn on the theme's band: the lines are `onBand` (what reads on it, on every theme), and the
+ * heart is the accent where it stands out from the band, `onBand` where it wouldn't (themes whose
+ * band is the accent itself).
  */
-export function ProfileCoupleLink({ accent, ringColor = '#FFFFFF' }: { accent: string; ringColor?: string }) {
+export function ProfileCoupleLink({ band, onBand, accent }: { band: string; onBand: string; accent: string }) {
+  const ringColor = onBand;
+  const ratio = contrast(accent, band);
+  const heartFill = ratio == null ? (accent.toLowerCase() === band.toLowerCase() ? onBand : accent) : ratio >= 3 ? accent : onBand;
   return (
     <View style={styles.wrap} accessibilityElementsHidden>
       <Svg width={WIDTH} height={HEIGHT}>
@@ -88,7 +109,7 @@ export function ProfileCoupleLink({ accent, ringColor = '#FFFFFF' }: { accent: s
              C57.7 19.1 59.4 18.2 61.2 18.2
              C64.1 18.2 66.5 20.4 66.5 23.6
              C66.5 29.2 56 36.2 56 36.2 Z"
-          fill={accent}
+          fill={heartFill}
           stroke={ringColor}
           strokeWidth={1.6}
           strokeLinejoin="round"
