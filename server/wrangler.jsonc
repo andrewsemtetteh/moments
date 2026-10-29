@@ -8,22 +8,47 @@
   // Share links (https://moments.vasemti.com/i/CODE, /r/CODE) are served by this Worker.
   // Turn on once vasemti.com is a zone in this Cloudflare account (deploy fails otherwise):
   // "routes": [{ "pattern": "moments.vasemti.com", "custom_domain": true }],
+  // Once the app talks to that domain (EXPO_PUBLIC_API_URL) and old builds are gone, close the
+  // workers.dev address so nothing can get around the zone's WAF and rate-limit rules:
+  // "workers_dev": false,
+  // "preview_urls": false,
+  // Logs and traces for every request (lower head_sampling_rate as traffic grows, to keep cost
+  // down). Logs are JSON lines ({ event, ... }) so they can be searched by field.
   "observability": {
-    "enabled": true
+    "enabled": true,
+    "head_sampling_rate": 1
   },
+  // Stack traces in the logs point at the TypeScript source lines, not the bundle.
+  "upload_source_maps": true,
   // Runs the Worker next to its D1 database: each request makes several database calls, and
   // from a far-away edge every one of them crossed the ocean.
   "placement": { "mode": "smart" },
   // In-memory rate limiters for the busy per-minute limits (see consumeRateLimit): no D1 write per call.
   // Pushes that failed the first time, retried with growing gaps (push.ts). Up to 8 tries, then the in-app catch-up.
+  // Hourly jobs, a page of couples per message (jobs.ts), so no single run has to do them all.
+  // Pushes that still fail after every retry land in the dead-letter queue, to be looked at.
   "queues": {
-    "producers": [{ "binding": "PUSH_QUEUE", "queue": "moments-push-retry" }],
-    "consumers": [{ "queue": "moments-push-retry", "max_batch_size": 20, "max_batch_timeout": 5, "max_retries": 8 }]
+    "producers": [
+      { "binding": "PUSH_QUEUE", "queue": "moments-push-retry" },
+      { "binding": "JOBS_QUEUE", "queue": "moments-jobs" }
+    ],
+    "consumers": [
+      {
+        "queue": "moments-push-retry",
+        "max_batch_size": 20,
+        "max_batch_timeout": 5,
+        "max_retries": 8,
+        "dead_letter_queue": "moments-push-dlq"
+      },
+      { "queue": "moments-jobs", "max_batch_size": 5, "max_batch_timeout": 5, "max_retries": 5 }
+    ]
   },
   "ratelimits": [
     { "name": "RL_30_PER_MIN", "namespace_id": "1030", "simple": { "limit": 30, "period": 60 } },
     { "name": "RL_60_PER_MIN", "namespace_id": "1060", "simple": { "limit": 60, "period": 60 } },
-    { "name": "RL_120_PER_MIN", "namespace_id": "1120", "simple": { "limit": 120, "period": 60 } }
+    { "name": "RL_120_PER_MIN", "namespace_id": "1120", "simple": { "limit": 120, "period": 60 } },
+    // The catch-all: any one person's calls of any kind (see index.ts).
+    { "name": "RL_600_PER_MIN", "namespace_id": "1600", "simple": { "limit": 600, "period": 60 } }
   ],
   "d1_databases": [
     {

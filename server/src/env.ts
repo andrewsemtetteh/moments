@@ -5,6 +5,12 @@ export {};
 declare global {
   interface Env {
     CLERK_SECRET_KEY: string;
+    /**
+     * Optional: Clerk's JWT public key (PEM, from the Clerk dashboard › API keys). With it, a
+     * sign-in token is checked here without asking Clerk, so it's faster and keeps working
+     * when Clerk is slow or down. Without it, Clerk's keys are fetched (and cached).
+     */
+    CLERK_JWT_KEY?: string;
     /** Prototype AI (Gemini 3.1 Flash-Lite). Ignored when OPENAI_API_KEY is set. */
     GEMINI_API_KEY?: string;
     /** Optional Gemini model override, e.g. gemini-2.5-flash for keys that still have access. */
@@ -31,7 +37,10 @@ declare global {
     RL_30_PER_MIN?: RateLimit;
     RL_60_PER_MIN?: RateLimit;
     RL_120_PER_MIN?: RateLimit;
+    RL_600_PER_MIN?: RateLimit;
     /** Failed pushes, retried with growing gaps (see push.ts). Optional: without it, the in-app catch-up still sends them. */
     PUSH_QUEUE?: Queue<import('./push').PushRetry>;
+    /** Hourly jobs, a page of couples at a time (see jobs.ts). Optional: without it the cron pages through itself. */
+    JOBS_QUEUE?: Queue<import('./jobs').JobMessage>;
   }
 }

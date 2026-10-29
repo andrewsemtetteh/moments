@@ -24,13 +24,17 @@ async function askAi(env: Env, maxTokens: number, prompt: string, json = false):
   return null;
 }
 
+/** How long an AI provider gets to answer before we fall back (the app gives up at 12s). */
+const AI_TIMEOUT_MS = 10_000;
+
 async function askOpenAi(apiKey: string, maxTokens: number, prompt: string): Promise<string | null> {
   const res = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
     body: JSON.stringify({ model: 'gpt-4o-mini', max_tokens: maxTokens, messages: [{ role: 'user', content: prompt }] }),
-  });
-  if (!res.ok) return null;
+    signal: AbortSignal.timeout(AI_TIMEOUT_MS),
+  }).catch(() => null);
+  if (!res?.ok) return null;
   const json = (await res.json()) as { choices?: { message?: { content?: string | null } }[] };
   return json.choices?.[0]?.message?.content ?? null;
 }
@@ -51,14 +55,15 @@ async function askGemini(env: Env, apiKey: string, maxTokens: number, prompt: st
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
       body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: prompt }] }], generationConfig }),
-    });
+      signal: AbortSignal.timeout(AI_TIMEOUT_MS),
+    }).catch(() => null);
   let res = await request();
   // Gemini returns transient 503 "high demand" errors fairly often.
-  if (res.status === 503 || res.status === 429) {
+  if (res?.status === 503 || res?.status === 429) {
     await new Promise((r) => setTimeout(r, 800));
     res = await request();
   }
-  if (!res.ok) return null;
+  if (!res?.ok) return null;
   const json = (await res.json()) as { candidates?: { content?: { parts?: { text?: string }[] } }[] };
   const text = json.candidates?.[0]?.content?.parts?.map((p) => p.text ?? '').join('');
   return text || null;
@@ -131,7 +136,7 @@ async function fillBank<T>(env: Env, spec: BankSpec<T>, atLeast = 0): Promise<vo
 
   const items = spec.parse(await askAi(env, spec.maxTokens, spec.prompt(Math.max(spec.batch ?? DEFAULT_BATCH, atLeast), avoid), true));
   if (!items.length) {
-    console.warn(`content bank fill produced nothing: ${spec.bank}`);
+    console.warn(JSON.stringify({ event: 'bank_fill_empty', bank: spec.bank }));
     return;
   }
   const seen = new Set<string>();
@@ -611,6 +616,7 @@ async function iceServers(env: Env, userId: string, bg: Bg) {
     method: 'POST',
     headers: { Authorization: `Bearer ${env.TURN_KEY_API_TOKEN}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ ttl: TURN_TTL_SECONDS, customIdentifier: userId.slice(0, 64) }),
+    signal: AbortSignal.timeout(5_000),
   }).catch(() => null);
   if (!res?.ok) return { iceServers: STUN_ONLY, ttl: 600 };
   const data = (await res.json().catch(() => null)) as { iceServers?: { urls: string[] | string; username?: string; credential?: string }[] } | null;

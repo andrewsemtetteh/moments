@@ -36,7 +36,15 @@ export type HubEvent = {
   userId?: string;
 };
 
+/** Biggest frame a phone may send (typing, presence and game moves are tiny). */
+const MAX_FRAME_BYTES = 16 * 1024;
+/** Frames a second one socket may send before it's closed (a loop or a flood, not a person). */
+const MAX_FRAMES_PER_SECOND = 50;
+
 export class Hub extends DurableObject<Env> {
+  /** Per socket, frames this second (in memory: reset if the object sleeps, which is fine). */
+  private rates = new WeakMap<WebSocket, { second: number; count: number }>();
+
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
     // Must match the client heartbeat byte-for-byte; answered without waking the object.
@@ -68,6 +76,19 @@ export class Hub extends DurableObject<Env> {
   }
 
   async webSocketMessage(ws: WebSocket, message: string | ArrayBuffer) {
+    const size = typeof message === 'string' ? message.length : message.byteLength;
+    if (size > MAX_FRAME_BYTES) return;
+    const second = Math.floor(Date.now() / 1000);
+    const rate = this.rates.get(ws);
+    if (rate && rate.second === second) {
+      rate.count += 1;
+      if (rate.count > MAX_FRAMES_PER_SECOND) {
+        ws.close(1008, 'Too many messages');
+        return;
+      }
+    } else {
+      this.rates.set(ws, { second, count: 1 });
+    }
     let frame: ClientFrame;
     try {
       frame = JSON.parse(typeof message === 'string' ? message : new TextDecoder().decode(message));

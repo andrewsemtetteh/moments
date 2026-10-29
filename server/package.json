@@ -5,6 +5,10 @@
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
+    "deploy:gradual": "wrangler versions upload",
+    "promote": "wrangler versions deploy",
+    "rollback": "wrangler rollback",
+    "migrate": "wrangler d1 migrations apply moments-db --remote",
     "types": "wrangler types",
     "typecheck": "tsc --noEmit"
   },

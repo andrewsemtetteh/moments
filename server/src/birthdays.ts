@@ -1,4 +1,5 @@
 import { createPartnerNotification, tryNotificationDedup } from './core';
+import { onlyCouples } from './db';
 import './env';
 
 /** Sent from this hour (the partner's local time) on the day before. */
@@ -55,15 +56,18 @@ function isBirthdayOn(birthday: string, day: string): boolean {
  * is, their partner gets a notification (in the app's list and as a push). Once a year,
  * guarded by the dedup table.
  */
-export async function sendBirthdayHeadsUps(env: Env, now = new Date()): Promise<number> {
+export async function sendBirthdayHeadsUps(env: Env, now = new Date(), relIds?: string[]): Promise<number> {
+  const page = onlyCouples(relIds, 1);
   const { results } = await env.DB.prepare(
     `SELECT r.id AS relationship_id, b.id AS birthday_user_id, b.name AS birthday_name, b.birthday,
             p.id AS partner_id, p.timezone AS partner_timezone
      FROM relationships r
      JOIN users b ON b.id IN (r.user_1_id, r.user_2_id)
      JOIN users p ON p.id IN (r.user_1_id, r.user_2_id) AND p.id <> b.id
-     WHERE r.status = 'active' AND b.birthday IS NOT NULL AND length(b.birthday) = 10`,
-  ).all<Row>();
+     WHERE r.status = 'active' AND b.birthday IS NOT NULL AND length(b.birthday) = 10${page.sql}`,
+  )
+    .bind(...page.binds)
+    .all<Row>();
 
   let sent = 0;
   for (const row of results ?? []) {

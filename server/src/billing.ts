@@ -252,6 +252,15 @@ const ACTIVE_EVENTS = new Set(['initial_purchase', 'renewal', 'uncancellation', 
 /** Cancelling only stops the renewal: Plus stays until it expires, so nothing changes yet. */
 const NO_CHANGE_EVENTS = new Set(['cancellation', 'subscription_paused']);
 
+/**
+ * The $0.99 streak restore: a one-time (consumable) product, not a subscription. Its purchase adds
+ * one paid restore for the buyer and never touches Plus. Matched loosely, since the stores spell
+ * product ids their own way.
+ */
+export const STREAK_RESTORE_PRODUCT = 'streak_restore';
+const isStreakRestoreProduct = (productId: string | null | undefined) =>
+  !!productId && productId.toLowerCase().includes(STREAK_RESTORE_PRODUCT);
+
 /** Our app's bundle / package; events for other apps in the same Superwall project are ignored. */
 const BUNDLE_IDS = new Set(['com.vasemti.moments']);
 
@@ -300,7 +309,7 @@ async function notifyPartnerUnlocked(env: Env, relationshipId: string, payerId: 
     });
     await runFunction(env, payerId, 'send-push-notification', {}, consumeRateLimit, (task) => void task.catch(() => undefined));
   } catch (e) {
-    console.error('plus unlocked notification failed', relationshipId, e);
+    console.error(JSON.stringify({ event: 'plus_unlocked_notify_failed', relationshipId, error: String(e) }));
   }
 }
 
@@ -310,8 +319,27 @@ async function applyEvent(env: Env, type: string, data: SuperwallEventData): Pro
   if (data.bundleId && !BUNDLE_IDS.has(data.bundleId)) return null;
   const userId = await resolveUserId(env, data);
   if (!userId) {
-    console.warn('[superwall] no user for event', type, data.id, data.originalAppUserId);
+    console.warn(JSON.stringify({ event: 'superwall_no_user', type, eventId: data.id, appUserId: data.originalAppUserId }));
     return null;
+  }
+
+  // A paid streak restore: one credit per store transaction (a retry can't add a second), and a
+  // refund takes back one that hasn't been used. Never Plus.
+  if (isStreakRestoreProduct(data.productId)) {
+    const transactionId = data.originalTransactionId ?? data.id;
+    if (!transactionId) return userId;
+    if (type === 'refund') {
+      await env.DB.prepare('DELETE FROM streak_restore_purchases WHERE transaction_id = ?1 AND used_at IS NULL')
+        .bind(transactionId)
+        .run();
+    } else if (type === 'non_renewing_purchase' || type === 'initial_purchase') {
+      await env.DB.prepare(
+        'INSERT OR IGNORE INTO streak_restore_purchases (transaction_id, user_id, product_id) VALUES (?1, ?2, ?3)',
+      )
+        .bind(transactionId, userId, data.productId ?? null)
+        .run();
+    }
+    return userId;
   }
 
   const relId = await activeRelationshipId(env, userId);
@@ -484,15 +512,26 @@ billingWebhooks.post('/superwall', async (c) => {
   const type = body?.type ?? data?.name;
   if (!type || !data) return c.json({ error: 'No event' }, 400);
 
-  // Svix retries until it gets a 2xx; the event id keeps a retry from applying twice.
+  // Svix retries until it gets a 2xx; the event id keeps a retry from applying twice. The id is
+  // claimed first, in one statement, so two copies arriving together can't both apply it.
   const eventId = data.id ?? c.req.header('svix-id')!;
-  const seen = await c.env.DB.prepare('SELECT id FROM billing_events WHERE id = ?1').bind(eventId).first();
-  if (seen) return c.json({ ok: true, duplicate: true });
+  const claimed = await c.env.DB.prepare(
+    'INSERT INTO billing_events (id, type, app_user_id) VALUES (?1, ?2, NULL) ON CONFLICT (id) DO NOTHING RETURNING id',
+  )
+    .bind(eventId, type)
+    .first();
+  if (!claimed) return c.json({ ok: true, duplicate: true });
 
-  const userId = await applyEvent(c.env, type, data);
+  let userId: string | null;
+  try {
+    userId = await applyEvent(c.env, type, data);
+  } catch (e) {
+    // Not applied: give the id back, so Svix's retry applies it.
+    await c.env.DB.prepare('DELETE FROM billing_events WHERE id = ?1').bind(eventId).run();
+    console.error(JSON.stringify({ event: 'billing_event_failed', eventId, type, error: String(e) }));
+    return c.json({ error: 'Could not apply the event' }, 500);
+  }
 
-  await c.env.DB.prepare('INSERT OR IGNORE INTO billing_events (id, type, app_user_id) VALUES (?1, ?2, ?3)')
-    .bind(eventId, type, userId)
-    .run();
+  await c.env.DB.prepare('UPDATE billing_events SET app_user_id = ?1 WHERE id = ?2').bind(userId, eventId).run();
   return c.json({ ok: true });
 });

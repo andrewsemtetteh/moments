@@ -20,7 +20,7 @@ export function runWithContext<T>(ctx: WaitContext | undefined, fn: () => T): T 
  */
 export async function afterResponse(task: Promise<unknown>): Promise<void> {
   const ctx = store.getStore();
-  const safe = task.catch((e) => console.warn('[after-response] failed', e));
+  const safe = task.catch((e) => console.warn(JSON.stringify({ event: 'after_response_failed', error: String(e) })));
   if (ctx) ctx.waitUntil(safe);
   else await safe;
 }

@@ -464,17 +464,37 @@ class HubConnection {
     });
   }
 
+  /** A short-lived ticket to open this space's realtime (the server checks we belong to it). */
+  private async wsTicket(): Promise<string | null> {
+    const token = await authToken();
+    if (!token) return null;
+    try {
+      const res = await fetch(`${API_URL}/ws-ticket`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ relationshipId: this.relationshipId }),
+      });
+      if (!res.ok) return null;
+      const body = (await res.json()) as { ticket?: string };
+      return body.ticket ?? null;
+    } catch {
+      return null;
+    }
+  }
+
   private async connect() {
     if (this.connecting || this.ws || this.closed || !API_URL) return;
     this.connecting = true;
-    const token = await authToken();
+    const ticket = await this.wsTicket();
     this.connecting = false;
-    if (!token || this.closed || this.channels.size === 0) {
+    if (!ticket || this.closed || this.channels.size === 0) {
       this.scheduleRetry();
       return;
     }
 
-    const ws = new WebSocket(`${API_URL.replace(/^http/, 'ws')}/ws/${this.relationshipId}?token=${encodeURIComponent(token)}`);
+    // A one-minute ticket for this space's realtime, not the sign-in token: addresses end up in
+    // logs, and a ticket there can't call the API.
+    const ws = new WebSocket(`${API_URL.replace(/^http/, 'ws')}/ws/${this.relationshipId}?ticket=${encodeURIComponent(ticket)}`);
     this.ws = ws;
 
     ws.onopen = () => {

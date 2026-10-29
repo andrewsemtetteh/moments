@@ -123,6 +123,8 @@ async function deliver(env: Env, rows: PushRow[]): Promise<{ sent: number; skipp
       method: 'POST',
       headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
       body: JSON.stringify(messages),
+      // A slow Expo is a failed try: the queue sends it again later.
+      signal: AbortSignal.timeout(8_000),
     }).catch(() => null);
     if (!res?.ok) {
       const list = rows.map((r) => r.id);

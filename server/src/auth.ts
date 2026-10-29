@@ -17,7 +17,8 @@ export async function requireAuth(c: Context<{ Bindings: Env; Variables: AuthVar
   }
 
   try {
-    const payload = await verifyToken(token, { secretKey: c.env.CLERK_SECRET_KEY });
+    // With CLERK_JWT_KEY set, checked here with no call to Clerk (see env.ts).
+    const payload = await verifyToken(token, { secretKey: c.env.CLERK_SECRET_KEY, jwtKey: c.env.CLERK_JWT_KEY });
     c.set('userId', payload.sub);
     await next();
   } catch {

@@ -19,14 +19,16 @@ import {
   tryNotificationDedup,
   updateStreak,
 } from './core';
-import { generateId, isRelationshipMember, nowIso, parseJson, relationshipIdsForUser } from './db';
+import { clientOrNewId, generateId, isRelationshipMember, newInviteCode, toggleReaction, updateJsonColumn, withUser, nowIso, parseJson, relationshipIdsForUser } from './db';
 import { assertMomentAllowance, stripProtected } from './billing';
 import { runFunction } from './functions';
 import { normalizeContentType, sniffImageType } from './media-type';
 import { isPrivateMediaKey, signedMediaUrl } from './media-sign';
-import { onPaired } from './pairing';
+import { joinWithInviteCode, onPaired } from './pairing';
 import './env';
+import { checkDbValues, checkIds, checkText, MAX_CHARS, MAX_IDS, MAX_ROWS_PER_INSERT } from './limits';
 import { profileUpdateError } from './profile-rules';
+import { clientIp } from './rate-limit';
 
 /**
  * Supabase-compatible surface for the app: a policy-checked generic table endpoint (`/db`),
@@ -104,8 +106,6 @@ const USER_SERVER_COLUMNS = new Set([
   'revenuecat_customer_id',
   'revenuecat_subscription_id',
 ]);
-
-const INVITE_CODE = /^[A-Z0-9]{6,12}$/;
 
 /** Same as MESSAGE_EDIT_WINDOW_MS in the app (src/services/api.ts). */
 const MESSAGE_EDIT_WINDOW_MS = 15 * 60_000;
@@ -277,6 +277,7 @@ function filterSql(f: Filter, cols: Set<string>, binds: unknown[]): string {
     case 'in': {
       const list = Array.isArray(f.val) ? f.val : [];
       if (list.length === 0) return f.negate ? '1 = 1' : '1 = 0';
+      if (list.length > MAX_IDS) throw new ApiError('Too many values in one filter', 400);
       sql = `${f.col} IN (${list.map((v) => p(v)).join(', ')})`;
       break;
     }
@@ -286,10 +287,16 @@ function filterSql(f: Filter, cols: Set<string>, binds: unknown[]): string {
   return f.negate ? `NOT (${sql})` : sql;
 }
 
+/**
+ * What the app is told when something fails. Our own errors keep their words; anything from the
+ * database is logged here and answered generically, so table and column names never leak.
+ */
 function dbError(e: unknown) {
   if (e instanceof ApiError) return { message: e.message, code: e.code ?? String(e.status) };
-  const message = e instanceof Error ? e.message : 'Request failed';
-  return { message, code: /no such (table|column)/i.test(message) ? '42P01' : 'D1_ERROR' };
+  const raw = e instanceof Error ? e.message : String(e);
+  console.error(JSON.stringify({ event: 'db_error', error: raw }));
+  if (/UNIQUE constraint/i.test(raw)) return { message: 'That already exists', code: '23505' };
+  return { message: 'Something went wrong. Please try again.', code: /no such (table|column)/i.test(raw) ? '42P01' : 'D1_ERROR' };
 }
 
 compat.post('/db', async (c) => {
@@ -332,10 +339,16 @@ compat.post('/db', async (c) => {
     // ---- INSERT / UPSERT --------------------------------------------------
     if (op === 'insert') {
       const list = Array.isArray(req.values) ? req.values : req.values ? [req.values] : [];
+      if (list.length > MAX_ROWS_PER_INSERT) throw new ApiError('Too many rows at once', 400);
       const inserted: Record<string, unknown>[] = [];
+      const replayed: Record<string, unknown>[] = [];
       for (const raw of list) {
         // Plus is granted only by the Superwall webhook.
         const values = cleanProtected(req.table, raw);
+        // A couple's streak row starts empty: only the server counts days (no writing yourself
+        // a 500-day streak). The app only says which couple it's for.
+        if (req.table === 'streaks') for (const k of Object.keys(values)) if (k !== 'relationship_id') delete values[k];
+        checkDbValues(req.table, values);
         if (req.table === 'users') {
           const problem = profileUpdateError(values);
           if (problem) throw new ApiError(problem, 400, '23514');
@@ -346,8 +359,8 @@ compat.post('/db', async (c) => {
         if (req.table === 'relationships') {
           values.user_2_id = null;
           values.status = 'pending';
-          const code = typeof values.invite_code === 'string' ? values.invite_code.toUpperCase() : '';
-          values.invite_code = INVITE_CODE.test(code) ? code : null;
+          // The code is always the server's: one the app picked could be guessed.
+          values.invite_code = newInviteCode();
         }
         if (req.table === 'couple_progress') await checkProgressStep(env, values.relationship_id, values.xp);
         if (cols.has('id') && !values.id) values.id = generateId();
@@ -364,6 +377,10 @@ compat.post('/db', async (c) => {
         const keys = Object.keys(values).filter((k) => IDENT.test(k) && cols.has(k));
         const binds = keys.map((k) => toBind(k, values[k]));
         let sql = `INSERT INTO ${req.table} (${keys.join(', ')}) VALUES (${keys.map((_, i) => `?${i + 1}`).join(', ')})`;
+        // The app chose the id: saving it twice (a retry after a timeout) returns the row the
+        // first try made, and doesn't run its side effects (pushes, streak) again.
+        const appId = req.op !== 'upsert' && typeof raw.id === 'string' && cols.has('id') ? String(values.id) : null;
+        if (appId) sql += ' ON CONFLICT (id) DO NOTHING';
         if (req.op === 'upsert') {
           const allowed = UPSERT_KEYS[req.table] ?? [];
           const conflict = req.onConflict && allowed.includes(req.onConflict) && cols.has(req.onConflict) ? req.onConflict : 'id';
@@ -377,13 +394,23 @@ compat.post('/db', async (c) => {
         sql += ' RETURNING *';
         const row = await env.DB.prepare(sql).bind(...binds).first<Record<string, unknown>>();
         if (row) inserted.push(row);
+        else if (appId) {
+          const scopeBinds: unknown[] = [appId];
+          const existing = await env.DB.prepare(
+            `SELECT * FROM ${req.table} WHERE id = ?1 AND ${scopeClause(policy, userId, scopeBinds)}`,
+          )
+            .bind(...scopeBinds)
+            .first<Record<string, unknown>>();
+          if (!existing) throw new ApiError('That id is taken', 409, '23505');
+          replayed.push(existing);
+        }
       }
 
       for (const row of inserted) {
         await emitRow(env, req.table, 'INSERT', row);
         await afterInsert(env, req.table, row, userId);
       }
-      return c.json(finish(inserted));
+      return c.json(finish([...inserted, ...replayed]));
     }
 
     // ---- SELECT / UPDATE / DELETE: shared WHERE ---------------------------
@@ -436,6 +463,7 @@ compat.post('/db', async (c) => {
         throw new ApiError('Not allowed', 403, '42501');
       }
       const patch = cleanProtected(req.table, asked);
+      checkDbValues(req.table, patch);
       // The same checks as PATCH /me (birthday 16+, the gender list), so Settings can't skip them.
       if (req.table === 'users') {
         const problem = profileUpdateError(patch);
@@ -448,10 +476,9 @@ compat.post('/db', async (c) => {
       if (req.table === 'relationships') {
         // A space can be left (ended), never made active from here: only joining does that.
         if ('status' in patch && patch.status !== 'ended') throw new ApiError('Not allowed', 403, '42501');
-        if (typeof patch.invite_code === 'string') {
-          const code = patch.invite_code.toUpperCase();
-          if (!INVITE_CODE.test(code)) throw new ApiError('Invalid invite code', 400);
-          patch.invite_code = code;
+        if ('invite_code' in patch) {
+          // Asking for a code gets a new one from the server, never the app's own.
+          patch.invite_code = newInviteCode();
           // A code only for a space still waiting for its partner.
           where.push(`user_2_id IS NULL AND status = 'pending'`);
         }
@@ -618,17 +645,12 @@ async function saveMessage(env: Env, messageId: string, patch: Record<string, un
   return row;
 }
 
-function toggleReaction(raw: string | null, userId: string, emoji: string): Record<string, string[]> {
-  const previous = parseJson<Record<string, string[]>>(raw, {});
-  const had = previous[emoji]?.includes(userId);
-  const next: Record<string, string[]> = {};
-  for (const [key, users] of Object.entries(previous)) {
-    const rest = users.filter((u) => u !== userId);
-    if (rest.length) next[key] = rest;
-  }
-  if (!had) next[emoji] = [...(next[emoji] ?? []), userId];
-  return next;
+/** A reaction: one short emoji, nothing else. */
+function checkEmoji(value: unknown): string {
+  if (typeof value !== 'string' || !value || value.length > MAX_CHARS.emoji) throw new ApiError('Invalid reaction', 400);
+  return value;
 }
+
 
 const RPC: Record<string, RpcHandler> = {
   async get_partner_profile(env, userId, a) {
@@ -646,28 +668,23 @@ const RPC: Record<string, RpcHandler> = {
   async join_relationship_by_invite(env, userId, a) {
     // Invite codes are short: limit guesses (10 per 10 minutes per person).
     await consumeRateLimit(env, `join:${userId}`, 10, 600);
-    const code = String(a.p_invite_code ?? '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
-    if (code.length < 6) throw new ApiError('Invalid or expired invite code');
-    const target = await env.DB.prepare(
-      `SELECT * FROM relationships WHERE invite_code = ?1 AND status = 'pending' AND user_2_id IS NULL LIMIT 1`,
-    )
-      .bind(code)
-      .first<{ id: string; user_1_id: string }>();
-    if (!target) throw new ApiError('Invalid or expired invite code');
-    if (target.user_1_id === userId) throw new ApiError("That's your own code. Share it with your partner, or enter their code instead.");
-
-    await env.DB.batch([
-      env.DB.prepare(
-        `UPDATE relationships SET status = 'ended', invite_code = NULL, subscription_tier = 'free', subscription_owner_id = NULL
-         WHERE user_1_id = ?1 AND user_2_id IS NULL AND status = 'pending' AND id <> ?2`,
-      ).bind(userId, target.id),
-      env.DB.prepare(`UPDATE relationships SET user_2_id = ?1, status = 'active', invite_code = NULL WHERE id = ?2`).bind(userId, target.id),
-      env.DB.prepare('INSERT OR IGNORE INTO streaks (id, relationship_id) VALUES (?1, ?2)').bind(generateId(), target.id),
-    ]);
-    const joined = await env.DB.prepare('SELECT * FROM relationships WHERE id = ?1').bind(target.id).first<Record<string, unknown>>();
+    const target = await joinWithInviteCode(env, userId, a.p_invite_code);
+    const joined = await env.DB.prepare('SELECT * FROM relationships WHERE id = ?1').bind(target.relationshipId).first<Record<string, unknown>>();
     if (joined) await emitRow(env, 'relationships', 'UPDATE', joined);
-    await onPaired(env, target.id, userId, target.user_1_id);
+    await onPaired(env, target.relationshipId, userId, target.inviterId);
     return joined ? shapeRow(joined) : null;
+  },
+
+  /** A code for my waiting space, made here (never by the app), if it has none yet. */
+  async ensure_invite_code(env, userId, a) {
+    const row = await env.DB.prepare(
+      `UPDATE relationships SET invite_code = COALESCE(invite_code, ?1)
+        WHERE id = ?2 AND user_1_id = ?3 AND user_2_id IS NULL AND status = 'pending' RETURNING *`,
+    )
+      .bind(newInviteCode(), a.p_relationship_id, userId)
+      .first<Record<string, unknown>>();
+    if (!row) throw new ApiError('Space not found', 404);
+    return shapeRow(row);
   },
 
   async set_relationship_anniversary(env, userId, a) {
@@ -681,6 +698,16 @@ const RPC: Record<string, RpcHandler> = {
 
   async create_moment(env, userId, a) {
     await requireMember(env, userId, a.p_relationship_id);
+    // A retried save (the app's own id): the moment it already made, not a second one.
+    const id = clientOrNewId(a.p_id);
+    const saved = await env.DB.prepare('SELECT * FROM moments WHERE id = ?1').bind(id).first<Record<string, unknown>>();
+    if (saved) {
+      if (saved.relationship_id !== a.p_relationship_id || saved.user_id !== userId) throw new ApiError('That id is taken', 409);
+      return shapeRow(saved);
+    }
+    const type = checkText(a.p_type, MAX_CHARS.kind, 'Type') ?? 'photo';
+    const content = checkText(a.p_content, MAX_CHARS.moment, 'Caption');
+    const mediaUrl = checkText(a.p_media_url, MAX_CHARS.url, 'Media link');
     await assertMomentAllowance(env, a.p_relationship_id, userId);
     // Optional pin for "Our map" — only kept when both are real coordinates.
     const lat = Number(a.p_latitude);
@@ -689,15 +716,16 @@ const RPC: Record<string, RpcHandler> = {
       a.p_latitude != null && a.p_longitude != null &&
       Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180;
     const row = await env.DB.prepare(
-      `INSERT INTO moments (id, relationship_id, user_id, type, content, media_url, latitude, longitude) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8) RETURNING *`,
+      `INSERT INTO moments (id, relationship_id, user_id, type, content, media_url, latitude, longitude) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+       ON CONFLICT (id) DO NOTHING RETURNING *`,
     )
       .bind(
-        generateId(),
+        id,
         a.p_relationship_id,
         userId,
-        a.p_type,
-        a.p_content ?? null,
-        a.p_media_url ?? null,
+        type,
+        content,
+        mediaUrl,
         hasPin ? lat : null,
         hasPin ? lng : null,
       )
@@ -712,12 +740,8 @@ const RPC: Record<string, RpcHandler> = {
     const moment = await env.DB.prepare('SELECT * FROM moments WHERE id = ?1').bind(a.p_moment_id).first<Record<string, any>>();
     if (!moment) throw new ApiError('Moment not found', 404);
     await requireMember(env, userId, moment.relationship_id);
-    const viewed = parseJson<string[]>(moment.viewed_by, []);
-    if (moment.user_id === userId || viewed.includes(userId)) return null;
-    viewed.push(userId);
-    const row = await env.DB.prepare('UPDATE moments SET viewed_by = ?1 WHERE id = ?2 RETURNING *')
-      .bind(JSON.stringify(viewed), a.p_moment_id)
-      .first<Record<string, unknown>>();
+    if (moment.user_id === userId) return null;
+    const row = await updateJsonColumn<string[]>(env.DB, 'moments', 'viewed_by', a.p_moment_id, [], (viewed) => withUser(viewed, userId));
     if (row) await emitRow(env, 'moments', 'UPDATE', row);
     return null;
   },
@@ -726,10 +750,10 @@ const RPC: Record<string, RpcHandler> = {
     const moment = await env.DB.prepare('SELECT * FROM moments WHERE id = ?1').bind(a.p_moment_id).first<Record<string, any>>();
     if (!moment) throw new ApiError('Moment not found', 404);
     await requireMember(env, userId, moment.relationship_id);
-    const next = toggleReaction(moment.reactions, userId, a.p_emoji);
-    const row = await env.DB.prepare('UPDATE moments SET reactions = ?1 WHERE id = ?2 RETURNING *')
-      .bind(JSON.stringify(next), a.p_moment_id)
-      .first<Record<string, unknown>>();
+    const emoji = checkEmoji(a.p_emoji);
+    const row = await updateJsonColumn<Record<string, string[]>>(env.DB, 'moments', 'reactions', a.p_moment_id, {}, (current) =>
+      toggleReaction(current, userId, emoji),
+    );
     if (row) await emitRow(env, 'moments', 'UPDATE', row);
     return null;
   },
@@ -746,8 +770,12 @@ const RPC: Record<string, RpcHandler> = {
   },
 
   async toggle_message_reaction(env, userId, a) {
-    const message = await loadMessage(env, userId, a.p_message_id);
-    await saveMessage(env, a.p_message_id, { reactions: toggleReaction(message.reactions, userId, a.p_emoji) });
+    await loadMessage(env, userId, a.p_message_id);
+    const emoji = checkEmoji(a.p_emoji);
+    const row = await updateJsonColumn<Record<string, string[]>>(env.DB, 'messages', 'reactions', a.p_message_id, {}, (current) =>
+      toggleReaction(current, userId, emoji),
+    );
+    if (row) await emitRow(env, 'messages', 'UPDATE', row);
     return null;
   },
 
@@ -758,9 +786,9 @@ const RPC: Record<string, RpcHandler> = {
   },
 
   async hide_message_for_user(env, userId, a) {
-    const message = await loadMessage(env, userId, a.p_message_id);
-    const hidden = parseJson<string[]>(message.hidden_for, []);
-    if (!hidden.includes(userId)) await saveMessage(env, a.p_message_id, { hidden_for: [...hidden, userId] });
+    await loadMessage(env, userId, a.p_message_id);
+    const row = await updateJsonColumn<string[]>(env.DB, 'messages', 'hidden_for', a.p_message_id, [], (hidden) => withUser(hidden, userId));
+    if (row) await emitRow(env, 'messages', 'UPDATE', row);
     return null;
   },
 
@@ -768,6 +796,7 @@ const RPC: Record<string, RpcHandler> = {
     await requireMember(env, userId, a.p_relationship_id);
     const mood = String(a.p_mood ?? '').trim();
     if (!mood) throw new ApiError('Mood is required');
+    if (mood.length > MAX_CHARS.mood) throw new ApiError('Mood is too long');
     const row = await env.DB.prepare('INSERT INTO mood_logs (id, relationship_id, user_id, mood) VALUES (?1, ?2, ?3, ?4) RETURNING *')
       .bind(generateId(), a.p_relationship_id, userId, mood)
       .first<Record<string, unknown>>();
@@ -830,11 +859,12 @@ const RPC: Record<string, RpcHandler> = {
 
   async try_notification_dedup(env, userId, a) {
     await requireMember(env, userId, a.p_relationship_id);
-    return tryNotificationDedup(env, a.p_relationship_id, String(a.p_dedup_key));
+    return tryNotificationDedup(env, a.p_relationship_id, String(a.p_dedup_key).slice(0, MAX_CHARS.dedupKey));
   },
 
   async mark_notifications_read(env, userId, a) {
-    const ids: string[] | null = Array.isArray(a.p_notification_ids) && a.p_notification_ids.length ? a.p_notification_ids : null;
+    const asked = checkIds(a.p_notification_ids);
+    const ids: string[] | null = asked.length ? asked : null;
     if (!ids) {
       await env.DB.prepare('UPDATE notifications SET read = 1 WHERE user_id = ?1 AND read = 0').bind(userId).run();
       return null;
@@ -848,6 +878,7 @@ const RPC: Record<string, RpcHandler> = {
 
   async register_push_token(env, userId, a) {
     const token = typeof a.p_token === 'string' && a.p_token ? a.p_token : null;
+    if (token && token.length > MAX_CHARS.pushToken) throw new ApiError('Invalid push token', 400);
     // One phone, one account: whoever signs in here takes the token, so the last account
     // on this phone stops getting pushes on it.
     if (token) {
@@ -868,6 +899,10 @@ compat.post('/rpc/:name', async (c) => {
     return c.json({ data: null, error: { code: 'PGRST202', message: `Function ${c.req.param('name')} not found` } });
   }
   try {
+    // Trying invite codes: also limited per address, so many accounts at one place can't guess.
+    if (c.req.param('name') === 'join_relationship_by_invite') {
+      await consumeRateLimit(c.env, `join:ip:${clientIp(c)}`, 30, 600);
+    }
     const args = await c.req.json<RpcArgs>().catch(() => ({}));
     const data = await handler(c.env, c.get('userId'), args);
     return c.json({ data: data ?? null, error: null });

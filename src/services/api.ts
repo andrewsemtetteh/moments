@@ -46,15 +46,6 @@ async function readForUpload(uri: string, contentType: string, maxSide?: number)
   return { body: await readUriAsArrayBuffer(image.uri), contentType: image.contentType };
 }
 
-function generateInviteCode(): string {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  let code = '';
-  for (let i = 0; i < 6; i++) {
-    code += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return code;
-}
-
 function pickPrimaryRelationship(relationships: Relationship[], userId: string): Relationship | null {
   if (relationships.length === 0) return null;
 
@@ -210,7 +201,6 @@ export async function createRelationship(
   name: string,
   options?: { anniversaryDate?: string | null; relationshipType?: RelationshipType | null },
 ) {
-  const inviteCode = generateInviteCode();
   const anniversaryDate = options?.anniversaryDate;
   const relationshipType = options?.relationshipType;
   const { data, error } = await backend
@@ -218,7 +208,7 @@ export async function createRelationship(
     .insert({
       user_1_id: userId,
       relationship_name: name,
-      invite_code: inviteCode,
+      // The server gives every new space its invite code (secure, never made here).
       status: 'pending',
       ...(anniversaryDate ? { anniversary_date: anniversaryDate } : {}),
       ...(relationshipType ? { relationship_type: relationshipType } : {}),
@@ -299,8 +289,10 @@ export async function ensureInviteCode(relationshipId: string): Promise<Relation
   if (rel.user_2_id) return rel as Relationship;
   if (rel.invite_code) return rel as Relationship;
 
-  const inviteCode = generateInviteCode();
-  return updateRelationship(relationshipId, { invite_code: inviteCode });
+  // The server makes the code (secure, never on the phone).
+  const { data, error: codeError } = await backend.rpc('ensure_invite_code', { p_relationship_id: relationshipId });
+  if (codeError || !data) throw new Error('Could not make an invite code');
+  return data as Relationship;
 }
 
 /** End a relationship for both partners. Either member can leave. */
@@ -388,6 +380,9 @@ export async function createMoment(
   options?: { senderName?: string | null; partnerUserId?: string | null },
 ) {
   const { data, error } = await backend.rpc('create_moment', {
+    // Our own id: if the answer is lost and this is sent again, the server returns this moment
+    // instead of saving a second one.
+    p_id: Crypto.randomUUID(),
     p_relationship_id: relationshipId,
     p_type: moment.type,
     p_media_url: moment.media_url,
@@ -519,6 +514,8 @@ export async function sendMessage(
   const { data, error } = await backend
     .from('messages')
     .insert({
+      // Our own id: a send repeated after a lost answer finds this message, not a copy.
+      id: Crypto.randomUUID(),
       relationship_id: relationshipId,
       sender_id: senderId,
       content,
@@ -1094,10 +1091,19 @@ async function fetchStreakActiveDays(relationshipId: string): Promise<string[]> 
     .filter((d): d is string => typeof d === 'string');
 }
 
+/** The server's answer when restoring needs a paid restore this person hasn't bought (402). */
+export class StreakRestoreNeedsPurchaseError extends Error {
+  constructor() {
+    super('Restoring your streak needs a purchase');
+    this.name = 'StreakRestoreNeedsPurchaseError';
+  }
+}
+
 export async function restoreStreak(relationshipId: string): Promise<StreakStatus | null> {
   const { data, error } = await backend.rpc('restore_streak', {
     p_relationship_id: relationshipId,
   });
+  if (error?.code === '402') throw new StreakRestoreNeedsPurchaseError();
   if (error) throw error;
   const status = parseStreakStatus(data);
   return status ? withEffectiveStreakRestore(status) : null;

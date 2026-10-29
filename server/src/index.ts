@@ -1,30 +1,50 @@
 import { createClerkClient } from '@clerk/backend';
 import { Hono } from 'hono';
+import { bodyLimit } from 'hono/body-limit';
 
 import { deleteAccount } from './account';
 import { requireAuth, type AuthVariables } from './auth';
 import { assertMomentAllowance, billingWebhooks, carryPersonalPlus, ensureBillingUserId } from './billing';
-import { ApiError, emitRow, publicProfile, sendMoodCheckins, sendStreakRiskReminders, settleBrokenStreaks } from './core';
-import { sendBirthdayHeadsUps } from './birthdays';
+import { ApiError, emitRow, publicProfile } from './core';
+import { type JobMessage, runJobPages, startHourlyJobs } from './jobs';
 import { profileUpdateError } from './profile-rules';
 import { compat } from './compat';
 import { links } from './links';
 import { coupleDocs } from './couple-docs';
 import { stockBanks } from './functions';
 import { verifyToken } from '@clerk/backend';
-import { buildUpdate, generateId, isRelationshipMember, nowIso, parseJson } from './db';
-import { onPaired } from './pairing';
-import { isPrivateMediaKey, signedMediaUrl, signMediaInText, verifyMediaSignature } from './media-sign';
+import { buildUpdate, clientOrNewId, generateId, isRelationshipMember, toggleReaction, updateJsonColumn, withUser, newInviteCode, nowIso, parseJson, relationshipIdsForUser } from './db';
+import { joinWithInviteCode, onPaired } from './pairing';
+import { hasMediaUrl, isPrivateMediaKey, signedMediaUrl, signMediaInText, verifyMediaSignature } from './media-sign';
 import { isInlineMediaType, resolveImageType } from './media-type';
 import { type PushRetry, retryPushes } from './push';
-import { rateLimit } from './rate-limit';
+import { checkIds, checkText, MAX_CHARS } from './limits';
+import { ipRateLimit, rateLimit } from './rate-limit';
 import { runWithContext } from './request-context';
+import { issueWsTicket, verifyWsTicket } from './ws-ticket';
 import { claimReferral, referralSummary } from './referrals';
 import './env';
 
 const USERNAME_PATTERN = /^[a-z0-9_]{4,64}$/;
 
 const app = new Hono<{ Bindings: Env; Variables: AuthVariables }>();
+
+/**
+ * A row this save already made (a retried request with the app's id): that row when it's the
+ * caller's in this space, 'taken' when the id belongs to something else, null when it's new.
+ */
+async function findOwnRow(
+  env: Env,
+  table: 'moments' | 'messages',
+  id: string,
+  relationshipId: string,
+  ownerColumn: 'user_id' | 'sender_id',
+  userId: string,
+): Promise<Record<string, unknown> | 'taken' | null> {
+  const row = await env.DB.prepare(`SELECT * FROM ${table} WHERE id = ?1`).bind(id).first<Record<string, unknown>>();
+  if (!row) return null;
+  return row.relationship_id === relationshipId && row[ownerColumn] === userId ? row : 'taken';
+}
 
 // Lets helpers finish side work (pushes, realtime) after the answer is sent (request-context.ts).
 app.use('*', (c, next) => {
@@ -37,20 +57,46 @@ app.use('*', (c, next) => {
   return runWithContext(ctx, next);
 });
 
+// HTTPS only from now on, and no guessing a response's type.
+app.use('*', async (c, next) => {
+  await next();
+  // A WebSocket upgrade comes back from the realtime hub as is (its headers can't change).
+  if (c.res.status === 101) return;
+  try {
+    c.res.headers.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+    if (!c.res.headers.has('X-Content-Type-Options')) c.res.headers.set('X-Content-Type-Options', 'nosniff');
+  } catch {
+    // Read-only headers (a response passed straight through): leave them.
+  }
+});
+
+// No reading a giant body into memory: JSON is capped well above the biggest real one (a shared
+// doc is at most 256 KB), the profile photo at 16 MB. Uploads stream with their own 50 MB cap.
+const JSON_BODY_LIMIT = 512 * 1024;
+app.use('*', (c, next) => {
+  const path = c.req.path;
+  if (c.req.method === 'GET' || c.req.method === 'HEAD' || path.startsWith('/storage/')) return next();
+  const maxSize = path === '/me/avatar' ? 16 * 1024 * 1024 : JSON_BODY_LIMIT;
+  return bodyLimit({ maxSize, onError: (cc) => cc.json({ error: 'That request is too large' }, 413) })(c, next);
+});
+
 // Every JSON answer (tables, functions, profiles…) goes out with its moment and chat media
 // links signed, so the app never needs to build one (see media-sign.ts).
 app.use('*', async (c, next) => {
   await next();
   if (!(c.res.headers.get('Content-Type') ?? '').includes('application/json')) return;
+  // Signed for a signed-in caller only, and only their own spaces' files.
+  const userId = (c.var as Partial<AuthVariables>).userId;
+  if (!userId) return;
   const text = await c.res.clone().text();
-  const signed = await signMediaInText(c.env, text);
+  if (!hasMediaUrl(text)) return;
+  const mine = new Set(await relationshipIdsForUser(c.env.DB, userId));
+  const signed = await signMediaInText(c.env, text, (id) => mine.has(id));
   if (signed !== text) c.res = new Response(signed, { status: c.res.status, headers: c.res.headers });
 });
 
-app.get('/health', async (c) => {
-  const row = await c.env.DB.prepare('SELECT 1 AS ok').first<{ ok: number }>();
-  return c.json({ status: 'ok', d1: row?.ok === 1, r2: Boolean(c.env.STORAGE) });
-});
+// Uptime checks: answers without touching the database, so it can't be used to load it.
+app.get('/health', (c) => c.json({ status: 'ok' }));
 
 /**
  * Serves uploaded media (avatars, moments, chat attachments) from R2. A link works for whoever
@@ -129,24 +175,36 @@ app.get('/media/*', async (c) => {
   return new Response(object.body, { headers });
 });
 
-/** Realtime hub: one Durable Object per relationship. Token rides the query string (WebSockets can't set headers). */
-app.get('/ws/:relationshipId', async (c) => {
+/**
+ * Realtime hub: one Durable Object per relationship. A WebSocket can't set headers, so it opens
+ * with a one-minute ticket (POST /ws-ticket) in the address. Builds from before tickets still
+ * send their sign-in token there instead; that keeps working until they've updated.
+ */
+app.get('/ws/:relationshipId', ipRateLimit('ws', 60, 60), async (c) => {
   if (c.req.header('Upgrade') !== 'websocket') return c.text('Expected websocket', 426);
-  const token = c.req.query('token');
-  if (!token) return c.text('Missing token', 401);
-
-  let userId: string;
-  try {
-    userId = (await verifyToken(token, { secretKey: c.env.CLERK_SECRET_KEY })).sub;
-  } catch {
-    return c.text('Invalid or expired token', 401);
-  }
-
   const relationshipId = c.req.param('relationshipId');
+  const ticket = c.req.query('ticket');
+  const token = c.req.query('token');
+
+  let userId: string | null = null;
+  if (ticket) {
+    userId = await verifyWsTicket(c.env, ticket, relationshipId);
+  } else if (token) {
+    try {
+      userId = (await verifyToken(token, { secretKey: c.env.CLERK_SECRET_KEY, jwtKey: c.env.CLERK_JWT_KEY })).sub;
+    } catch {
+      userId = null;
+    }
+  } else {
+    return c.text('Missing ticket', 401);
+  }
+  if (!userId) return c.text('Invalid or expired ticket', 401);
+
   if (!(await isRelationshipMember(c.env.DB, userId, relationshipId))) return c.text('Forbidden', 403);
 
   const url = new URL(c.req.url);
   url.searchParams.delete('token');
+  url.searchParams.delete('ticket');
   url.searchParams.set('uid', userId);
   const stub = c.env.HUB.get(c.env.HUB.idFromName(relationshipId));
   return stub.fetch(new Request(url.toString(), c.req.raw));
@@ -159,6 +217,19 @@ app.route('/', links);
 app.route('/webhooks', billingWebhooks);
 
 app.use('*', requireAuth);
+
+// A ceiling on any one person's calls of every kind (a runaway loop or a script), on top of the
+// tighter per-route limits.
+app.use('*', rateLimit('api', 600, 60));
+
+/** A one-minute ticket to open this space's realtime (see GET /ws/:relationshipId). */
+app.post('/ws-ticket', rateLimit('ws-ticket', 60, 60), async (c) => {
+  const userId = c.get('userId');
+  const { relationshipId } = await c.req.json<{ relationshipId?: string }>().catch(() => ({ relationshipId: undefined }));
+  const relId = String(relationshipId ?? '');
+  if (!relId || !(await isRelationshipMember(c.env.DB, userId, relId))) return c.json({ error: 'Not allowed' }, 403);
+  return c.json({ ticket: await issueWsTicket(c.env, userId, relId) });
+});
 
 /** A signed link for a file this person just uploaded (or any file in their space). */
 app.post('/media/sign', rateLimit('media-sign', 60, 60), async (c) => {
@@ -316,7 +387,7 @@ app.delete('/me', rateLimit('delete-account', 5, 3600), async (c) => {
     await deleteAccount(c.env, userId);
     return c.json({ ok: true });
   } catch (e) {
-    console.error('delete account failed', userId, e);
+    console.error(JSON.stringify({ event: 'delete_account_failed', userId, error: String(e) }));
     return c.json({ error: 'Could not delete your account. Please try again.' }, 500);
   }
 });
@@ -326,7 +397,8 @@ app.get('/me/referral', async (c) => {
   try {
     return c.json(await referralSummary(c.env, c.get('userId')));
   } catch (e) {
-    return c.json({ error: e instanceof Error ? e.message : 'Something went wrong' }, 500);
+    console.error(JSON.stringify({ event: 'referral_summary_failed', error: String(e) }));
+    return c.json({ error: 'Something went wrong' }, 500);
   }
 });
 
@@ -336,13 +408,14 @@ app.post('/referrals/claim', rateLimit('referral-claim', 10, 3600), async (c) =>
   try {
     return c.json(await claimReferral(c.env, c.get('userId'), String(code ?? '')));
   } catch (e) {
-    const status = (e as { status?: number }).status ?? 400;
-    return c.json({ error: e instanceof Error ? e.message : 'Could not use that link' }, status as 400);
+    if (e instanceof ApiError) return c.json({ error: e.message }, e.status as 400);
+    console.error(JSON.stringify({ event: 'referral_claim_failed', error: String(e) }));
+    return c.json({ error: 'Could not use that link' }, 500);
   }
 });
 
 /** Live availability check while the user types — does not claim the username. */
-app.get('/username-available', async (c) => {
+app.get('/username-available', rateLimit('username', 60, 60), async (c) => {
   const candidate = (c.req.query('u') ?? '').toLowerCase();
   if (!USERNAME_PATTERN.test(candidate)) {
     return c.json({ available: false, reason: 'invalid' });
@@ -375,10 +448,11 @@ app.post('/me/avatar', rateLimit('avatar', 10, 600), async (c) => {
   return c.json(updated);
 });
 
-app.post('/me/push-token', async (c) => {
+app.post('/me/push-token', rateLimit('push-token', 30, 60), async (c) => {
   const userId = c.get('userId');
-  const body = await c.req.json<{ token: string | null }>();
+  const body = await c.req.json<{ token?: string | null }>();
   const token = typeof body.token === 'string' && body.token ? body.token : null;
+  if (token && token.length > MAX_CHARS.pushToken) return c.json({ error: 'Invalid push token' }, 400);
   // One phone, one account (see register_push_token).
   if (token) {
     await c.env.DB.prepare('UPDATE users SET expo_push_token = NULL WHERE expo_push_token = ?1 AND id <> ?2')
@@ -414,12 +488,12 @@ app.get('/me/relationship', async (c) => {
   return c.json({ relationship, partner });
 });
 
-app.post('/relationships', async (c) => {
+app.post('/relationships', rateLimit('space-create', 10, 3600), async (c) => {
   const userId = c.get('userId');
   type CreateRelationshipBody = { relationship_name?: string; anniversary_date?: string; relationship_type?: string };
   const body = await c.req.json<CreateRelationshipBody>().catch((): CreateRelationshipBody => ({}));
   const id = generateId();
-  const inviteCode = generateId().slice(0, 8).toUpperCase();
+  const inviteCode = newInviteCode();
 
   await c.env.DB.prepare(
     `INSERT INTO relationships (id, user_1_id, status, invite_code, relationship_name, anniversary_date, relationship_type)
@@ -453,7 +527,7 @@ app.post('/relationships/:id/invite-code', async (c) => {
   if (!relationship) return c.json({ error: 'Space not found' }, 404);
   if (relationship.invite_code) return c.json({ invite_code: relationship.invite_code });
 
-  const inviteCode = generateId().slice(0, 8).toUpperCase();
+  const inviteCode = newInviteCode();
   await c.env.DB.prepare('UPDATE relationships SET invite_code = ?1 WHERE id = ?2')
     .bind(inviteCode, relationshipId)
     .run();
@@ -461,40 +535,27 @@ app.post('/relationships/:id/invite-code', async (c) => {
 });
 
 /** Mirrors join_relationship_by_invite(): ends the caller's own pending space, joins the target one. */
-app.post('/relationships/join', rateLimit('join', 10, 600), async (c) => {
+app.post('/relationships/join', ipRateLimit('join', 30, 600), rateLimit('join', 10, 600), async (c) => {
   const userId = c.get('userId');
-  const body = await c.req.json<{ inviteCode: string }>();
-  const code = body.inviteCode?.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
-  if (!code || code.length < 6) return c.json({ error: 'Invalid or expired invite code' }, 400);
-
-  const target = await c.env.DB.prepare(
-    `SELECT * FROM relationships WHERE invite_code = ?1 AND status = 'pending' AND user_2_id IS NULL LIMIT 1`,
-  )
-    .bind(code)
-    .first<{ id: string; user_1_id: string }>();
-
-  if (!target) return c.json({ error: 'Invalid or expired invite code' }, 404);
-  if (target.user_1_id === userId) {
-    return c.json({ error: "That's your own code. Share it with your partner, or enter their code instead." }, 400);
+  const body = await c.req.json<{ inviteCode?: string }>().catch((): { inviteCode?: string } => ({}));
+  let target: { relationshipId: string; inviterId: string };
+  try {
+    target = await joinWithInviteCode(c.env, userId, body.inviteCode);
+  } catch (e) {
+    if (e instanceof ApiError) return c.json({ error: e.message }, e.status as 400);
+    throw e;
   }
-
-  await c.env.DB.batch([
-    c.env.DB.prepare(
-      `UPDATE relationships SET status = 'ended', invite_code = NULL, subscription_tier = 'free', subscription_owner_id = NULL
-       WHERE user_1_id = ?1 AND user_2_id IS NULL AND status = 'pending' AND id <> ?2`,
-    ).bind(userId, target.id),
-    c.env.DB.prepare(
-      `UPDATE relationships SET user_2_id = ?1, status = 'active', invite_code = NULL WHERE id = ?2`,
-    ).bind(userId, target.id),
-  ]);
   // If the joining partner already pays, their Plus now covers this couple.
-  await carryPersonalPlus(c.env, userId, target.id);
+  await carryPersonalPlus(c.env, userId, target.relationshipId);
   // Tell the inviter, and credit any referral that brought them here.
-  await onPaired(c.env, target.id, userId, target.user_1_id, (task) => c.executionCtx.waitUntil(task));
+  await onPaired(c.env, target.relationshipId, userId, target.inviterId, (task) => c.executionCtx.waitUntil(task));
 
-  const joined = await c.env.DB.prepare('SELECT * FROM relationships WHERE id = ?1').bind(target.id).first();
-  const partner = await c.env.DB.prepare('SELECT * FROM users WHERE id = ?1').bind(target.user_1_id).first();
-  return c.json({ relationship: joined, partner });
+  const joined = await c.env.DB.prepare('SELECT * FROM relationships WHERE id = ?1').bind(target.relationshipId).first();
+  const partnerRow = await c.env.DB.prepare('SELECT * FROM users WHERE id = ?1')
+    .bind(target.inviterId)
+    .first<Record<string, unknown>>();
+  // Your partner's profile, without their private columns (as everywhere else).
+  return c.json({ relationship: joined, partner: partnerRow ? publicProfile(partnerRow) : null });
 });
 
 app.patch('/relationships/:id', async (c) => {
@@ -540,19 +601,33 @@ app.post('/relationships/:id/moments', rateLimit('moment', 30, 60), async (c) =>
   const userId = c.get('userId');
   const relationshipId = c.req.param('id');
   if (!(await isRelationshipMember(c.env.DB, userId, relationshipId))) return c.json({ error: 'Forbidden' }, 403);
+
+  const body = await c.req.json<{ id?: string; type?: string; media_url?: string; content?: string; mood?: string }>();
+  // Saved already (a retry after a timeout): the same moment back, not a second one, and it
+  // doesn't count against the day's allowance twice.
+  const id = clientOrNewId(body.id);
+  const replay = await findOwnRow(c.env, 'moments', id, relationshipId, 'user_id', userId);
+  if (replay) return replay === 'taken' ? c.json({ error: 'That id is taken' }, 409) : c.json(replay, 200);
+
+  let fields: { type: string; content: string | null; mediaUrl: string | null; mood: string | null };
   try {
+    fields = {
+      type: checkText(body.type, MAX_CHARS.kind, 'Type') ?? 'photo',
+      content: checkText(body.content, MAX_CHARS.moment, 'Caption'),
+      mediaUrl: checkText(body.media_url, MAX_CHARS.url, 'Media link'),
+      mood: checkText(body.mood, MAX_CHARS.mood, 'Mood'),
+    };
     await assertMomentAllowance(c.env, relationshipId, userId);
   } catch (e) {
-    if (e instanceof ApiError) return c.json({ error: e.message, code: e.code }, 402);
+    if (e instanceof ApiError) return c.json({ error: e.message, code: e.code }, e.status === 400 ? 400 : 402);
     throw e;
   }
-
-  const body = await c.req.json<{ type: string; media_url?: string; content?: string; mood?: string }>();
-  const id = generateId();
+  // Two copies of the same save at once: the second changes nothing.
   await c.env.DB.prepare(
-    'INSERT INTO moments (id, relationship_id, user_id, type, content, media_url, mood) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)',
+    `INSERT INTO moments (id, relationship_id, user_id, type, content, media_url, mood) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+     ON CONFLICT (id) DO NOTHING`,
   )
-    .bind(id, relationshipId, userId, body.type, body.content ?? null, body.media_url ?? null, body.mood ?? null)
+    .bind(id, relationshipId, userId, fields.type, fields.content, fields.mediaUrl, fields.mood)
     .run();
 
   const created = await c.env.DB.prepare('SELECT * FROM moments WHERE id = ?1').bind(id).first();
@@ -563,20 +638,13 @@ app.post('/moments/:id/viewed', async (c) => {
   const userId = c.get('userId');
   const momentId = c.req.param('id');
 
-  const moment = await c.env.DB.prepare('SELECT relationship_id, viewed_by FROM moments WHERE id = ?1')
+  const moment = await c.env.DB.prepare('SELECT relationship_id FROM moments WHERE id = ?1')
     .bind(momentId)
-    .first<{ relationship_id: string; viewed_by: string }>();
+    .first<{ relationship_id: string }>();
   if (!moment || !(await isRelationshipMember(c.env.DB, userId, moment.relationship_id))) {
     return c.json({ error: 'Moment not found' }, 404);
   }
-
-  const viewed = parseJson<string[]>(moment.viewed_by, []);
-  if (!viewed.includes(userId)) {
-    viewed.push(userId);
-    await c.env.DB.prepare('UPDATE moments SET viewed_by = ?1 WHERE id = ?2')
-      .bind(JSON.stringify(viewed), momentId)
-      .run();
-  }
+  await updateJsonColumn<string[]>(c.env.DB, 'moments', 'viewed_by', momentId, [], (viewed) => withUser(viewed, userId));
   return c.json({ ok: true });
 });
 
@@ -612,12 +680,27 @@ app.post('/relationships/:id/messages', rateLimit('message', 120, 60), async (c)
   const relationshipId = c.req.param('id');
   if (!(await isRelationshipMember(c.env.DB, userId, relationshipId))) return c.json({ error: 'Forbidden' }, 403);
 
-  const body = await c.req.json<{ content?: string; media_url?: string; media_type?: string }>();
-  const id = generateId();
+  const body = await c.req.json<{ id?: string; content?: string; media_url?: string; media_type?: string }>();
+  // A retried send: the message already saved, not a second copy.
+  const id = clientOrNewId(body.id);
+  const replay = await findOwnRow(c.env, 'messages', id, relationshipId, 'sender_id', userId);
+  if (replay) return replay === 'taken' ? c.json({ error: 'That id is taken' }, 409) : c.json(replay, 200);
+  let fields: { content: string | null; mediaUrl: string | null; mediaType: string | null };
+  try {
+    fields = {
+      content: checkText(body.content, MAX_CHARS.message, 'Message'),
+      mediaUrl: checkText(body.media_url, MAX_CHARS.url, 'Media link'),
+      mediaType: checkText(body.media_type, MAX_CHARS.kind, 'Media type'),
+    };
+  } catch (e) {
+    if (e instanceof ApiError) return c.json({ error: e.message }, 400);
+    throw e;
+  }
   await c.env.DB.prepare(
-    'INSERT INTO messages (id, relationship_id, sender_id, content, media_url, media_type) VALUES (?1, ?2, ?3, ?4, ?5, ?6)',
+    `INSERT INTO messages (id, relationship_id, sender_id, content, media_url, media_type) VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+     ON CONFLICT (id) DO NOTHING`,
   )
-    .bind(id, relationshipId, userId, body.content ?? null, body.media_url ?? null, body.media_type ?? null)
+    .bind(id, relationshipId, userId, fields.content, fields.mediaUrl, fields.mediaType)
     .run();
 
   const created = await c.env.DB.prepare('SELECT * FROM messages WHERE id = ?1').bind(id).first();
@@ -640,49 +723,36 @@ app.post('/relationships/:id/messages/read', async (c) => {
 app.post('/messages/:id/react', async (c) => {
   const userId = c.get('userId');
   const messageId = c.req.param('id');
-  const body = await c.req.json<{ emoji: string }>();
+  const body = await c.req.json<{ emoji?: string }>();
+  if (typeof body.emoji !== 'string' || !body.emoji || body.emoji.length > MAX_CHARS.emoji) {
+    return c.json({ error: 'Invalid reaction' }, 400);
+  }
+  const emoji = body.emoji;
 
-  const message = await c.env.DB.prepare('SELECT relationship_id, reactions FROM messages WHERE id = ?1')
+  const message = await c.env.DB.prepare('SELECT relationship_id FROM messages WHERE id = ?1')
     .bind(messageId)
-    .first<{ relationship_id: string; reactions: string }>();
+    .first<{ relationship_id: string }>();
   if (!message || !(await isRelationshipMember(c.env.DB, userId, message.relationship_id))) {
     return c.json({ error: 'Message not found' }, 404);
   }
-
-  const reactions = parseJson<Record<string, string[]>>(message.reactions, {});
-  for (const emoji of Object.keys(reactions)) {
-    reactions[emoji] = reactions[emoji].filter((u) => u !== userId);
-    if (reactions[emoji].length === 0) delete reactions[emoji];
-  }
-  const hadEmoji = parseJson<Record<string, string[]>>(message.reactions, {})[body.emoji]?.includes(userId);
-  if (!hadEmoji) {
-    reactions[body.emoji] = [...(reactions[body.emoji] ?? []), userId];
-  }
-
-  await c.env.DB.prepare('UPDATE messages SET reactions = ?1 WHERE id = ?2')
-    .bind(JSON.stringify(reactions), messageId)
-    .run();
-  return c.json(reactions);
+  // Both of you reacting at the same moment: neither reaction is lost.
+  const updated = await updateJsonColumn<Record<string, string[]>>(c.env.DB, 'messages', 'reactions', messageId, {}, (current) =>
+    toggleReaction(current, userId, emoji),
+  );
+  return c.json(parseJson<Record<string, string[]>>((updated?.reactions as string | null) ?? null, {}));
 });
 
 app.post('/messages/:id/hide', async (c) => {
   const userId = c.get('userId');
   const messageId = c.req.param('id');
 
-  const message = await c.env.DB.prepare('SELECT relationship_id, hidden_for FROM messages WHERE id = ?1')
+  const message = await c.env.DB.prepare('SELECT relationship_id FROM messages WHERE id = ?1')
     .bind(messageId)
-    .first<{ relationship_id: string; hidden_for: string }>();
+    .first<{ relationship_id: string }>();
   if (!message || !(await isRelationshipMember(c.env.DB, userId, message.relationship_id))) {
     return c.json({ error: 'Message not found' }, 404);
   }
-
-  const hidden = parseJson<string[]>(message.hidden_for, []);
-  if (!hidden.includes(userId)) {
-    hidden.push(userId);
-    await c.env.DB.prepare('UPDATE messages SET hidden_for = ?1 WHERE id = ?2')
-      .bind(JSON.stringify(hidden), messageId)
-      .run();
-  }
+  await updateJsonColumn<string[]>(c.env.DB, 'messages', 'hidden_for', messageId, [], (hidden) => withUser(hidden, userId));
   return c.json({ ok: true });
 });
 
@@ -721,13 +791,14 @@ app.get('/relationships/:id/moods', async (c) => {
   return c.json(results);
 });
 
-app.post('/relationships/:id/moods', async (c) => {
+app.post('/relationships/:id/moods', rateLimit('mood', 30, 60), async (c) => {
   const userId = c.get('userId');
   const relationshipId = c.req.param('id');
   if (!(await isRelationshipMember(c.env.DB, userId, relationshipId))) return c.json({ error: 'Forbidden' }, 403);
 
-  const body = await c.req.json<{ mood: string }>();
-  if (!body.mood?.trim()) return c.json({ error: 'Mood is required' }, 400);
+  const body = await c.req.json<{ mood?: string }>();
+  if (typeof body.mood !== 'string' || !body.mood.trim()) return c.json({ error: 'Mood is required' }, 400);
+  if (body.mood.length > MAX_CHARS.mood) return c.json({ error: 'Mood is too long' }, 400);
 
   const id = generateId();
   await c.env.DB.prepare('INSERT INTO mood_logs (id, relationship_id, user_id, mood) VALUES (?1, ?2, ?3, ?4)')
@@ -763,11 +834,18 @@ app.post('/notifications/read', async (c) => {
     return c.json({ count: result.meta.changes });
   }
 
-  const placeholders = body.ids.map((_, i) => `?${i + 2}`).join(', ');
+  let ids: string[];
+  try {
+    ids = checkIds(body.ids);
+  } catch (e) {
+    if (e instanceof ApiError) return c.json({ error: e.message }, 400);
+    throw e;
+  }
+  const placeholders = ids.map((_, i) => `?${i + 2}`).join(', ');
   const result = await c.env.DB.prepare(
     `UPDATE notifications SET read = 1 WHERE user_id = ?1 AND read = 0 AND id IN (${placeholders})`,
   )
-    .bind(userId, ...body.ids)
+    .bind(userId, ...ids)
     .run();
   return c.json({ count: result.meta.changes });
 });
@@ -802,21 +880,25 @@ export { Hub } from './hub';
 
 export default {
   fetch: app.fetch,
-  // Pushes that failed the first time (Expo down, network blip): tried again with growing gaps.
-  queue: (batch: MessageBatch<PushRetry>, env: Env) => retryPushes(batch, env),
-  // Hourly: top up the emptiest shared content banks. Few AI calls per run keeps it inside the free CPU limit.
+  async queue(batch: MessageBatch<PushRetry | JobMessage>, env: Env) {
+    // Hourly jobs, a page of couples per message (jobs.ts).
+    if (batch.queue === 'moments-jobs') return runJobPages(batch as MessageBatch<JobMessage>, env);
+    // Pushes that failed the first time (Expo down, network blip): tried again with growing gaps.
+    return retryPushes(batch as MessageBatch<PushRetry>, env);
+  },
   async scheduled(_event: ScheduledController, env: Env, ctx: ExecutionContext) {
+    // Hourly: top up the emptiest shared content banks. Few AI calls per run keeps it inside the CPU limit.
     ctx.waitUntil(stockBanks(env, 6));
-    // The day before a birthday (9am the partner's time): a heads-up to the partner.
-    ctx.waitUntil(sendBirthdayHeadsUps(env).catch(() => 0));
-    // Streaks ending tonight: a warning in each person's last 3 hours (once a day, deduped).
-    ctx.waitUntil(sendStreakRiskReminders(env).catch(() => 0));
-    // Streaks that missed a day: ended (or frozen) just after their midnight, restore windows closed.
-    ctx.waitUntil(settleBrokenStreaks(env).catch(() => 0));
-    // No mood shared for over a day: "How are you feeling?" (daytime, once a day).
-    ctx.waitUntil(sendMoodCheckins(env).catch(() => 0));
+    // Birthday heads-ups, streak warnings and settling, restore reminders, mood check-ins: queued
+    // a page of couples at a time, so they keep up however many couples there are.
+    ctx.waitUntil(startHourlyJobs(env).catch((e) => console.error(JSON.stringify({ event: 'jobs_start_failed', error: String(e) }))));
     // Rate-limit windows older than a day are never read again: clear them so the table stays small.
     const dayAgo = Math.floor(Date.now() / 1000) - 86_400;
-    ctx.waitUntil(env.DB.prepare('DELETE FROM rate_limits WHERE window_start < ?1').bind(dayAgo).run());
+    ctx.waitUntil(
+      env.DB.prepare('DELETE FROM rate_limits WHERE window_start < ?1')
+        .bind(dayAgo)
+        .run()
+        .catch((e) => console.error(JSON.stringify({ event: 'rate_limit_cleanup_failed', error: String(e) }))),
+    );
   },
-} satisfies ExportedHandler<Env, PushRetry>;
+} satisfies ExportedHandler<Env, PushRetry | JobMessage>;

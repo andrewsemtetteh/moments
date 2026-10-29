@@ -66,25 +66,30 @@ export async function verifyMediaSignature(env: Env, key: string, e: string | un
   return diff === 0;
 }
 
-/** Re-signs every moment/chat file URL found in a piece of text (a JSON body, a message…). */
-export async function signMediaInText(env: Env, text: string): Promise<string> {
+/** Whether a piece of text has any moment/chat file URL in it (worth signing at all). */
+export function hasMediaUrl(text: string): boolean {
   MEDIA_URL.lastIndex = 0;
-  if (!MEDIA_URL.test(text)) return text;
+  const found = MEDIA_URL.test(text);
   MEDIA_URL.lastIndex = 0;
+  return found;
+}
+
+/**
+ * Re-signs the moment/chat file URLs in a piece of text (a JSON body, a live update), but only
+ * files of a space the reader belongs to (`allowed`, by the space id in the path,
+ * `moments/<space>/…`). Anything else is left as it was: a link someone pasted into a chat,
+ * an old one an ex kept, stays expired instead of coming back freshly signed.
+ */
+export async function signMediaInText(env: Env, text: string, allowed: (relationshipId: string) => boolean): Promise<string> {
+  if (!hasMediaUrl(text)) return text;
   const e = currentExpiry();
   const found = new Map<string, string>();
   for (const m of text.matchAll(MEDIA_URL)) {
     const [whole, base, path] = m;
     if (found.has(whole)) continue;
     const key = decodeURIComponent(path);
+    if (!allowed(key.split('/')[1] ?? '')) continue;
     found.set(whole, `${base}?e=${e}&s=${await signature(env, key, e)}`);
   }
   return text.replace(MEDIA_URL, (whole) => found.get(whole) ?? whole);
-}
-
-/** Same, for a value about to be sent as JSON (realtime events). */
-export async function signMediaInValue<T>(env: Env, value: T): Promise<T> {
-  const text = JSON.stringify(value);
-  const signed = await signMediaInText(env, text);
-  return signed === text ? value : (JSON.parse(signed) as T);
 }
